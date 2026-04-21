@@ -4,9 +4,8 @@ import { useCatalogue } from "@/data/index";
 import type { CrystalEntry } from "@/data/crystals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-// ── Types that the rest of the app still uses via the legacy name ──────────
-// BeadLibrary is passed a CrystalEntry (same shape as the old CrystalBead)
 type CrystalBead = CrystalEntry;
 
 interface BeadLibraryProps {
@@ -19,6 +18,7 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
   const { crystals, types } = useCatalogue();
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
+  const isMobile = useIsMobile();
 
   const availableTypes = useMemo(() => {
     if (!types) return [];
@@ -37,16 +37,15 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
 
   if (!open) return null;
 
-  return (
-    <div className="absolute left-0 top-0 bottom-0 w-72 glass-panel rounded-lg z-20 flex flex-col animate-slide-in">
-      <div className="flex items-center justify-between p-4 border-b border-border">
+  const listContent = (
+    <>
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border">
         <h3 className="font-display text-sm font-semibold">Bead Library</h3>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Search & Filter */}
       <div className="p-3 space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -58,7 +57,7 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
             className="w-full pl-9 pr-3 py-2 text-sm bg-muted/50 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary font-body"
           />
         </div>
-        
+
         <Select value={selectedType} onValueChange={setSelectedType}>
           <SelectTrigger className="w-full h-8 text-xs font-body">
             <SelectValue placeholder="Filter by type" />
@@ -74,7 +73,6 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
         </Select>
       </div>
 
-      {/* Crystal list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {filteredCrystals.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-6">No crystals match your search.</p>
@@ -87,7 +85,7 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
               key={bead.id}
               onClick={() => !outOfStock && onSelectBead(bead)}
               disabled={outOfStock}
-              draggable={!outOfStock}
+              draggable={!outOfStock && !isMobile}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "copy";
                 e.dataTransfer.setData(
@@ -101,7 +99,6 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
                   : "hover:bg-muted/60 cursor-grab active:cursor-grabbing"
               }`}
             >
-              {/* Swatch / image */}
               {bead.image ? (
                 <img
                   src={bead.image}
@@ -141,7 +138,7 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
                 </div>
               </div>
 
-              {!outOfStock && (
+              {!outOfStock && !isMobile && (
                 <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   Drag or Click
                 </span>
@@ -150,6 +147,33 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
           );
         })}
       </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-black/40 z-30 animate-fade-in"
+          onClick={onClose}
+        />
+        {/* Bottom sheet */}
+        <div className="fixed left-0 right-0 bottom-0 z-40 bg-background rounded-t-2xl border-t border-border shadow-2xl flex flex-col animate-slide-up"
+          style={{ maxHeight: "70vh" }}
+        >
+          <div className="flex justify-center pt-2 pb-1">
+            <div className="w-10 h-1 rounded-full bg-border" />
+          </div>
+          {listContent}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div className="absolute left-0 top-0 bottom-0 w-72 glass-panel rounded-lg z-20 flex flex-col animate-slide-in">
+      {listContent}
     </div>
   );
 };

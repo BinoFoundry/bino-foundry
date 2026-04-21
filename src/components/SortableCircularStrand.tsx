@@ -27,6 +27,7 @@ interface SortableCircularStrandProps {
   onBeadDrop?: (position: number, data: any) => void;
   label?: string;
   wristSize: number;
+  size?: number;
 }
 
 interface SortableBeadProps {
@@ -36,7 +37,7 @@ interface SortableBeadProps {
   y: number;
   beadPixelSize: number;
   onSlotClick: (position: number) => void;
-  isDragActive: boolean; // is ANY bead currently being dnd-kit-dragged
+  isDragActive: boolean;
 }
 
 function getBeadBackground(bead: PlacedBead | null): string {
@@ -80,16 +81,12 @@ function SortableBead({
     height: beadPixelSize,
     left: x - beadPixelSize / 2,
     top: y - beadPixelSize / 2,
-    // No CSS.Transform — absolute position is driven by left/top only.
-    // Applying dnd-kit's transform to abs-positioned items breaks layout.
     background: hasImage ? "transparent" : getBeadBackground(bead),
     border: hasImage ? "none" : undefined,
     borderColor: !hasImage && bead ? "transparent" : !hasImage ? "hsl(var(--border))" : undefined,
     boxShadow: !hasImage && bead ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
-    opacity: isDragging ? 0 : 1, // hide original while overlay ghost is shown
+    opacity: isDragging ? 0 : 1,
     transition: isDragActive ? undefined : "opacity 0.15s, background 0.2s",
-    // z-index 20 ensures bead buttons sit above the z-10 HTML5 drop zone overlay
-    // so click-to-place works on empty slots even when the drop zone is active.
     zIndex: 20,
   };
 
@@ -132,13 +129,16 @@ const SortableCircularStrand = ({
   onBeadDrop,
   label,
   wristSize,
+  size = 320,
 }: SortableCircularStrandProps) => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const canvasSize = 320;
+
+  const canvasSize = size;
   const center = canvasSize / 2;
-  const radius = canvasSize / 2 - 36;
+  const radius = canvasSize / 2 - (canvasSize * 36) / 320;
+  const scaleFactor = canvasSize / 320;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -157,11 +157,9 @@ const SortableCircularStrand = ({
     const x = center + radius * Math.cos(angle);
     const y = center + radius * Math.sin(angle);
     const placed = placedBeads.find((b) => b.position === i);
-    const beadPixelSize = placed ? placed.beadSize * 2.5 : 20;
+    const beadPixelSize = placed ? placed.beadSize * 2.5 * scaleFactor : 20 * scaleFactor;
     return { index: i, x, y, placed, beadPixelSize };
   });
-
-  // ── dnd-kit handlers ─────────────────────────────────────────────────────
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -174,15 +172,10 @@ const SortableCircularStrand = ({
       const targetBead = placedBeads.find((b) => `bead-${b.position}` === over.id);
 
       if (draggedBead && targetBead) {
-        // Sort by position so arrayMove shifts beads in spatial order
         const sorted = [...placedBeads].sort((a, b) => a.position - b.position);
         const sortedPositions = sorted.map((b) => b.position);
-
         const oldIndex = sorted.findIndex((b) => b.position === draggedBead.position);
         const newIndex = sorted.findIndex((b) => b.position === targetBead.position);
-
-        // arrayMove inserts the dragged bead at target's position and shifts
-        // all beads in between one slot over to fill the gap.
         const reordered = arrayMove(sorted, oldIndex, newIndex);
         const updatedBeads = reordered.map((bead, idx) => ({
           ...bead,
@@ -190,7 +183,6 @@ const SortableCircularStrand = ({
         }));
         onBeadsReorder(updatedBeads);
       } else if (draggedBead && !targetBead) {
-        // Moving to an empty slot
         const match = String(over.id).match(/^bead-(\d+)$/);
         if (match) {
           const targetPosition = parseInt(match[1], 10);
@@ -204,15 +196,13 @@ const SortableCircularStrand = ({
     setActiveId(null);
   };
 
-  // ── HTML5 drop-zone (from library panels) ────────────────────────────────
-  // A single transparent overlay handles drops so we avoid conflicts with
-  // dnd-kit's pointer capture on individual bead buttons.
-
   const findNearestSlot = (clientX: number, clientY: number): number => {
     if (!canvasRef.current) return 0;
     const rect = canvasRef.current.getBoundingClientRect();
-    const localX = clientX - rect.left;
-    const localY = clientY - rect.top;
+    const scaleX = canvasSize / rect.width;
+    const scaleY = canvasSize / rect.height;
+    const localX = (clientX - rect.left) * scaleX;
+    const localY = (clientY - rect.top) * scaleY;
     let nearestIndex = 0;
     let minDist = Infinity;
     slots.forEach((slot) => {
@@ -227,7 +217,6 @@ const SortableCircularStrand = ({
 
   const handleDropZoneDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    // Only accept drops from the library panels (not dnd-kit drags)
     if (e.dataTransfer.types.includes("application/json")) {
       e.dataTransfer.dropEffect = "copy";
       setIsDragOver(true);
@@ -239,7 +228,7 @@ const SortableCircularStrand = ({
     setIsDragOver(false);
     if (!onBeadDrop) return;
     const raw = e.dataTransfer.getData("application/json");
-    if (!raw) return; // not a library drop – ignore silently
+    if (!raw) return;
     try {
       const data = JSON.parse(raw);
       const slotIndex = findNearestSlot(e.clientX, e.clientY);
@@ -260,7 +249,7 @@ const SortableCircularStrand = ({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-2 sm:gap-3">
         {label && (
           <span className="text-xs font-body text-muted-foreground uppercase tracking-widest">
             {label}
@@ -272,7 +261,6 @@ const SortableCircularStrand = ({
           className="relative"
           style={{ width: canvasSize, height: canvasSize }}
         >
-          {/* Guide circle */}
           <svg className="absolute inset-0" width={canvasSize} height={canvasSize}>
             <circle
               cx={center}
@@ -286,9 +274,6 @@ const SortableCircularStrand = ({
             />
           </svg>
 
-          {/* Bead images — rendered directly on the canvas, precisely centered at the
-              bracelet circle point. Kept separate from the button so the image is
-              never clipped or offset by the small interaction hitbox. */}
           {slots.map((slot) => {
             if (!slot.placed || `bead-${slot.index}` === activeId) return null;
             const imgSrc = getBeadImageSrc(slot.placed);
@@ -315,7 +300,6 @@ const SortableCircularStrand = ({
             );
           })}
 
-          {/* Bead slots (dnd-kit sortable) */}
           <SortableContext items={slots.map((slot) => `bead-${slot.index}`)}>
             {slots.map((slot) => (
               <SortableBead
@@ -331,7 +315,6 @@ const SortableCircularStrand = ({
             ))}
           </SortableContext>
 
-          {/* Single HTML5 drop zone covering the canvas (below beads in z-order) */}
           <div
             className="absolute inset-0 z-10"
             style={{ pointerEvents: activeId ? "none" : "auto" }}
@@ -340,10 +323,10 @@ const SortableCircularStrand = ({
             onDrop={handleDropZoneDrop}
           />
 
-          {/* dnd-kit drag overlay ghost */}
           <DragOverlay dropAnimation={null}>
             {activeBead ? (() => {
-              const ghostSize = activeBead.beadSize === 6 ? 18 : activeBead.beadSize === 8 ? 22 : 26;
+              const baseGhost = activeBead.beadSize === 6 ? 18 : activeBead.beadSize === 8 ? 22 : 26;
+              const ghostSize = baseGhost * scaleFactor;
               const ghostImgSrc = getBeadImageSrc(activeBead);
               return (
                 <div
@@ -377,13 +360,12 @@ const SortableCircularStrand = ({
             })() : null}
           </DragOverlay>
 
-          {/* Center counter */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
-              <p className="text-2xl font-display font-semibold text-foreground">
+              <p className="font-display font-semibold text-foreground" style={{ fontSize: 24 * scaleFactor }}>
                 {placedBeads.length}
               </p>
-              <p className="text-[10px] text-muted-foreground font-body uppercase tracking-wider">
+              <p className="text-muted-foreground font-body uppercase tracking-wider" style={{ fontSize: 10 * scaleFactor }}>
                 of {beadCount}
               </p>
             </div>
