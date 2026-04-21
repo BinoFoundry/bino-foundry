@@ -10,10 +10,14 @@ import {
   type BeadSize,
   type PlacedBead,
   type CrystalBead,
+  type CharmItem,
+  type SpacerItem,
 } from "@/lib/luxe-data";
 
 type SelectedItem =
   | { kind: "crystal"; crystal: CrystalBead }
+  | { kind: "charm"; charm: CharmItem }
+  | { kind: "spacer"; spacer: SpacerItem }
   | null;
 
 interface BraceletBuilderProps {
@@ -62,6 +66,62 @@ function useCanvasSize(isMobile: boolean, twinning: boolean, libraryOpen: boolea
   return { containerRef, strandSize };
 }
 
+function getItemPrice(item: PlacedBead): number {
+  if (item.type === "crystal" && item.crystal) {
+    return calculateBeadPrice(item.crystal.price, item.beadSize);
+  }
+  if (item.type === "charm" && item.charm) {
+    return item.charm.price;
+  }
+  if (item.type === "spacer" && item.spacer) {
+    return item.spacer.price;
+  }
+  return 0;
+}
+
+function getSelectedItemLabel(sel: SelectedItem): string {
+  if (!sel) return "";
+  if (sel.kind === "crystal") return sel.crystal.name;
+  if (sel.kind === "charm") return sel.charm.name;
+  if (sel.kind === "spacer") return sel.spacer.name;
+  return "";
+}
+
+function getSelectedItemImage(sel: SelectedItem): string {
+  if (!sel) return "";
+  if (sel.kind === "crystal") return sel.crystal.image;
+  if (sel.kind === "charm") return sel.charm.image;
+  if (sel.kind === "spacer") return sel.spacer.image;
+  return "";
+}
+
+function buildPlacedBead(sel: SelectedItem, position: number, defaultBeadSize: BeadSize): PlacedBead | null {
+  if (!sel) return null;
+  if (sel.kind === "crystal") {
+    return { position, type: "crystal", crystal: sel.crystal, beadSize: defaultBeadSize };
+  }
+  if (sel.kind === "charm") {
+    return { position, type: "charm", charm: sel.charm, beadSize: defaultBeadSize };
+  }
+  if (sel.kind === "spacer") {
+    return { position, type: "spacer", spacer: sel.spacer, beadSize: defaultBeadSize };
+  }
+  return null;
+}
+
+function buildPlacedBeadFromDrop(data: any, position: number, defaultBeadSize: BeadSize): PlacedBead | null {
+  if (data.type === "crystal") {
+    return { position, type: "crystal", crystal: data.item, beadSize: defaultBeadSize };
+  }
+  if (data.type === "charm") {
+    return { position, type: "charm", charm: data.item, beadSize: defaultBeadSize };
+  }
+  if (data.type === "spacer") {
+    return { position, type: "spacer", spacer: data.item, beadSize: defaultBeadSize };
+  }
+  return null;
+}
+
 const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [wristSizeA, setWristSizeA] = useState(16);
   const [wristSizeB, setWristSizeB] = useState(16);
@@ -93,15 +153,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const updatePrice = useCallback(
     (beadsA: PlacedBead[], beadsB: PlacedBead[], twin: boolean) => {
-      const calculateItemPrice = (item: PlacedBead) => {
-        if (item.type === 'crystal' && item.crystal) {
-          return calculateBeadPrice(item.crystal.price, item.beadSize);
-        }
-        return 0;
-      };
-
-      const priceA = beadsA.reduce((s, b) => s + calculateItemPrice(b), 0);
-      const priceB = twin ? beadsB.reduce((s, b) => s + calculateItemPrice(b), 0) : 0;
+      const priceA = beadsA.reduce((s, b) => s + getItemPrice(b), 0);
+      const priceB = twin ? beadsB.reduce((s, b) => s + getItemPrice(b), 0) : 0;
       onPriceChange(priceA + priceB);
     },
     [onPriceChange]
@@ -117,12 +170,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     if (existing && !selectedItem) {
       updated = placedBeads.filter((b) => b.position !== position);
     } else if (selectedItem) {
-      let newBead: PlacedBead;
-      if (selectedItem.kind === "crystal") {
-        newBead = { position, type: "crystal", crystal: selectedItem.crystal, beadSize: defaultBeadSize };
-      } else {
-        return;
-      }
+      const newBead = buildPlacedBead(selectedItem, position, defaultBeadSize);
+      if (!newBead) return;
       updated = existing
         ? placedBeads.map((b) => (b.position === position ? newBead : b))
         : [...placedBeads, newBead];
@@ -132,12 +181,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     }
 
     setPlacedBeads(updated);
-
-    if (bracelet === "A") {
-      updatePrice(updated, placedBeadsB, twinning);
-    } else {
-      updatePrice(placedBeadsA, updated, twinning);
-    }
+    if (bracelet === "A") updatePrice(updated, placedBeadsB, twinning);
+    else updatePrice(placedBeadsA, updated, twinning);
   };
 
   const handleBeadDrop = (bracelet: "A" | "B", position: number, data: any) => {
@@ -145,86 +190,76 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     const setPlacedBeads = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
 
     const existing = placedBeads.find((b) => b.position === position);
-
-    let newItem: PlacedBead;
-    if (data.type === "crystal") {
-      newItem = { position, type: "crystal", crystal: data.item, beadSize: defaultBeadSize };
-    } else {
-      return;
-    }
+    const newItem = buildPlacedBeadFromDrop(data, position, defaultBeadSize);
+    if (!newItem) return;
 
     const updated = existing
       ? placedBeads.map((b) => (b.position === position ? newItem : b))
       : [...placedBeads, newItem];
 
     setPlacedBeads(updated);
-
-    if (bracelet === "A") {
-      updatePrice(updated, placedBeadsB, twinning);
-    } else {
-      updatePrice(placedBeadsA, updated, twinning);
-    }
+    if (bracelet === "A") updatePrice(updated, placedBeadsB, twinning);
+    else updatePrice(placedBeadsA, updated, twinning);
   };
 
   const handleBeadsReorder = (bracelet: "A" | "B", reorderedBeads: PlacedBead[]) => {
     const setPlacedBeads = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
     setPlacedBeads(reorderedBeads);
-
-    if (bracelet === "A") {
-      updatePrice(reorderedBeads, placedBeadsB, twinning);
-    } else {
-      updatePrice(placedBeadsA, reorderedBeads, twinning);
-    }
+    if (bracelet === "A") updatePrice(reorderedBeads, placedBeadsB, twinning);
+    else updatePrice(placedBeadsA, reorderedBeads, twinning);
   };
 
   const handleBeadSizeChange = (newSize: BeadSize) => {
     setDefaultBeadSize(newSize);
   };
 
-  const autoPlaceItem = (type: "crystal", item: any) => {
+  const autoPlaceItem = (newBead: PlacedBead) => {
     let targetBracelet: "A" | "B" = "A";
     let nextPos = -1;
 
     for (let i = 0; i < beadCountA; i++) {
-      if (!placedBeadsA.find(b => b.position === i)) {
-        nextPos = i;
-        break;
-      }
+      if (!placedBeadsA.find(b => b.position === i)) { nextPos = i; break; }
     }
 
     if (nextPos === -1 && twinning) {
       targetBracelet = "B";
       for (let i = 0; i < beadCountB; i++) {
-        if (!placedBeadsB.find(b => b.position === i)) {
-          nextPos = i;
-          break;
-        }
+        if (!placedBeadsB.find(b => b.position === i)) { nextPos = i; break; }
       }
     }
 
     if (nextPos !== -1) {
-      let newBead: PlacedBead;
-      if (type === "crystal") {
-        newBead = { position: nextPos, type: "crystal", crystal: item, beadSize: defaultBeadSize };
-      } else {
-        return;
-      }
-
+      const placed = { ...newBead, position: nextPos };
       if (targetBracelet === "A") {
-        const updated = [...placedBeadsA, newBead];
+        const updated = [...placedBeadsA, placed];
         setPlacedBeadsA(updated);
         updatePrice(updated, placedBeadsB, twinning);
       } else {
-        const updated = [...placedBeadsB, newBead];
+        const updated = [...placedBeadsB, placed];
         setPlacedBeadsB(updated);
         updatePrice(placedBeadsA, updated, twinning);
       }
     }
   };
 
-  const handleSelectBead = (bead: CrystalBead) => {
-    setSelectedItem({ kind: "crystal", crystal: bead });
-    autoPlaceItem("crystal", bead);
+  const handleSelectCrystal = (bead: CrystalBead) => {
+    const sel: SelectedItem = { kind: "crystal", crystal: bead };
+    setSelectedItem(sel);
+    autoPlaceItem({ position: 0, type: "crystal", crystal: bead, beadSize: defaultBeadSize });
+    if (isMobile) setLibraryOpen(false);
+  };
+
+  const handleSelectCharm = (charm: CharmItem) => {
+    const sel: SelectedItem = { kind: "charm", charm };
+    setSelectedItem(sel);
+    autoPlaceItem({ position: 0, type: "charm", charm, beadSize: defaultBeadSize });
+    if (isMobile) setLibraryOpen(false);
+  };
+
+  const handleSelectSpacer = (spacer: SpacerItem) => {
+    const sel: SelectedItem = { kind: "spacer", spacer };
+    setSelectedItem(sel);
+    autoPlaceItem({ position: 0, type: "spacer", spacer, beadSize: defaultBeadSize });
     if (isMobile) setLibraryOpen(false);
   };
 
@@ -245,6 +280,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       updatePrice(placedBeadsA, placedBeadsB, next);
     }
   };
+
+  const itemImage = getSelectedItemImage(selectedItem);
 
   return (
     <div className="relative flex-1 w-full h-full flex flex-col animate-fade-in">
@@ -267,7 +304,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           <span className="text-[10px] sm:text-xs text-muted-foreground">cm</span>
         </div>
 
-        {/* Wrist size II */}
         {twinning && (
           <div className="flex items-center gap-1.5 sm:gap-2">
             <label className="text-[10px] sm:text-xs text-muted-foreground font-body uppercase tracking-wider">Wrist II</label>
@@ -309,23 +345,23 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               title="Click to deselect"
               onClick={() => setSelectedItem(null)}
             >
-              {selectedItem.kind === "crystal" && (
+              {itemImage ? (
                 <div
                   className="w-4 h-4 rounded-full"
                   style={{
-                    background: selectedItem.crystal.image ? `url("${selectedItem.crystal.image}${selectedItem.crystal.image.startsWith('data:') ? '' : '?v=2'}") center / cover no-repeat` : "hsl(var(--muted))"
+                    background: `url("${itemImage}${itemImage.startsWith('data:') ? '' : '?v=2'}") center / cover no-repeat`
                   }}
                 />
+              ) : (
+                <div className="w-4 h-4 rounded-full bg-muted-foreground/20" />
               )}
-              <span>
-                {selectedItem.kind === "crystal" ? selectedItem.crystal.name : ""}
-              </span>
+              <span>{getSelectedItemLabel(selectedItem)}</span>
               <span className="text-xs text-muted-foreground">&#x2715;</span>
             </div>
           )}
           <Button variant="luxe-outline" size="sm" onClick={() => setLibraryOpen(!libraryOpen)} className="text-xs sm:text-sm">
             <Library className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Crystals</span>
+            <span className="hidden sm:inline">Library</span>
           </Button>
           <Button variant="luxe-outline" size="sm" onClick={handleToggleTwinning} className="text-xs sm:text-sm">
             <Copy className="w-3.5 h-3.5" />
@@ -346,7 +382,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       >
         <BeadLibrary
           open={libraryOpen}
-          onSelectBead={handleSelectBead}
+          onSelectCrystal={handleSelectCrystal}
+          onSelectCharm={handleSelectCharm}
+          onSelectSpacer={handleSelectSpacer}
           onClose={() => setLibraryOpen(false)}
         />
 

@@ -15,8 +15,22 @@ function getBeadBackground(bead: PlacedBead | null | undefined): string {
     const isDataUrl = bead.crystal.image.startsWith("data:");
     return `url("${bead.crystal.image}${isDataUrl ? "" : "?v=2"}") center / cover no-repeat`;
   }
-
+  if (bead.type === "charm" && bead.charm?.image) {
+    return `url("${bead.charm.image}") center / cover no-repeat`;
+  }
+  if (bead.type === "spacer" && bead.spacer?.image) {
+    return `url("${bead.spacer.image}") center / cover no-repeat`;
+  }
+  if (bead.type === "charm") return "hsl(43 60% 70%)";
+  if (bead.type === "spacer") return "hsl(0 0% 82%)";
   return "hsl(var(--muted))";
+}
+
+function getBeadLabel(bead: PlacedBead): string {
+  if (bead.type === "crystal" && bead.crystal) return `${bead.crystal.name} (${bead.beadSize}mm)`;
+  if (bead.type === "charm" && bead.charm) return bead.charm.name;
+  if (bead.type === "spacer" && bead.spacer) return bead.spacer.name;
+  return `Slot`;
 }
 
 const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label, wristSize }: CircularStrandProps) => {
@@ -37,7 +51,6 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
     <div className="flex flex-col items-center gap-3">
       {label && <span className="text-xs font-body text-muted-foreground uppercase tracking-widest">{label}</span>}
       <div className="relative" style={{ width: canvasSize, height: canvasSize }}>
-        {/* Strand line */}
         <svg className="absolute inset-0" width={canvasSize} height={canvasSize}>
           <circle
             cx={center}
@@ -49,8 +62,8 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
             strokeDasharray="4 3"
           />
         </svg>
-        {/* Bead slots */}
         {slots.map((slot) => {
+          const borderRadius = slot.placed?.type === "charm" ? "4px" : "50%";
           return (
             <button
               key={slot.index}
@@ -70,7 +83,7 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
                   }
                 }
               }}
-              className="absolute rounded-full border transition-all duration-200 hover:scale-110 active:scale-95 group"
+              className="absolute border transition-all duration-200 hover:scale-110 active:scale-95 group"
               style={{
                 width: slot.beadPixelSize,
                 height: slot.beadPixelSize,
@@ -79,24 +92,22 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
                 background: getBeadBackground(slot.placed),
                 borderColor: slot.placed ? "transparent" : "hsl(var(--border))",
                 boxShadow: slot.placed ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
+                borderRadius,
               }}
               title={
                 slot.placed
-                  ? slot.placed.type === "crystal" && slot.placed.crystal
-                    ? `${slot.placed.crystal.name} (${slot.placed.beadSize}mm)`
-                    : `Slot ${slot.index + 1}`
+                  ? getBeadLabel(slot.placed)
                   : `Slot ${slot.index + 1}`
               }
             >
-              {slot.placed && slot.placed.type === "crystal" && (
+              {slot.placed && (
                 <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                  {slot.placed.beadSize}mm
+                  {slot.placed.type === "crystal" ? `${slot.placed.beadSize}mm` : getBeadLabel(slot.placed)}
                 </span>
               )}
             </button>
           );
         })}
-        {/* Center info */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center">
             <p className="text-2xl font-display font-semibold text-foreground">{placedBeads.length}</p>

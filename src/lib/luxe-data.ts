@@ -51,14 +51,53 @@ export const ZODIAC_ANIMALS: string[] = [
 // ── Business-logic helpers (unchanged) ───────────────────────────────────────
 
 export type BeadSize = 6 | 8 | 10;
-export type ItemType = "crystal";
+export type ItemType = "crystal" | "charm" | "spacer";
+
+export interface CharmItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  description: string;
+}
+
+export interface SpacerItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  description: string;
+}
 
 export interface PlacedBead {
   position: number;
   type: ItemType;
   crystal?: CrystalEntry;
+  charm?: CharmItem;
+  spacer?: SpacerItem;
   beadSize: BeadSize;
 }
+
+export const CHARM_LIBRARY: CharmItem[] = [
+  { id: "charm-evil-eye", name: "Evil Eye", price: 8.00, image: "", description: "Protection charm with classic evil eye motif" },
+  { id: "charm-hamsa", name: "Hamsa Hand", price: 9.50, image: "", description: "Hand of Fatima for good fortune" },
+  { id: "charm-lotus", name: "Lotus Flower", price: 7.50, image: "", description: "Symbol of purity and spiritual growth" },
+  { id: "charm-moon", name: "Crescent Moon", price: 6.50, image: "", description: "Celestial crescent moon pendant" },
+  { id: "charm-star", name: "North Star", price: 6.50, image: "", description: "Guiding star charm for direction" },
+  { id: "charm-heart", name: "Heart", price: 5.50, image: "", description: "Classic heart charm" },
+  { id: "charm-butterfly", name: "Butterfly", price: 8.50, image: "", description: "Delicate butterfly symbolizing transformation" },
+  { id: "charm-tree", name: "Tree of Life", price: 10.00, image: "", description: "Sacred tree representing growth and connection" },
+];
+
+export const SPACER_LIBRARY: SpacerItem[] = [
+  { id: "spacer-gold-round", name: "Gold Round", price: 2.00, image: "", description: "Polished gold-tone round spacer" },
+  { id: "spacer-silver-round", name: "Silver Round", price: 2.00, image: "", description: "Polished silver-tone round spacer" },
+  { id: "spacer-gold-flat", name: "Gold Flat Disc", price: 2.50, image: "", description: "Flat gold-tone disc spacer" },
+  { id: "spacer-silver-flat", name: "Silver Flat Disc", price: 2.50, image: "", description: "Flat silver-tone disc spacer" },
+  { id: "spacer-rhinestone", name: "Rhinestone Ring", price: 3.50, image: "", description: "Crystal-studded ring spacer" },
+  { id: "spacer-rondelle-gold", name: "Gold Rondelle", price: 3.00, image: "", description: "Textured gold-tone rondelle spacer" },
+  { id: "spacer-rondelle-silver", name: "Silver Rondelle", price: 3.00, image: "", description: "Textured silver-tone rondelle spacer" },
+];
 
 export function calculateBeadPrice(basePrice: number, beadSize: BeadSize): number {
   const multiplier = beadSize === 6 ? 0.8 : beadSize === 8 ? 1.0 : 1.3;

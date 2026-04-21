@@ -42,9 +42,11 @@ interface SortableBeadProps {
 
 function getBeadBackground(bead: PlacedBead | null): string {
   if (!bead) return "hsl(var(--muted))";
-  if (bead.type === "crystal" && bead.crystal && bead.crystal.image) {
-    return "transparent";
-  }
+  if (bead.type === "crystal" && bead.crystal?.image) return "transparent";
+  if (bead.type === "charm" && bead.charm?.image) return "transparent";
+  if (bead.type === "spacer" && bead.spacer?.image) return "transparent";
+  if (bead.type === "charm") return "hsl(43 60% 70%)";
+  if (bead.type === "spacer") return "hsl(0 0% 82%)";
   return "hsl(var(--muted))";
 }
 
@@ -53,7 +55,24 @@ function getBeadImageSrc(bead: PlacedBead | null): string | null {
     const isDataUrl = bead.crystal.image.startsWith("data:");
     return bead.crystal.image + (isDataUrl ? "" : "?v=2");
   }
+  if (bead?.type === "charm" && bead.charm?.image) return bead.charm.image;
+  if (bead?.type === "spacer" && bead.spacer?.image) return bead.spacer.image;
   return null;
+}
+
+function getBeadLabel(bead: PlacedBead | null): string {
+  if (!bead) return "";
+  if (bead.type === "crystal" && bead.crystal) return bead.crystal.name;
+  if (bead.type === "charm" && bead.charm) return bead.charm.name;
+  if (bead.type === "spacer" && bead.spacer) return bead.spacer.name;
+  return "";
+}
+
+function getBeadShape(bead: PlacedBead | null): string {
+  if (!bead) return "rounded-full";
+  if (bead.type === "charm") return "rounded-md";
+  if (bead.type === "spacer") return "rounded-full";
+  return "rounded-full";
 }
 
 function SortableBead({
@@ -74,7 +93,8 @@ function SortableBead({
     id: `bead-${position}`,
   });
 
-  const hasImage = !!(bead?.type === "crystal" && bead.crystal?.image);
+  const hasImage = !!getBeadImageSrc(bead);
+  const shape = getBeadShape(bead);
 
   const style: React.CSSProperties = {
     width: beadPixelSize,
@@ -90,10 +110,9 @@ function SortableBead({
     zIndex: 20,
   };
 
+  const label = getBeadLabel(bead);
   const title = bead
-    ? bead.type === "crystal" && bead.crystal
-      ? `${bead.crystal.name} (${bead.beadSize}mm) — Drag to reorder`
-      : `Slot ${position + 1}`
+    ? `${label} (${bead.beadSize}mm) — Drag to reorder`
     : `Empty slot ${position + 1} — Click to place`;
 
   return (
@@ -107,14 +126,14 @@ function SortableBead({
         hasImage
           ? "cursor-grab active:cursor-grabbing"
           : bead
-          ? "border rounded-full cursor-grab active:cursor-grabbing"
+          ? `border ${shape} cursor-grab active:cursor-grabbing`
           : "border rounded-full cursor-pointer hover:border-primary/60"
       }`}
       title={title}
     >
-      {bead && bead.type === "crystal" && (
+      {bead && (
         <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          {bead.beadSize}mm
+          {bead.type === "charm" ? label : bead.type === "spacer" ? label : `${bead.beadSize}mm`}
         </span>
       )}
     </button>
@@ -295,6 +314,7 @@ const SortableCircularStrand = ({
                   pointerEvents: "none",
                   userSelect: "none",
                   zIndex: 19,
+                  borderRadius: slot.placed.type === "charm" ? 4 : "50%",
                 }}
               />
             );
@@ -328,9 +348,10 @@ const SortableCircularStrand = ({
               const baseGhost = activeBead.beadSize === 6 ? 18 : activeBead.beadSize === 8 ? 22 : 26;
               const ghostSize = baseGhost * scaleFactor;
               const ghostImgSrc = getBeadImageSrc(activeBead);
+              const ghostShape = activeBead.type === "charm" ? "rounded-md" : "rounded-full";
               return (
                 <div
-                  className={`border-2 border-primary shadow-xl ${ghostImgSrc ? "rounded-sm" : "rounded-full"}`}
+                  className={`border-2 border-primary shadow-xl ${ghostImgSrc ? ghostShape : ghostShape}`}
                   style={{
                     width: ghostSize,
                     height: ghostSize,
