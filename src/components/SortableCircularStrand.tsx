@@ -93,7 +93,8 @@ function SortableBead({
     id: `bead-${position}`,
   });
 
-  const hasImage = !!getBeadImageSrc(bead);
+  const imgSrc = getBeadImageSrc(bead);
+  const hasImage = !!imgSrc;
   const shape = getBeadShape(bead);
 
   const style: React.CSSProperties = {
@@ -110,6 +111,7 @@ function SortableBead({
     opacity: isDragging ? 0 : bead ? 1 : 0.35,
     transition: isDragActive ? undefined : "opacity 0.15s, background 0.2s, transform 0.15s",
     zIndex: 20,
+    overflow: "visible",
   };
 
   const label = getBeadLabel(bead);
@@ -126,13 +128,31 @@ function SortableBead({
       onClick={() => !bead && onSlotClick(position)}
       className={`absolute transition-all duration-150 group ${
         hasImage
-          ? "cursor-grab active:cursor-grabbing hover:scale-105 active:scale-95"
+          ? `${shape} cursor-grab active:cursor-grabbing hover:scale-105 active:scale-95`
           : bead
           ? `border ${shape} cursor-grab active:cursor-grabbing hover:scale-105 active:scale-95`
           : "border rounded-full cursor-pointer hover:opacity-60 hover:border-primary/40"
       }`}
       title={title}
     >
+      {hasImage && (
+        <img
+          src={imgSrc}
+          alt=""
+          draggable={false}
+          className="pointer-events-none select-none"
+          style={{
+            position: "absolute",
+            width: "200%",
+            height: "200%",
+            top: "-50%",
+            left: "-50%",
+            objectFit: "contain",
+            borderRadius: bead?.type === "charm" ? 4 : "50%",
+            filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.15))",
+          }}
+        />
+      )}
       {bead && (
         <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           {bead.type === "charm" ? label : bead.type === "spacer" ? label : `${bead.beadSize}mm`}
@@ -302,34 +322,6 @@ const SortableCircularStrand = ({
               style={{ transition: "stroke 0.2s, opacity 0.2s" }}
             />
           </svg>
-
-          {slots.map((slot) => {
-            if (!slot.placed || `bead-${slot.index}` === activeId) return null;
-            const imgSrc = getBeadImageSrc(slot.placed);
-            if (!imgSrc) return null;
-            const displaySize = slot.beadPixelSize * 1.6;
-            return (
-              <img
-                key={`bead-img-${slot.index}`}
-                src={imgSrc}
-                alt=""
-                draggable={false}
-                style={{
-                  position: "absolute",
-                  left: slot.x - displaySize / 2,
-                  top: slot.y - displaySize / 2,
-                  width: displaySize,
-                  height: displaySize,
-                  objectFit: "contain",
-                  pointerEvents: "none",
-                  userSelect: "none",
-                  zIndex: 19,
-                  borderRadius: slot.placed.type === "charm" ? 4 : "50%",
-                  filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.15))",
-                }}
-              />
-            );
-          })}
 
           <SortableContext items={slots.map((slot) => `bead-${slot.index}`)}>
             {slots.map((slot) => (
