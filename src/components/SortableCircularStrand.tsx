@@ -104,9 +104,11 @@ function SortableBead({
     background: hasImage ? "transparent" : getBeadBackground(bead),
     border: hasImage ? "none" : undefined,
     borderColor: !hasImage && bead ? "transparent" : !hasImage ? "hsl(var(--border))" : undefined,
-    boxShadow: !hasImage && bead ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
-    opacity: isDragging ? 0 : 1,
-    transition: isDragActive ? undefined : "opacity 0.15s, background 0.2s",
+    boxShadow: bead
+      ? "0 1px 3px rgba(0,0,0,0.18), 0 4px 10px rgba(0,0,0,0.12), inset 0 1px 1px rgba(255,255,255,0.25)"
+      : "none",
+    opacity: isDragging ? 0 : bead ? 1 : 0.35,
+    transition: isDragActive ? undefined : "opacity 0.15s, background 0.2s, transform 0.15s",
     zIndex: 20,
   };
 
@@ -122,12 +124,12 @@ function SortableBead({
       {...attributes}
       {...(bead ? listeners : {})}
       onClick={() => !bead && onSlotClick(position)}
-      className={`absolute transition-all duration-200 hover:scale-110 active:scale-95 group ${
+      className={`absolute transition-all duration-150 group ${
         hasImage
-          ? "cursor-grab active:cursor-grabbing"
+          ? "cursor-grab active:cursor-grabbing hover:scale-105 active:scale-95"
           : bead
-          ? `border ${shape} cursor-grab active:cursor-grabbing`
-          : "border rounded-full cursor-pointer hover:border-primary/60"
+          ? `border ${shape} cursor-grab active:cursor-grabbing hover:scale-105 active:scale-95`
+          : "border rounded-full cursor-pointer hover:opacity-60 hover:border-primary/40"
       }`}
       title={title}
     >
@@ -156,7 +158,6 @@ const SortableCircularStrand = ({
 
   const canvasSize = size;
   const center = canvasSize / 2;
-  const radius = canvasSize / 2 - (canvasSize * 36) / 320;
   const scaleFactor = canvasSize / 320;
 
   const sensors = useSensors(
@@ -171,12 +172,20 @@ const SortableCircularStrand = ({
     })
   );
 
+  const getBeadPixelSize = (beadSize: BeadSize): number => {
+    const basePx = beadSize === 6 ? 22 : beadSize === 8 ? 28 : 36;
+    return basePx * scaleFactor;
+  };
+
+  const maxBeadPx = getBeadPixelSize(10);
+  const radius = center - maxBeadPx / 2 - 6 * scaleFactor;
+
   const slots = Array.from({ length: beadCount }, (_, i) => {
     const angle = (2 * Math.PI * i) / beadCount - Math.PI / 2;
     const x = center + radius * Math.cos(angle);
     const y = center + radius * Math.sin(angle);
     const placed = placedBeads.find((b) => b.position === i);
-    const beadPixelSize = placed ? placed.beadSize * 2.5 * scaleFactor : 20 * scaleFactor;
+    const beadPixelSize = placed ? getBeadPixelSize(placed.beadSize) : 10 * scaleFactor;
     return { index: i, x, y, placed, beadPixelSize };
   });
 
@@ -287,9 +296,10 @@ const SortableCircularStrand = ({
               r={radius}
               fill="none"
               stroke={isDragOver ? "hsl(var(--primary))" : "hsl(var(--border))"}
-              strokeWidth={isDragOver ? 2 : 1.5}
-              strokeDasharray="4 3"
-              style={{ transition: "stroke 0.2s" }}
+              strokeWidth={isDragOver ? 2 : 1}
+              strokeDasharray={isDragOver ? "6 3" : "3 4"}
+              opacity={isDragOver ? 0.8 : 0.4}
+              style={{ transition: "stroke 0.2s, opacity 0.2s" }}
             />
           </svg>
 
@@ -297,7 +307,7 @@ const SortableCircularStrand = ({
             if (!slot.placed || `bead-${slot.index}` === activeId) return null;
             const imgSrc = getBeadImageSrc(slot.placed);
             if (!imgSrc) return null;
-            const displaySize = slot.beadPixelSize * 2;
+            const displaySize = slot.beadPixelSize * 1.6;
             return (
               <img
                 key={`bead-img-${slot.index}`}
@@ -315,6 +325,7 @@ const SortableCircularStrand = ({
                   userSelect: "none",
                   zIndex: 19,
                   borderRadius: slot.placed.type === "charm" ? 4 : "50%",
+                  filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.15))",
                 }}
               />
             );
@@ -345,19 +356,20 @@ const SortableCircularStrand = ({
 
           <DragOverlay dropAnimation={null}>
             {activeBead ? (() => {
-              const baseGhost = activeBead.beadSize === 6 ? 18 : activeBead.beadSize === 8 ? 22 : 26;
-              const ghostSize = baseGhost * scaleFactor;
+              const ghostSize = (activeBead.beadSize === 6 ? 30 : activeBead.beadSize === 8 ? 36 : 44) * scaleFactor;
               const ghostImgSrc = getBeadImageSrc(activeBead);
               const ghostShape = activeBead.type === "charm" ? "rounded-md" : "rounded-full";
               return (
                 <div
-                  className={`border-2 border-primary shadow-xl ${ghostImgSrc ? ghostShape : ghostShape}`}
+                  className={`border-2 border-primary/60 ${ghostShape}`}
                   style={{
                     width: ghostSize,
                     height: ghostSize,
                     background: getBeadBackground(activeBead),
-                    opacity: 0.9,
+                    opacity: 0.92,
                     position: "relative",
+                    boxShadow: "0 6px 20px rgba(0,0,0,0.25), 0 0 0 2px rgba(var(--primary),0.15)",
+                    overflow: "hidden",
                   }}
                 >
                   {ghostImgSrc && (
@@ -367,10 +379,10 @@ const SortableCircularStrand = ({
                       draggable={false}
                       style={{
                         position: "absolute",
-                        width: "200%",
-                        height: "200%",
-                        top: "-50%",
-                        left: "-50%",
+                        width: "160%",
+                        height: "160%",
+                        top: "-30%",
+                        left: "-30%",
                         objectFit: "contain",
                         pointerEvents: "none",
                       }}
@@ -383,11 +395,8 @@ const SortableCircularStrand = ({
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
-              <p className="font-display font-semibold text-foreground" style={{ fontSize: 24 * scaleFactor }}>
-                {placedBeads.length}
-              </p>
-              <p className="text-muted-foreground font-body uppercase tracking-wider" style={{ fontSize: 10 * scaleFactor }}>
-                of {beadCount}
+              <p className="font-display font-semibold text-foreground/70" style={{ fontSize: 22 * scaleFactor }}>
+                {placedBeads.length}<span className="text-muted-foreground/50 font-normal" style={{ fontSize: 12 * scaleFactor }}>/{beadCount}</span>
               </p>
             </div>
           </div>

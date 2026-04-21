@@ -28,7 +28,7 @@ const BEAD_SIZES: BeadSize[] = [6, 8, 10];
 
 function useCanvasSize(isMobile: boolean, twinning: boolean, libraryOpen: boolean) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [strandSize, setStrandSize] = useState(320);
+  const [strandSize, setStrandSize] = useState(400);
 
   useEffect(() => {
     const measure = () => {
@@ -41,19 +41,19 @@ function useCanvasSize(isMobile: boolean, twinning: boolean, libraryOpen: boolea
         if (twinning) {
           const maxByWidth = (w - 24) / 2;
           const maxByHeight = h - 80;
-          setStrandSize(Math.max(140, Math.min(200, maxByWidth, maxByHeight)));
+          setStrandSize(Math.max(160, Math.min(240, maxByWidth, maxByHeight)));
         } else {
           const maxByWidth = w - 32;
           const maxByHeight = h - 40;
-          setStrandSize(Math.max(180, Math.min(300, maxByWidth, maxByHeight)));
+          setStrandSize(Math.max(220, Math.min(360, maxByWidth, maxByHeight)));
         }
       } else {
-        const sidebarOffset = libraryOpen ? 300 : 0;
+        const sidebarOffset = libraryOpen ? 260 : 0;
         const availableW = w - sidebarOffset - 48;
         const strandCount = twinning ? 2 : 1;
         const maxByWidth = (availableW - (twinning ? 32 : 0)) / strandCount;
         const maxByHeight = h - 40;
-        setStrandSize(Math.max(200, Math.min(360, maxByWidth, maxByHeight)));
+        setStrandSize(Math.max(280, Math.min(480, maxByWidth, maxByHeight)));
       }
     };
 
@@ -377,7 +377,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       <div
         ref={containerRef}
         className={`flex-1 relative flex items-center justify-center gap-4 sm:gap-8 p-3 sm:p-6 overflow-hidden transition-all duration-300 ${
-          libraryOpen && !isMobile ? "lg:pl-[300px]" : ""
+          libraryOpen && !isMobile ? "lg:pl-[260px]" : ""
         }`}
       >
         <BeadLibrary

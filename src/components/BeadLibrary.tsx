@@ -306,7 +306,7 @@ const BeadLibrary = ({ onSelectCrystal, onSelectCharm, onSelectSpacer, open, onC
   }
 
   return (
-    <div className="absolute left-0 top-0 bottom-0 w-72 glass-panel rounded-lg z-20 flex flex-col animate-slide-in">
+    <div className="absolute left-0 top-0 bottom-0 w-60 bg-background/80 backdrop-blur-sm border-r border-border/50 z-20 flex flex-col animate-slide-in">
       {listContent}
     </div>
   );

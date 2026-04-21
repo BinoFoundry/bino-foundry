@@ -36,14 +36,17 @@ function getBeadLabel(bead: PlacedBead): string {
 const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label, wristSize }: CircularStrandProps) => {
   const canvasSize = 320;
   const center = canvasSize / 2;
-  const radius = canvasSize / 2 - 36;
+
+  const getBeadPx = (sz: number) => sz === 6 ? 22 : sz === 8 ? 28 : 36;
+  const maxBeadPx = getBeadPx(10);
+  const radius = center - maxBeadPx / 2 - 6;
 
   const slots = Array.from({ length: beadCount }, (_, i) => {
     const angle = (2 * Math.PI * i) / beadCount - Math.PI / 2;
     const x = center + radius * Math.cos(angle);
     const y = center + radius * Math.sin(angle);
     const placed = placedBeads.find((b) => b.position === i);
-    const beadPixelSize = placed ? placed.beadSize * 2.5 : 20;
+    const beadPixelSize = placed ? getBeadPx(placed.beadSize) : 10;
     return { index: i, x, y, placed, beadPixelSize };
   });
 
@@ -58,8 +61,9 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
             r={radius}
             fill="none"
             stroke="hsl(var(--border))"
-            strokeWidth="1.5"
-            strokeDasharray="4 3"
+            strokeWidth="1"
+            strokeDasharray="3 4"
+            opacity="0.4"
           />
         </svg>
         {slots.map((slot) => {
@@ -83,7 +87,7 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
                   }
                 }
               }}
-              className="absolute border transition-all duration-200 hover:scale-110 active:scale-95 group"
+              className={`absolute border transition-all duration-150 group ${slot.placed ? "hover:scale-105 active:scale-95" : "hover:opacity-60"}`}
               style={{
                 width: slot.beadPixelSize,
                 height: slot.beadPixelSize,
@@ -91,7 +95,10 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
                 top: slot.y - slot.beadPixelSize / 2,
                 background: getBeadBackground(slot.placed),
                 borderColor: slot.placed ? "transparent" : "hsl(var(--border))",
-                boxShadow: slot.placed ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
+                boxShadow: slot.placed
+                  ? "0 1px 3px rgba(0,0,0,0.18), 0 4px 10px rgba(0,0,0,0.12), inset 0 1px 1px rgba(255,255,255,0.25)"
+                  : "none",
+                opacity: slot.placed ? 1 : 0.35,
                 borderRadius,
               }}
               title={
