@@ -1,0 +1,27 @@
+# Static SPA + nginx (optional VPS all-in-one; Vercel can skip this image)
+# Build: docker build -f Dockerfile.frontend -t bino-foundry-web .
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/
+COPY shared/package.json shared/
+
+RUN npm ci
+
+COPY shared/ shared/
+COPY frontend/ frontend/
+
+ARG VITE_API_BASE_URL=
+ARG VITE_API_PREFIX=/api
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_API_PREFIX=$VITE_API_PREFIX
+
+RUN npm run build -w @bino-foundry/shared && npm run build -w @bino-foundry/frontend
+
+FROM nginx:1.27-alpine AS runner
+COPY deploy/nginx/frontend-docker.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/frontend/dist /usr/share/nginx/html
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1/ || exit 1

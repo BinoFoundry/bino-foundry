@@ -1,0 +1,37 @@
+# Local / VPS stack — API only (pair with Vercel for SPA or add frontend service).
+# Usage: docker compose up -d --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-5050}:5050"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      NODE_ENV: production
+      PORT: 5050
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5050/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+  # Uncomment for same-host SPA (set VITE_API_BASE_URL empty + nginx proxy in custom config)
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.frontend
+  #     args:
+  #       VITE_API_BASE_URL: http://localhost:5050
+  #   ports:
+  #     - "8080:80"
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy

@@ -1,73 +1,84 @@
-# Welcome to your Lovable project
+# Bino Foundry
 
-## Project info
+Monorepo for a custom jewellery platform: **bracelet builder**, **sunglasses customiser**, and **admin catalogue**.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Stack
 
-## How can I edit this code?
+| Layer | Tech |
+|-------|------|
+| Frontend | Vite, React 18, TypeScript, Tailwind, shadcn/ui |
+| Backend | Express 5, TypeScript, Zod |
+| Data | Supabase (Postgres + Storage only) |
+| Shared | `@bino-foundry/shared` — types, storage path helpers |
+| API docs | OpenAPI 3 + Swagger UI at `/api/docs` |
 
-There are several ways of editing your application.
+## Quick start
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+npm ci
+cp .env.example .env              # fill SUPABASE_* etc.
+cp frontend/.env.example frontend/.env.development.local
+# Apply database/migrations/*.sql in Supabase (see docs)
+npm run env:check
+npm run dev:backend               # :5050
+npm run dev                       # :8080
 ```
 
-**Edit a file directly in GitHub**
+Full guide: **[docs/setup/GETTING_STARTED.md](./docs/setup/GETTING_STARTED.md)**
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| URL (local) | Purpose |
+|-------------|---------|
+| http://localhost:8080 | SPA (builders + admin) |
+| http://localhost:8080/admin | Admin dashboard |
+| http://localhost:5050/api/status | API health |
+| http://localhost:5050/api/docs | Swagger UI |
 
-**Use GitHub Codespaces**
+## Documentation
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+**[docs/README.md](./docs/README.md)** — central index
 
-## What technologies are used for this project?
+| Topic | Doc |
+|-------|-----|
+| Setup | [docs/setup/GETTING_STARTED.md](./docs/setup/GETTING_STARTED.md) |
+| Architecture | [docs/architecture/OVERVIEW.md](./docs/architecture/OVERVIEW.md) |
+| Admin | [docs/architecture/ADMIN.md](./docs/architecture/ADMIN.md) |
+| API | [docs/api/README.md](./docs/api/README.md) |
+| Swagger | [docs/api/SWAGGER.md](./docs/api/SWAGGER.md) |
+| Environment | [docs/environment/README.md](./docs/environment/README.md) |
+| Development | [docs/development/WORKFLOW.md](./docs/development/WORKFLOW.md) |
+| Assets / Storage | [docs/assets/WORKFLOW.md](./docs/assets/WORKFLOW.md) |
+| Deploy | [deploy/README.md](./deploy/README.md) |
 
-This project is built with:
+## Repository layout
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```
+bino-foundry/
+├── frontend/     # SPA (@bino-foundry/frontend)
+│   └── src/features/admin/   # Admin dashboard module
+├── backend/      # API (@bino-foundry/backend)
+│   └── src/openapi/          # OpenAPI spec (Swagger)
+├── shared/       # Shared package
+├── database/     # SQL migrations + storage layout
+├── docs/         # Developer documentation
+├── deploy/       # Deployment configs (Docker, nginx, PM2)
+└── scripts/      # Build / env check scripts
+```
 
-## How can I deploy this project?
+## Common commands
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Frontend dev server |
+| `npm run dev:backend` | API dev server |
+| `npm run build:all` | Production build (all workspaces) |
+| `npm run env:check` | Validate environment |
+| `npm run test` | Frontend tests |
 
-## Can I connect a custom domain to my Lovable project?
+## Deploy
 
-Yes, you can!
+- **SPA:** Vercel or static host (`frontend/dist`) — see [deploy/README.md](./deploy/README.md)
+- **API:** VPS, Docker, or PM2 — vendor-neutral; not tied to Vercel
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## License
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Private — All rights reserved (adjust as needed for your org).

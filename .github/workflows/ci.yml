@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Env check (development)
+        run: npm run env:check
+        env:
+          APP_ENV: development
+
+      - name: Build all workspaces
+        run: npm run build:all
+
+      - name: Backend typecheck
+        run: npm run typecheck:backend
+
+      - name: Frontend tests
+        run: npm run test --workspace frontend

@@ -1,0 +1,39 @@
+## Supabase migrations
+
+SQL in this folder is **Postgres-compatible** (Supabase = managed Postgres).
+
+### Applying
+
+**Option A · Supabase Dashboard**
+
+1. Open **SQL Editor** → paste [`000001_initial_catalog.sql`](./000001_initial_catalog.sql) → run.
+
+**Option B · Supabase CLI** (recommended for CI)
+
+```bash
+supabase login
+supabase link --project-ref <ref>
+supabase db push   # after placing files under supabase/migrations/, or pipe manually
+```
+
+**Option C · `psql`**
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_catalog.sql
+```
+
+### Order
+
+1. `000001_initial_catalog.sql` — extensions, enums-as-check constraints, catalogue + assets + tagging + pricing KV.
+2. `000002_storage_buckets_supabase.sql` — **Supabase-hosted only** (`storage.buckets` + anon SELECT policies for public catalogue buckets). Skip on plain Postgres installs.
+3. `000003_sunglasses_builder_catalog.sql` — lens tints, builder options (polarised / prescription), frame colour swatches + disclaimer KV.
+
+Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
+
+### Naming & money rules
+
+See [../schema/CONVENTIONS.md](../schema/CONVENTIONS.md).
+
+### Row Level Security
+
+Phase 1 ships **without** RLS policies: the Express backend will use the **service role** for writes and can narrow access later. Enable RLS in a future migration once auth is tied to Supabase JWT.

@@ -1,0 +1,388 @@
+import { useEffect, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/common";
+import { LoadingState } from "@/components/common";
+import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
+import type {
+  BuilderOptionEntry,
+  FrameColorEntry,
+  LensTintEntry,
+} from "@/types/sunglasses-catalog";
+
+type Section = "tints" | "options" | "colors";
+
+export function SunglassesCatalogAdmin() {
+  const catalog = useSunglassesCatalog();
+  const [section, setSection] = useState<Section>("tints");
+  const [editingTint, setEditingTint] = useState<LensTintEntry | null>(null);
+  const [editingOption, setEditingOption] = useState<BuilderOptionEntry | null>(null);
+  const [editingColor, setEditingColor] = useState<FrameColorEntry | null>(null);
+
+  useEffect(() => {
+    void catalog.refreshAdminFromApi();
+  }, [catalog.refreshAdminFromApi]);
+
+  if (catalog.isHydrating && catalog.lensTints.length === 0) {
+    return <LoadingState label="Loading sunglasses catalog…" className="h-64" />;
+  }
+
+  if (catalog.hydrateError) {
+    return (
+      <ErrorState
+        message={catalog.hydrateError}
+        onRetry={() => void catalog.refreshAdminFromApi()}
+        className="m-6"
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex gap-2 border-b border-border px-6 py-3">
+        {(
+          [
+            ["tints", "Lens tints"],
+            ["options", "Add-on options"],
+            ["colors", "Frame colours"],
+          ] as const
+        ).map(([id, label]) => (
+          <Button
+            key={id}
+            size="sm"
+            variant={section === id ? "default" : "outline"}
+            onClick={() => setSection(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6">
+        {section === "tints" && (
+          <CatalogSection
+            title="Lens tints"
+            onAdd={() =>
+              setEditingTint({
+                id: "",
+                code: "",
+                name: "",
+                category: "gradient",
+                gradientTop: "#4a5568",
+                gradientBottom: "#2d3748",
+                priceSurcharge: 0,
+                displayOrder: 0,
+                isActive: true,
+              })
+            }
+          >
+            {catalog.lensTints.map((tint) => (
+              <CatalogRow
+                key={tint.id}
+                title={tint.name}
+                subtitle={`${tint.category} · ${tint.code} · +$${tint.priceSurcharge}`}
+                active={tint.isActive}
+                onEdit={() => setEditingTint(tint)}
+                onDelete={() => void catalog.deleteLensTint(tint.id)}
+              />
+            ))}
+            {editingTint && (
+              <TintEditor
+                entry={editingTint}
+                onCancel={() => setEditingTint(null)}
+                onSave={async (entry) => {
+                  if (entry.id) await catalog.updateLensTint(entry);
+                  else
+                    await catalog.createLensTint({
+                      code: entry.code,
+                      name: entry.name,
+                      category: entry.category,
+                      gradientTop: entry.gradientTop,
+                      gradientBottom: entry.gradientBottom,
+                      priceSurcharge: entry.priceSurcharge,
+                      displayOrder: entry.displayOrder,
+                      isActive: entry.isActive,
+                    });
+                  setEditingTint(null);
+                }}
+              />
+            )}
+          </CatalogSection>
+        )}
+
+        {section === "options" && (
+          <CatalogSection
+            title="Builder options"
+            onAdd={() =>
+              setEditingOption({
+                id: "",
+                code: "",
+                label: "",
+                description: "",
+                priceSurcharge: 0,
+                requiresManualFollowUp: false,
+                tooltipText: null,
+                displayOrder: 0,
+                isActive: true,
+              })
+            }
+          >
+            {catalog.builderOptions.map((option) => (
+              <CatalogRow
+                key={option.id}
+                title={option.label}
+                subtitle={`${option.code} · +$${option.priceSurcharge}`}
+                active={option.isActive}
+                onEdit={() => setEditingOption(option)}
+                onDelete={() => void catalog.deleteBuilderOption(option.id)}
+              />
+            ))}
+            {editingOption && (
+              <OptionEditor
+                entry={editingOption}
+                onCancel={() => setEditingOption(null)}
+                onSave={async (entry) => {
+                  if (entry.id) await catalog.updateBuilderOption(entry);
+                  else
+                    await catalog.createBuilderOption({
+                      code: entry.code,
+                      label: entry.label,
+                      description: entry.description,
+                      priceSurcharge: entry.priceSurcharge,
+                      requiresManualFollowUp: entry.requiresManualFollowUp,
+                      tooltipText: entry.tooltipText,
+                      displayOrder: entry.displayOrder,
+                      isActive: entry.isActive,
+                    });
+                  setEditingOption(null);
+                }}
+              />
+            )}
+          </CatalogSection>
+        )}
+
+        {section === "colors" && (
+          <CatalogSection
+            title="Frame colours"
+            onAdd={() =>
+              setEditingColor({
+                id: "",
+                name: "",
+                hex: "#1a1a1a",
+                displayOrder: 0,
+                isActive: true,
+              })
+            }
+          >
+            {catalog.frameColors.map((color) => (
+              <CatalogRow
+                key={color.id}
+                title={color.name}
+                subtitle={color.hex}
+                active={color.isActive}
+                onEdit={() => setEditingColor(color)}
+                onDelete={() => void catalog.deleteFrameColor(color.id)}
+              />
+            ))}
+            {editingColor && (
+              <ColorEditor
+                entry={editingColor}
+                onCancel={() => setEditingColor(null)}
+                onSave={async (entry) => {
+                  if (entry.id) await catalog.updateFrameColor(entry);
+                  else
+                    await catalog.createFrameColor({
+                      name: entry.name,
+                      hex: entry.hex,
+                      displayOrder: entry.displayOrder,
+                      isActive: entry.isActive,
+                    });
+                  setEditingColor(null);
+                }}
+              />
+            )}
+          </CatalogSection>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CatalogSection({
+  title,
+  children,
+  onAdd,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-base font-semibold">{title}</h3>
+        <Button size="sm" onClick={onAdd}>
+          <Plus className="mr-1 h-4 w-4" />
+          Add
+        </Button>
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function CatalogRow({
+  title,
+  subtitle,
+  active,
+  onEdit,
+  onDelete,
+}: {
+  title: string;
+  subtitle: string;
+  active: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
+      <div>
+        <p className="font-medium text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+        {!active && <p className="text-[10px] text-amber-600">Inactive</p>}
+      </div>
+      <div className="flex gap-1">
+        <Button size="icon" variant="ghost" onClick={onEdit} aria-label="Edit">
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button size="icon" variant="ghost" onClick={onDelete} aria-label="Delete">
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function fieldClass() {
+  return "w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50";
+}
+
+function TintEditor({
+  entry,
+  onSave,
+  onCancel,
+}: {
+  entry: LensTintEntry;
+  onSave: (entry: LensTintEntry) => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState(entry);
+  return (
+    <form
+      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSave(form);
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <input className={fieldClass()} placeholder="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+        <input className={fieldClass()} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <select className={fieldClass()} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as LensTintEntry["category"] })}>
+          <option value="classic">Classic</option>
+          <option value="gradient">Gradient</option>
+        </select>
+        <input className={fieldClass()} type="number" step="0.01" placeholder="Surcharge" value={form.priceSurcharge} onChange={(e) => setForm({ ...form, priceSurcharge: Number(e.target.value) })} />
+        <input className={fieldClass()} placeholder="Gradient top #RRGGBB" value={form.gradientTop} onChange={(e) => setForm({ ...form, gradientTop: e.target.value })} />
+        <input className={fieldClass()} placeholder="Gradient bottom #RRGGBB" value={form.gradientBottom} onChange={(e) => setForm({ ...form, gradientBottom: e.target.value })} />
+        <input className={fieldClass()} type="number" placeholder="Display order" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+          Active
+        </label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="sm">Save tint</Button>
+      </div>
+    </form>
+  );
+}
+
+function OptionEditor({
+  entry,
+  onSave,
+  onCancel,
+}: {
+  entry: BuilderOptionEntry;
+  onSave: (entry: BuilderOptionEntry) => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState(entry);
+  return (
+    <form
+      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSave(form);
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <input className={fieldClass()} placeholder="Code (e.g. prescription)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+        <input className={fieldClass()} placeholder="Label" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
+        <input className={fieldClass()} placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        <input className={fieldClass()} type="number" step="0.01" placeholder="Price surcharge" value={form.priceSurcharge} onChange={(e) => setForm({ ...form, priceSurcharge: Number(e.target.value) })} />
+        <input className={fieldClass()} placeholder="Tooltip (optional)" value={form.tooltipText ?? ""} onChange={(e) => setForm({ ...form, tooltipText: e.target.value || null })} />
+        <input className={fieldClass()} type="number" placeholder="Display order" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.requiresManualFollowUp} onChange={(e) => setForm({ ...form, requiresManualFollowUp: e.target.checked })} />
+          Manual follow-up
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+          Active
+        </label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="sm">Save option</Button>
+      </div>
+    </form>
+  );
+}
+
+function ColorEditor({
+  entry,
+  onSave,
+  onCancel,
+}: {
+  entry: FrameColorEntry;
+  onSave: (entry: FrameColorEntry) => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState(entry);
+  return (
+    <form
+      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSave(form);
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <input className={fieldClass()} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input className={fieldClass()} placeholder="#RRGGBB" value={form.hex} onChange={(e) => setForm({ ...form, hex: e.target.value })} />
+        <input className={fieldClass()} type="number" placeholder="Display order" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+          Active
+        </label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="sm">Save colour</Button>
+      </div>
+    </form>
+  );
+}

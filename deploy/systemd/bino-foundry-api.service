@@ -1,0 +1,19 @@
+[Unit]
+Description=Bino Foundry Express API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/bino-foundry
+EnvironmentFile=-/opt/bino-foundry/.env.production
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node backend/dist/server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
