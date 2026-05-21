@@ -21,12 +21,12 @@ function adminAssetObjectKey(folder: string, originalName: string): string {
 
 export class UploadService {
   async uploadImageBuffer(file: Express.Multer.File, folder = "bino-foundry"): Promise<{ imageUrl: string }> {
-    if (cloudinaryConfigured()) {
-      return this.uploadViaCloudinary(file, folder);
-    }
-
     if (catalogStorageConfigured()) {
       return this.uploadViaSupabasePublicAsset(file, folder);
+    }
+
+    if (cloudinaryConfigured()) {
+      return this.uploadViaCloudinary(file, folder);
     }
 
     throw new ValidationError(

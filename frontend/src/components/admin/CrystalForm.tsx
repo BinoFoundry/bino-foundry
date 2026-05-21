@@ -9,7 +9,7 @@ import { isApiError, uploadApi } from "@/services/api";
 
 interface CrystalFormProps {
   initial?: CrystalEntry;
-  onSave: (entry: CrystalEntry) => void;
+  onSave: (entry: CrystalEntry) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -21,6 +21,7 @@ export const CrystalForm = ({ initial, onSave, onCancel }: CrystalFormProps) => 
   const [form, setForm] = useState<CrystalEntry>(initial ?? blank);
   const [showPreview, setShowPreview] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const set = (k: keyof CrystalEntry, v: string | number) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -42,11 +43,17 @@ export const CrystalForm = ({ initial, onSave, onCancel }: CrystalFormProps) => 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!form.name.trim()) return;
     const id = form.id || form.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    onSave({ ...form, id });
+    setSaving(true);
+    try {
+      await onSave({ ...form, id });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -137,10 +144,10 @@ export const CrystalForm = ({ initial, onSave, onCancel }: CrystalFormProps) => 
       </div>
 
       <div className="flex gap-2 pt-1">
-        <Button type="submit" size="sm" variant="default" className="flex-1">
-          {initial ? "Save Changes" : "Add Crystal"}
+        <Button type="submit" size="sm" variant="default" className="flex-1" disabled={saving}>
+          {saving ? "Saving..." : initial ? "Save Changes" : "Add Crystal"}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
       </div>

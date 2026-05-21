@@ -1,5 +1,6 @@
 import { SunglassesCompositor } from "@/render";
 import type { SunglassesCompositorConfig } from "@/render/types";
+import { NO_PREVIEW_MESSAGE } from "../utils/frame-plates";
 
 interface DisplayColumnProps {
   config: SunglassesCompositorConfig;
@@ -17,12 +18,29 @@ export function DisplayColumn({
   lensDisclaimer,
   showSummaryCard = true,
 }: DisplayColumnProps) {
+  const previewProps = {
+    config,
+    allowSvgFallback: false as const,
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <SunglassesCompositor config={config} view="front" aspectRatio="16/10" label="Front View" />
+      <SunglassesCompositor
+        {...previewProps}
+        view="front"
+        aspectRatio="16/10"
+        label="Front View"
+        emptyMessage={NO_PREVIEW_MESSAGE.front}
+      />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <SunglassesCompositor config={config} view="side" aspectRatio="video" label="Side View" />
+        <SunglassesCompositor
+          {...previewProps}
+          view="side"
+          aspectRatio="video"
+          label="Side View"
+          emptyMessage={NO_PREVIEW_MESSAGE.side}
+        />
 
         {showSummaryCard && (
           <div className="glass-panel flex flex-col justify-center rounded-[2rem] p-6">

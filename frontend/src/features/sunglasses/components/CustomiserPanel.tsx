@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import type { CustomiserStep } from "../constants";
 import { useCustomiserFlow } from "../hooks/useCustomiserFlow";
@@ -16,17 +17,17 @@ type CustomiserState = ReturnType<typeof useSunglassesCustomiserState>;
 interface CustomiserPanelProps {
   flow: ReturnType<typeof useCustomiserFlow>;
   state: CustomiserState;
+  className?: string;
 }
 
 const POLARIZED_CODE = "polarized";
 
-export function CustomiserPanel({ flow, state }: CustomiserPanelProps) {
+export function CustomiserPanel({ flow, state, className }: CustomiserPanelProps) {
   const {
     frames,
     frameSku,
     selectFrameSku,
     config,
-    setFrame,
     setOption,
     isOptionEnabled,
     selectTintById,
@@ -46,11 +47,8 @@ export function CustomiserPanel({ flow, state }: CustomiserPanelProps) {
     frame: (
       <FrameStepPanel
         frames={frames}
-        frameColors={sunglassesCatalog.frameColors}
         selectedFrameId={frameSku.id}
-        selectedFrameColor={config.frame}
         onSelectFrame={selectFrameSku}
-        onSelectColor={setFrame}
       />
     ),
     lens: (
@@ -76,7 +74,6 @@ export function CustomiserPanel({ flow, state }: CustomiserPanelProps) {
     preview: (
       <PreviewStepPanel
         frameSku={frameSku}
-        frameColorName={config.frame.name}
         tintName={config.tint.name}
         selectedTintEntry={selectedTintEntry}
         builderOptions={sunglassesCatalog.builderOptions}
@@ -90,10 +87,15 @@ export function CustomiserPanel({ flow, state }: CustomiserPanelProps) {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto p-1">{stepContent[flow.step]}</div>
+    <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
+      <div
+        className="customiser-options-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5"
+        aria-label="Customiser options"
+      >
+        <div className="pb-2">{stepContent[flow.step]}</div>
+      </div>
 
-      <div className="mt-4 flex shrink-0 items-center justify-between gap-3 border-t border-border pt-4">
+      <div className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border/80 pt-3">
         <Button type="button" variant="outline" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
           <ChevronLeft className="mr-1 h-4 w-4" />
           Back

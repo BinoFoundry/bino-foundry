@@ -29,8 +29,9 @@ export const openApiDocument = {
     { name: "Frames", description: "Sunglasses frame SKUs" },
     { name: "Crystals", description: "Bracelet beads" },
     { name: "Types", description: "Crystal taxonomy" },
-    { name: "Sunglasses", description: "Lens tints, options, frame colours" },
+    { name: "Sunglasses", description: "Lens tints and builder options" },
     { name: "Upload", description: "Image staging and upload" },
+    { name: "Rendering", description: "Frame view plates and lens masks" },
   ],
   paths: openApiPaths,
   components: {

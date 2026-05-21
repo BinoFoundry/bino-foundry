@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useReducer } from "react";
 
-import type { BuilderOptionEntry, FrameColorEntry, LensTintEntry } from "@/types/sunglasses-catalog";
+import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
 
 import {
   calculateSunglassesTotal,
@@ -9,19 +9,19 @@ import {
 } from "../engine/pricing";
 import {
   createInitialSunglassesConfig,
-  frameColorEntryToSelection,
   lensTintEntryToGradient,
   sunglassesRenderReducer,
   type InitialSunglassesCatalogSlice,
   type SunglassesRenderAction,
 } from "../state/sunglasses-render-reducer";
-import type { FrameColorSelection, SunglassesCompositorConfig, TintGradient } from "../types";
+import type { SunglassesCompositorConfig, TintGradient } from "../types";
 
 export interface UseSunglassesRenderStateArgs {
   basePrice: number;
   catalog: InitialSunglassesCatalogSlice;
   builderOptions: BuilderOptionEntry[];
   selectedTintEntry?: LensTintEntry | null;
+  frameLabel?: string;
 }
 
 export function useSunglassesRenderState({
@@ -29,11 +29,13 @@ export function useSunglassesRenderState({
   catalog,
   builderOptions,
   selectedTintEntry,
+  frameLabel,
 }: UseSunglassesRenderStateArgs) {
   const [config, dispatch] = useReducer(
     sunglassesRenderReducer,
-    { basePrice, catalog },
-    ({ basePrice: bp, catalog: cat }) => createInitialSunglassesConfig(bp, cat),
+    { basePrice, catalog, frameLabel },
+    ({ basePrice: bp, catalog: cat, frameLabel: label }) =>
+      createInitialSunglassesConfig(bp, { ...cat, frameLabel: label ?? cat.frameLabel }),
   );
 
   const totalPrice = useMemo(
@@ -53,13 +55,9 @@ export function useSunglassesRenderState({
   );
 
   const summaryText = useMemo(
-    () => formatConfigSummary(config.frame.name, config.tint.name),
-    [config.frame.name, config.tint.name],
+    () => formatConfigSummary(frameLabel ?? "Frame", config.tint.name),
+    [frameLabel, config.tint.name],
   );
-
-  const setFrame = useCallback((frame: FrameColorSelection) => {
-    dispatch({ type: "SET_FRAME", frame });
-  }, []);
 
   const setTint = useCallback((tint: TintGradient) => {
     dispatch({ type: "SET_TINT", tint });
@@ -83,16 +81,14 @@ export function useSunglassesRenderState({
       basePrice?: number;
       builderOptions?: BuilderOptionEntry[];
       defaultTint?: LensTintEntry;
-      defaultFrame?: FrameColorEntry;
+      frameLabel?: string;
     }) => {
       dispatch({
         type: "RESET",
         basePrice: next?.basePrice,
         builderOptions: next?.builderOptions,
         defaultTint: next?.defaultTint ? lensTintEntryToGradient(next.defaultTint) : undefined,
-        defaultFrame: next?.defaultFrame
-          ? frameColorEntryToSelection(next.defaultFrame)
-          : undefined,
+        frameLabel: next?.frameLabel,
       });
     },
     [],
@@ -106,7 +102,6 @@ export function useSunglassesRenderState({
     totalPrice,
     summaryText,
     requiresManualFollowUp,
-    setFrame,
     setTint,
     setOption,
     isOptionEnabled,

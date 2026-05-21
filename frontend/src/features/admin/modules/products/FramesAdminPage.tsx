@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { FrameEntry } from "@/data/glasses";
+import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
@@ -63,8 +64,14 @@ export function FramesAdminPage() {
               <AdminDeleteConfirm
                 onCancel={() => setConfirmDeleteId(null)}
                 onConfirm={() => {
-                  cat.deleteFrame(selectedFrame.id);
-                  clearSelection();
+                  void (async () => {
+                    try {
+                      await cat.deleteFrame(selectedFrame.id);
+                      clearSelection();
+                    } catch (err) {
+                      alert(isApiError(err) ? err.message : "Failed to delete frame");
+                    }
+                  })();
                 }}
               />
             ) : (
@@ -94,11 +101,16 @@ export function FramesAdminPage() {
             <FrameForm
               key={isNew ? "new" : selectedFrame!.id}
               initial={isNew ? undefined : selectedFrame}
-              onSave={(entry) => {
-                if (isNew) cat.addFrame(entry);
-                else cat.updateFrame(entry);
-                if (isNew) clearSelection();
-                else setIsEditing(false);
+              onSave={async (entry) => {
+                try {
+                  if (isNew) await cat.addFrame(entry);
+                  else await cat.updateFrame(entry);
+                  if (isNew) clearSelection();
+                  else setIsEditing(false);
+                } catch (err) {
+                  alert(isApiError(err) ? err.message : "Failed to save frame");
+                  throw err;
+                }
               }}
               onCancel={() => {
                 if (isNew) clearSelection();
@@ -162,7 +174,8 @@ function FrameToolbarTitle({
 
 function FrameThumb({ frame, size = "sm" }: { frame: FrameEntry; size?: "sm" | "lg" }) {
   const dim = size === "lg" ? "h-16 w-16" : "h-12 w-12";
-  const src = frame.frameImages?.[0];
+  const src =
+    frame.renderViews?.find((v) => v.view === "front")?.plateUrl ?? frame.frameImages?.[0];
   if (src) {
     return (
       <img
@@ -184,69 +197,34 @@ function FrameDetailView({ frame }: { frame: FrameEntry }) {
   return (
     <div className="space-y-8 pb-8">
       <section>
-        <h3 className="mb-4 text-lg font-semibold">Images ({frame.frameImages?.length ?? 0})</h3>
-        <AssetGrid
-          items={(frame.frameImages ?? []).map((src, i) => ({
-            key: String(i),
-            src,
-            label: src.split("/").pop() ?? `Image ${i + 1}`,
-          }))}
-          emptyLabel="No frame images. Click Edit to add."
-        />
-      </section>
-      <section className="border-t border-border pt-6">
-        <h3 className="mb-4 text-lg font-semibold">Lens colours ({frame.lensColors?.length ?? 0})</h3>
-        <AssetGrid
-          items={(frame.lensColors ?? []).map((lc, i) => ({
-            key: String(i),
-            src: lc.image,
-            label: lc.colorName || `Colour ${i + 1}`,
-          }))}
-          emptyLabel="No lens colours configured. Click Edit to add."
-        />
+        <h3 className="mb-4 text-lg font-semibold">
+          Render views ({frame.renderViews?.filter((v) => v.plateUrl).length ?? 0})
+        </h3>
+        {(frame.renderViews?.filter((v) => v.plateUrl).length ?? 0) === 0 ? (
+          <p className="rounded-lg border-2 border-dashed border-border bg-muted/20 py-8 text-center text-sm text-muted-foreground">
+            No views configured. Click Edit to upload front/side plates and masks.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {frame.renderViews
+              ?.filter((v) => v.plateUrl)
+              .map((v) => (
+                <div key={v.view} className="rounded-lg border border-border bg-background p-3">
+                  <p className="mb-2 text-sm font-medium capitalize">
+                    {v.view} · {v.maskStatus === "ready" ? "mask ready" : "draft"}
+                  </p>
+                  <img
+                    src={v.plateUrl}
+                    alt={v.view}
+                    className="mx-auto max-h-40 object-contain"
+                    crossOrigin="anonymous"
+                  />
+                </div>
+              ))}
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
-function AssetGrid({
-  items,
-  emptyLabel,
-}: {
-  items: { key: string; src?: string; label: string }[];
-  emptyLabel: string;
-}) {
-  if (items.length === 0) {
-    return (
-      <p className="rounded-lg border-2 border-dashed border-border bg-muted/20 py-8 text-center text-sm text-muted-foreground">
-        {emptyLabel}
-      </p>
-    );
-  }
-  return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {items.map((item) => (
-        <div
-          key={item.key}
-          className="flex flex-col items-center gap-3 rounded-lg border border-border bg-background p-3 text-center shadow-sm"
-        >
-          {item.src ? (
-            <img
-              src={item.src}
-              alt=""
-              className="h-24 w-full rounded object-contain"
-              crossOrigin="anonymous"
-            />
-          ) : (
-            <div className="flex h-24 w-full items-center justify-center rounded bg-muted text-xs text-muted-foreground">
-              No image
-            </div>
-          )}
-          <span className="w-full truncate px-1 text-sm font-medium" title={item.label}>
-            {item.label}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}

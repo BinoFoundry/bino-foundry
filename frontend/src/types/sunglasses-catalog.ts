@@ -24,17 +24,8 @@ export interface BuilderOptionEntry {
   isActive: boolean;
 }
 
-export interface FrameColorEntry {
-  id: string;
-  name: string;
-  hex: string;
-  displayOrder: number;
-  isActive: boolean;
-}
-
 export interface SunglassesCatalogSnapshot {
   lensTints: LensTintEntry[];
   builderOptions: BuilderOptionEntry[];
-  frameColors: FrameColorEntry[];
   lensDisclaimer: string;
 }

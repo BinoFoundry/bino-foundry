@@ -1,6 +1,6 @@
 import { useCatalogueContext, type CatalogueContextValue } from "./CatalogueProvider";
 
-/** Phase-1 catalogue hook (local optimistic state + Express API sync). */
+/** Catalogue hook (Supabase-backed via API). */
 export function useCatalogue(): CatalogueContextValue {
   return useCatalogueContext();
 }

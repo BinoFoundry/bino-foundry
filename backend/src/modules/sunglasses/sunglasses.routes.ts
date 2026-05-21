@@ -18,10 +18,5 @@ export function createSunglassesRoutes(): Router {
   router.put("/options/:id", sunglassesHandlers.updateBuilderOption);
   router.delete("/options/:id", sunglassesHandlers.removeBuilderOption);
 
-  router.get("/frame-colors", sunglassesHandlers.listFrameColors);
-  router.post("/frame-colors", sunglassesHandlers.createFrameColor);
-  router.put("/frame-colors/:id", sunglassesHandlers.updateFrameColor);
-  router.delete("/frame-colors/:id", sunglassesHandlers.removeFrameColor);
-
   return router;
 }

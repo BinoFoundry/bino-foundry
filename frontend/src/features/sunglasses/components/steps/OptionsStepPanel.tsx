@@ -18,17 +18,18 @@ export function OptionsStepPanel({
   onOptionChange,
 }: OptionsStepPanelProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h3 className="font-display text-lg font-bold text-foreground">Additional options</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Prescription orders are reviewed before confirmation.</p>
+        <h3 className="font-display text-base font-bold text-foreground">Additional options</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">Prescription orders are reviewed before confirmation.</p>
       </div>
 
-      {builderOptions.map((option) => (
-        <div
-          key={option.id}
-          className="flex items-center justify-between rounded-2xl border border-border bg-card p-4"
-        >
+      <div className="space-y-2">
+        {builderOptions.map((option) => (
+          <div
+            key={option.id}
+            className="flex items-center justify-between rounded-xl border border-border bg-card p-3"
+          >
           <div className="space-y-1 pr-4">
             <Label htmlFor={`option-${option.code}`} className="font-semibold">
               {option.label}
@@ -58,12 +59,13 @@ export function OptionsStepPanel({
             checked={Boolean(selectedOptions[option.code])}
             onCheckedChange={(value) => onOptionChange(option.code, value)}
           />
-        </div>
-      ))}
+          </div>
+        ))}
 
-      {builderOptions.length === 0 && (
-        <p className="text-sm text-muted-foreground">No builder options configured in admin.</p>
-      )}
+        {builderOptions.length === 0 && (
+          <p className="text-sm text-muted-foreground">No builder options configured in admin.</p>
+        )}
+      </div>
 
       {requiresManualFollowUp && (
         <Alert>

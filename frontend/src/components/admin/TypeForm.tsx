@@ -4,7 +4,7 @@ import type { TypeEntry } from "@/data/index";
 
 interface TypeFormProps {
   initial?: TypeEntry;
-  onSave: (entry: TypeEntry) => void;
+  onSave: (entry: TypeEntry) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -13,14 +13,21 @@ export const TypeForm = ({ initial, onSave, onCancel }: TypeFormProps) => {
     id: "", name: "", description: "",
   };
   const [form, setForm] = useState<TypeEntry>(initial ?? blank);
+  const [saving, setSaving] = useState(false);
 
   const set = (k: keyof TypeEntry, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!form.name.trim()) return;
-    onSave(form);
+    setSaving(true);
+    try {
+      await onSave(form);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -49,8 +56,10 @@ export const TypeForm = ({ initial, onSave, onCancel }: TypeFormProps) => {
       </div>
 
       <div className="flex gap-2 justify-end pt-2 border-t border-border">
-        <Button variant="outline" type="button" onClick={onCancel} className="text-sm">Cancel</Button>
-        <Button type="submit" className="text-sm bg-primary/90 hover:bg-primary">Save Type</Button>
+        <Button variant="outline" type="button" onClick={onCancel} className="text-sm" disabled={saving}>Cancel</Button>
+        <Button type="submit" className="text-sm bg-primary/90 hover:bg-primary" disabled={saving}>
+          {saving ? "Saving..." : "Save Type"}
+        </Button>
       </div>
     </form>
   );

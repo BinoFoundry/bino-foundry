@@ -32,7 +32,7 @@ export function buildCompositorConfigFromCatalogue(
 
   const base: SunglassesCompositorConfig = {
     basePrice: frame.price ?? FRAME_BASE_PRICE,
-    frame: { name: frame.name, hex: "#1a1a1a" },
+    frameLabel: frame.name,
     tint: hasLensRaster ? { ...tint, name: lens.name } : tint,
     options: { polarized: false, prescription: false },
     raster: hasFrameRaster || hasLensRaster
@@ -49,7 +49,6 @@ export function buildCompositorConfigFromCatalogue(
   return {
     ...base,
     ...overrides,
-    frame: { ...base.frame, ...overrides.frame },
     tint: { ...base.tint, ...overrides.tint },
     options: { ...base.options, ...overrides.options },
     raster: overrides.raster ?? base.raster,

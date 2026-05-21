@@ -1,32 +1,46 @@
 import { cn } from "@/lib/utils";
 import type { FrameOption } from "@/lib/luxe-data";
-import type { FrameColorEntry } from "@/types/sunglasses-catalog";
+
+import { getFrontPlateUrl } from "../../utils/frame-plates";
 
 interface FrameStepPanelProps {
   frames: FrameOption[];
-  frameColors: FrameColorEntry[];
   selectedFrameId: string;
-  selectedFrameColor: { name: string; hex: string };
   onSelectFrame: (id: string) => void;
-  onSelectColor: (color: { name: string; hex: string }) => void;
 }
 
-export function FrameStepPanel({
-  frames,
-  frameColors,
-  selectedFrameId,
-  selectedFrameColor,
-  onSelectFrame,
-  onSelectColor,
-}: FrameStepPanelProps) {
+function FrameCardThumbnail({ frame }: { frame: FrameOption }) {
+  const src = getFrontPlateUrl(frame);
+
+  if (src) {
+    return (
+      <div className="flex aspect-[5/3] w-full items-center justify-center overflow-hidden rounded-md border border-border/60 bg-muted/30">
+        <img
+          src={src}
+          alt=""
+          className="max-h-full max-w-full object-contain p-1"
+          crossOrigin="anonymous"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="flex aspect-[5/3] w-full items-center justify-center rounded-md border border-dashed border-border bg-muted/20 px-2 text-center text-[10px] leading-tight text-muted-foreground">
+      No preview
+    </div>
+  );
+}
+
+export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: FrameStepPanelProps) {
+  return (
+    <div className="space-y-4">
       <div>
-        <h3 className="font-display text-lg font-bold text-foreground">Choose your frame</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Select a style, then pick a frame colour.</p>
+        <h3 className="font-display text-base font-bold text-foreground">Choose your frame</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">Select a frame style from the catalogue.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-2">
         {frames.map((frame) => {
           const active = frame.id === selectedFrameId;
           return (
@@ -35,50 +49,30 @@ export function FrameStepPanel({
               type="button"
               onClick={() => onSelectFrame(frame.id)}
               className={cn(
-                "rounded-2xl border p-4 text-left transition-all",
+                "flex min-w-0 flex-col rounded-xl border p-2 text-left transition-all",
                 active
-                  ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
                   : "border-border bg-card hover:border-primary/40",
               )}
             >
-              <p className="font-semibold text-foreground">{frame.name}</p>
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{frame.description}</p>
-              <p className="mt-2 text-sm font-bold text-primary">${frame.price}</p>
+              <FrameCardThumbnail frame={frame} />
+              <div className="mt-2 min-w-0 space-y-0.5">
+                <p className="truncate text-xs font-semibold text-foreground sm:text-sm">{frame.name}</p>
+                {frame.description ? (
+                  <p className="hidden line-clamp-2 text-[10px] text-muted-foreground sm:block">
+                    {frame.description}
+                  </p>
+                ) : null}
+                <p className="text-[11px] font-bold text-primary sm:text-xs">${frame.price}</p>
+              </div>
             </button>
           );
         })}
-        {frames.length === 0 && (
-          <p className="text-sm text-muted-foreground">No frames in catalogue yet.</p>
-        )}
       </div>
 
-      <div>
-        <p className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Frame colour</p>
-        <div className="flex flex-wrap gap-3">
-          {frameColors.map((color) => {
-            const active = selectedFrameColor.hex === color.hex;
-            return (
-              <button
-                key={color.id}
-                type="button"
-                title={color.name}
-                onClick={() => onSelectColor({ name: color.name, hex: color.hex })}
-                className={cn(
-                  "h-10 w-10 rounded-full border-2 transition-transform",
-                  active ? "scale-110 border-primary" : "border-border hover:scale-105",
-                )}
-                style={{ backgroundColor: color.hex }}
-                aria-label={color.name}
-                aria-pressed={active}
-              />
-            );
-          })}
-        </div>
-        {frameColors.length === 0 && (
-          <p className="text-sm text-muted-foreground">No frame colours configured in admin.</p>
-        )}
-        <p className="mt-2 text-sm text-muted-foreground">{selectedFrameColor.name}</p>
-      </div>
+      {frames.length === 0 && (
+        <p className="text-sm text-muted-foreground">No frames in catalogue yet.</p>
+      )}
     </div>
   );
 }

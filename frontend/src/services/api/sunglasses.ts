@@ -1,6 +1,5 @@
 import type {
   BuilderOptionEntry,
-  FrameColorEntry,
   LensTintEntry,
   SunglassesCatalogSnapshot,
 } from "@/types/sunglasses-catalog";
@@ -48,25 +47,6 @@ export const sunglassesApi = {
 
   deleteBuilderOption(id: string): Promise<{ message: string }> {
     return apiRequest<{ message: string }>(`/sunglasses/options/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-  },
-
-  createFrameColor(
-    payload: Omit<FrameColorEntry, "id" | "createdAt" | "updatedAt">,
-  ): Promise<FrameColorEntry> {
-    return apiRequest<FrameColorEntry>("/sunglasses/frame-colors", { method: "POST", body: payload });
-  },
-
-  updateFrameColor(id: string, payload: Partial<FrameColorEntry>): Promise<FrameColorEntry> {
-    return apiRequest<FrameColorEntry>(`/sunglasses/frame-colors/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      body: payload,
-    });
-  },
-
-  deleteFrameColor(id: string): Promise<{ message: string }> {
-    return apiRequest<{ message: string }>(`/sunglasses/frame-colors/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
   },

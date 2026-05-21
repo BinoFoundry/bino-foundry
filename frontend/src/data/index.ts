@@ -13,3 +13,4 @@ export {
 export type { TypeEntry } from "@/types/catalogue";
 export type { CrystalEntry } from "@/data/crystals";
 export type { FrameEntry } from "@/data/glasses";
+export type { CharmEntry, SpacerEntry, CharmTypeEntry, SpacerTypeEntry } from "@/types/catalogue";

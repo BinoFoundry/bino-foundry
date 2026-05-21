@@ -1,4 +1,4 @@
-import { LAYER_Z_INDEX } from "../constants";
+import { DEFAULT_FRAME_VECTOR_COLOR, LAYER_Z_INDEX } from "../constants";
 import type {
   CompositorLayerSpec,
   CompositorStack,
@@ -36,7 +36,7 @@ export function buildCompositorStack(
     layers.push(
       layer("frame-side", "frame-vector", {
         variant: "side",
-        color: config.frame.hex,
+        color: DEFAULT_FRAME_VECTOR_COLOR,
       }),
     );
     return { view, layers };
@@ -77,7 +77,7 @@ export function buildCompositorStack(
     layers.push(
       layer("frame-image", "frame-image", {
         src: raster.frameImageUrl,
-        alt: config.frame.name,
+        alt: config.frameLabel ?? "Frame",
       }),
     );
   }
@@ -87,14 +87,14 @@ export function buildCompositorStack(
     layers.push(
       layer("frame-vector", "frame-vector", {
         variant: "front",
-        color: config.frame.hex,
+        color: DEFAULT_FRAME_VECTOR_COLOR,
       }),
     );
   } else if (!raster?.frameImageUrl && !raster?.lensImageUrl) {
     layers.push(
       layer("frame-vector", "frame-vector", {
         variant: "front",
-        color: config.frame.hex,
+        color: DEFAULT_FRAME_VECTOR_COLOR,
       }),
     );
   }

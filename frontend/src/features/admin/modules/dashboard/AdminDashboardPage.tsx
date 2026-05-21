@@ -17,9 +17,9 @@ const quickLinks: {
   icon: typeof Glasses;
 }[] = [
   { section: "frames", label: "Frames", description: "Sunglasses frame SKUs", icon: Glasses },
-  { section: "crystals", label: "Crystals", description: "Bracelet bead catalogue", icon: Gem },
-  { section: "types", label: "Crystal types", description: "Taxonomy", icon: Settings2 },
-  { section: "pricing", label: "Sunglasses config", description: "Tints, options, colours", icon: Sun },
+  { section: "crystals", label: "Bracelet items", description: "Crystals, charms, spacers", icon: Gem },
+  { section: "types", label: "Bracelet types", description: "Crystal/charm/spacer taxonomies", icon: Settings2 },
+  { section: "pricing", label: "Sunglasses config", description: "Lens tints and add-ons", icon: Sun },
   { section: "media", label: "Media", description: "Staging uploads", icon: Image },
 ];
 
@@ -38,10 +38,13 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
       <div className="mb-8 grid gap-3 sm:grid-cols-3">
         <StatCard label="Frames" value={catalogue.frames?.length ?? 0} />
         <StatCard label="Crystals" value={catalogue.crystals.length} />
-        <StatCard label="Types" value={catalogue.types?.length ?? 0} />
+        <StatCard label="Charms" value={catalogue.charms.length} />
+        <StatCard label="Spacers" value={catalogue.spacers.length} />
+        <StatCard label="Crystal types" value={catalogue.types?.length ?? 0} />
+        <StatCard label="Charm types" value={catalogue.charmTypes?.length ?? 0} />
+        <StatCard label="Spacer types" value={catalogue.spacerTypes?.length ?? 0} />
         <StatCard label="Lens tints" value={sunglasses.lensTints.length} />
         <StatCard label="Builder options" value={sunglasses.builderOptions.length} />
-        <StatCard label="Frame colours" value={sunglasses.frameColors.length} />
       </div>
 
       <h3 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">

@@ -59,16 +59,16 @@ export function LensStepPanel({
   onSelectTint,
 }: LensStepPanelProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h3 className="font-display text-lg font-bold text-foreground">Lens options</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h3 className="font-display text-base font-bold text-foreground">Lens options</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">
           Tint is applied dynamically to the lens only — the frame stays unchanged in real time.
         </p>
       </div>
 
       {polarizedOption && (
-        <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
           <div>
             <Label htmlFor="polarized-toggle" className="font-semibold">
               {polarizedOption.label}

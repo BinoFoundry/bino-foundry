@@ -13,4 +13,7 @@ export const LAYER_Z_INDEX: Record<CompositorLayerType, number> = {
 
 export const DEFAULT_VIEWBOX = "0 0 400 200";
 
+/** Default vector frame fill when no per-SKU colour is configured. */
+export const DEFAULT_FRAME_VECTOR_COLOR = "#1a1a1a";
+
 export const COMPOSITOR_TRANSITION_MS = 400;

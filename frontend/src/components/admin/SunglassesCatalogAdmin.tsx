@@ -5,21 +5,15 @@ import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/common";
 import { LoadingState } from "@/components/common";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
-import type {
-  BuilderOptionEntry,
-  FrameColorEntry,
-  LensTintEntry,
-} from "@/types/sunglasses-catalog";
+import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
 
-type Section = "tints" | "options" | "colors";
+type Section = "tints" | "options";
 
 export function SunglassesCatalogAdmin() {
   const catalog = useSunglassesCatalog();
   const [section, setSection] = useState<Section>("tints");
   const [editingTint, setEditingTint] = useState<LensTintEntry | null>(null);
   const [editingOption, setEditingOption] = useState<BuilderOptionEntry | null>(null);
-  const [editingColor, setEditingColor] = useState<FrameColorEntry | null>(null);
-
   useEffect(() => {
     void catalog.refreshAdminFromApi();
   }, [catalog.refreshAdminFromApi]);
@@ -45,7 +39,6 @@ export function SunglassesCatalogAdmin() {
           [
             ["tints", "Lens tints"],
             ["options", "Add-on options"],
-            ["colors", "Frame colours"],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -162,48 +155,6 @@ export function SunglassesCatalogAdmin() {
           </CatalogSection>
         )}
 
-        {section === "colors" && (
-          <CatalogSection
-            title="Frame colours"
-            onAdd={() =>
-              setEditingColor({
-                id: "",
-                name: "",
-                hex: "#1a1a1a",
-                displayOrder: 0,
-                isActive: true,
-              })
-            }
-          >
-            {catalog.frameColors.map((color) => (
-              <CatalogRow
-                key={color.id}
-                title={color.name}
-                subtitle={color.hex}
-                active={color.isActive}
-                onEdit={() => setEditingColor(color)}
-                onDelete={() => void catalog.deleteFrameColor(color.id)}
-              />
-            ))}
-            {editingColor && (
-              <ColorEditor
-                entry={editingColor}
-                onCancel={() => setEditingColor(null)}
-                onSave={async (entry) => {
-                  if (entry.id) await catalog.updateFrameColor(entry);
-                  else
-                    await catalog.createFrameColor({
-                      name: entry.name,
-                      hex: entry.hex,
-                      displayOrder: entry.displayOrder,
-                      isActive: entry.isActive,
-                    });
-                  setEditingColor(null);
-                }}
-              />
-            )}
-          </CatalogSection>
-        )}
       </div>
     </div>
   );
@@ -347,41 +298,6 @@ function OptionEditor({
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
         <Button type="submit" size="sm">Save option</Button>
-      </div>
-    </form>
-  );
-}
-
-function ColorEditor({
-  entry,
-  onSave,
-  onCancel,
-}: {
-  entry: FrameColorEntry;
-  onSave: (entry: FrameColorEntry) => void | Promise<void>;
-  onCancel: () => void;
-}) {
-  const [form, setForm] = useState(entry);
-  return (
-    <form
-      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSave(form);
-      }}
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <input className={fieldClass()} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input className={fieldClass()} placeholder="#RRGGBB" value={form.hex} onChange={(e) => setForm({ ...form, hex: e.target.value })} />
-        <input className={fieldClass()} type="number" placeholder="Display order" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-          Active
-        </label>
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" size="sm">Save colour</Button>
       </div>
     </form>
   );

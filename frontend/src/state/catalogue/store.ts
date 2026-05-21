@@ -1,30 +1,31 @@
-import { DEFAULT_CRYSTALS } from "@/data/crystals";
-import { DEFAULT_FRAMES } from "@/data/glasses";
-import type { CrystalEntry, FrameEntry, TypeEntry } from "@/types/catalogue";
+import type {
+  CharmEntry,
+  CharmTypeEntry,
+  CrystalEntry,
+  FrameEntry,
+  SpacerEntry,
+  SpacerTypeEntry,
+  TypeEntry,
+} from "@/types/catalogue";
 
-export const CATALOGUE_STORAGE_KEY = "bino_catalogue_v3";
+export const CATALOGUE_STORAGE_KEY = "bino_catalogue_v4";
 
 export interface CatalogueStore {
   crystals: CrystalEntry[];
+  charms: CharmEntry[];
+  spacers: SpacerEntry[];
   frames: FrameEntry[];
   types: TypeEntry[];
+  charmTypes: CharmTypeEntry[];
+  spacerTypes: SpacerTypeEntry[];
 }
 
 export function loadFromStorage(): Partial<CatalogueStore> {
-  try {
-    const raw = localStorage.getItem(CATALOGUE_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Partial<CatalogueStore>) : {};
-  } catch {
-    return {};
-  }
+  return {};
 }
 
-export function saveToStorage(data: CatalogueStore): void {
-  try {
-    localStorage.setItem(CATALOGUE_STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // quota / private mode
-  }
+export function saveToStorage(_data: CatalogueStore): void {
+  // Catalogue state is API-driven; local persistence intentionally disabled.
 }
 
 /** Merge stored overrides on top of defaults by `id`. */
@@ -38,11 +39,14 @@ export function mergeById<T extends { id: string }>(defaults: T[], stored: T[]):
 }
 
 export function createInitialCatalogueStore(): CatalogueStore {
-  const saved = loadFromStorage();
   return {
-    crystals: mergeById(DEFAULT_CRYSTALS, saved.crystals ?? []),
-    frames: mergeById(DEFAULT_FRAMES, saved.frames ?? []),
-    types: mergeById([], saved.types ?? []),
+    crystals: [],
+    charms: [],
+    spacers: [],
+    frames: [],
+    types: [],
+    charmTypes: [],
+    spacerTypes: [],
   };
 }
 

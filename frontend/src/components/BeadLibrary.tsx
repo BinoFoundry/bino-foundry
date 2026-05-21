@@ -1,18 +1,15 @@
 import { useState, useMemo } from "react";
 import { Search, X, Info, Gem, Heart, Circle } from "lucide-react";
-import { useCatalogue } from "@/data/index";
+import { useCatalogue } from "@/state/catalogue";
 import type { CrystalEntry } from "@/data/crystals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  CHARM_LIBRARY,
-  SPACER_LIBRARY,
-  type CharmItem,
-  type SpacerItem,
-} from "@/lib/luxe-data";
+import type { CharmEntry, SpacerEntry } from "@/types/catalogue";
 
 type CrystalBead = CrystalEntry;
+type CharmItem = CharmEntry;
+type SpacerItem = SpacerEntry;
 type LibraryTab = "crystals" | "charms" | "spacers";
 
 interface BeadLibraryProps {
@@ -30,35 +27,50 @@ const TABS: { id: LibraryTab; label: string; icon: typeof Gem }[] = [
 ];
 
 const BeadLibrary = ({ onSelectCrystal, onSelectCharm, onSelectSpacer, open, onClose }: BeadLibraryProps) => {
-  const { crystals, types } = useCatalogue();
+  const cat = useCatalogue();
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<LibraryTab>("crystals");
   const isMobile = useIsMobile();
 
   const availableTypes = useMemo(() => {
-    if (!types) return [];
-    return [...types].sort((a, b) => a.name.localeCompare(b.name));
-  }, [types]);
+    if (activeTab === "charms") {
+      return [...cat.charmTypes].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (activeTab === "spacers") {
+      return [...cat.spacerTypes].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return [...cat.types].sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeTab, cat.charmTypes, cat.spacerTypes, cat.types]);
 
   const filteredCrystals = useMemo(
     () =>
-      crystals.filter((b) => {
+      cat.crystals.filter((b) => {
         const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase());
         const matchesType = selectedType === "all" || b.type === selectedType;
         return matchesSearch && matchesType;
       }),
-    [crystals, search, selectedType]
+    [cat.crystals, search, selectedType]
   );
 
   const filteredCharms = useMemo(
-    () => CHARM_LIBRARY.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())),
-    [search]
+    () =>
+      cat.charms.filter((c) => {
+        const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase());
+        const matchesType = selectedType === "all" || c.type === selectedType;
+        return matchesSearch && matchesType;
+      }),
+    [cat.charms, search, selectedType]
   );
 
   const filteredSpacers = useMemo(
-    () => SPACER_LIBRARY.filter((s) => s.name.toLowerCase().includes(search.toLowerCase())),
-    [search]
+    () =>
+      cat.spacers.filter((s) => {
+        const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
+        const matchesType = selectedType === "all" || s.type === selectedType;
+        return matchesSearch && matchesType;
+      }),
+    [cat.spacers, search, selectedType]
   );
 
   if (!open) return null;
@@ -107,7 +119,7 @@ const BeadLibrary = ({ onSelectCrystal, onSelectCharm, onSelectSpacer, open, onC
           />
         </div>
 
-        {activeTab === "crystals" && (
+        {(activeTab === "crystals" || activeTab === "charms" || activeTab === "spacers") && (
           <Select value={selectedType} onValueChange={setSelectedType}>
             <SelectTrigger className="w-full h-8 text-xs font-body">
               <SelectValue placeholder="Filter by type" />

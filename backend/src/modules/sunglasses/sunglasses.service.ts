@@ -4,8 +4,6 @@ import { assertNoDbError } from "../../lib/supabase-db.js";
 import type {
   BuilderOptionCreateDTO,
   BuilderOptionUpdateDTO,
-  FrameColorCreateDTO,
-  FrameColorUpdateDTO,
   LensTintCreateDTO,
   LensTintUpdateDTO,
 } from "./sunglasses.validation.js";
@@ -42,18 +40,6 @@ function mapBuilderOption(row: Record<string, unknown>) {
   };
 }
 
-function mapFrameColor(row: Record<string, unknown>) {
-  return {
-    id: row.id,
-    name: row.name,
-    hex: row.hex,
-    displayOrder: row.display_order,
-    isActive: row.is_active,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 async function readLensDisclaimer(): Promise<string> {
   const supabase = getSupabaseServiceRole();
   const { data, error } = await supabase
@@ -72,29 +58,26 @@ async function readLensDisclaimer(): Promise<string> {
 
 export class SunglassesCatalogService {
   async getCatalog() {
-    const [lensTints, builderOptions, frameColors, lensDisclaimer] = await Promise.all([
+    const [lensTints, builderOptions, lensDisclaimer] = await Promise.all([
       this.listLensTints(false),
       this.listBuilderOptions(false),
-      this.listFrameColors(false),
       readLensDisclaimer(),
     ]);
 
     return {
       lensTints: lensTints.filter((t) => t.isActive),
       builderOptions: builderOptions.filter((o) => o.isActive),
-      frameColors: frameColors.filter((c) => c.isActive),
       lensDisclaimer,
     };
   }
 
   async getAdminCatalog() {
-    const [lensTints, builderOptions, frameColors, lensDisclaimer] = await Promise.all([
+    const [lensTints, builderOptions, lensDisclaimer] = await Promise.all([
       this.listLensTints(true),
       this.listBuilderOptions(true),
-      this.listFrameColors(true),
       readLensDisclaimer(),
     ]);
-    return { lensTints, builderOptions, frameColors, lensDisclaimer };
+    return { lensTints, builderOptions, lensDisclaimer };
   }
 
   async listLensTints(includeInactive: boolean) {
@@ -237,66 +220,6 @@ export class SunglassesCatalogService {
     return { message: "Builder option deleted" };
   }
 
-  async listFrameColors(includeInactive: boolean) {
-    const supabase = getSupabaseServiceRole();
-    let query = supabase
-      .from("sunglasses_frame_colors")
-      .select("*")
-      .order("display_order", { ascending: true })
-      .order("name", { ascending: true });
-
-    if (!includeInactive) {
-      query = query.eq("is_active", true);
-    }
-
-    const { data, error } = await query;
-    assertNoDbError(error);
-    return (data ?? []).map((row) => mapFrameColor(row as Record<string, unknown>));
-  }
-
-  async createFrameColor(payload: FrameColorCreateDTO) {
-    const supabase = getSupabaseServiceRole();
-    const { data, error } = await supabase
-      .from("sunglasses_frame_colors")
-      .insert({
-        name: payload.name,
-        hex: payload.hex,
-        display_order: payload.displayOrder ?? 0,
-        is_active: payload.isActive ?? true,
-      })
-      .select("*")
-      .single();
-
-    assertNoDbError(error);
-    return mapFrameColor(data as Record<string, unknown>);
-  }
-
-  async updateFrameColor(id: string, payload: FrameColorUpdateDTO) {
-    const supabase = getSupabaseServiceRole();
-    const patch: Record<string, unknown> = {};
-    if (payload.name !== undefined) patch.name = payload.name;
-    if (payload.hex !== undefined) patch.hex = payload.hex;
-    if (payload.displayOrder !== undefined) patch.display_order = payload.displayOrder;
-    if (payload.isActive !== undefined) patch.is_active = payload.isActive;
-
-    const { data, error } = await supabase
-      .from("sunglasses_frame_colors")
-      .update(patch)
-      .eq("id", id)
-      .select("*")
-      .maybeSingle();
-
-    assertNoDbError(error);
-    if (!data) throw new NotFoundError("Frame colour not found");
-    return mapFrameColor(data as Record<string, unknown>);
-  }
-
-  async removeFrameColor(id: string) {
-    const supabase = getSupabaseServiceRole();
-    const { error } = await supabase.from("sunglasses_frame_colors").delete().eq("id", id);
-    assertNoDbError(error);
-    return { message: "Frame colour deleted" };
-  }
 }
 
 export const sunglassesCatalogService = new SunglassesCatalogService();

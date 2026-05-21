@@ -9,31 +9,48 @@ import {
   type ReactNode,
 } from "react";
 
-import { DEFAULT_CRYSTALS } from "@/data/crystals";
-import { DEFAULT_FRAMES } from "@/data/glasses";
 import { catalogueApi } from "@/services/api";
 import { isApiError } from "@/services/api/errors";
-import type { CrystalEntry, FrameEntry, TypeEntry } from "@/types/catalogue";
+import type {
+  CharmEntry,
+  CharmTypeEntry,
+  CrystalEntry,
+  FrameEntry,
+  SpacerEntry,
+  SpacerTypeEntry,
+  TypeEntry,
+} from "@/types/catalogue";
 
 import {
   CATALOGUE_STORAGE_KEY,
   createInitialCatalogueStore,
-  mergeById,
   saveToStorage,
   syncCatalogueSnapshot,
   type CatalogueStore,
 } from "./store";
 
 export interface CatalogueActions {
-  addCrystal: (entry: CrystalEntry) => void;
-  updateCrystal: (entry: CrystalEntry) => void;
-  deleteCrystal: (id: string) => void;
-  addFrame: (entry: FrameEntry) => void;
-  updateFrame: (entry: FrameEntry) => void;
-  deleteFrame: (id: string) => void;
-  addType: (entry: TypeEntry) => void;
-  updateType: (entry: TypeEntry) => void;
-  deleteType: (id: string) => void;
+  addCrystal: (entry: CrystalEntry) => Promise<void>;
+  updateCrystal: (entry: CrystalEntry) => Promise<void>;
+  deleteCrystal: (id: string) => Promise<void>;
+  addCharm: (entry: CharmEntry) => Promise<void>;
+  updateCharm: (entry: CharmEntry) => Promise<void>;
+  deleteCharm: (id: string) => Promise<void>;
+  addSpacer: (entry: SpacerEntry) => Promise<void>;
+  updateSpacer: (entry: SpacerEntry) => Promise<void>;
+  deleteSpacer: (id: string) => Promise<void>;
+  addFrame: (entry: FrameEntry) => Promise<void>;
+  updateFrame: (entry: FrameEntry) => Promise<void>;
+  deleteFrame: (id: string) => Promise<void>;
+  addType: (entry: TypeEntry) => Promise<void>;
+  updateType: (entry: TypeEntry) => Promise<void>;
+  deleteType: (id: string) => Promise<void>;
+  addCharmType: (entry: CharmTypeEntry) => Promise<void>;
+  updateCharmType: (entry: CharmTypeEntry) => Promise<void>;
+  deleteCharmType: (id: string) => Promise<void>;
+  addSpacerType: (entry: SpacerTypeEntry) => Promise<void>;
+  updateSpacerType: (entry: SpacerTypeEntry) => Promise<void>;
+  deleteSpacerType: (id: string) => Promise<void>;
   resetToDefaults: () => void;
   refreshFromApi: () => Promise<void>;
 }
@@ -62,23 +79,27 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, crystals, types] = await Promise.all([
+      const [frames, crystals, charms, spacers, types, charmTypes, spacerTypes] = await Promise.all([
         catalogueApi.listFrames(),
         catalogueApi.listCrystals(),
+        catalogueApi.listCharms(),
+        catalogueApi.listSpacers(),
         catalogueApi.listTypes(),
+        catalogueApi.listCharmTypes(),
+        catalogueApi.listSpacerTypes(),
       ]);
-
-      setStore((prev) => {
-        const next: CatalogueStore = {
-          crystals:
-            crystals.length > 0 ? mergeById(DEFAULT_CRYSTALS, crystals) : prev.crystals,
-          frames: frames.length > 0 ? mergeById(DEFAULT_FRAMES, frames) : prev.frames,
-          types: types.length > 0 ? mergeById([], types) : prev.types,
-        };
-        saveToStorage(next);
-        syncCatalogueSnapshot(next);
-        return next;
-      });
+      const next: CatalogueStore = {
+        crystals,
+        charms,
+        spacers,
+        frames,
+        types,
+        charmTypes,
+        spacerTypes,
+      };
+      saveToStorage(next);
+      syncCatalogueSnapshot(next);
+      setStore(next);
     } catch (error) {
       const message = isApiError(error)
         ? error.message
@@ -102,115 +123,121 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     void refreshFromApi();
   }, [refreshFromApi]);
 
-  const addCrystal = useCallback((entry: CrystalEntry) => {
-    setStore((prev) => {
-      const next = { ...prev, crystals: [...prev.crystals, entry] };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.createCrystal(entry).catch((err) => console.error("createCrystal", err));
-  }, []);
+  const addCrystal = useCallback(async (entry: CrystalEntry) => {
+    await catalogueApi.createCrystal(entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const updateCrystal = useCallback((entry: CrystalEntry) => {
-    setStore((prev) => {
-      const next = {
-        ...prev,
-        crystals: prev.crystals.map((c) => (c.id === entry.id ? entry : c)),
-      };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.updateCrystal(entry.id, entry).catch((err) => console.error("updateCrystal", err));
-  }, []);
+  const updateCrystal = useCallback(async (entry: CrystalEntry) => {
+    await catalogueApi.updateCrystal(entry.id, entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const deleteCrystal = useCallback((id: string) => {
-    setStore((prev) => {
-      const next = { ...prev, crystals: prev.crystals.filter((c) => c.id !== id) };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.deleteCrystal(id).catch((err) => console.error("deleteCrystal", err));
-  }, []);
+  const deleteCrystal = useCallback(async (id: string) => {
+    await catalogueApi.deleteCrystal(id);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const addFrame = useCallback((entry: FrameEntry) => {
-    setStore((prev) => {
-      const next = { ...prev, frames: [...prev.frames, entry] };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.createFrame(entry).catch((err) => console.error("createFrame", err));
-  }, []);
+  const addCharm = useCallback(async (entry: CharmEntry) => {
+    await catalogueApi.createCharm(entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const updateFrame = useCallback((entry: FrameEntry) => {
-    setStore((prev) => {
-      const next = {
-        ...prev,
-        frames: prev.frames.map((f) => (f.id === entry.id ? entry : f)),
-      };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.updateFrame(entry.id, entry).catch((err) => console.error("updateFrame", err));
-  }, []);
+  const updateCharm = useCallback(async (entry: CharmEntry) => {
+    await catalogueApi.updateCharm(entry.id, entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const deleteFrame = useCallback((id: string) => {
-    setStore((prev) => {
-      const next = { ...prev, frames: prev.frames.filter((f) => f.id !== id) };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.deleteFrame(id).catch((err) => console.error("deleteFrame", err));
-  }, []);
+  const deleteCharm = useCallback(async (id: string) => {
+    await catalogueApi.deleteCharm(id);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const addType = useCallback((entry: TypeEntry) => {
-    void catalogueApi
-      .createType({ name: entry.name, description: entry.description })
-      .then((saved) => {
-        setStore((prev) => {
-          const next = { ...prev, types: [...prev.types, saved] };
-          saveToStorage(next);
-          syncCatalogueSnapshot(next);
-          return next;
-        });
-      })
-      .catch((err) => console.error("createType", err));
-  }, []);
+  const addSpacer = useCallback(async (entry: SpacerEntry) => {
+    await catalogueApi.createSpacer(entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const updateType = useCallback((entry: TypeEntry) => {
-    setStore((prev) => {
-      const next = {
-        ...prev,
-        types: prev.types.map((t) => (t.id === entry.id ? entry : t)),
-      };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.updateType(entry.id, entry).catch((err) => console.error("updateType", err));
-  }, []);
+  const updateSpacer = useCallback(async (entry: SpacerEntry) => {
+    await catalogueApi.updateSpacer(entry.id, entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
-  const deleteType = useCallback((id: string) => {
-    setStore((prev) => {
-      const next = { ...prev, types: prev.types.filter((t) => t.id !== id) };
-      saveToStorage(next);
-      syncCatalogueSnapshot(next);
-      return next;
-    });
-    void catalogueApi.deleteType(id).catch((err) => console.error("deleteType", err));
-  }, []);
+  const deleteSpacer = useCallback(async (id: string) => {
+    await catalogueApi.deleteSpacer(id);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const addFrame = useCallback(async (entry: FrameEntry) => {
+    await catalogueApi.createFrame(entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const updateFrame = useCallback(async (entry: FrameEntry) => {
+    await catalogueApi.updateFrame(entry.id, entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const deleteFrame = useCallback(async (id: string) => {
+    await catalogueApi.deleteFrame(id);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const addType = useCallback(async (entry: TypeEntry) => {
+    await catalogueApi.createType({ name: entry.name, description: entry.description });
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const updateType = useCallback(async (entry: TypeEntry) => {
+    await catalogueApi.updateType(entry.id, entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const deleteType = useCallback(async (id: string) => {
+    await catalogueApi.deleteType(id);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const addCharmType = useCallback(async (entry: CharmTypeEntry) => {
+    await catalogueApi.createCharmType({ name: entry.name, description: entry.description });
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const updateCharmType = useCallback(async (entry: CharmTypeEntry) => {
+    await catalogueApi.updateCharmType(entry.id, entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const deleteCharmType = useCallback(async (id: string) => {
+    await catalogueApi.deleteCharmType(id);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const addSpacerType = useCallback(async (entry: SpacerTypeEntry) => {
+    await catalogueApi.createSpacerType({ name: entry.name, description: entry.description });
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const updateSpacerType = useCallback(async (entry: SpacerTypeEntry) => {
+    await catalogueApi.updateSpacerType(entry.id, entry);
+    await refreshFromApi();
+  }, [refreshFromApi]);
+
+  const deleteSpacerType = useCallback(async (id: string) => {
+    await catalogueApi.deleteSpacerType(id);
+    await refreshFromApi();
+  }, [refreshFromApi]);
 
   const resetToDefaults = useCallback(() => {
     localStorage.removeItem(CATALOGUE_STORAGE_KEY);
     const next: CatalogueStore = {
-      crystals: [...DEFAULT_CRYSTALS],
-      frames: [...DEFAULT_FRAMES],
+      crystals: [],
+      charms: [],
+      spacers: [],
+      frames: [],
       types: [],
+      charmTypes: [],
+      spacerTypes: [],
     };
     persist(next, setStore);
   }, []);
@@ -223,12 +250,24 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addCrystal,
       updateCrystal,
       deleteCrystal,
+      addCharm,
+      updateCharm,
+      deleteCharm,
+      addSpacer,
+      updateSpacer,
+      deleteSpacer,
       addFrame,
       updateFrame,
       deleteFrame,
       addType,
       updateType,
       deleteType,
+      addCharmType,
+      updateCharmType,
+      deleteCharmType,
+      addSpacerType,
+      updateSpacerType,
+      deleteSpacerType,
       resetToDefaults,
       refreshFromApi,
     }),
@@ -239,12 +278,24 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addCrystal,
       updateCrystal,
       deleteCrystal,
+      addCharm,
+      updateCharm,
+      deleteCharm,
+      addSpacer,
+      updateSpacer,
+      deleteSpacer,
       addFrame,
       updateFrame,
       deleteFrame,
       addType,
       updateType,
       deleteType,
+      addCharmType,
+      updateCharmType,
+      deleteCharmType,
+      addSpacerType,
+      updateSpacerType,
+      deleteSpacerType,
       resetToDefaults,
       refreshFromApi,
     ],

@@ -5,7 +5,6 @@ import type { FrameOption } from "@/lib/luxe-data";
 
 interface PreviewStepPanelProps {
   frameSku: FrameOption;
-  frameColorName: string;
   tintName: string;
   selectedTintEntry: LensTintEntry | null;
   builderOptions: BuilderOptionEntry[];
@@ -18,7 +17,6 @@ interface PreviewStepPanelProps {
 
 export function PreviewStepPanel({
   frameSku,
-  frameColorName,
   tintName,
   selectedTintEntry,
   builderOptions,
@@ -41,7 +39,7 @@ export function PreviewStepPanel({
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Frame</span>
           <span className="font-medium text-foreground">
-            {frameSku.name} · {frameColorName}
+            {frameSku.name}
           </span>
         </div>
         <div className="flex justify-between text-sm">

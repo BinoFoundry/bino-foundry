@@ -6,7 +6,7 @@ export { createRenderEngineFacade, createPlaceholderRenderFacade } from "./facad
 export { useCompositor, useSunglassesRenderState } from "./hooks";
 export { LayerStack } from "./layers";
 export { RenderProvider, useRenderFacade } from "./RenderProvider";
-export { TINT_PRESETS, FRAME_COLOR_PRESETS, DEFAULT_TINT } from "./tint";
+export { TINT_PRESETS, DEFAULT_TINT } from "./tint";
 export type {
   CompositorLayerSpec,
   CompositorStack,

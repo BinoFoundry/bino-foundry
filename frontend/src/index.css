@@ -111,6 +111,25 @@
   .builder-library {
     @apply w-full shrink-0 md:max-w-xs lg:max-w-sm;
   }
+
+  .customiser-options-scroll {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .customiser-options-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .customiser-options-scroll::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: hsl(var(--border));
+  }
+
+  .customiser-options-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 @supports (padding: max(0px)) {

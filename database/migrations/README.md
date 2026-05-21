@@ -27,6 +27,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 1. `000001_initial_catalog.sql` — extensions, enums-as-check constraints, catalogue + assets + tagging + pricing KV.
 2. `000002_storage_buckets_supabase.sql` — **Supabase-hosted only** (`storage.buckets` + anon SELECT policies for public catalogue buckets). Skip on plain Postgres installs.
 3. `000003_sunglasses_builder_catalog.sql` — lens tints, builder options (polarised / prescription), frame colour swatches + disclaimer KV.
+4. `000004_frame_render_views.sql` — per-frame front/side plates + polygon lens `mask_config` JSON.
+5. `000005_drop_sunglasses_frame_colors.sql` — remove deprecated frame colour swatch table.
+6. `000006_bracelet_charms_spacers.sql` — charms + spacers catalogue tables and dedicated type systems (`charm_types`, `spacer_types`).
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

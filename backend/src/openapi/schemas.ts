@@ -154,32 +154,11 @@ export const schemas = {
       isActive: { type: "boolean", default: true },
     },
   },
-  FrameColor: {
-    type: "object",
-    properties: {
-      id: { type: "string", format: "uuid" },
-      name: { type: "string" },
-      hex: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
-      displayOrder: { type: "integer" },
-      isActive: { type: "boolean" },
-    },
-  },
-  FrameColorCreate: {
-    type: "object",
-    required: ["name", "hex"],
-    properties: {
-      name: { type: "string" },
-      hex: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
-      displayOrder: { type: "integer", minimum: 0, default: 0 },
-      isActive: { type: "boolean", default: true },
-    },
-  },
   SunglassesCatalog: {
     type: "object",
     properties: {
       lensTints: { type: "array", items: { $ref: "#/components/schemas/LensTint" } },
       builderOptions: { type: "array", items: { $ref: "#/components/schemas/BuilderOption" } },
-      frameColors: { type: "array", items: { $ref: "#/components/schemas/FrameColor" } },
       lensDisclaimer: { type: "string" },
     },
   },

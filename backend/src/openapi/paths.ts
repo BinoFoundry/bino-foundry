@@ -337,54 +337,6 @@ export const openApiPaths = {
       },
     },
   },
-  "/sunglasses/frame-colors": {
-    get: {
-      tags: ["Sunglasses"],
-      summary: "List frame colours",
-      responses: {
-        "200": {
-          description: "Frame colours",
-          content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/FrameColor" } } } },
-        },
-      },
-    },
-    post: {
-      tags: ["Sunglasses"],
-      summary: "Create frame colour",
-      security: apiKeySecurity,
-      requestBody: {
-        required: true,
-        content: { "application/json": { schema: { $ref: "#/components/schemas/FrameColorCreate" } } },
-      },
-      responses: {
-        "201": { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/FrameColor" } } } },
-        ...err,
-      },
-    },
-  },
-  "/sunglasses/frame-colors/{id}": {
-    put: {
-      tags: ["Sunglasses"],
-      summary: "Update frame colour",
-      security: apiKeySecurity,
-      parameters: [parameters.uuidId],
-      requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/FrameColorCreate" } } } },
-      responses: {
-        "200": { description: "Updated", content: { "application/json": { schema: { $ref: "#/components/schemas/FrameColor" } } } },
-        ...err,
-      },
-    },
-    delete: {
-      tags: ["Sunglasses"],
-      summary: "Delete frame colour",
-      security: apiKeySecurity,
-      parameters: [parameters.uuidId],
-      responses: {
-        "200": { description: "Deleted", content: { "application/json": { schema: { $ref: "#/components/schemas/MessageResponse" } } } },
-        ...err,
-      },
-    },
-  },
   "/upload/staging": {
     post: {
       tags: ["Upload"],
@@ -435,6 +387,49 @@ export const openApiPaths = {
       },
       responses: {
         "201": { description: "Uploaded" },
+        ...err,
+      },
+    },
+  },
+  "/rendering/frames/{frameId}/bundle": {
+    get: {
+      tags: ["Rendering"],
+      summary: "Get frame render bundle (front/side masks)",
+      parameters: [{ name: "frameId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+      responses: {
+        "200": { description: "Render bundle" },
+        ...err,
+      },
+    },
+  },
+  "/rendering/frames/{frameId}/views/{viewAxis}": {
+    put: {
+      tags: ["Rendering"],
+      summary: "Upsert masked view plate + polygon config",
+      security: apiKeySecurity,
+      parameters: [
+        { name: "frameId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        { name: "viewAxis", in: "path", required: true, schema: { type: "string", enum: ["front", "side"] } },
+      ],
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: { type: "object" } } },
+      },
+      responses: {
+        "200": { description: "View saved" },
+        ...err,
+      },
+    },
+    delete: {
+      tags: ["Rendering"],
+      summary: "Remove render view",
+      security: apiKeySecurity,
+      parameters: [
+        { name: "frameId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        { name: "viewAxis", in: "path", required: true, schema: { type: "string", enum: ["front", "side"] } },
+      ],
+      responses: {
+        "200": { description: "Removed", content: { "application/json": { schema: { $ref: "#/components/schemas/MessageResponse" } } } },
         ...err,
       },
     },

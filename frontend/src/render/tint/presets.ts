@@ -10,12 +10,6 @@ export const TINT_PRESETS: TintGradient[] = [
 
 export const DEFAULT_TINT: TintGradient = TINT_PRESETS[0];
 
-export const FRAME_COLOR_PRESETS = [
-  { name: "Matte Black", hex: "#1a1a1a" },
-  { name: "Tortoise", hex: "#5e3a24" },
-  { name: "Champagne", hex: "#e2e8f0" },
-] as const;
-
 export function findTintPresetByName(name: string): TintGradient | undefined {
   const normalized = name.trim().toLowerCase();
   return TINT_PRESETS.find((p) => p.name.toLowerCase() === normalized);

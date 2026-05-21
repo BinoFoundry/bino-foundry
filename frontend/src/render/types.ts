@@ -1,3 +1,5 @@
+import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
+
 /** Discriminated layer kinds (bottom → top paint order). */
 export type CompositorLayerType =
   | "shadow"
@@ -14,11 +16,6 @@ export interface TintGradient {
   bottom: string;
 }
 
-export interface FrameColorSelection {
-  name: string;
-  hex: string;
-}
-
 /** Builder toggle state keyed by `sunglasses_builder_options.code`. */
 export type SunglassesRenderOptions = Record<string, boolean>;
 
@@ -26,16 +23,19 @@ export type SunglassesRenderOptions = Record<string, boolean>;
  * - `customiser-dynamic`: lens tint via SVG gradient on lens path only; frame vector updates colour; **no** pre-rendered tint swaps.
  * - `catalogue`: legacy/admin path — may use raster plates when catalogue provides URLs.
  */
-export type CompositorRenderMode = "customiser-dynamic" | "catalogue";
+export type CompositorRenderMode = "customiser-dynamic" | "catalogue" | "masked-photo";
 
 /** Input to the compositor (vector demo, raster catalogue assets, or hybrid). */
 export interface SunglassesCompositorConfig {
   renderMode?: CompositorRenderMode;
   basePrice: number;
-  frame: FrameColorSelection;
+  /** Alt text for raster frame plates */
+  frameLabel?: string;
   tint: TintGradient;
   options: SunglassesRenderOptions;
-  /** Ignored when `renderMode` is `customiser-dynamic`. */
+  /** Per-view masked plates when renderMode is `masked-photo`. */
+  maskedViews?: Partial<Record<FrameViewAxis, FrameRenderView>>;
+  /** Ignored when `renderMode` is `customiser-dynamic` or `masked-photo`. */
   raster?: {
     frameImageUrl?: string;
     lensImageUrl?: string;

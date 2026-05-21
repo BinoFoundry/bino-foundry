@@ -6,10 +6,7 @@ import type { FrameOption } from "@/lib/luxe-data";
 import { FRAME_BASE_PRICE } from "@/lib/luxe-data";
 import { buildCustomiserCompositorConfig } from "@/render/adapters/customiser-config";
 import { calculateSunglassesTotal, formatConfigSummary } from "@/render/engine/pricing";
-import {
-  frameColorEntryToSelection,
-  lensTintEntryToGradient,
-} from "@/render/state/sunglasses-render-reducer";
+import { lensTintEntryToGradient } from "@/render/state/sunglasses-render-reducer";
 import { useSunglassesRenderState } from "@/render/hooks/useSunglassesRenderState";
 
 const EMPTY_FRAME: FrameOption = {
@@ -42,24 +39,21 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
   }, [selectedTintId, sunglassesCatalog]);
 
   const catalogSlice = useMemo(() => {
-    const defaultFrame = sunglassesCatalog.frameColors[0];
     const defaultTint = sunglassesCatalog.lensTints[0];
     return {
       builderOptions: sunglassesCatalog.builderOptions,
-      defaultFrame: defaultFrame
-        ? frameColorEntryToSelection(defaultFrame)
-        : { name: "Default", hex: "#1a1a1a" },
       defaultTint: defaultTint
         ? lensTintEntryToGradient(defaultTint)
         : { name: "Default", top: "#4a5568", bottom: "#2d3748" },
     };
-  }, [sunglassesCatalog.builderOptions, sunglassesCatalog.frameColors, sunglassesCatalog.lensTints]);
+  }, [sunglassesCatalog.builderOptions, sunglassesCatalog.lensTints]);
 
   const render = useSunglassesRenderState({
     basePrice: frameSku.price ?? FRAME_BASE_PRICE,
     catalog: catalogSlice,
     builderOptions: sunglassesCatalog.builderOptions,
     selectedTintEntry,
+    frameLabel: frameSku.name,
   });
 
   useEffect(() => {
@@ -75,8 +69,8 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
   }, [sunglassesCatalog.lensTints, selectedTintId]);
 
   useEffect(() => {
-    render.patchConfig({ basePrice: frameSku.price ?? FRAME_BASE_PRICE });
-  }, [frameSku.price, render.patchConfig]);
+    render.patchConfig({ basePrice: frameSku.price ?? FRAME_BASE_PRICE, frameLabel: frameSku.name });
+  }, [frameSku.name, frameSku.price, render.patchConfig]);
 
   useEffect(() => {
     if (selectedTintEntry) {
@@ -88,11 +82,10 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
     () =>
       buildCustomiserCompositorConfig({
         frameSku,
-        frameColor: render.config.frame,
         tint: render.config.tint,
         options: render.config.options,
       }),
-    [frameSku, render.config.frame, render.config.tint, render.config.options],
+    [frameSku, render.config.tint, render.config.options],
   );
 
   const totalPrice = useMemo(
@@ -107,8 +100,8 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
   );
 
   const summaryText = useMemo(
-    () => formatConfigSummary(render.config.frame.name, render.config.tint.name),
-    [render.config.frame.name, render.config.tint.name],
+    () => formatConfigSummary(frameSku.name, render.config.tint.name),
+    [frameSku.name, render.config.tint.name],
   );
 
   useEffect(() => {

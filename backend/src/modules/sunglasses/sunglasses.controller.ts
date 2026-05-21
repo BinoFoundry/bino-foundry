@@ -8,9 +8,6 @@ import {
   builderOptionCreateDto,
   builderOptionIdParam,
   builderOptionUpdateDto,
-  frameColorCreateDto,
-  frameColorIdParam,
-  frameColorUpdateDto,
   lensTintCreateDto,
   lensTintIdParam,
   lensTintUpdateDto,
@@ -64,26 +61,6 @@ async function removeBuilderOption(req: Request, res: Response): Promise<void> {
   sendJson(res, await sunglassesCatalogService.removeBuilderOption(id));
 }
 
-async function listFrameColors(_req: Request, res: Response): Promise<void> {
-  sendJson(res, await sunglassesCatalogService.listFrameColors(true));
-}
-
-async function createFrameColor(req: Request, res: Response): Promise<void> {
-  const dto = validateBody(frameColorCreateDto, req.body);
-  sendCreated(res, await sunglassesCatalogService.createFrameColor(dto));
-}
-
-async function updateFrameColor(req: Request, res: Response): Promise<void> {
-  const { id } = frameColorIdParam.parse(req.params);
-  const dto = validateBody(frameColorUpdateDto, req.body);
-  sendJson(res, await sunglassesCatalogService.updateFrameColor(id, dto));
-}
-
-async function removeFrameColor(req: Request, res: Response): Promise<void> {
-  const { id } = frameColorIdParam.parse(req.params);
-  sendJson(res, await sunglassesCatalogService.removeFrameColor(id));
-}
-
 export const sunglassesHandlers = {
   getCatalog: asyncHandler(getCatalog),
   getAdminCatalog: asyncHandler(getAdminCatalog),
@@ -95,8 +72,4 @@ export const sunglassesHandlers = {
   createBuilderOption: asyncHandler(createBuilderOption),
   updateBuilderOption: asyncHandler(updateBuilderOption),
   removeBuilderOption: asyncHandler(removeBuilderOption),
-  listFrameColors: asyncHandler(listFrameColors),
-  createFrameColor: asyncHandler(createFrameColor),
-  updateFrameColor: asyncHandler(updateFrameColor),
-  removeFrameColor: asyncHandler(removeFrameColor),
 };

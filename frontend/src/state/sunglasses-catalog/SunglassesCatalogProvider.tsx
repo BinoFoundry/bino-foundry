@@ -13,7 +13,6 @@ import { sunglassesApi } from "@/services/api/sunglasses";
 import { isApiError } from "@/services/api/errors";
 import type {
   BuilderOptionEntry,
-  FrameColorEntry,
   LensTintEntry,
   SunglassesCatalogSnapshot,
 } from "@/types/sunglasses-catalog";
@@ -21,7 +20,6 @@ import type {
 const EMPTY_CATALOG: SunglassesCatalogSnapshot = {
   lensTints: [],
   builderOptions: [],
-  frameColors: [],
   lensDisclaimer: "",
 };
 
@@ -34,9 +32,6 @@ export interface SunglassesCatalogActions {
   createBuilderOption: (payload: Omit<BuilderOptionEntry, "id">) => Promise<void>;
   updateBuilderOption: (entry: BuilderOptionEntry) => Promise<void>;
   deleteBuilderOption: (id: string) => Promise<void>;
-  createFrameColor: (payload: Omit<FrameColorEntry, "id">) => Promise<void>;
-  updateFrameColor: (entry: FrameColorEntry) => Promise<void>;
-  deleteFrameColor: (id: string) => Promise<void>;
 }
 
 export type SunglassesCatalogContextValue = SunglassesCatalogSnapshot &
@@ -145,30 +140,6 @@ export function SunglassesCatalogProvider({ children }: { children: ReactNode })
     [refreshAdminFromApi],
   );
 
-  const createFrameColor = useCallback(
-    async (payload: Omit<FrameColorEntry, "id">) => {
-      await sunglassesApi.createFrameColor(payload);
-      await refreshAdminFromApi();
-    },
-    [refreshAdminFromApi],
-  );
-
-  const updateFrameColor = useCallback(
-    async (entry: FrameColorEntry) => {
-      await sunglassesApi.updateFrameColor(entry.id, entry);
-      await refreshAdminFromApi();
-    },
-    [refreshAdminFromApi],
-  );
-
-  const deleteFrameColor = useCallback(
-    async (id: string) => {
-      await sunglassesApi.deleteFrameColor(id);
-      await refreshAdminFromApi();
-    },
-    [refreshAdminFromApi],
-  );
-
   const value = useMemo<SunglassesCatalogContextValue>(() => {
     const classicTints = catalog.lensTints.filter((t) => t.category === "classic");
     const gradientTints = catalog.lensTints.filter((t) => t.category === "gradient");
@@ -187,9 +158,6 @@ export function SunglassesCatalogProvider({ children }: { children: ReactNode })
       createBuilderOption,
       updateBuilderOption,
       deleteBuilderOption,
-      createFrameColor,
-      updateFrameColor,
-      deleteFrameColor,
       getTintById: (id: string) => catalog.lensTints.find((t) => t.id === id),
       getOptionByCode: (code: string) => catalog.builderOptions.find((o) => o.code === code),
     };
@@ -205,9 +173,6 @@ export function SunglassesCatalogProvider({ children }: { children: ReactNode })
     createBuilderOption,
     updateBuilderOption,
     deleteBuilderOption,
-    createFrameColor,
-    updateFrameColor,
-    deleteFrameColor,
   ]);
 
   return (
