@@ -27,6 +27,7 @@
     "start:prod": "npm run start:api:prod",
     "env:check": "node scripts/check-env.mjs",
     "deploy:build": "bash scripts/build-production.sh",
+    "deploy:web": "bash scripts/sync-web-root.sh",
     "docker:api": "docker compose build api",
     "docker:up": "docker compose up -d",
     "typecheck:backend": "npm run typecheck --workspace backend"

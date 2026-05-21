@@ -122,7 +122,7 @@ APP_ENV=production npm run start:api:prod
 curl -s http://localhost:5050/api/status   # expect appEnv: production
 ```
 
-Use [deploy/README.md](../../deploy/README.md) for real staging/production deploys.
+Use [deploy/VPS_SETUP.md](../../deploy/VPS_SETUP.md) for **binofoundry.temukreatif.id** on a VPS (no Docker), or [deploy/README.md](../../deploy/README.md) for other hosting options.
 
 ## Troubleshooting
 

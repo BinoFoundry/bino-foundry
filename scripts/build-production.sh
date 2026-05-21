@@ -16,4 +16,5 @@ npm run build:all
 
 echo "==> Build complete"
 echo "    API:      backend/dist/server.js"
-echo "    Frontend: frontend/dist/"
+echo "    Frontend: frontend/dist/ (build output)"
+echo "    Publish:  sudo npm run deploy:web  → /var/www/bino-foundry (nginx document root)"

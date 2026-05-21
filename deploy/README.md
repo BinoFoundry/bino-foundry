@@ -42,14 +42,18 @@ Outputs:
 
 See [`../frontend/vercel.json`](../frontend/vercel.json) and repo [`vercel.json`](../vercel.json).
 
-## Option B — Single VPS (nginx + API + static)
+## Option B — Single VPS (nginx + API + static, no Docker)
 
-1. `npm run build:all`
-2. Copy `frontend/dist` → `/var/www/bino-foundry`
-3. Run API on `127.0.0.1:5050` with `TRUST_PROXY=1`
-4. Use [`nginx/bino-foundry.conf`](./nginx/bino-foundry.conf) (same-origin `/api` → proxy)
+**Step-by-step guide:** [`VPS_SETUP.md`](./VPS_SETUP.md) — **binofoundry.temukreatif.id** (Node + PM2 + nginx + Let’s Encrypt).
 
-Or set `VITE_API_BASE_URL` empty and proxy only — SPA uses relative `/api` when base URL is empty.
+Quick summary:
+
+1. App install under `/opt/bino-foundry` — `npm run build:all`
+2. Publish SPA — `sudo npm run deploy:web` → `/var/www/bino-foundry`
+3. API on `127.0.0.1:5050` with `TRUST_PROXY=1` (PM2 or systemd)
+4. nginx `root /var/www/bino-foundry` — [`nginx/binofoundry.temukreatif.id.conf`](./nginx/binofoundry.temukreatif.id.conf) or [`nginx/bino-foundry.conf`](./nginx/bino-foundry.conf)
+
+Leave `VITE_API_BASE_URL` empty in `frontend/.env.production` — the SPA uses same-origin `/api` through nginx.
 
 ## Option C — Docker Compose
 
@@ -77,5 +81,6 @@ API: `http://localhost:5050/api/status`
 | Script | Purpose |
 |--------|---------|
 | `scripts/build-production.sh` | CI/VPS full build |
+| `scripts/sync-web-root.sh` | `npm run deploy:web` — rsync `frontend/dist` → `/var/www/bino-foundry` |
 | `scripts/check-env.mjs` | Validate env for current `APP_ENV` |
 | `scripts/start-api-production.sh` | Run compiled API locally |
