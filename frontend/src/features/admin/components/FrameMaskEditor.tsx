@@ -20,7 +20,7 @@ interface FrameMaskEditorProps {
   className?: string;
 }
 
-/** Inline polygon mask editor (bino-rendering editor workflow). */
+/** Lens clip path editor (polygon/curve tools → persisted as SVG clip paths). */
 export function FrameMaskEditor({
   plateUrl,
   initialMask,

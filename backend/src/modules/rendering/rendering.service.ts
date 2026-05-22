@@ -3,38 +3,41 @@ import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
 import type { UpsertFrameViewDTO } from "./rendering.validation.js";
 
+export type FrameViewAxis = "front" | "side" | "three_quarter";
+
 export interface FrameRenderViewRow {
   id: string;
   frameId: string;
-  view: "front" | "side";
+  view: FrameViewAxis;
   plateUrl: string;
   width: number;
   height: number;
-  maskConfig: unknown | null;
-  maskStatus: "draft" | "ready";
+  clipConfig: unknown | null;
+  clipStatus: "draft" | "ready";
+}
+
+function isClipConfigValid(config: unknown): boolean {
+  if (!config || typeof config !== "object") return false;
+  const c = config as { version?: number; lenses?: unknown[] };
+  if (c.version !== 1) return false;
+  if (!Array.isArray(c.lenses) || c.lenses.length === 0) return false;
+  return c.lenses.some((l) => {
+    const pathD = (l as { pathD?: string }).pathD;
+    return typeof pathD === "string" && pathD.trim().length > 8;
+  });
 }
 
 function mapViewRow(row: Record<string, unknown>): FrameRenderViewRow {
   return {
     id: String(row.id),
     frameId: String(row.frame_id),
-    view: row.view_axis as "front" | "side",
+    view: row.view_axis as FrameViewAxis,
     plateUrl: String(row.plate_url),
     width: Number(row.image_width),
     height: Number(row.image_height),
-    maskConfig: row.mask_config ?? null,
-    maskStatus: (row.mask_status as "draft" | "ready") ?? "draft",
+    clipConfig: row.clip_config ?? null,
+    clipStatus: (row.clip_status as "draft" | "ready") ?? "draft",
   };
-}
-
-function isMaskConfigValid(config: unknown): boolean {
-  if (!config || typeof config !== "object") return false;
-  const lenses = (config as { lenses?: unknown }).lenses;
-  if (!Array.isArray(lenses)) return false;
-  return lenses.some((l) => {
-    const pts = (l as { points?: unknown[] }).points;
-    return Array.isArray(pts) && pts.length >= 3;
-  });
 }
 
 export class RenderingService {
@@ -63,17 +66,17 @@ export class RenderingService {
 
   async upsertView(
     frameId: string,
-    viewAxis: "front" | "side",
+    viewAxis: FrameViewAxis,
     payload: UpsertFrameViewDTO,
   ): Promise<FrameRenderViewRow> {
     await this.assertFrameExists(frameId);
 
-    let maskStatus = payload.maskStatus ?? "draft";
-    if (payload.maskConfig) {
-      if (!isMaskConfigValid(payload.maskConfig)) {
-        throw new ValidationError("maskConfig must include at least one lens with 3+ points");
+    let clipStatus = payload.clipStatus ?? "draft";
+    if (payload.clipConfig) {
+      if (!isClipConfigValid(payload.clipConfig)) {
+        throw new ValidationError("clipConfig must include at least one lens with a valid SVG path");
       }
-      maskStatus = payload.maskStatus ?? "ready";
+      clipStatus = payload.clipStatus ?? "ready";
     }
 
     const supabase = getSupabaseServiceRole();
@@ -83,8 +86,10 @@ export class RenderingService {
       plate_url: payload.plateUrl,
       image_width: payload.imageWidth,
       image_height: payload.imageHeight,
-      mask_config: payload.maskConfig ?? null,
-      mask_status: maskStatus,
+      clip_config: payload.clipConfig ?? null,
+      clip_status: clipStatus,
+      mask_config: null,
+      mask_status: clipStatus,
     };
 
     const { data, error } = await supabase
@@ -97,7 +102,7 @@ export class RenderingService {
     return mapViewRow(data as Record<string, unknown>);
   }
 
-  async removeView(frameId: string, viewAxis: "front" | "side"): Promise<{ message: string }> {
+  async removeView(frameId: string, viewAxis: FrameViewAxis): Promise<{ message: string }> {
     await this.assertFrameExists(frameId);
     const supabase = getSupabaseServiceRole();
     const { error } = await supabase

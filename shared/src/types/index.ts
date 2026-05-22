@@ -12,3 +12,4 @@ export interface ApiErrorPayload {
 }
 
 export * from "./bead-crop.js";
+export * from "./lens-clip.js";

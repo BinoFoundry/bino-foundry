@@ -1,6 +1,7 @@
 import type { FrameOption } from "@/lib/luxe-data";
 import { FRAME_BASE_PRICE } from "@/lib/luxe-data";
 import type { FrameRenderView } from "@/types/frame-rendering";
+import { isFrameViewClipReady } from "@/render/lens-clip";
 import type {
   SunglassesCompositorConfig,
   SunglassesRenderOptions,
@@ -13,22 +14,22 @@ export interface CustomiserSelection {
   options: SunglassesRenderOptions;
 }
 
-/** Views with a plate URL (mask optional — canvas pipeline can auto-mask). */
-export function buildPlateViewsMap(views: FrameRenderView[] | undefined) {
+/** Views with plate + ready SVG clip paths. */
+export function buildClipViewsMap(views: FrameRenderView[] | undefined) {
   if (!views?.length) return undefined;
 
-  const map: NonNullable<SunglassesCompositorConfig["maskedViews"]> = {};
+  const map: NonNullable<SunglassesCompositorConfig["clipViews"]> = {};
   for (const v of views) {
-    if (v.plateUrl) map[v.view] = v;
+    if (v.plateUrl && isFrameViewClipReady(v)) map[v.view] = v;
   }
   return Object.keys(map).length > 0 ? map : undefined;
 }
 
 /**
- * Customiser config: masked photo plates when available (bino-rendering), else SVG lens-only mode.
+ * Customiser config: SVG clipPath tint on photo plates when ready, else SVG lens-only demo.
  */
 export function buildCustomiserCompositorConfig(selection: CustomiserSelection): SunglassesCompositorConfig {
-  const plateViews = buildPlateViewsMap(selection.frameSku.renderViews);
+  const clipViews = buildClipViewsMap(selection.frameSku.renderViews);
   const base = {
     basePrice: selection.frameSku.price ?? FRAME_BASE_PRICE,
     frameLabel: selection.frameSku.name,
@@ -36,17 +37,19 @@ export function buildCustomiserCompositorConfig(selection: CustomiserSelection):
     options: selection.options,
   };
 
-  if (plateViews && (plateViews.front || plateViews.side)) {
+  if (clipViews && (clipViews.front || clipViews.side || clipViews.three_quarter)) {
     return {
-      renderMode: "masked-photo",
+      renderMode: "svg-clip",
       ...base,
-      maskedViews: plateViews,
+      clipViews,
+      maskedViews: clipViews,
     };
   }
 
   return {
     renderMode: "customiser-dynamic",
     ...base,
+    clipViews: undefined,
     maskedViews: undefined,
     raster: undefined,
   };

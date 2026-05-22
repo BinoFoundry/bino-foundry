@@ -23,7 +23,7 @@ export interface CanvasCompositorViewProps {
 }
 
 /**
- * Canvas-based sunglasses preview using masked photo plates (bino-rendering workflow).
+ * @deprecated Sunglasses customiser uses {@link SvgClipCompositorView} (SVG clipPath). Kept for legacy tooling only.
  */
 export function CanvasCompositorView({
   view,

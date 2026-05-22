@@ -1,38 +1,41 @@
 import { z } from "zod";
 
-const pathAnchorSchema = z.object({
-  x: z.number().min(0).max(1),
-  y: z.number().min(0).max(1),
-  curved: z.boolean().optional(),
-  handleIn: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
-  handleOut: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
-});
-
-const lensPolygonSchema = z.object({
+const lensClipShapeSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
-  points: z.array(pathAnchorSchema),
+  pathD: z.string().min(8),
 });
 
-export const maskConfigSchema = z.object({
-  version: z.literal(2),
+const lensClipRenderSchema = z
+  .object({
+    lensOpacity: z.number().min(0).max(1).optional(),
+    tintBlendMode: z.enum(["multiply", "screen", "overlay", "color"]).optional(),
+    highlightStrength: z.number().min(0).max(1).optional(),
+    highlightBlendMode: z.enum(["screen", "overlay", "soft-light"]).optional(),
+    shadowStrength: z.number().min(0).max(1).optional(),
+  })
+  .optional();
+
+export const lensClipConfigSchema = z.object({
+  version: z.literal(1),
   imageWidth: z.number().int().positive(),
   imageHeight: z.number().int().positive(),
-  lenses: z.array(lensPolygonSchema).min(1),
+  lenses: z.array(lensClipShapeSchema).min(1),
+  render: lensClipRenderSchema,
   updatedAt: z.number().optional(),
 });
 
 export const upsertFrameViewSchema = z.object({
-  plateUrl: z.string().url(),
-  imageWidth: z.number().int().positive(),
-  imageHeight: z.number().int().positive(),
-  maskConfig: maskConfigSchema.nullable().optional(),
-  maskStatus: z.enum(["draft", "ready"]).optional(),
+  plateUrl: z.string().min(1),
+  imageWidth: z.coerce.number().int().positive(),
+  imageHeight: z.coerce.number().int().positive(),
+  clipConfig: lensClipConfigSchema.nullable().optional(),
+  clipStatus: z.enum(["draft", "ready"]).optional(),
 });
 
 export type UpsertFrameViewDTO = z.infer<typeof upsertFrameViewSchema>;
 
-export const viewAxisParamSchema = z.enum(["front", "side"]);
+export const viewAxisParamSchema = z.enum(["front", "side", "three_quarter"]);
 
 export const frameIdParam = z.object({
   frameId: z.string().uuid(),

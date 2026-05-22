@@ -23,7 +23,10 @@ export type SunglassesRenderOptions = Record<string, boolean>;
  * - `customiser-dynamic`: lens tint via SVG gradient on lens path only; frame vector updates colour; **no** pre-rendered tint swaps.
  * - `catalogue`: legacy/admin path — may use raster plates when catalogue provides URLs.
  */
-export type CompositorRenderMode = "customiser-dynamic" | "catalogue" | "masked-photo";
+export type CompositorRenderMode = "customiser-dynamic" | "catalogue" | "svg-clip";
+
+/** @deprecated Use `svg-clip` */
+export type LegacyCompositorRenderMode = "masked-photo";
 
 /** Input to the compositor (vector demo, raster catalogue assets, or hybrid). */
 export interface SunglassesCompositorConfig {
@@ -33,9 +36,11 @@ export interface SunglassesCompositorConfig {
   frameLabel?: string;
   tint: TintGradient;
   options: SunglassesRenderOptions;
-  /** Per-view masked plates when renderMode is `masked-photo`. */
+  /** Per-view plates + SVG clip config when renderMode is `svg-clip`. */
+  clipViews?: Partial<Record<FrameViewAxis, FrameRenderView>>;
+  /** @deprecated Alias of clipViews */
   maskedViews?: Partial<Record<FrameViewAxis, FrameRenderView>>;
-  /** Ignored when `renderMode` is `customiser-dynamic` or `masked-photo`. */
+  /** Ignored when `renderMode` is `customiser-dynamic` or `svg-clip`. */
   raster?: {
     frameImageUrl?: string;
     lensImageUrl?: string;

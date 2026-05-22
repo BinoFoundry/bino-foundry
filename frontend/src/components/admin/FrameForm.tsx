@@ -4,7 +4,8 @@ import { FrameRenderViewsSection } from "@/features/admin/components/FrameRender
 import type { FrameEntry } from "@/data/glasses";
 import type { FrameRenderView } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES } from "@/types/frame-rendering";
-import { isMaskConfigValid } from "@/render/mask";
+import { serializeRenderViewsForApi } from "@/lib/frame-render-views";
+import { isFrameViewClipReady } from "@/render/lens-clip";
 
 import { Button } from "../ui/button";
 
@@ -23,6 +24,8 @@ function normalizeViews(views?: FrameRenderView[]): FrameRenderView[] {
         plateUrl: "",
         width: 0,
         height: 0,
+        clipConfig: null,
+        clipStatus: "draft" as const,
         maskConfig: null,
         maskStatus: "draft" as const,
       }
@@ -47,9 +50,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
 
   const viewsReady = useMemo(
     () =>
-      renderViews.every(
-        (v) => !v.plateUrl || (v.maskConfig && isMaskConfigValid(v.maskConfig) && v.maskStatus === "ready"),
-      ),
+      renderViews.every((v) => !v.plateUrl || isFrameViewClipReady(v)),
     [renderViews],
   );
 
@@ -63,7 +64,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     if (saving) return;
     if (!form.name.trim()) return;
     if (hasAnyPlate && !viewsReady) {
-      alert("Complete lens masks for each uploaded view (3+ points per lens) before saving.");
+      alert("Complete lens SVG clips for each uploaded view (3+ points per lens) before saving.");
       return;
     }
 
@@ -79,7 +80,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
       await onSave({
         ...form,
         id,
-        renderViews,
+        renderViews: serializeRenderViewsForApi(renderViews),
         frameImages: legacyImages,
         lensColors: [],
       });

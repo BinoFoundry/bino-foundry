@@ -1,9 +1,10 @@
 import { useId, useMemo } from "react";
 
+import { resolveLensClipConfig } from "@/render/lens-clip";
 import { buildCompositorStack } from "../engine/compositor";
 import { LayerStack } from "../layers/LayerStack";
 import type { CompositorView, SunglassesCompositorConfig } from "../types";
-import { CanvasCompositorView } from "./CanvasCompositorView";
+import { SvgClipCompositorView } from "./SvgClipCompositorView";
 import { CompositorViewport, type CompositorAspectRatio } from "./CompositorViewport";
 
 export interface SunglassesCompositorProps {
@@ -12,13 +13,12 @@ export interface SunglassesCompositorProps {
   aspectRatio?: CompositorAspectRatio;
   label?: string;
   className?: string;
-  /** When false, missing plate shows `emptyMessage` instead of the SVG demo stack. */
   allowSvgFallback?: boolean;
   emptyMessage?: string;
 }
 
 /**
- * Sunglasses preview — canvas masked photos (bino-rendering) or optional SVG demo stack.
+ * Sunglasses preview — SVG clipPath tint on photo plates, or vector demo stack fallback.
  */
 export function SunglassesCompositor({
   config,
@@ -32,17 +32,22 @@ export function SunglassesCompositor({
   const instanceId = useId().replace(/:/g, "");
   const stack = useMemo(() => buildCompositorStack(config, view), [config, view]);
 
-  const maskedPlate = config.renderMode === "masked-photo" ? config.maskedViews?.[view] : null;
+  const plateView =
+    config.renderMode === "svg-clip"
+      ? config.clipViews?.[view] ?? config.maskedViews?.[view]
+      : null;
 
-  if (maskedPlate?.plateUrl) {
+  const clipConfig = plateView ? resolveLensClipConfig(plateView) : null;
+
+  if (plateView?.plateUrl && clipConfig) {
     return (
-      <CanvasCompositorView
+      <SvgClipCompositorView
         view={view}
         plate={{
-          plateUrl: maskedPlate.plateUrl,
-          width: maskedPlate.width,
-          height: maskedPlate.height,
-          maskConfig: maskedPlate.maskConfig,
+          plateUrl: plateView.plateUrl,
+          width: plateView.width,
+          height: plateView.height,
+          clipConfig,
         }}
         tintTop={config.tint.top}
         tintBottom={config.tint.bottom}

@@ -108,7 +108,12 @@ export function FramesAdminPage() {
                   if (isNew) clearSelection();
                   else setIsEditing(false);
                 } catch (err) {
-                  alert(isApiError(err) ? err.message : "Failed to save frame");
+                  const msg = isApiError(err)
+                    ? err.details
+                      ? `${err.message}\n${JSON.stringify(err.details, null, 2)}`
+                      : err.message
+                    : "Failed to save frame";
+                  alert(msg);
                   throw err;
                 }
               }}

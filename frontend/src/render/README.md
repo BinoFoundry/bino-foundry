@@ -1,21 +1,21 @@
 # Render engine (Phase 1)
 
-Modular compositor for sunglasses (vector + **masked photo** plates from `bino-rendering`).
+Modular compositor for sunglasses (vector demo + **SVG clipPath** photo plates).
 
 ## Flow
 
 ```
-Frame renderViews (front/side plates + MaskConfig)
+Frame renderViews (front/side plates + LensClipConfig SVG paths)
         ↓
-buildCustomiserCompositorConfig()  →  renderMode: masked-photo
+buildCustomiserCompositorConfig()  →  renderMode: svg-clip
         ↓
-CanvasCompositorView  →  renderMaskedViewToCanvas (lens tint only in mask)
+SvgClipCompositorView  →  tint + highlights inside SVG clipPath regions
 ```
 
 Legacy / fallback:
 
 ```
-No masks ready  →  customiser-dynamic (SVG lens gradient + vector frame)
+No clips ready  →  customiser-dynamic (SVG lens gradient + vector frame)
 ```
 
 ## Layout
@@ -23,38 +23,26 @@ No masks ready  →  customiser-dynamic (SVG lens gradient + vector frame)
 | Path | Role |
 |------|------|
 | `types.ts` | Config + layer specs |
-| `mask/` | Polygon editor, auto-mask, Bézier rasterization (`bino-rendering` port) |
-| `engine/canvas/` | `lens-compositor`, `canvas-render-pipeline` |
-| `constants.ts` | Z-order, viewBox |
-| `tint/` | Gradient presets |
-| `engine/` | Stack builder + pricing |
-| `layers/` | SVG + raster React layers |
-| `components/` | `SunglassesCompositor`, `CanvasCompositorView` |
+| `lens-clip/` | SVG path builder, clip resolve, render settings |
+| `mask/` | Polygon editor (admin clip drawing only; no canvas tint pipeline) |
+| `engine/canvas/` | Legacy canvas pipeline (deprecated for customiser) |
+| `components/` | `SunglassesCompositor`, `SvgClipCompositorView` |
 | `adapters/` | Customiser + catalogue config |
-| `hooks/` | `useFrameRenderBundle`, `useSunglassesRenderState` |
 
 ## Modes
 
 | Mode | When | Behaviour |
 |------|------|-----------|
-| **`masked-photo`** | Frame has front/side plates + valid polygon masks | Canvas tint inside lens polygons (`maskOnly`) |
-| **`customiser-dynamic`** | No masks | SVG lens gradient; customers change tint only |
+| **`svg-clip`** | Frame has plates + valid `clipConfig` | SVG gradient tint + screened highlights per lens clip |
+| **`customiser-dynamic`** | No clips | SVG lens gradient on demo vectors |
 | **`catalogue`** | Legacy raster URLs | Optional `frameImages` stack |
 
 ## Admin workflow
 
-Frames are edited in **Admin → Frames** (not a separate menu):
-
-1. Upload **front** and **side** photos.
-2. **Edit mask** inline per view (Draw / Select / Pan, left + right lens polygons).
-3. Save frame — masks stored in catalogue + API (`frame_render_views` when migrated).
+1. Upload **front** and **side** (45°) photos.
+2. **Edit clip** — polygon/curve editor → saved as SVG `pathD` in `clip_config`.
+3. Save frame — persisted to `frame_render_views`.
 
 ## Database
 
-Apply `database/migrations/000004_frame_render_views.sql`. API: `GET/PUT /api/rendering/frames/:id/...`.
-
-## Extension (later)
-
-- Promote plates from staging → `frames/{slug}/views/` storage keys
-- Canvas export via `RenderFacade.compose`
-- Bracelet strand renderer under `render/bracelet/`
+Apply `000004_frame_render_views.sql` and **`000008_svg_lens_clip_config.sql`**. API: `GET/PUT /api/rendering/frames/:id/views/:axis`.

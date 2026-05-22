@@ -31,6 +31,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 5. `000005_drop_sunglasses_frame_colors.sql` — remove deprecated frame colour swatch table.
 6. `000006_bracelet_charms_spacers.sql` — charms + spacers catalogue tables and dedicated type systems (`charm_types`, `spacer_types`).
 7. `000007_unified_bead_libraries.sql` — **`bead_types`** + **`bead_libraries`** (unified API); migrates existing crystals/charms/spacers rows. Legacy tables remain for rollback.
+8. `000008_svg_lens_clip_config.sql` — **`clip_config`** / **`clip_status`** on `frame_render_views`; adds `three_quarter` view axis. Sunglasses tint uses SVG clip paths (replaces canvas mask bitmap workflow for new saves).
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

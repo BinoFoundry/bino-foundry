@@ -6,8 +6,9 @@ import { isApiError, uploadApi } from "@/services/api";
 import { isApiFrameId, renderingApi } from "@/services/api/rendering";
 import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES, FRAME_VIEW_LABELS } from "@/types/frame-rendering";
-import type { MaskConfig } from "@/render/mask";
-import { isMaskConfigValid } from "@/render/mask";
+import { maskConfigToLensClipConfig } from "@/render/lens-clip";
+import { isMaskConfigValid, type MaskConfig } from "@/render/mask";
+import { isLensClipConfigValid } from "@bino-foundry/shared/types";
 
 import { FrameMaskEditor } from "./FrameMaskEditor";
 
@@ -17,6 +18,8 @@ function emptyView(view: FrameViewAxis): FrameRenderView {
     plateUrl: "",
     width: 0,
     height: 0,
+    clipConfig: null,
+    clipStatus: "draft",
     maskConfig: null,
     maskStatus: "draft",
   };
@@ -43,7 +46,7 @@ interface FrameRenderViewsSectionProps {
 }
 
 /**
- * Front + side plate upload and inline mask editor (bino-rendering workflow in frame form).
+ * Front + side plate upload and SVG lens clip editor (polygon editor → SVG paths).
  */
 export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRenderViewsSectionProps) {
   const [uploading, setUploading] = useState<FrameViewAxis | null>(null);
@@ -68,13 +71,18 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
   );
 
   const scheduleDraftSync = useCallback(
-    (axis: FrameViewAxis, config: MaskConfig | null, valid: boolean) => {
-      draftRef.current[axis] = config;
+    (axis: FrameViewAxis, mask: MaskConfig | null, valid: boolean) => {
+      draftRef.current[axis] = mask;
+      const clip = valid && mask && isMaskConfigValid(mask) ? maskConfigToLensClipConfig(mask) : null;
+      const clipReady = Boolean(clip && isLensClipConfigValid(clip));
+
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
         patchView(axis, {
-          maskConfig: config,
-          maskStatus: valid ? "ready" : "draft",
+          maskConfig: mask,
+          maskStatus: clipReady ? "ready" : "draft",
+          clipConfig: clip,
+          clipStatus: clipReady ? "ready" : "draft",
         });
       }, 250);
     },
@@ -100,6 +108,8 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
         height,
         maskConfig: null,
         maskStatus: "draft",
+        clipConfig: null,
+        clipStatus: "draft",
       });
       setEditingView(axis);
     } catch (err) {
@@ -110,27 +120,33 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
     }
   };
 
-  const commitViewMask = async (axis: FrameViewAxis) => {
-    const config = draftRef.current[axis];
+  const commitViewClip = async (axis: FrameViewAxis) => {
+    const mask = draftRef.current[axis];
     const view = getView(axis);
-    if (!view.plateUrl || !config || !isMaskConfigValid(config)) {
-      alert("Complete the lens mask (3+ points on at least one lens) before saving.");
+    if (!view.plateUrl || !mask || !isMaskConfigValid(mask)) {
+      alert("Complete the lens clip path (3+ points on at least one lens) before saving.");
       return;
     }
 
-    patchView(axis, { maskConfig: config, maskStatus: "ready" });
+    const clipConfig = maskConfigToLensClipConfig(mask);
+    patchView(axis, {
+      maskConfig: mask,
+      maskStatus: "ready",
+      clipConfig,
+      clipStatus: "ready",
+    });
 
     if (frameId && isApiFrameId(frameId)) {
       try {
         await renderingApi.upsertView(frameId, axis, {
-          plateUrl: view.plateUrl,
-          imageWidth: view.width,
-          imageHeight: view.height,
-          maskConfig: config,
-          maskStatus: "ready",
+          plateUrl: view.plateUrl.trim(),
+          imageWidth: Math.max(1, Math.floor(view.width)),
+          imageHeight: Math.max(1, Math.floor(view.height)),
+          clipConfig,
+          clipStatus: "ready",
         });
       } catch (err) {
-        console.warn("API mask sync failed (saved in form state)", err);
+        console.warn("API clip sync failed (saved in form state)", err);
       }
     }
   };
@@ -140,8 +156,8 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
       <div>
         <h3 className="text-sm font-semibold text-foreground">Render views</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Upload front and side (45°) photos, then draw lens masks inline. Points stay on the canvas while
-          you edit — use <strong>Save mask</strong> when each view is complete.
+          Upload front and side (45°) photos, then draw lens SVG clip areas. Use{" "}
+          <strong>Save clip</strong> when each view is complete — paths are stored for dynamic tint rendering.
         </p>
       </div>
 
@@ -149,6 +165,7 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
         const view = getView(axis);
         const isEditing = editingView === axis;
         const hasPlate = Boolean(view.plateUrl);
+        const clipReady = view.clipStatus === "ready" && Boolean(view.clipConfig);
 
         return (
           <div key={axis} className="rounded-xl border border-border bg-muted/20 p-4">
@@ -158,8 +175,8 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
                 {hasPlate ? (
                   <p className="text-xs text-muted-foreground">
                     {view.width}×{view.height} ·{" "}
-                    <span className={view.maskStatus === "ready" ? "text-emerald-600" : "text-amber-600"}>
-                      {view.maskStatus === "ready" ? "Mask ready" : "Mask in progress"}
+                    <span className={clipReady ? "text-emerald-600" : "text-amber-600"}>
+                      {clipReady ? "SVG clip ready" : "Clip in progress"}
                     </span>
                   </p>
                 ) : (
@@ -198,12 +215,12 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
                       variant={isEditing ? "default" : "secondary"}
                       onClick={() => setEditingView(isEditing ? null : axis)}
                     >
-                      {isEditing ? "Hide mask editor" : "Edit mask"}
+                      {isEditing ? "Hide clip editor" : "Edit clip"}
                     </Button>
                     {isEditing ? (
-                      <Button type="button" size="sm" onClick={() => void commitViewMask(axis)}>
+                      <Button type="button" size="sm" onClick={() => void commitViewClip(axis)}>
                         <Check className="mr-1.5 h-3.5 w-3.5" />
-                        Save mask
+                        Save clip
                       </Button>
                     ) : null}
                   </>

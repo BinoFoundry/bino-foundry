@@ -7,7 +7,7 @@ import { slugifyKebab } from "../../lib/slug.js";
 import type { FrameCreateDTO, FrameUpdateDTO } from "./frame.validation.js";
 
 type MarketingCopy = Record<string, unknown>;
-type ViewAxis = "front" | "side";
+type ViewAxis = "front" | "side" | "three_quarter";
 
 function normalizeMarketing(existing: unknown): MarketingCopy {
   if (existing !== null && typeof existing === "object" && !Array.isArray(existing)) {
@@ -23,6 +23,8 @@ function mapRenderViewRow(row: Record<string, unknown>): Record<string, unknown>
     plateUrl: row.plate_url,
     width: Number(row.image_width),
     height: Number(row.image_height),
+    clipConfig: row.clip_config ?? row.mask_config ?? null,
+    clipStatus: row.clip_status ?? row.mask_status ?? "draft",
     maskConfig: row.mask_config ?? null,
     maskStatus: row.mask_status ?? "draft",
   };
@@ -99,8 +101,8 @@ function normalizeRenderViews(
   plateUrl: string;
   width: number;
   height: number;
-  maskConfig: unknown | null;
-  maskStatus: "draft" | "ready";
+  clipConfig: unknown | null;
+  clipStatus: "draft" | "ready";
 }> {
   if (!renderViews?.length) return [];
 
@@ -109,12 +111,12 @@ function normalizeRenderViews(
     plateUrl: string;
     width: number;
     height: number;
-    maskConfig: unknown | null;
-    maskStatus: "draft" | "ready";
+    clipConfig: unknown | null;
+    clipStatus: "draft" | "ready";
   }>();
 
   for (const v of renderViews) {
-    if (v.view !== "front" && v.view !== "side") continue;
+    if (v.view !== "front" && v.view !== "side" && v.view !== "three_quarter") continue;
     if (!v.plateUrl?.trim()) continue;
     if (!Number.isFinite(v.width) || v.width <= 0) continue;
     if (!Number.isFinite(v.height) || v.height <= 0) continue;
@@ -124,8 +126,8 @@ function normalizeRenderViews(
       plateUrl: v.plateUrl.trim(),
       width: Math.floor(v.width),
       height: Math.floor(v.height),
-      maskConfig: v.maskConfig ?? null,
-      maskStatus: v.maskStatus ?? "draft",
+      clipConfig: v.clipConfig ?? v.maskConfig ?? null,
+      clipStatus: v.clipStatus ?? v.maskStatus ?? "draft",
     });
   }
 
@@ -152,8 +154,10 @@ async function syncFrameRenderViews(
     plate_url: v.plateUrl,
     image_width: v.width,
     image_height: v.height,
-    mask_config: v.maskConfig,
-    mask_status: v.maskStatus,
+    clip_config: v.clipConfig,
+    clip_status: v.clipStatus,
+    mask_config: null,
+    mask_status: v.clipStatus,
   }));
 
   const { error: upsertErr } = await supabase
