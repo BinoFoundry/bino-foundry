@@ -9,17 +9,11 @@ import {
   type ReactNode,
 } from "react";
 
+import { beadsApi } from "@/services/api/beads";
 import { catalogueApi } from "@/services/api";
 import { isApiError } from "@/services/api/errors";
-import type {
-  CharmEntry,
-  CharmTypeEntry,
-  CrystalEntry,
-  FrameEntry,
-  SpacerEntry,
-  SpacerTypeEntry,
-  TypeEntry,
-} from "@/types/catalogue";
+import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { FrameEntry } from "@/types/catalogue";
 
 import {
   CATALOGUE_STORAGE_KEY,
@@ -30,27 +24,19 @@ import {
 } from "./store";
 
 export interface CatalogueActions {
-  addCrystal: (entry: CrystalEntry) => Promise<void>;
-  updateCrystal: (entry: CrystalEntry) => Promise<void>;
-  deleteCrystal: (id: string) => Promise<void>;
-  addCharm: (entry: CharmEntry) => Promise<void>;
-  updateCharm: (entry: CharmEntry) => Promise<void>;
-  deleteCharm: (id: string) => Promise<void>;
-  addSpacer: (entry: SpacerEntry) => Promise<void>;
-  updateSpacer: (entry: SpacerEntry) => Promise<void>;
-  deleteSpacer: (id: string) => Promise<void>;
+  addBeadLibrary: (entry: BeadLibraryEntry) => Promise<void>;
+  updateBeadLibrary: (entry: BeadLibraryEntry) => Promise<void>;
+  updateBeadCrop: (
+    publicId: string,
+    payload: Parameters<typeof beadsApi.updateCrop>[1],
+  ) => Promise<void>;
+  deleteBeadLibrary: (id: string) => Promise<void>;
+  addBeadType: (entry: Pick<BeadTypeEntry, "name" | "description">) => Promise<void>;
+  updateBeadType: (entry: BeadTypeEntry) => Promise<void>;
+  deleteBeadType: (id: string) => Promise<void>;
   addFrame: (entry: FrameEntry) => Promise<void>;
   updateFrame: (entry: FrameEntry) => Promise<void>;
   deleteFrame: (id: string) => Promise<void>;
-  addType: (entry: TypeEntry) => Promise<void>;
-  updateType: (entry: TypeEntry) => Promise<void>;
-  deleteType: (id: string) => Promise<void>;
-  addCharmType: (entry: CharmTypeEntry) => Promise<void>;
-  updateCharmType: (entry: CharmTypeEntry) => Promise<void>;
-  deleteCharmType: (id: string) => Promise<void>;
-  addSpacerType: (entry: SpacerTypeEntry) => Promise<void>;
-  updateSpacerType: (entry: SpacerTypeEntry) => Promise<void>;
-  deleteSpacerType: (id: string) => Promise<void>;
   resetToDefaults: () => void;
   refreshFromApi: () => Promise<void>;
 }
@@ -79,24 +65,12 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, crystals, charms, spacers, types, charmTypes, spacerTypes] = await Promise.all([
+      const [frames, beadTypes, beadLibraries] = await Promise.all([
         catalogueApi.listFrames(),
-        catalogueApi.listCrystals(),
-        catalogueApi.listCharms(),
-        catalogueApi.listSpacers(),
-        catalogueApi.listTypes(),
-        catalogueApi.listCharmTypes(),
-        catalogueApi.listSpacerTypes(),
+        beadsApi.listTypes(),
+        beadsApi.listLibraries(),
       ]);
-      const next: CatalogueStore = {
-        crystals,
-        charms,
-        spacers,
-        frames,
-        types,
-        charmTypes,
-        spacerTypes,
-      };
+      const next: CatalogueStore = { frames, beadTypes, beadLibraries };
       saveToStorage(next);
       syncCatalogueSnapshot(next);
       setStore(next);
@@ -123,122 +97,89 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     void refreshFromApi();
   }, [refreshFromApi]);
 
-  const addCrystal = useCallback(async (entry: CrystalEntry) => {
-    await catalogueApi.createCrystal(entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const addBeadLibrary = useCallback(
+    async (entry: BeadLibraryEntry) => {
+      await beadsApi.createLibrary(entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const updateCrystal = useCallback(async (entry: CrystalEntry) => {
-    await catalogueApi.updateCrystal(entry.id, entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const updateBeadLibrary = useCallback(
+    async (entry: BeadLibraryEntry) => {
+      await beadsApi.updateLibrary(entry.id, entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const deleteCrystal = useCallback(async (id: string) => {
-    await catalogueApi.deleteCrystal(id);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const updateBeadCrop = useCallback(
+    async (publicId: string, payload: Parameters<typeof beadsApi.updateCrop>[1]) => {
+      await beadsApi.updateCrop(publicId, payload);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const addCharm = useCallback(async (entry: CharmEntry) => {
-    await catalogueApi.createCharm(entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const deleteBeadLibrary = useCallback(
+    async (id: string) => {
+      await beadsApi.deleteLibrary(id);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const updateCharm = useCallback(async (entry: CharmEntry) => {
-    await catalogueApi.updateCharm(entry.id, entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const addBeadType = useCallback(
+    async (entry: Pick<BeadTypeEntry, "name" | "description">) => {
+      await beadsApi.createType(entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const deleteCharm = useCallback(async (id: string) => {
-    await catalogueApi.deleteCharm(id);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const updateBeadType = useCallback(
+    async (entry: BeadTypeEntry) => {
+      await beadsApi.updateType(entry.id, entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const addSpacer = useCallback(async (entry: SpacerEntry) => {
-    await catalogueApi.createSpacer(entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const deleteBeadType = useCallback(
+    async (id: string) => {
+      await beadsApi.deleteType(id);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const updateSpacer = useCallback(async (entry: SpacerEntry) => {
-    await catalogueApi.updateSpacer(entry.id, entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const addFrame = useCallback(
+    async (entry: FrameEntry) => {
+      await catalogueApi.createFrame(entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const deleteSpacer = useCallback(async (id: string) => {
-    await catalogueApi.deleteSpacer(id);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const updateFrame = useCallback(
+    async (entry: FrameEntry) => {
+      await catalogueApi.updateFrame(entry.id, entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
-  const addFrame = useCallback(async (entry: FrameEntry) => {
-    await catalogueApi.createFrame(entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const updateFrame = useCallback(async (entry: FrameEntry) => {
-    await catalogueApi.updateFrame(entry.id, entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const deleteFrame = useCallback(async (id: string) => {
-    await catalogueApi.deleteFrame(id);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const addType = useCallback(async (entry: TypeEntry) => {
-    await catalogueApi.createType({ name: entry.name, description: entry.description });
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const updateType = useCallback(async (entry: TypeEntry) => {
-    await catalogueApi.updateType(entry.id, entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const deleteType = useCallback(async (id: string) => {
-    await catalogueApi.deleteType(id);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const addCharmType = useCallback(async (entry: CharmTypeEntry) => {
-    await catalogueApi.createCharmType({ name: entry.name, description: entry.description });
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const updateCharmType = useCallback(async (entry: CharmTypeEntry) => {
-    await catalogueApi.updateCharmType(entry.id, entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const deleteCharmType = useCallback(async (id: string) => {
-    await catalogueApi.deleteCharmType(id);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const addSpacerType = useCallback(async (entry: SpacerTypeEntry) => {
-    await catalogueApi.createSpacerType({ name: entry.name, description: entry.description });
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const updateSpacerType = useCallback(async (entry: SpacerTypeEntry) => {
-    await catalogueApi.updateSpacerType(entry.id, entry);
-    await refreshFromApi();
-  }, [refreshFromApi]);
-
-  const deleteSpacerType = useCallback(async (id: string) => {
-    await catalogueApi.deleteSpacerType(id);
-    await refreshFromApi();
-  }, [refreshFromApi]);
+  const deleteFrame = useCallback(
+    async (id: string) => {
+      await catalogueApi.deleteFrame(id);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
 
   const resetToDefaults = useCallback(() => {
     localStorage.removeItem(CATALOGUE_STORAGE_KEY);
-    const next: CatalogueStore = {
-      crystals: [],
-      charms: [],
-      spacers: [],
-      frames: [],
-      types: [],
-      charmTypes: [],
-      spacerTypes: [],
-    };
+    const next = createInitialCatalogueStore();
     persist(next, setStore);
   }, []);
 
@@ -247,27 +188,16 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       ...store,
       isHydrating,
       hydrateError,
-      addCrystal,
-      updateCrystal,
-      deleteCrystal,
-      addCharm,
-      updateCharm,
-      deleteCharm,
-      addSpacer,
-      updateSpacer,
-      deleteSpacer,
+      addBeadLibrary,
+      updateBeadLibrary,
+      updateBeadCrop,
+      deleteBeadLibrary,
+      addBeadType,
+      updateBeadType,
+      deleteBeadType,
       addFrame,
       updateFrame,
       deleteFrame,
-      addType,
-      updateType,
-      deleteType,
-      addCharmType,
-      updateCharmType,
-      deleteCharmType,
-      addSpacerType,
-      updateSpacerType,
-      deleteSpacerType,
       resetToDefaults,
       refreshFromApi,
     }),
@@ -275,27 +205,16 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       store,
       isHydrating,
       hydrateError,
-      addCrystal,
-      updateCrystal,
-      deleteCrystal,
-      addCharm,
-      updateCharm,
-      deleteCharm,
-      addSpacer,
-      updateSpacer,
-      deleteSpacer,
+      addBeadLibrary,
+      updateBeadLibrary,
+      updateBeadCrop,
+      deleteBeadLibrary,
+      addBeadType,
+      updateBeadType,
+      deleteBeadType,
       addFrame,
       updateFrame,
       deleteFrame,
-      addType,
-      updateType,
-      deleteType,
-      addCharmType,
-      updateCharmType,
-      deleteCharmType,
-      addSpacerType,
-      updateSpacerType,
-      deleteSpacerType,
       resetToDefaults,
       refreshFromApi,
     ],

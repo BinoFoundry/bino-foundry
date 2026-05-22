@@ -43,6 +43,17 @@ export function framesMarketingObjectKey(frameSlug: string, rank: number, descri
   return `${slug}/marketing/${String(rank).padStart(2, "0")}_${stem}${extWithDot}`;
 }
 
+/** Original bead upload — `crystals` bucket (public catalogue). */
+export function beadLibraryOriginalObjectKey(publicId: string, extWithDot = ".png"): string {
+  return `bracelets/beads/${assertKebab(publicId, "beadPublicId")}/original${extWithDot}`;
+}
+
+/** Cropped/processed bead render asset. */
+export function beadLibraryProcessedObjectKey(publicId: string, extWithDot = ".png"): string {
+  return `bracelets/beads/${assertKebab(publicId, "beadPublicId")}/processed${extWithDot}`;
+}
+
+/** @deprecated Use `beadLibraryProcessedObjectKey` */
 export function crystalsBeadObjectKey(
   publicId: string,
   density: "" | "@2x" | "@3x" = "",

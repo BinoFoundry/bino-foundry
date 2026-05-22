@@ -4,21 +4,8 @@ import { Button } from "@/components/ui/button";
 import BeadLibrary from "@/components/BeadLibrary";
 import SortableCircularStrand from "@/components/SortableCircularStrand";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  calculateBeadCount,
-  calculateBeadPrice,
-  type BeadSize,
-  type PlacedBead,
-  type CrystalBead,
-  type CharmItem,
-  type SpacerItem,
-} from "@/lib/luxe-data";
-
-type SelectedItem =
-  | { kind: "crystal"; crystal: CrystalBead }
-  | { kind: "charm"; charm: CharmItem }
-  | { kind: "spacer"; spacer: SpacerItem }
-  | null;
+import { calculateBeadCount, getPlacedBeadPrice, type BeadSize, type PlacedBead } from "@/lib/luxe-data";
+import type { BeadLibraryEntry } from "@/types/beads";
 
 interface BraceletBuilderProps {
   onPriceChange: (price: number) => void;
@@ -66,60 +53,14 @@ function useCanvasSize(isMobile: boolean, twinning: boolean, libraryOpen: boolea
   return { containerRef, strandSize };
 }
 
-function getItemPrice(item: PlacedBead): number {
-  if (item.type === "crystal" && item.crystal) {
-    return calculateBeadPrice(item.crystal.price, item.beadSize);
-  }
-  if (item.type === "charm" && item.charm) {
-    return item.charm.price;
-  }
-  if (item.type === "spacer" && item.spacer) {
-    return item.spacer.price;
-  }
-  return 0;
+function buildPlacedBead(bead: BeadLibraryEntry | null, position: number, defaultBeadSize: BeadSize): PlacedBead | null {
+  if (!bead) return null;
+  return { position, bead, beadSize: defaultBeadSize };
 }
 
-function getSelectedItemLabel(sel: SelectedItem): string {
-  if (!sel) return "";
-  if (sel.kind === "crystal") return sel.crystal.name;
-  if (sel.kind === "charm") return sel.charm.name;
-  if (sel.kind === "spacer") return sel.spacer.name;
-  return "";
-}
-
-function getSelectedItemImage(sel: SelectedItem): string {
-  if (!sel) return "";
-  if (sel.kind === "crystal") return sel.crystal.image;
-  if (sel.kind === "charm") return sel.charm.image;
-  if (sel.kind === "spacer") return sel.spacer.image;
-  return "";
-}
-
-function buildPlacedBead(sel: SelectedItem, position: number, defaultBeadSize: BeadSize): PlacedBead | null {
-  if (!sel) return null;
-  if (sel.kind === "crystal") {
-    return { position, type: "crystal", crystal: sel.crystal, beadSize: defaultBeadSize };
-  }
-  if (sel.kind === "charm") {
-    return { position, type: "charm", charm: sel.charm, beadSize: defaultBeadSize };
-  }
-  if (sel.kind === "spacer") {
-    return { position, type: "spacer", spacer: sel.spacer, beadSize: defaultBeadSize };
-  }
-  return null;
-}
-
-function buildPlacedBeadFromDrop(data: any, position: number, defaultBeadSize: BeadSize): PlacedBead | null {
-  if (data.type === "crystal") {
-    return { position, type: "crystal", crystal: data.item, beadSize: defaultBeadSize };
-  }
-  if (data.type === "charm") {
-    return { position, type: "charm", charm: data.item, beadSize: defaultBeadSize };
-  }
-  if (data.type === "spacer") {
-    return { position, type: "spacer", spacer: data.item, beadSize: defaultBeadSize };
-  }
-  return null;
+function buildPlacedBeadFromDrop(data: { bead?: BeadLibraryEntry }, position: number, defaultBeadSize: BeadSize): PlacedBead | null {
+  if (!data?.bead) return null;
+  return { position, bead: data.bead, beadSize: defaultBeadSize };
 }
 
 const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
@@ -144,7 +85,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [placedBeadsB, setPlacedBeadsB] = useState<PlacedBead[]>([]);
   const [twinning, setTwinning] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(() => !window.matchMedia("(max-width: 767px)").matches);
-  const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
+  const [selectedBead, setSelectedBead] = useState<BeadLibraryEntry | null>(null);
 
   const beadCountA = calculateBeadCount(wristSizeA, defaultBeadSize);
   const beadCountB = calculateBeadCount(wristSizeB, defaultBeadSize);
@@ -153,8 +94,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const updatePrice = useCallback(
     (beadsA: PlacedBead[], beadsB: PlacedBead[], twin: boolean) => {
-      const priceA = beadsA.reduce((s, b) => s + getItemPrice(b), 0);
-      const priceB = twin ? beadsB.reduce((s, b) => s + getItemPrice(b), 0) : 0;
+      const priceA = beadsA.reduce((s, b) => s + getPlacedBeadPrice(b), 0);
+      const priceB = twin ? beadsB.reduce((s, b) => s + getPlacedBeadPrice(b), 0) : 0;
       onPriceChange(priceA + priceB);
     },
     [onPriceChange]
@@ -167,10 +108,10 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     const existing = placedBeads.find((b) => b.position === position);
     let updated: PlacedBead[];
 
-    if (existing && !selectedItem) {
+    if (existing && !selectedBead) {
       updated = placedBeads.filter((b) => b.position !== position);
-    } else if (selectedItem) {
-      const newBead = buildPlacedBead(selectedItem, position, defaultBeadSize);
+    } else if (selectedBead) {
+      const newBead = buildPlacedBead(selectedBead, position, defaultBeadSize);
       if (!newBead) return;
       updated = existing
         ? placedBeads.map((b) => (b.position === position ? newBead : b))
@@ -242,31 +183,16 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     }
   };
 
-  const handleSelectCrystal = (bead: CrystalBead) => {
-    const sel: SelectedItem = { kind: "crystal", crystal: bead };
-    setSelectedItem(sel);
-    autoPlaceItem({ position: 0, type: "crystal", crystal: bead, beadSize: defaultBeadSize });
-    if (isMobile) setLibraryOpen(false);
-  };
-
-  const handleSelectCharm = (charm: CharmItem) => {
-    const sel: SelectedItem = { kind: "charm", charm };
-    setSelectedItem(sel);
-    autoPlaceItem({ position: 0, type: "charm", charm, beadSize: defaultBeadSize });
-    if (isMobile) setLibraryOpen(false);
-  };
-
-  const handleSelectSpacer = (spacer: SpacerItem) => {
-    const sel: SelectedItem = { kind: "spacer", spacer };
-    setSelectedItem(sel);
-    autoPlaceItem({ position: 0, type: "spacer", spacer, beadSize: defaultBeadSize });
+  const handleSelectBead = (bead: BeadLibraryEntry) => {
+    setSelectedBead(bead);
+    autoPlaceItem({ position: 0, bead, beadSize: defaultBeadSize });
     if (isMobile) setLibraryOpen(false);
   };
 
   const handleReset = () => {
     setPlacedBeadsA([]);
     setPlacedBeadsB([]);
-    setSelectedItem(null);
+    setSelectedBead(null);
     updatePrice([], [], twinning);
   };
 
@@ -281,7 +207,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     }
   };
 
-  const itemImage = getSelectedItemImage(selectedItem);
+  const itemImage = selectedBead?.image ?? "";
 
   return (
     <div className="relative flex-1 w-full h-full flex flex-col animate-fade-in">
@@ -339,23 +265,23 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
-          {selectedItem && !isMobile && (
+          {selectedBead && !isMobile && (
             <div
               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm font-body cursor-pointer hover:bg-muted/60 transition-colors"
               title="Click to deselect"
-              onClick={() => setSelectedItem(null)}
+              onClick={() => setSelectedBead(null)}
             >
               {itemImage ? (
                 <div
                   className="w-4 h-4 rounded-full"
                   style={{
-                    background: `url("${itemImage}${itemImage.startsWith('data:') ? '' : '?v=2'}") center / cover no-repeat`
+                    background: `url("${itemImage}${itemImage.startsWith("data:") ? "" : "?v=2"}") center / cover no-repeat`,
                   }}
                 />
               ) : (
                 <div className="w-4 h-4 rounded-full bg-muted-foreground/20" />
               )}
-              <span>{getSelectedItemLabel(selectedItem)}</span>
+              <span>{selectedBead.name}</span>
               <span className="text-xs text-muted-foreground">&#x2715;</span>
             </div>
           )}
@@ -380,13 +306,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           libraryOpen && !isMobile ? "lg:pl-[260px]" : ""
         }`}
       >
-        <BeadLibrary
-          open={libraryOpen}
-          onSelectCrystal={handleSelectCrystal}
-          onSelectCharm={handleSelectCharm}
-          onSelectSpacer={handleSelectSpacer}
-          onClose={() => setLibraryOpen(false)}
-        />
+        <BeadLibrary open={libraryOpen} onSelectBead={handleSelectBead} onClose={() => setLibraryOpen(false)} />
 
         <SortableCircularStrand
           beadCount={beadCountA}

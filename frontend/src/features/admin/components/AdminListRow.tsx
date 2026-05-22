@@ -4,37 +4,35 @@ import { cn } from "@/lib/utils";
 
 interface AdminListRowProps {
   children: ReactNode;
+  /** Buttons/controls rendered outside the row click target (avoids nested buttons). */
+  actions?: ReactNode;
   onClick?: () => void;
   selected?: boolean;
   className?: string;
 }
 
-export function AdminListRow({ children, onClick, selected, className }: AdminListRowProps) {
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/80",
-          selected && "bg-primary/15 ring-2 ring-primary",
-          className,
-        )}
-      >
-        {children}
-      </button>
-    );
-  }
+export function AdminListRow({ children, actions, onClick, selected, className }: AdminListRowProps) {
+  const rowClass = cn(
+    "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors",
+    selected && "bg-primary/15 ring-2 ring-primary",
+    className,
+  );
+
+  const mainClass = cn(
+    "flex min-w-0 flex-1 items-center gap-3 text-left",
+    onClick && "rounded-md hover:bg-muted/80",
+  );
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5",
-        selected && "bg-primary/15 ring-2 ring-primary",
-        className,
+    <div className={rowClass}>
+      {onClick ? (
+        <button type="button" onClick={onClick} className={mainClass}>
+          {children}
+        </button>
+      ) : (
+        <div className={mainClass}>{children}</div>
       )}
-    >
-      {children}
+      {actions ? <div className="flex shrink-0 items-center">{actions}</div> : null}
     </div>
   );
 }

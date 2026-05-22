@@ -15,6 +15,7 @@
 import { DEFAULT_CRYSTALS } from "@/data/crystals";
 import { DEFAULT_FRAMES, type FrameEntry } from "@/data/glasses";
 import { getCatalogueSnapshot } from "@/data/index";
+import type { BeadLibraryEntry } from "@/types/beads";
 
 // Re-export entry types under the legacy names used across the app
 export type { CrystalEntry as CrystalBead } from "@/data/crystals";
@@ -36,51 +37,40 @@ export type CrystalBeadAlias = CrystalEntry;
  */
 function snapshot() {
   if (typeof window === "undefined") {
-    return { crystals: DEFAULT_CRYSTALS, frames: DEFAULT_FRAMES, charms: [], spacers: [] };
+    return { beadLibraries: DEFAULT_CRYSTALS, beadTypes: [], frames: DEFAULT_FRAMES };
   }
   return getCatalogueSnapshot();
 }
 
-export const CRYSTAL_LIBRARY: CrystalEntry[] = snapshot().crystals;
+export const CRYSTAL_LIBRARY: CrystalEntry[] = snapshot().beadLibraries as unknown as CrystalEntry[];
 
 export const ZODIAC_ANIMALS: string[] = [
   "Rat", "Ox", "Tiger", "Rabbit", "Dragon", "Snake",
   "Horse", "Goat", "Monkey", "Rooster", "Dog", "Pig",
 ];
 
-// ── Business-logic helpers (unchanged) ───────────────────────────────────────
+// ── Business-logic helpers ───────────────────────────────────────────────────
 
 export type BeadSize = 6 | 8 | 10;
-export type ItemType = "crystal" | "charm" | "spacer";
 
-export interface CharmItem {
-  id: string;
-  name: string;
-  price: number;
-  image: string;
-  description: string;
-}
+/** @deprecated Use beadTypeSlug on BeadLibraryEntry */
+export type ItemType = string;
 
-export interface SpacerItem {
-  id: string;
-  name: string;
-  price: number;
-  image: string;
-  description: string;
-}
-
+/** Unified placed bead on the strand. */
 export interface PlacedBead {
   position: number;
-  type: ItemType;
-  crystal?: CrystalEntry;
-  charm?: CharmItem;
-  spacer?: SpacerItem;
+  bead: BeadLibraryEntry;
   beadSize: BeadSize;
 }
 
-export const CHARM_LIBRARY: CharmItem[] = (snapshot() as { charms?: CharmItem[] }).charms ?? [];
-
-export const SPACER_LIBRARY: SpacerItem[] = (snapshot() as { spacers?: SpacerItem[] }).spacers ?? [];
+export function getPlacedBeadPrice(item: PlacedBead): number {
+  const base = item.bead.price;
+  const slug = item.bead.beadTypeSlug ?? "crystal";
+  if (slug === "crystal" || slug === "accent") {
+    return calculateBeadPrice(base, item.beadSize);
+  }
+  return base;
+}
 
 export function calculateBeadPrice(basePrice: number, beadSize: BeadSize): number {
   const multiplier = beadSize === 6 ? 0.8 : beadSize === 8 ? 1.0 : 1.3;

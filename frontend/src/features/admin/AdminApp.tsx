@@ -5,9 +5,9 @@ import { AdminMobileNav } from "./components/AdminMobileNav";
 import { AdminDashboardPage } from "./modules/dashboard/AdminDashboardPage";
 import { MediaManagerPage } from "./modules/media/MediaManagerPage";
 import { SunglassesPricingPage } from "./modules/pricing/SunglassesPricingPage";
-import { CrystalsAdminPage } from "./modules/products/CrystalsAdminPage";
+import { BeadsAdminPage } from "./modules/products/BeadsAdminPage";
+import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
 import { FramesAdminPage } from "./modules/products/FramesAdminPage";
-import { TypesAdminPage } from "./modules/products/TypesAdminPage";
 import type { AdminSection } from "./types";
 
 function AdminSectionView({
@@ -22,10 +22,10 @@ function AdminSectionView({
       return <AdminDashboardPage onNavigate={onNavigate} />;
     case "frames":
       return <FramesAdminPage />;
-    case "crystals":
-      return <CrystalsAdminPage />;
-    case "types":
-      return <TypesAdminPage />;
+    case "beads":
+      return <BeadsAdminPage />;
+    case "bead-types":
+      return <BeadTypesAdminPage />;
     case "pricing":
       return <SunglassesPricingPage />;
     case "media":

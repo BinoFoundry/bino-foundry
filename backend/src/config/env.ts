@@ -13,6 +13,8 @@ const envSchema = z
     APP_ENV: appEnvSchema.default("development"),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().positive().default(5050),
+    /** Bind address; production defaults to 127.0.0.1 for nginx on the same host */
+    LISTEN_HOST: z.preprocess(emptyAsUndefined, z.string().optional()),
     /** When set, non-GET catalogue/upload mutations must send matching `x-api-key` */
     ADMIN_API_KEY: z.preprocess(emptyAsUndefined, z.string().optional()),
     CLOUDINARY_CLOUD_NAME: z.preprocess(emptyAsUndefined, z.string().optional()),
@@ -69,6 +71,13 @@ export function getEnv(): BackendEnv {
 export function isProductionLike(): boolean {
   const env = getEnv().APP_ENV;
   return env === "production" || env === "staging";
+}
+
+/** Where Express listens. Production/staging default 127.0.0.1 (matches nginx upstream). */
+export function resolveListenHost(): string | undefined {
+  const explicit = getEnv().LISTEN_HOST?.trim();
+  if (explicit) return explicit;
+  return isProductionLike() ? "127.0.0.1" : undefined;
 }
 
 /** Vite dev server + common local ports (always merged in APP_ENV=development). */

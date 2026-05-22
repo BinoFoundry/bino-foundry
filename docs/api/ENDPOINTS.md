@@ -25,29 +25,34 @@ Machine-readable spec: `/api/openapi.json` · UI: `/api/docs` — [SWAGGER.md](.
 
 **Admin UI:** Frames section (`features/admin/modules/products/FramesAdminPage`) — Phase 1 uses local catalogue state; API ready for backend sync.
 
-## Crystals
+## Bead library (unified bracelet catalogue)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/crystals` | R | List crystals |
-| GET | `/crystals/:id` | R | Get by `public_id` |
-| POST | `/crystals` | W | Create |
-| PUT | `/crystals/:id` | W | Update |
-| DELETE | `/crystals/:id` | W | Delete |
+| GET | `/bead-libraries` | R | List all beads |
+| GET | `/bead-libraries/:id` | R | Get by `public_id` |
+| POST | `/bead-libraries` | W | Create bead |
+| PUT | `/bead-libraries/:id` | W | Update bead |
+| PUT | `/bead-libraries/:id/crop` | W | Save crop config + processed image URL |
+| DELETE | `/bead-libraries/:id` | W | Delete |
 
-**Admin UI:** Crystals section — local catalogue + forms.
+**Admin UI:** Bead library — `BeadForm` + `BeadCropEditor` (manual path/curve crop, same tools as frame mask editor).
 
-## Crystal types
+Replaces legacy `/crystals`, `/charms`, `/spacers` after migration `000007`.
+
+## Bead types (dynamic categories)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/types` | R | List types |
-| GET | `/types/:id` | R | Get type |
-| POST | `/types` | W | Create |
-| PUT | `/types/:id` | W | Update |
-| DELETE | `/types/:id` | W | Delete |
+| GET | `/bead-types` | R | List types (Crystal, Charm, Spacer, …) |
+| GET | `/bead-types/:id` | R | Get type (UUID) |
+| POST | `/bead-types` | W | Create type |
+| PUT | `/bead-types/:id` | W | Update type |
+| DELETE | `/bead-types/:id` | W | Delete |
 
-**Admin UI:** Types section.
+**Admin UI:** Bead types section.
+
+Seeded slugs: `crystal`, `charm`, `spacer`, `separator`, `accent`, `connector`.
 
 ## Sunglasses builder catalog
 

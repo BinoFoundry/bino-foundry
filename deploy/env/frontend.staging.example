@@ -1,0 +1,5 @@
+# Vite staging — copy to frontend/.env.staging (build: npm run build:staging -w frontend)
+
+VITE_API_BASE_URL=https://api-staging.example.com
+VITE_API_PREFIX=/api
+# VITE_ADMIN_API_KEY=

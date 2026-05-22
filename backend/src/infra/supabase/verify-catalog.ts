@@ -6,10 +6,17 @@ import { getSupabaseServiceRole } from "./adminClient.js";
  */
 export async function verifySupabaseCatalogReady(): Promise<void> {
   const supabase = getSupabaseServiceRole();
-  const { error } = await supabase.from("crystal_types").select("id").limit(1);
+  const { error } = await supabase.from("bead_libraries").select("id").limit(1);
   if (error) {
     throw new Error(
-      `Supabase catalogue unreachable: ${error.message}. Ensure SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are set and migrations (000001_initial_catalog.sql) are applied.`,
+      `Supabase catalogue unreachable: ${error.message}. Ensure SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are set and migrations through 000007_unified_bead_libraries.sql are applied.`,
+    );
+  }
+
+  const { error: beadTypesError } = await supabase.from("bead_types").select("id").limit(1);
+  if (beadTypesError) {
+    throw new Error(
+      `Bead types missing: ${beadTypesError.message}. Apply database/migrations/000007_unified_bead_libraries.sql.`,
     );
   }
 

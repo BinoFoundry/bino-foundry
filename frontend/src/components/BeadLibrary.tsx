@@ -1,326 +1,181 @@
-import { useState, useMemo } from "react";
-import { Search, X, Info, Gem, Heart, Circle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Search, X, Info, Gem } from "lucide-react";
+
 import { useCatalogue } from "@/state/catalogue";
-import type { CrystalEntry } from "@/data/crystals";
+import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { CharmEntry, SpacerEntry } from "@/types/catalogue";
-
-type CrystalBead = CrystalEntry;
-type CharmItem = CharmEntry;
-type SpacerItem = SpacerEntry;
-type LibraryTab = "crystals" | "charms" | "spacers";
+import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
 
 interface BeadLibraryProps {
-  onSelectCrystal: (bead: CrystalBead) => void;
-  onSelectCharm: (charm: CharmItem) => void;
-  onSelectSpacer: (spacer: SpacerItem) => void;
+  onSelectBead: (bead: BeadLibraryEntry) => void;
   open: boolean;
   onClose: () => void;
 }
 
-const TABS: { id: LibraryTab; label: string; icon: typeof Gem }[] = [
-  { id: "crystals", label: "Crystals", icon: Gem },
-  { id: "charms", label: "Charms", icon: Heart },
-  { id: "spacers", label: "Spacers", icon: Circle },
-];
-
-const BeadLibrary = ({ onSelectCrystal, onSelectCharm, onSelectSpacer, open, onClose }: BeadLibraryProps) => {
+const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
   const cat = useCatalogue();
   const [search, setSearch] = useState("");
-  const [selectedType, setSelectedType] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<LibraryTab>("crystals");
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("all");
+  const [activeBeadTypeId, setActiveBeadTypeId] = useState<string>("");
   const isMobile = useIsMobile();
 
-  const availableTypes = useMemo(() => {
-    if (activeTab === "charms") {
-      return [...cat.charmTypes].sort((a, b) => a.name.localeCompare(b.name));
+  const activeTypes = useMemo(
+    () => [...cat.beadTypes].filter((t) => t.isActive !== false).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    [cat.beadTypes],
+  );
+
+  const currentBeadTypeId = activeBeadTypeId || activeTypes[0]?.id || "";
+
+  const subtypeOptions = useMemo(() => {
+    const beads = cat.beadLibraries.filter((b) => b.beadTypeId === currentBeadTypeId);
+    const legacyIds = new Set<string>();
+    for (const b of beads) {
+      const meta = b.metadata as Record<string, unknown> | undefined;
+      const legacy =
+        (meta?.legacyCrystalTypeId as string) ||
+        (meta?.legacyCharmTypeId as string) ||
+        (meta?.legacySpacerTypeId as string);
+      if (legacy) legacyIds.add(legacy);
     }
-    if (activeTab === "spacers") {
-      return [...cat.spacerTypes].sort((a, b) => a.name.localeCompare(b.name));
-    }
-    return [...cat.types].sort((a, b) => a.name.localeCompare(b.name));
-  }, [activeTab, cat.charmTypes, cat.spacerTypes, cat.types]);
+    return Array.from(legacyIds);
+  }, [cat.beadLibraries, currentBeadTypeId]);
 
-  const filteredCrystals = useMemo(
-    () =>
-      cat.crystals.filter((b) => {
-        const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase());
-        const matchesType = selectedType === "all" || b.type === selectedType;
-        return matchesSearch && matchesType;
-      }),
-    [cat.crystals, search, selectedType]
-  );
+  const filtered = useMemo(() => {
+    return cat.beadLibraries.filter((b) => {
+      if (b.beadTypeId !== currentBeadTypeId) return false;
+      const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase());
+      if (!matchesSearch) return false;
+      if (selectedTypeId === "all") return true;
+      const meta = b.metadata as Record<string, unknown> | undefined;
+      const legacy =
+        (meta?.legacyCrystalTypeId as string) ||
+        (meta?.legacyCharmTypeId as string) ||
+        (meta?.legacySpacerTypeId as string);
+      return legacy === selectedTypeId;
+    });
+  }, [cat.beadLibraries, currentBeadTypeId, search, selectedTypeId]);
 
-  const filteredCharms = useMemo(
-    () =>
-      cat.charms.filter((c) => {
-        const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase());
-        const matchesType = selectedType === "all" || c.type === selectedType;
-        return matchesSearch && matchesType;
-      }),
-    [cat.charms, search, selectedType]
-  );
-
-  const filteredSpacers = useMemo(
-    () =>
-      cat.spacers.filter((s) => {
-        const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
-        const matchesType = selectedType === "all" || s.type === selectedType;
-        return matchesSearch && matchesType;
-      }),
-    [cat.spacers, search, selectedType]
-  );
+  const tabLabel = (t: BeadTypeEntry) => t.name;
 
   if (!open) return null;
 
-  const handleDragStart = (e: React.DragEvent, type: string, item: any) => {
-    e.dataTransfer.effectAllowed = "copy";
-    e.dataTransfer.setData("application/json", JSON.stringify({ type, item }));
-  };
-
-  const listContent = (
+  return (
     <>
-      <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border">
-        <h3 className="font-display text-sm font-semibold">Bead Library</h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-border">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => { setActiveTab(id); setSearch(""); setSelectedType("all"); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-body transition-colors ${
-              activeTab === id
-                ? "text-primary border-b-2 border-primary font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
+      {isMobile && <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />}
+      <div
+        className={
+          isMobile
+            ? "fixed bottom-0 left-0 right-0 z-50 max-h-[70vh] rounded-t-2xl border-t border-border bg-card shadow-xl flex flex-col"
+            : "absolute left-0 top-0 bottom-0 z-20 w-60 border-r border-border bg-card/95 backdrop-blur-sm flex flex-col"
+        }
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h3 className="font-display text-sm font-semibold tracking-wide">Bead Library</h3>
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
           </button>
-        ))}
-      </div>
-
-      <div className="p-3 space-y-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder={`Search ${activeTab}...`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-muted/50 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary font-body"
-          />
         </div>
 
-        {(activeTab === "crystals" || activeTab === "charms" || activeTab === "spacers") && (
-          <Select value={selectedType} onValueChange={setSelectedType}>
-            <SelectTrigger className="w-full h-8 text-xs font-body">
-              <SelectValue placeholder="Filter by type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs font-body">All Types</SelectItem>
-              {availableTypes.map(({ id, name }) => (
-                <SelectItem key={id} value={id} className="text-xs font-body">
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
+          {activeTypes.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                setActiveBeadTypeId(t.id);
+                setSelectedTypeId("all");
+              }}
+              className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-wider ${
+                currentBeadTypeId === t.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {tabLabel(t)}
+            </button>
+          ))}
+        </div>
 
-      {/* Item list */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-1">
-        {/* Crystals */}
-        {activeTab === "crystals" && (
-          <>
-            {filteredCrystals.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">No crystals match your search.</p>
-            )}
-            {filteredCrystals.map((bead) => (
-              <button
-                key={bead.id}
-                onClick={() => onSelectCrystal(bead)}
-                draggable={!isMobile}
-                onDragStart={(e) => handleDragStart(e, "crystal", bead)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group hover:bg-muted/60 cursor-grab active:cursor-grabbing"
-              >
-                {bead.image ? (
-                  <img
-                    src={bead.image}
-                    alt={bead.name}
-                    className="w-9 h-9 flex-shrink-0 object-contain"
-                    onError={(e) => {
-                      const img = e.target as HTMLImageElement;
-                      img.style.display = "none";
-                      const next = img.nextElementSibling as HTMLElement | null;
-                      if (next) next.style.display = "block";
-                    }}
-                  />
-                ) : null}
-                <div
-                  className={`w-7 h-7 rounded-full border border-border/50 flex-shrink-0 shadow-sm ${bead.image ? "hidden" : ""}`}
-                  style={{ background: "hsl(var(--muted))" }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-foreground truncate">{bead.name}</p>
-                    {bead.description && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div onClick={(e) => e.stopPropagation()} className="cursor-help flex items-center justify-center">
-                            <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary transition-colors" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-[200px] whitespace-normal z-[60]">
-                          <p className="text-xs">{bead.description}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">${bead.price.toFixed(2)} / bead</p>
-                </div>
-                {!isMobile && (
-                  <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    Drag or Click
-                  </span>
-                )}
-              </button>
-            ))}
-          </>
-        )}
+        <div className="space-y-2 border-b border-border p-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search beads…"
+              className="w-full rounded-md border border-border bg-muted/40 py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          {subtypeOptions.length > 0 ? (
+            <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Subtype" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All subtypes</SelectItem>
+                {subtypeOptions.map((id) => (
+                  <SelectItem key={id} value={id}>
+                    Legacy subtype
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
 
-        {/* Charms */}
-        {activeTab === "charms" && (
-          <>
-            {filteredCharms.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">No charms match your search.</p>
-            )}
-            {filteredCharms.map((charm) => (
-              <button
-                key={charm.id}
-                onClick={() => onSelectCharm(charm)}
-                draggable={!isMobile}
-                onDragStart={(e) => handleDragStart(e, "charm", charm)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group hover:bg-muted/60 cursor-grab active:cursor-grabbing"
-              >
-                {charm.image ? (
-                  <img src={charm.image} alt={charm.name} className="w-9 h-9 flex-shrink-0 object-contain" />
-                ) : (
-                  <div className="w-7 h-7 rounded-md border border-border/50 flex-shrink-0 shadow-sm flex items-center justify-center bg-amber-50">
-                    <Heart className="w-3.5 h-3.5 text-amber-600" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-foreground truncate">{charm.name}</p>
-                    {charm.description && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div onClick={(e) => e.stopPropagation()} className="cursor-help flex items-center justify-center">
-                            <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary transition-colors" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-[200px] whitespace-normal z-[60]">
-                          <p className="text-xs">{charm.description}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">${charm.price.toFixed(2)} / charm</p>
-                </div>
-                {!isMobile && (
-                  <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    Drag or Click
-                  </span>
-                )}
-              </button>
-            ))}
-          </>
-        )}
+        <div className="flex-1 overflow-y-auto p-2">
+          {filtered.length === 0 ? (
+            <p className="px-2 py-6 text-center text-xs text-muted-foreground">No beads in this category.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {filtered.map((bead) => {
+                const img = getBeadDisplayImageUrl(bead);
+                return (
+                  <Tooltip key={bead.id}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        draggable={!isMobile}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("application/json", JSON.stringify({ bead }));
+                        }}
+                        onClick={() => onSelectBead(bead)}
+                        className="flex flex-col items-center gap-1 rounded-lg border border-border/60 bg-muted/30 p-2 transition hover:border-primary/40 hover:bg-muted/60"
+                      >
+                        <div className="flex h-12 w-12 items-center justify-center overflow-visible bg-transparent">
+                          {img ? (
+                            <img
+                              src={img}
+                              alt=""
+                              className="max-h-full max-w-full"
+                              style={getStrandBeadImageStyle(bead)}
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded border border-dashed border-border bg-muted">
+                              <Gem className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="line-clamp-2 text-center text-[9px] leading-tight">{bead.name}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[200px] text-xs">
+                      <p className="font-medium">{bead.name}</p>
+                      <p className="text-muted-foreground">${bead.price.toFixed(2)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-        {/* Spacers */}
-        {activeTab === "spacers" && (
-          <>
-            {filteredSpacers.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">No spacers match your search.</p>
-            )}
-            {filteredSpacers.map((spacer) => (
-              <button
-                key={spacer.id}
-                onClick={() => onSelectSpacer(spacer)}
-                draggable={!isMobile}
-                onDragStart={(e) => handleDragStart(e, "spacer", spacer)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group hover:bg-muted/60 cursor-grab active:cursor-grabbing"
-              >
-                {spacer.image ? (
-                  <img src={spacer.image} alt={spacer.name} className="w-9 h-9 flex-shrink-0 object-contain" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full border border-border/50 flex-shrink-0 shadow-sm flex items-center justify-center bg-stone-100">
-                    <Circle className="w-3 h-3 text-stone-500" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-foreground truncate">{spacer.name}</p>
-                    {spacer.description && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div onClick={(e) => e.stopPropagation()} className="cursor-help flex items-center justify-center">
-                            <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary transition-colors" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-[200px] whitespace-normal z-[60]">
-                          <p className="text-xs">{spacer.description}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">${spacer.price.toFixed(2)} / spacer</p>
-                </div>
-                {!isMobile && (
-                  <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    Drag or Click
-                  </span>
-                )}
-              </button>
-            ))}
-          </>
-        )}
+        <div className="flex items-start gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+          <Info className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>Click or drag beads onto the strand. Crop-ready assets render cleaner on the bracelet.</span>
+        </div>
       </div>
     </>
-  );
-
-  if (isMobile) {
-    return (
-      <>
-        <div
-          className="fixed inset-0 bg-black/40 z-30 animate-fade-in"
-          onClick={onClose}
-        />
-        <div className="fixed left-0 right-0 bottom-0 z-40 bg-background rounded-t-2xl border-t border-border shadow-2xl flex flex-col animate-slide-up"
-          style={{ maxHeight: "70vh" }}
-        >
-          <div className="flex justify-center pt-2 pb-1">
-            <div className="w-10 h-1 rounded-full bg-border" />
-          </div>
-          {listContent}
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <div className="absolute left-0 top-0 bottom-0 w-60 bg-background/80 backdrop-blur-sm border-r border-border/50 z-20 flex flex-col animate-slide-in">
-      {listContent}
-    </div>
   );
 };
 

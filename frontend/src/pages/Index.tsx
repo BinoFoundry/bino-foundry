@@ -34,7 +34,7 @@ const Index = () => {
       braceletPrice={prices.bracelet}
       sunglassesPrice={prices.sunglasses}
     >
-      {catalogue.isHydrating && catalogue.crystals.length === 0 && catalogue.frames.length === 0 ? (
+      {catalogue.isHydrating && catalogue.beadLibraries.length === 0 && catalogue.frames.length === 0 ? (
         <LoadingState label="Loading catalogue…" className="h-full" />
       ) : catalogue.hydrateError ? (
         <ErrorState

@@ -262,6 +262,85 @@ certbot renew --dry-run
 
 Use **https://binofoundry.temukreatif.id** from now on.
 
+After certbot, confirm SPA routing on **HTTPS** (see [Refresh on `/bracelet`](#refresh-on-bracelet-or-other-routes) below).
+
+---
+
+## Certbot reset (same domain)
+
+Use this if the certificate or nginx SSL block is wrong and you want a clean run.
+
+**1. List and delete the old certificate**
+
+```bash
+sudo certbot certificates
+sudo certbot delete --cert-name binofoundry.temukreatif.id
+```
+
+(If the name differs, use the name from `certbot certificates`.)
+
+**2. Restore HTTP-only site config** (needed before certbot can validate on port 80)
+
+```bash
+cd /opt/bino-foundry
+sudo cp deploy/nginx/binofoundry.temukreatif.id.conf /etc/nginx/sites-available/binofoundry.temukreatif.id.conf
+sudo ln -sf /etc/nginx/sites-available/binofoundry.temukreatif.id.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**3. Request certificate again**
+
+```bash
+sudo certbot --nginx -d binofoundry.temukreatif.id
+```
+
+**4. Fix SPA + keep TLS (recommended)** — certbot sometimes omits `try_files` on the `listen 443` block. Install the repo’s full HTTPS config (cert paths must already exist from step 3):
+
+```bash
+sudo cp /opt/bino-foundry/deploy/nginx/binofoundry.temukreatif.id.https.conf \
+  /etc/nginx/sites-available/binofoundry.temukreatif.id.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Renewal still works; certbot only renews files under `/etc/letsencrypt/`.
+
+---
+
+## Refresh on `/bracelet` or other routes
+
+The app uses client-side routes (`/bracelet`, `/sunglasses`, `/admin`). A **browser refresh** asks nginx for that path; nginx must serve `index.html`, not a 404 or another site.
+
+**Required in the `listen 443 ssl` server block:**
+
+```nginx
+location / {
+  try_files $uri $uri/ /index.html;
+}
+```
+
+**Check on the VPS:**
+
+```bash
+sudo nginx -T 2>/dev/null | grep -A2 "server_name binofoundry"
+sudo nginx -T 2>/dev/null | grep -B5 -A8 "listen 443"
+```
+
+You should see `try_files` inside the **443** server for `binofoundry.temukreatif.id`, and `root /var/www/bino-foundry`.
+
+**Test:**
+
+```bash
+curl -sI https://binofoundry.temukreatif.id/bracelet | head -5
+```
+
+Expect `HTTP/2 200` (not `301` to another domain, not `404`).
+
+| Symptom | Likely cause |
+|---------|----------------|
+| Refresh opens **temukreatif.id** homepage | Wrong `server_name` or nginx `default_server`; disable `/etc/nginx/sites-enabled/default` |
+| Refresh shows **404** | Missing `try_files` on port **443** (common after certbot) |
+| Refresh shows blank page | Run `sudo npm run deploy:web`; check `/var/www/bino-foundry/index.html` |
+
 ---
 
 ## 11. Smoke test checklist
@@ -298,13 +377,97 @@ No nginx reload needed unless you change nginx config or static paths.
 
 | Problem | What to do |
 |---------|------------|
-| `502 Bad Gateway` on `/api` | `pm2 status`; `pm2 logs bino-foundry-api`; confirm `curl http://127.0.0.1:5050/api/status` works |
+| `502 Bad Gateway` on `/api` | API not listening — see [502 Bad Gateway](#502-bad-gateway-api) below |
 | Site 404 / blank | `ls /var/www/bino-foundry/index.html`; re-run `npm run build:all` then `sudo npm run deploy:web` |
 | CORS errors in browser | `CORS_ORIGINS` must be `https://binofoundry.temukreatif.id`; restart API: `pm2 restart bino-foundry-api` |
 | Admin save 401 | `ADMIN_API_KEY` (server) must match `VITE_ADMIN_API_KEY` (rebuild frontend after changing) |
 | API startup: Supabase errors | Re-run migrations; verify `SUPABASE_URL` and service role key |
 | certbot fails | DNS must point to this VPS; port 80 open (`ufw status`) |
+| Refresh `/bracelet` wrong page | [Certbot reset](#certbot-reset-same-domain) + HTTPS config with `try_files`; see [`nginx/binofoundry.temukreatif.id.https.conf`](./nginx/binofoundry.temukreatif.id.https.conf) |
 | Upload fails | Migration `000002`; bucket policies; check Network tab for `/api/...` errors |
+
+## 502 Bad Gateway (API)
+
+**Meaning:** nginx proxies `/api/` to `127.0.0.1:5050`, but nothing is accepting connections there (PM2 stopped, crash on startup, or wrong port).
+
+Run on the VPS **in order**:
+
+```bash
+# 1) Is anything on port 5050?
+curl -sS http://127.0.0.1:5050/api/status || echo "FAIL: API not reachable locally"
+
+# 2) PM2 process
+pm2 status
+pm2 logs bino-foundry-api --lines 80
+```
+
+| `curl` local | `pm2 status` | Likely fix |
+|--------------|--------------|------------|
+| Fails | `errored` / `stopped` | Read logs below; fix env/Supabase; restart |
+| Fails | no process | Start from repo root (see step 3) |
+| `listening` but `curl 127.0.0.1` refused | Process exited, or IPv6-only bind — see below |
+| Works | `online` | nginx/proxy issue (step 4) |
+
+**“Listening” but `curl` refused:** run `curl` **while** `node dist/server.js` is still running (second SSH tab). Check bind address:
+
+```bash
+ss -tlnp | grep 5050
+curl -sS http://127.0.0.1:5050/api/status
+curl -sS http://[::1]:5050/api/status
+```
+
+Production builds bind **`127.0.0.1:5050`** (nginx upstream). After `git pull`, rebuild and restart PM2.
+
+**3) Fix API process (from `/opt/bino-foundry`)**
+
+```bash
+cd /opt/bino-foundry
+ls -la backend/dist/server.js    # must exist
+APP_ENV=production npm run env:check
+npm run build:all                # if dist missing
+
+pm2 delete bino-foundry-api 2>/dev/null || true
+pm2 start deploy/pm2/ecosystem.config.cjs --env production
+pm2 save
+curl -sS http://127.0.0.1:5050/api/status
+```
+
+**4) If local curl works but browser still 502**
+
+```bash
+sudo nginx -t
+grep -n "5050\|bino_api\|proxy_pass" /etc/nginx/sites-enabled/*
+sudo tail -20 /var/log/nginx/error.log
+```
+
+Upstream must be `127.0.0.1:5050` and `location /api/` must `proxy_pass http://bino_api;` (no trailing slash on upstream name).
+
+### Common log errors → fixes
+
+| PM2 / startup log | Fix |
+|-------------------|-----|
+| `Missing backend/dist/server.js` | `cd /opt/bino-foundry && npm run build:all` |
+| `SUPABASE_URL is required` / `CORS_ORIGINS is required` | Create `/opt/bino-foundry/.env.production` (copy from `deploy/env/.env.production.example`) |
+| `Supabase catalogue unreachable` | Run SQL migrations `000001`–`000006` in Supabase; verify service role key |
+| `Sunglasses builder catalog missing` | Apply `000003_sunglasses_builder_catalog.sql` |
+| `EADDRINUSE` port 5050 | `ss -tlnp \| grep 5050`; stop duplicate process |
+
+**Env file location:** backend loads `.env.production` from **repo root** and `deploy/env/`. Prefer a single file:
+
+```bash
+cp deploy/env/.env.production.example /opt/bino-foundry/.env.production
+nano /opt/bino-foundry/.env.production
+```
+
+Required for production:
+
+```env
+CORS_ORIGINS=https://binofoundry.temukreatif.id
+TRUST_PROXY=1
+PORT=5050
+```
+
+(Wrong `CORS_ORIGINS` causes browser CORS errors after API is up — not nginx 502.)
 
 **Logs**
 

@@ -4,8 +4,8 @@ import type { LucideIcon } from "lucide-react";
 export type AdminSection =
   | "dashboard"
   | "frames"
-  | "crystals"
-  | "types"
+  | "beads"
+  | "bead-types"
   | "pricing"
   | "media";
 
