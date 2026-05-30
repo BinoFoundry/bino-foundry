@@ -1,4 +1,4 @@
-import { Gem, Glasses, Image, Settings2, Sun } from "lucide-react";
+import { Gem, Glasses, Image, Ruler, Settings2, Sun } from "lucide-react";
 
 import { useCatalogue } from "@/state/catalogue";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
@@ -19,7 +19,8 @@ const quickLinks: {
   { section: "frames", label: "Frames", description: "Sunglasses frame SKUs", icon: Glasses },
   { section: "beads", label: "Bead library", description: "Unified beads with crop workflow", icon: Gem },
   { section: "bead-types", label: "Bead types", description: "Dynamic categories", icon: Settings2 },
-  { section: "pricing", label: "Sunglasses config", description: "Lens tints and add-ons", icon: Sun },
+  { section: "bead-sizes", label: "Bead sizes", description: "Mm options and price multipliers", icon: Settings2 },
+  { section: "pricing", label: "Pricing & config", description: "Sunglasses and bracelet rules", icon: Sun },
   { section: "media", label: "Media", description: "Staging uploads", icon: Image },
 ];
 

@@ -33,7 +33,12 @@ export interface CatalogueActions {
     payload: Parameters<typeof beadsApi.updateCrop>[1],
   ) => Promise<void>;
   deleteBeadLibrary: (id: string) => Promise<void>;
-  addBeadType: (entry: Pick<BeadTypeEntry, "name" | "description">) => Promise<void>;
+  addBeadType: (
+    entry: Pick<BeadTypeEntry, "name" | "description"> & {
+      displayOrder?: number;
+      isActive?: boolean;
+    },
+  ) => Promise<void>;
   updateBeadType: (entry: BeadTypeEntry) => Promise<void>;
   deleteBeadType: (id: string) => Promise<void>;
   addBeadSize: (entry: Omit<BeadSizeEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
@@ -136,7 +141,12 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   );
 
   const addBeadType = useCallback(
-    async (entry: Pick<BeadTypeEntry, "name" | "description">) => {
+    async (
+      entry: Pick<BeadTypeEntry, "name" | "description"> & {
+        displayOrder?: number;
+        isActive?: boolean;
+      },
+    ) => {
       await beadsApi.createType(entry);
       await refreshFromApi();
     },

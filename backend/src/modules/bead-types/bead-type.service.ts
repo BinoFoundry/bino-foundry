@@ -63,7 +63,7 @@ export class BeadTypeService {
       name: payload.name.trim(),
       description: payload.description?.trim() ?? "",
       display_order: payload.displayOrder ?? 0,
-      is_active: true,
+      is_active: payload.isActive ?? true,
       metadata: payload.metadata ?? {},
     };
 
@@ -81,6 +81,7 @@ export class BeadTypeService {
     if (payload.name !== undefined) updates.name = payload.name.trim();
     if (payload.description !== undefined) updates.description = payload.description.trim();
     if (payload.displayOrder !== undefined) updates.display_order = payload.displayOrder;
+    if (payload.isActive !== undefined) updates.is_active = payload.isActive;
     if (payload.metadata !== undefined) updates.metadata = payload.metadata;
 
     const { data, error } = await supabase.from("bead_types").update(updates).eq("id", recordId).select("*").single();

@@ -1,14 +1,38 @@
-## Milestone 1 · Storage foundation
+# Milestone 1 — Storage foundation (completed)
 
-- **Buckets** (`000002_storage_buckets_supabase.sql`): `frames`, `crystals`, `assets` (**public read**); `uploads` (**private**).
-- **Path layout**: [`database/storage/STORAGE_LAYOUT.md`](../database/storage/STORAGE_LAYOUT.md) — immutable keys, tiered folders (preview/thumbnail/render cache).
-- **Helpers**: `@bino-foundry/shared/storage` — kebab asserts, deterministic object keys (`uploadStagingObjectKey`, frame/crystal/assets builders).
-- **Backend integration**: `@supabase/supabase-js` + service-role singleton; staging upload → `POST /api/upload/staging` or `/api/v1/upload/staging` with `batch` query (default `default`).
-- **Promotion**: [`promoteCatalogObject`](../backend/src/infra/storage/catalog-object-storage.ts) stream-copy `uploads` → catalogue buckets (Postgres asset row linkage is a separate milestone slice).
-- **Public URLs**: `getPublicUrl` only for catalogue buckets (`publicCatalogHttpUrl`); never expose `uploads/*` URLs in PDP.
+Supabase Storage for catalogue assets and private staging.
 
-### Verify locally
+## Delivered
 
-1. Apply `database/migrations/000002_storage_buckets_supabase.sql` on the linked Supabase project.
+- **Buckets** (`000002_storage_buckets_supabase.sql`): `frames`, `crystals`, `assets` (public read); `uploads` (private).
+- **Path layout**: [`database/storage/STORAGE_LAYOUT.md`](../database/storage/STORAGE_LAYOUT.md) — frames, crystals, bracelet beads/charms/spacers, previews.
+- **Shared helpers**: `@bino-foundry/shared` — `uploadStagingObjectKey`, catalogue key builders.
+- **Backend**: service-role client; `POST /api/upload/staging` (+ `/api/v1/...`).
+- **Promotion**: `promoteCatalogObject` — stream copy `uploads` → catalogue bucket (asset row linkage still partial).
+- **Public URLs**: catalogue buckets only; never expose private `uploads/*` in builders.
+
+## Bracelet asset paths (documented)
+
+```
+bracelets/beads/{crystal_public_id}@{density}.{ext}
+bracelets/charms/{charm_id}.{ext}
+bracelets/spacers/{spacer_id}.{ext}
+```
+
+Bead **crop** processed assets referenced via `bead_libraries` metadata / asset FKs.
+
+## Verify
+
+1. Apply `000002` on Supabase project.
 2. Set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` in `.env`.
-3. `npm install` at repo root; `npm run build -w backend` then `multipart` POST staging route with configured `ADMIN_API_KEY` header if mutations are guarded.
+3. `npm run build -w backend`
+4. Upload test file to staging with `x-api-key` when `ADMIN_API_KEY` is set.
+5. Confirm object under `uploads/yyyy/mm/batch/...` in Supabase Storage UI.
+
+## Milestone 2
+
+- Admin UI: promote staging → catalogue with `assets` row creation
+- Render-cache tier usage
+- Deprecate Cloudinary-only path where Supabase is primary
+
+See [MILESTONE2_ADMIN_CHECKLIST.md](./MILESTONE2_ADMIN_CHECKLIST.md) and [assets/WORKFLOW.md](./assets/WORKFLOW.md).

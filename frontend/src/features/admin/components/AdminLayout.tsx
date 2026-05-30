@@ -1,9 +1,11 @@
-import type { ReactNode } from "react";
-import { RotateCcw } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getAdminApiKey } from "@/config/env";
 import { useCatalogue } from "@/state/catalogue";
+import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 
 import { ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS } from "../navigation";
 import type { AdminSection } from "../types";
@@ -16,7 +18,10 @@ interface AdminLayoutProps {
 
 export function AdminLayout({ section, onSectionChange, children }: AdminLayoutProps) {
   const catalogue = useCatalogue();
+  const sunglasses = useSunglassesCatalog();
   const activeNav = ADMIN_NAV_ITEMS.find((n) => n.id === section);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasAdminApiKey = Boolean(getAdminApiKey());
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -31,19 +36,28 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
         <Button
           variant="ghost"
           size="sm"
-          className="text-muted-foreground hover:text-destructive"
+          className="text-muted-foreground"
+          disabled={refreshing}
           onClick={() => {
-            if (
-              window.confirm("Reset local catalogue cache to factory defaults? This cannot be undone.")
-            ) {
-              catalogue.resetToDefaults();
-            }
+            setRefreshing(true);
+            void Promise.all([
+              catalogue.refreshFromApi(),
+              sunglasses.refreshAdminFromApi(),
+            ]).finally(() => setRefreshing(false));
           }}
         >
-          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-          Reset local cache
+          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh catalogue
         </Button>
       </header>
+
+      {!hasAdminApiKey ? (
+        <p className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-800 dark:text-amber-200">
+          Set <code className="rounded bg-background/80 px-1">VITE_ADMIN_API_KEY</code> to match server{" "}
+          <code className="rounded bg-background/80 px-1">ADMIN_API_KEY</code> before saving catalogue changes.
+          Reads work without a key; writes are blocked on the API.
+        </p>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <nav

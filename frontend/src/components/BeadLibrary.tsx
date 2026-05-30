@@ -44,6 +44,7 @@ const BeadLibrary = ({ onSelectBead, open, onClose }: BeadLibraryProps) => {
 
   const filtered = useMemo(() => {
     return cat.beadLibraries.filter((b) => {
+      if (b.isActive === false) return false;
       if (b.beadTypeId !== currentBeadTypeId) return false;
       const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase());
       if (!matchesSearch) return false;

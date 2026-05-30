@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
+import { AdminDeleteConfirm } from "@/features/admin/components/AdminDeleteConfirm";
+import {
+  isValidHexColor,
+  normalizeHexInput,
+  tintPreviewStyle,
+  validateHexFields,
+} from "@/features/admin/lib/adminHex";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/common";
 import { LoadingState } from "@/components/common";
+import { isApiError } from "@/services/api";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
 
@@ -14,6 +22,8 @@ export function SunglassesCatalogAdmin() {
   const [section, setSection] = useState<Section>("tints");
   const [editingTint, setEditingTint] = useState<LensTintEntry | null>(null);
   const [editingOption, setEditingOption] = useState<BuilderOptionEntry | null>(null);
+  const [confirmDeleteTintId, setConfirmDeleteTintId] = useState<string | null>(null);
+  const [confirmDeleteOptionId, setConfirmDeleteOptionId] = useState<string | null>(null);
   useEffect(() => {
     void catalog.refreshAdminFromApi();
   }, [catalog.refreshAdminFromApi]);
@@ -76,8 +86,19 @@ export function SunglassesCatalogAdmin() {
                 title={tint.name}
                 subtitle={`${tint.category} · ${tint.code} · +$${tint.priceSurcharge}`}
                 active={tint.isActive}
+                swatchStyle={tintPreviewStyle(tint.category, tint.gradientTop, tint.gradientBottom)}
                 onEdit={() => setEditingTint(tint)}
-                onDelete={() => void catalog.deleteLensTint(tint.id)}
+                onDelete={() => setConfirmDeleteTintId(tint.id)}
+                confirmDelete={confirmDeleteTintId === tint.id}
+                onConfirmDelete={async () => {
+                  try {
+                    await catalog.deleteLensTint(tint.id);
+                    setConfirmDeleteTintId(null);
+                  } catch (err) {
+                    alert(isApiError(err) ? err.message : "Delete failed");
+                  }
+                }}
+                onCancelDelete={() => setConfirmDeleteTintId(null)}
               />
             ))}
             {editingTint && (
@@ -128,7 +149,17 @@ export function SunglassesCatalogAdmin() {
                 subtitle={`${option.code} · +$${option.priceSurcharge}`}
                 active={option.isActive}
                 onEdit={() => setEditingOption(option)}
-                onDelete={() => void catalog.deleteBuilderOption(option.id)}
+                onDelete={() => setConfirmDeleteOptionId(option.id)}
+                confirmDelete={confirmDeleteOptionId === option.id}
+                onConfirmDelete={async () => {
+                  try {
+                    await catalog.deleteBuilderOption(option.id);
+                    setConfirmDeleteOptionId(null);
+                  } catch (err) {
+                    alert(isApiError(err) ? err.message : "Delete failed");
+                  }
+                }}
+                onCancelDelete={() => setConfirmDeleteOptionId(null)}
               />
             ))}
             {editingOption && (
@@ -187,30 +218,51 @@ function CatalogRow({
   title,
   subtitle,
   active,
+  swatchStyle,
   onEdit,
   onDelete,
+  confirmDelete,
+  onConfirmDelete,
+  onCancelDelete,
 }: {
   title: string;
   subtitle: string;
   active: boolean;
+  swatchStyle?: React.CSSProperties;
   onEdit: () => void;
   onDelete: () => void;
+  confirmDelete?: boolean;
+  onConfirmDelete?: () => void;
+  onCancelDelete?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
-      <div>
-        <p className="font-medium text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-        {!active && <p className="text-[10px] text-amber-600">Inactive</p>}
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {swatchStyle ? (
+          <span
+            className="h-10 w-10 shrink-0 rounded-md border border-border shadow-inner"
+            style={swatchStyle}
+            aria-hidden
+          />
+        ) : null}
+        <div className="min-w-0">
+          <p className="font-medium text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          {!active && <p className="text-[10px] text-amber-600">Inactive</p>}
+        </div>
       </div>
-      <div className="flex gap-1">
-        <Button size="icon" variant="ghost" onClick={onEdit} aria-label="Edit">
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button size="icon" variant="ghost" onClick={onDelete} aria-label="Delete">
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-      </div>
+      {confirmDelete && onConfirmDelete && onCancelDelete ? (
+        <AdminDeleteConfirm onCancel={onCancelDelete} onConfirm={onConfirmDelete} />
+      ) : (
+        <div className="flex shrink-0 gap-1">
+          <Button size="icon" variant="ghost" onClick={onEdit} aria-label="Edit">
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={onDelete} aria-label="Delete">
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -229,33 +281,105 @@ function TintEditor({
   onCancel: () => void;
 }) {
   const [form, setForm] = useState(entry);
+  const [hexError, setHexError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const isClassic = form.category === "classic";
+
+  const setCategory = (category: LensTintEntry["category"]) => {
+    setForm((f) => {
+      if (category === "classic") {
+        return { ...f, category, gradientBottom: f.gradientTop };
+      }
+      return { ...f, category };
+    });
+    setHexError(null);
+  };
+
+  const setTopColor = (raw: string) => {
+    const gradientTop = normalizeHexInput(raw);
+    setForm((f) => ({
+      ...f,
+      gradientTop,
+      gradientBottom: f.category === "classic" ? gradientTop : f.gradientBottom,
+    }));
+    setHexError(null);
+  };
+
   return (
     <form
       className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        void onSave(form);
+        const err = validateHexFields(
+          isClassic
+            ? [{ label: "Lens color", value: form.gradientTop }]
+            : [
+                { label: "Gradient top", value: form.gradientTop },
+                { label: "Gradient bottom", value: form.gradientBottom },
+              ],
+        );
+        if (err) {
+          setHexError(err);
+          return;
+        }
+        const payload: LensTintEntry = isClassic
+          ? { ...form, gradientBottom: form.gradientTop }
+          : form;
+        setSaving(true);
+        void Promise.resolve(onSave(payload)).finally(() => setSaving(false));
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <input className={fieldClass()} placeholder="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-        <input className={fieldClass()} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <select className={fieldClass()} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as LensTintEntry["category"] })}>
-          <option value="classic">Classic</option>
-          <option value="gradient">Gradient</option>
-        </select>
-        <input className={fieldClass()} type="number" step="0.01" placeholder="Surcharge" value={form.priceSurcharge} onChange={(e) => setForm({ ...form, priceSurcharge: Number(e.target.value) })} />
-        <input className={fieldClass()} placeholder="Gradient top #RRGGBB" value={form.gradientTop} onChange={(e) => setForm({ ...form, gradientTop: e.target.value })} />
-        <input className={fieldClass()} placeholder="Gradient bottom #RRGGBB" value={form.gradientBottom} onChange={(e) => setForm({ ...form, gradientBottom: e.target.value })} />
-        <input className={fieldClass()} type="number" placeholder="Display order" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-          Active
-        </label>
+      <div className="flex items-start gap-4">
+        <span
+          className="h-16 w-16 shrink-0 rounded-lg border border-border shadow-inner"
+          style={tintPreviewStyle(form.category, form.gradientTop, form.gradientBottom)}
+          title="Preview (matches customiser)"
+        />
+        <div className="grid flex-1 gap-3 sm:grid-cols-2">
+          <input className={fieldClass()} placeholder="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+          <input className={fieldClass()} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <select
+            className={fieldClass()}
+            value={form.category}
+            onChange={(e) => setCategory(e.target.value as LensTintEntry["category"])}
+          >
+            <option value="classic">Classic</option>
+            <option value="gradient">Gradient</option>
+          </select>
+          <input className={fieldClass()} type="number" step="0.01" placeholder="Surcharge" value={form.priceSurcharge} onChange={(e) => setForm({ ...form, priceSurcharge: Number(e.target.value) })} />
+          <input
+            className={fieldClass()}
+            placeholder={isClassic ? "Color #RRGGBB" : "Gradient top #RRGGBB"}
+            value={form.gradientTop}
+            onChange={(e) => setTopColor(e.target.value)}
+            onBlur={() => {
+              if (form.gradientTop && !isValidHexColor(form.gradientTop)) {
+                setHexError("Use #RRGGBB format (e.g. #2d3748)");
+              }
+            }}
+          />
+          {!isClassic ? (
+            <input
+              className={fieldClass()}
+              placeholder="Gradient bottom #RRGGBB"
+              value={form.gradientBottom}
+              onChange={(e) => {
+                setForm({ ...form, gradientBottom: normalizeHexInput(e.target.value) });
+                setHexError(null);
+              }}
+            />
+          ) : null}
+          <input className={fieldClass()} type="number" placeholder="Display order" value={form.displayOrder} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+            Active
+          </label>
+        </div>
       </div>
+      {hexError ? <p className="text-sm text-destructive">{hexError}</p> : null}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" size="sm">Save tint</Button>
+        <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}>Cancel</Button>
+        <Button type="submit" size="sm" disabled={saving}>{saving ? "Saving…" : "Save tint"}</Button>
       </div>
     </form>
   );

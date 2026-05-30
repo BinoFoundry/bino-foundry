@@ -37,6 +37,8 @@ function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown
     metadata: row.metadata ?? {},
     cropConfig: row.crop_config ?? null,
     cropStatus: row.crop_status ?? "draft",
+    isActive: row.is_active !== false,
+    displayOrder: Number(row.display_order ?? 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -97,8 +99,8 @@ export class BeadLibraryService {
       crop_status: cropStatus,
       metadata: payload.metadata ?? {},
       specs: original ? { legacy_image_url: original } : {},
-      display_order: 0,
-      is_active: true,
+      display_order: payload.displayOrder ?? 0,
+      is_active: payload.isActive ?? true,
     };
 
     const { data, error } = await supabase.from("bead_libraries").insert(insertRow).select("*, bead_types(slug, name)").single();
@@ -132,6 +134,8 @@ export class BeadLibraryService {
       ...(payload.description !== undefined && { description: payload.description.trim() }),
       ...(payload.beadTypeId !== undefined && { bead_type_id: payload.beadTypeId }),
       ...(payload.metadata !== undefined && { metadata: payload.metadata }),
+      ...(payload.isActive !== undefined && { is_active: payload.isActive }),
+      ...(payload.displayOrder !== undefined && { display_order: payload.displayOrder }),
     };
 
     if (payload.originalImage !== undefined) {

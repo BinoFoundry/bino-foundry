@@ -52,6 +52,8 @@ export const beadLibraryCreateSchema = z.object({
   name: z.string().min(1).max(200),
   price: z.coerce.number().min(0),
   beadTypeId: z.string().uuid(),
+  isActive: z.boolean().optional(),
+  displayOrder: z.coerce.number().int().min(0).optional(),
   description: z.string().max(5000).optional(),
   originalImage: z.string().optional(),
   processedImage: z.string().optional(),

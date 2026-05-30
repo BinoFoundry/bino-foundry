@@ -1,6 +1,6 @@
-# Render engine (Phase 1)
+# Render engine (Milestone 1 foundation · M2 quality pass)
 
-Modular compositor for sunglasses (vector demo + **SVG clipPath** photo plates).
+Modular compositor for sunglasses (vector demo + **SVG clipPath** photo plates). Visual realism improvements are tracked in [docs/MILESTONE2_RENDER_CHECKLIST.md](../../../docs/MILESTONE2_RENDER_CHECKLIST.md).
 
 ## Flow
 

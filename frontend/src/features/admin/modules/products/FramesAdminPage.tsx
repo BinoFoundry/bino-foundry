@@ -6,12 +6,18 @@ import type { FrameEntry } from "@/data/glasses";
 import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 
+import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
+import {
+  FRAME_CLIP_LABELS,
+  summarizeFrameClipStatus,
+} from "../../lib/frameClipStatus";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
 import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { FrameForm } from "../../forms";
+import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
 export function FramesAdminPage() {
@@ -95,7 +101,7 @@ export function FramesAdminPage() {
         }
       />
 
-      <AdminPage footer={<span>{frames.length} frame{frames.length === 1 ? "" : "s"}</span>}>
+      <AdminPage footer={<span>{frames.length} frame{frames.length === 1 ? "" : "s"}{list.totalItems !== frames.length ? ` · ${list.totalItems} shown` : ""}</span>}>
         <div ref={scrollRef} className="mx-auto w-full max-w-4xl">
           {isNew || (selectedFrame && isEditing) ? (
             <FrameForm
@@ -127,17 +133,38 @@ export function FramesAdminPage() {
           ) : list.items.length === 0 ? (
             <AdminEmptyState message="No frames found." />
           ) : (
-            <div className="space-y-1">
-              {list.items.map((f) => (
-                <AdminListRow key={f.id} onClick={() => { setSelectedId(f.id); setIsEditing(false); }}>
-                  <FrameThumb frame={f} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{f.name}</p>
-                    <p className="font-mono text-[10px] text-muted-foreground">{f.id}</p>
-                  </div>
-                </AdminListRow>
-              ))}
-            </div>
+            <>
+              <div className="space-y-1">
+                {list.items.map((f) => {
+                  const clip = summarizeFrameClipStatus(f.renderViews);
+                  return (
+                    <AdminListRow key={f.id} onClick={() => { setSelectedId(f.id); setIsEditing(false); }}>
+                      <FrameThumb frame={f} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{f.name}</p>
+                        <p className="font-mono text-[10px] text-muted-foreground">{f.id}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <AdminStatusBadge
+                          label={FRAME_CLIP_LABELS[clip]}
+                          variant={clip === "ready" ? "success" : clip === "draft" ? "warning" : "muted"}
+                        />
+                        {f.isActive === false ? (
+                          <AdminStatusBadge label="Unpublished" variant="danger" />
+                        ) : null}
+                      </div>
+                    </AdminListRow>
+                  );
+                })}
+              </div>
+              <AdminListPagination
+                page={list.page}
+                totalPages={list.totalPages}
+                totalItems={list.totalItems}
+                pageSize={list.pageSize}
+                onPageChange={list.setPage}
+              />
+            </>
           )}
         </div>
       </AdminPage>
@@ -170,6 +197,7 @@ function FrameToolbarTitle({
         <h3 className="font-display text-lg font-semibold">{frame.name}</h3>
         <p className="text-sm text-muted-foreground">
           ${frame.price} · {frame.id}
+          {frame.isActive === false ? " · unpublished" : ""}
           {isEditing ? " · editing" : ""}
         </p>
       </div>
@@ -199,8 +227,20 @@ function FrameThumb({ frame, size = "sm" }: { frame: FrameEntry; size?: "sm" | "
 }
 
 function FrameDetailView({ frame }: { frame: FrameEntry }) {
+  const clip = summarizeFrameClipStatus(frame.renderViews);
   return (
     <div className="space-y-8 pb-8">
+      <div className="flex flex-wrap gap-2">
+        <AdminStatusBadge
+          label={FRAME_CLIP_LABELS[clip]}
+          variant={clip === "ready" ? "success" : clip === "draft" ? "warning" : "muted"}
+        />
+        <AdminStatusBadge
+          label={frame.isActive === false ? "Unpublished" : "Published"}
+          variant={frame.isActive === false ? "danger" : "success"}
+        />
+        <span className="text-xs text-muted-foreground">Base price ${frame.price}</span>
+      </div>
       <section>
         <h3 className="mb-4 text-lg font-semibold">
           Render views ({frame.renderViews?.filter((v) => v.plateUrl).length ?? 0})
@@ -216,7 +256,7 @@ function FrameDetailView({ frame }: { frame: FrameEntry }) {
               .map((v) => (
                 <div key={v.view} className="rounded-lg border border-border bg-background p-3">
                   <p className="mb-2 text-sm font-medium capitalize">
-                    {v.view} · {v.maskStatus === "ready" ? "mask ready" : "draft"}
+                    {v.view} · clip {v.clipStatus ?? v.maskStatus ?? "draft"}
                   </p>
                   <img
                     src={v.plateUrl}

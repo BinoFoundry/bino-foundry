@@ -50,8 +50,9 @@ export function MediaManagerPage() {
       <AdminToolbar hideSearch title={<span className="text-sm font-medium">Media library</span>} />
       <AdminPage>
         <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
-          Upload images to the staging bucket. Use the object key or public URL when attaching assets to
-          catalogue records. Production paths are promoted separately via the API catalogue flow.
+          Upload images to the staging bucket, then <strong>copy the public URL</strong> into frame or bead
+          forms — or upload directly on those forms to write into the catalogue bucket. Both paths attach
+          production-ready URLs to catalogue records.
         </p>
 
         <div className="mb-6 flex flex-wrap items-end gap-4 rounded-xl border border-border bg-card p-4">

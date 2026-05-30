@@ -30,6 +30,8 @@ export interface BeadLibraryEntry {
   metadata?: Record<string, unknown>;
   cropConfig?: BeadCropConfig | null;
   cropStatus?: BeadCropStatus;
+  isActive?: boolean;
+  displayOrder?: number;
   createdAt?: string;
   updatedAt?: string;
 }

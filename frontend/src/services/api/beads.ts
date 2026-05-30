@@ -11,7 +11,9 @@ export const beadsApi = {
     return apiRequest<BeadTypeEntry>(`/bead-types/${encodeURIComponent(id)}`);
   },
 
-  createType(payload: Pick<BeadTypeEntry, "name" | "description"> & { displayOrder?: number }): Promise<BeadTypeEntry> {
+  createType(
+    payload: Pick<BeadTypeEntry, "name" | "description"> & { displayOrder?: number; isActive?: boolean },
+  ): Promise<BeadTypeEntry> {
     return apiRequest<BeadTypeEntry>("/bead-types", { method: "POST", body: payload });
   },
 
@@ -46,6 +48,8 @@ export const beadsApi = {
         metadata: payload.metadata,
         cropConfig: payload.cropConfig,
         cropStatus: payload.cropStatus,
+        isActive: payload.isActive,
+        displayOrder: payload.displayOrder,
       },
     });
   },
@@ -64,6 +68,8 @@ export const beadsApi = {
         metadata: payload.metadata,
         cropConfig: payload.cropConfig,
         cropStatus: payload.cropStatus,
+        isActive: payload.isActive,
+        displayOrder: payload.displayOrder,
       },
     });
   },

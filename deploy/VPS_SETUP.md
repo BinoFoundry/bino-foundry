@@ -47,8 +47,12 @@ In [Supabase](https://supabase.com) → **SQL Editor**, run every file under `da
 4. `000004_frame_render_views.sql`
 5. `000005_drop_sunglasses_frame_colors.sql`
 6. `000006_bracelet_charms_spacers.sql`
+7. `000007_unified_bead_libraries.sql`
+8. `000008_svg_lens_clip_config.sql`
+9. `000009_bracelet_configurations.sql`
+10. `000010_bead_sizes.sql`
 
-If a migration was already applied, skip it (Supabase will error on duplicate objects — that is fine).
+If a migration was already applied, skip it (Supabase will error on duplicate objects — that is fine). See [database/migrations/README.md](../database/migrations/README.md).
 
 Copy for later:
 
@@ -448,7 +452,7 @@ Upstream must be `127.0.0.1:5050` and `location /api/` must `proxy_pass http://b
 |-------------------|-----|
 | `Missing backend/dist/server.js` | `cd /opt/bino-foundry && npm run build:all` |
 | `SUPABASE_URL is required` / `CORS_ORIGINS is required` | Create `/opt/bino-foundry/.env.production` (copy from `deploy/env/.env.production.example`) |
-| `Supabase catalogue unreachable` | Run SQL migrations `000001`–`000006` in Supabase; verify service role key |
+| `Supabase catalogue unreachable` | Run SQL migrations `000001`–`000010` in Supabase; verify service role key |
 | `Sunglasses builder catalog missing` | Apply `000003_sunglasses_builder_catalog.sql` |
 | `EADDRINUSE` port 5050 | `ss -tlnp \| grep 5050`; stop duplicate process |
 

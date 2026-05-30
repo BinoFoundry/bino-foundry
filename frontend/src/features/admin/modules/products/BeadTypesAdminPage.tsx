@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Settings2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { TypeForm } from "@/components/admin/TypeForm";
+import { BeadTypeForm } from "../../components/BeadTypeForm";
+import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadTypeEntry } from "@/types/beads";
@@ -12,6 +13,7 @@ import { AdminEmptyState } from "../../components/AdminEmptyState";
 import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
+import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
 type ModalState = { type: "add" } | { type: "edit"; entry: BeadTypeEntry } | null;
@@ -41,23 +43,20 @@ export function BeadTypesAdminPage() {
 
       <AdminPage scrollRef={scrollRef} footer={`${cat.beadTypes.length} type(s)`}>
         {modal ? (
-          <TypeForm
-            initial={
-              modal.type === "edit"
-                ? { id: modal.entry.id, name: modal.entry.name, description: modal.entry.description }
-                : undefined
-            }
+          <BeadTypeForm
+            initial={modal.type === "edit" ? modal.entry : undefined}
             onCancel={() => setModal(null)}
             onSave={async (entry) => {
               try {
                 if (modal.type === "add") {
-                  await cat.addBeadType({ name: entry.name, description: entry.description });
-                } else {
-                  await cat.updateBeadType({
-                    ...modal.entry,
+                  await cat.addBeadType({
                     name: entry.name,
                     description: entry.description,
+                    displayOrder: entry.displayOrder,
+                    isActive: entry.isActive,
                   });
+                } else {
+                  await cat.updateBeadType(entry);
                 }
                 setModal(null);
               } catch (err) {
@@ -69,7 +68,8 @@ export function BeadTypesAdminPage() {
         ) : list.items.length === 0 ? (
           <AdminEmptyState icon={Settings2} title="No bead types" description="Define Crystal, Charm, Spacer, and custom categories." />
         ) : (
-          <ul className="space-y-1">
+          <>
+            <ul className="space-y-1">
             {list.items.map((t) => (
               <AdminListRow
                 key={t.id}
@@ -98,6 +98,9 @@ export function BeadTypesAdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{t.name}</p>
                   <p className="font-mono text-[10px] text-muted-foreground">{t.slug}</p>
+                  {t.isActive === false ? (
+                    <AdminStatusBadge label="Inactive" variant="danger" />
+                  ) : null}
                   {t.description ? (
                     <p className="line-clamp-1 text-xs text-muted-foreground">{t.description}</p>
                   ) : null}
@@ -105,6 +108,14 @@ export function BeadTypesAdminPage() {
               </AdminListRow>
             ))}
           </ul>
+          <AdminListPagination
+            page={list.page}
+            totalPages={list.totalPages}
+            totalItems={list.totalItems}
+            pageSize={list.pageSize}
+            onPageChange={list.setPage}
+          />
+          </>
         )}
       </AdminPage>
     </div>

@@ -2,11 +2,16 @@ import { z } from "zod";
 
 const beadSizeMm = z.number().int().min(4).max(24);
 
-export const braceletPricingRulesResponse = z.object({
-  sizeMultipliers: z.record(z.string(), z.number()),
-  sizePricedTypeSlugs: z.array(z.string()),
-  currencyCode: z.string().length(3),
+export const braceletPricingRulesDto = z.object({
+  sizeMultipliers: z
+    .record(z.string().regex(/^\d+$/), z.number().positive())
+    .refine((m) => Object.keys(m).length > 0, "At least one size multiplier is required"),
+  sizePricedTypeSlugs: z.array(z.string().trim().min(1)).min(1),
+  currencyCode: z.string().length(3).toUpperCase(),
+  description: z.string().max(2000).optional(),
 });
+
+export const braceletPricingRulesResponse = braceletPricingRulesDto;
 
 export const braceletConfigItemDto = z.object({
   strandIndex: z.union([z.literal(0), z.literal(1)]),

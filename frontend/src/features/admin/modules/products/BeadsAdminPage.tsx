@@ -7,11 +7,13 @@ import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 
+import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
 import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
+import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
 type ModalState = { type: "add" } | { type: "edit"; entry: BeadLibraryEntry } | null;
@@ -85,7 +87,8 @@ export function BeadsAdminPage() {
         ) : list.items.length === 0 ? (
           <AdminEmptyState icon={Gem} title="No beads" description="Add items to the unified bead library." />
         ) : (
-          <ul className="space-y-1">
+          <>
+            <ul className="space-y-1">
             {list.items.map((b) => (
               <AdminListRow
                 key={b.id}
@@ -126,9 +129,18 @@ export function BeadsAdminPage() {
                     {typeName(b.beadTypeId)} · ${b.price.toFixed(2)} · crop {b.cropStatus ?? "draft"}
                   </p>
                 </div>
+                {b.isActive === false ? <AdminStatusBadge label="Inactive" variant="danger" /> : null}
               </AdminListRow>
             ))}
           </ul>
+          <AdminListPagination
+            page={list.page}
+            totalPages={list.totalPages}
+            totalItems={list.totalItems}
+            pageSize={list.pageSize}
+            onPageChange={list.setPage}
+          />
+          </>
         )}
       </AdminPage>
     </div>

@@ -48,6 +48,8 @@ Full guide: **[docs/setup/GETTING_STARTED.md](./docs/setup/GETTING_STARTED.md)**
 | Development | [docs/development/WORKFLOW.md](./docs/development/WORKFLOW.md) |
 | Assets / Storage | [docs/assets/WORKFLOW.md](./docs/assets/WORKFLOW.md) |
 | Deploy | [deploy/README.md](./deploy/README.md) |
+| **Milestone 1 (done)** | [docs/MILESTONE1_SIGNOFF.md](./docs/MILESTONE1_SIGNOFF.md) |
+| **Milestone 2 (active)** | [docs/MILESTONE2_OVERVIEW.md](./docs/MILESTONE2_OVERVIEW.md) |
 
 ## Repository layout
 

@@ -11,7 +11,8 @@ Vite + React 18 + TypeScript + Tailwind + shadcn/ui.
 | `state/catalogue/` | `CatalogueProvider` + `useCatalogue` (optimistic local + API sync) |
 | `providers/` | `AppProviders` (React Query, catalogue, render, toasts) |
 | `layouts/` | `AppShell`, `BuilderViewport`, module navigation |
-| `render/` | 2D compositing facade (placeholder until Milestone 2) |
+| `render/` | 2D compositor (SVG clip + sunglasses customiser) — quality pass in M2 |
+| `features/bracelet/` | Bracelet builder (strand, pricing, zoom/pan) |
 | `components/ui/` | shadcn primitives |
 | `components/common/` | Shared loading/error/responsive wrappers |
 | `features/admin/` | Admin dashboard (`AdminApp`, products, pricing, media) |

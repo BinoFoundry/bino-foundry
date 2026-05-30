@@ -19,8 +19,13 @@ const EMPTY_FRAME: FrameOption = {
 };
 
 export function useSunglassesCustomiserState(onPriceChange?: (price: number) => void) {
-  const { frames } = useCatalogue();
+  const { frames: allFrames } = useCatalogue();
   const sunglassesCatalog = useSunglassesCatalog();
+
+  const frames = useMemo(
+    () => allFrames.filter((f) => f.isActive !== false),
+    [allFrames],
+  );
 
   const [frameSkuId, setFrameSkuId] = useState<string>("");
   const [selectedTintId, setSelectedTintId] = useState<string | null>(null);

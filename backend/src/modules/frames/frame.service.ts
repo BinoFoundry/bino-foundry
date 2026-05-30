@@ -51,6 +51,8 @@ function mapFrameRow(
     name: row.name,
     price: Number(row.base_price),
     description: row.description ?? "",
+    isActive: row.is_active !== false,
+    displayOrder: Number(row.display_order ?? 0),
     frameImages: Array.isArray(images) ? images : [],
     lensColors: Array.isArray(lens) ? lens : [],
     renderViews: views,
@@ -221,8 +223,8 @@ export class FrameService {
       currency_code: "USD",
       description: payload.description?.trim() ?? "",
       marketing_copy,
-      display_order: 0,
-      is_active: true,
+      display_order: payload.displayOrder ?? 0,
+      is_active: payload.isActive ?? true,
     };
 
     const { data, error } = await supabase.from("frames").insert(insertRow).select("*").single();
@@ -250,6 +252,8 @@ export class FrameService {
       ...(payload.name !== undefined && { name: payload.name.trim() }),
       ...(payload.price !== undefined && { base_price: payload.price }),
       ...(payload.description !== undefined && { description: payload.description.trim() }),
+      ...(payload.isActive !== undefined && { is_active: payload.isActive }),
+      ...(payload.displayOrder !== undefined && { display_order: payload.displayOrder }),
       marketing_copy: mc,
     };
 

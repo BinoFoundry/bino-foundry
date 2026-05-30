@@ -20,8 +20,14 @@ export interface AdminNavItem {
 
 export interface AdminListController<T> {
   items: T[];
+  allItems: T[];
   search: string;
   setSearch: (q: string) => void;
+  page: number;
+  setPage: (page: number) => void;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
   confirmDeleteId: string | null;
   requestDelete: (id: string) => void;
   cancelDelete: () => void;

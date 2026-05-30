@@ -39,6 +39,8 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     name: "",
     price: 0,
     description: "",
+    isActive: true,
+    displayOrder: 0,
     renderViews: normalizeViews(),
   };
 
@@ -56,7 +58,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
 
   const hasAnyPlate = renderViews.some((v) => v.plateUrl);
 
-  const set = (k: keyof FrameEntry, v: string | number) =>
+  const set = (k: keyof FrameEntry, v: string | number | boolean) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,6 +124,23 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
             placeholder="Optional"
           />
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Display order</label>
+          <input
+            type="number"
+            className="w-full rounded border border-border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+            value={form.displayOrder ?? 0}
+            onChange={(e) => set("displayOrder", Number(e.target.value))}
+          />
+        </div>
+        <label className="col-span-2 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.isActive !== false}
+            onChange={(e) => set("isActive", e.target.checked)}
+          />
+          Published (visible in sunglasses customiser)
+        </label>
       </div>
 
       <FrameRenderViewsSection

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { DEFAULT_BRACELET_PRICING_RULES } from "@bino-foundry/shared/types";
+import { DEFAULT_BRACELET_PRICING_RULES, type BraceletPricingRules } from "@bino-foundry/shared/types";
 
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
@@ -42,12 +42,46 @@ export class BraceletService {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
       .from("config_kv")
-      .select("value")
+      .select("value, description")
       .eq("key", PRICING_KEY)
       .maybeSingle();
 
     assertNoDbError(error);
-    return parsePricingRules(data?.value ?? null);
+    return {
+      ...parsePricingRules(data?.value ?? null),
+      description: typeof data?.description === "string" ? data.description : "",
+    };
+  }
+
+  async updatePricingRules(payload: BraceletPricingRules & { description?: string }) {
+    const supabase = getSupabaseServiceRole();
+    const { description, ...rules } = payload;
+    const value = {
+      sizeMultipliers: rules.sizeMultipliers,
+      sizePricedTypeSlugs: rules.sizePricedTypeSlugs,
+      currencyCode: rules.currencyCode,
+    };
+
+    const { data, error } = await supabase
+      .from("config_kv")
+      .upsert(
+        {
+          key: PRICING_KEY,
+          value,
+          description:
+            description?.trim() ||
+            "Bracelet builder size multipliers and priced type slugs",
+        },
+        { onConflict: "key" },
+      )
+      .select("value, description")
+      .single();
+
+    assertNoDbError(error);
+    return {
+      ...parsePricingRules(data?.value ?? value),
+      description: typeof data?.description === "string" ? data.description : "",
+    };
   }
 
   async createConfiguration(dto: CreateBraceletConfigDTO) {

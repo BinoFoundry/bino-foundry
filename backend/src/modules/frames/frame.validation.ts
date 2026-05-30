@@ -23,6 +23,8 @@ export const frameCreateDto = z.object({
   name: z.string().min(1),
   price: z.coerce.number().nonnegative(),
   description: z.string().optional(),
+  isActive: z.boolean().optional(),
+  displayOrder: z.coerce.number().int().optional(),
   frameImages: z.array(z.string()).optional(),
   lensColors: z.array(lensColorSchema).optional(),
   renderViews: z.array(renderViewSchema).optional(),

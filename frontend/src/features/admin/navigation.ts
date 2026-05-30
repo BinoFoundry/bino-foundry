@@ -40,8 +40,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   },
   {
     id: "pricing",
-    label: "Sunglasses config",
-    description: "Lens tints and add-on options",
+    label: "Pricing & config",
+    description: "Sunglasses tints/options and bracelet pricing rules",
     icon: Sun,
     group: "configuration",
   },

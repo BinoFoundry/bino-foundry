@@ -30,6 +30,8 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       processedImage: "",
       beadTypeId: defaultType,
       description: "",
+      isActive: true,
+      displayOrder: 0,
       cropStatus: "draft",
       cropConfig: null,
     }),
@@ -165,6 +167,23 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
             ))}
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Display order</label>
+          <input
+            type="number"
+            value={form.displayOrder ?? 0}
+            onChange={(e) => set("displayOrder", Number(e.target.value))}
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-body focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+        <label className="flex items-end gap-2 pb-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.isActive !== false}
+            onChange={(e) => set("isActive", e.target.checked)}
+          />
+          Active in builder
+        </label>
         <div className="col-span-2">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
           <textarea

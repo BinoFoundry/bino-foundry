@@ -2,6 +2,10 @@ import type { BraceletPricingRules } from "@bino-foundry/shared/types";
 
 import { apiRequest } from "./client";
 
+export type BraceletPricingRulesPayload = BraceletPricingRules & {
+  description?: string;
+};
+
 export interface SavedBraceletConfiguration {
   id: string;
   status: string;
@@ -27,8 +31,15 @@ export interface CreateBraceletConfigBody {
 }
 
 export const braceletApi = {
-  getPricingRules(): Promise<BraceletPricingRules> {
-    return apiRequest<BraceletPricingRules>("/bracelet/pricing-rules");
+  getPricingRules(): Promise<BraceletPricingRulesPayload> {
+    return apiRequest<BraceletPricingRulesPayload>("/bracelet/pricing-rules");
+  },
+
+  updatePricingRules(rules: BraceletPricingRulesPayload): Promise<BraceletPricingRulesPayload> {
+    return apiRequest<BraceletPricingRulesPayload>("/bracelet/pricing-rules", {
+      method: "PUT",
+      body: rules,
+    });
   },
 
   saveConfiguration(body: CreateBraceletConfigBody): Promise<SavedBraceletConfiguration> {
