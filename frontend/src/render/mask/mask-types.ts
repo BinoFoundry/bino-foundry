@@ -84,6 +84,19 @@ export function defaultLensSet() {
   ];
 }
 
+/** Keep left + right lens slots even when saved data only has one path. */
+export function ensureFrameLensSet(lenses: LensPolygon[]): LensPolygon[] {
+  return defaultLensSet().map((def) => {
+    const existing = lenses.find((l) => l.id === def.id);
+    if (!existing) return def;
+    return {
+      id: def.id,
+      label: existing.label || def.label,
+      points: migrateAnchors(existing.points),
+    };
+  });
+}
+
 export function isMaskConfigValid(config) {
   if (!config?.lenses?.length) return false;
   return config.lenses.some((l) => migrateAnchors(l.points).length >= 3);

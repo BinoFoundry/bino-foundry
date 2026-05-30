@@ -16,6 +16,28 @@ const lensClipRenderSchema = z
   })
   .optional();
 
+const pathAnchorSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  curved: z.boolean().optional(),
+  handleIn: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
+  handleOut: z.object({ x: z.number(), y: z.number() }).nullable().optional(),
+});
+
+const lensPolygonSchema = z.object({
+  id: z.string().min(1),
+  label: z.string(),
+  points: z.array(pathAnchorSchema),
+});
+
+export const maskConfigSchema = z.object({
+  version: z.literal(2),
+  imageWidth: z.number().int().positive(),
+  imageHeight: z.number().int().positive(),
+  lenses: z.array(lensPolygonSchema).min(1),
+  updatedAt: z.number().optional(),
+});
+
 export const lensClipConfigSchema = z.object({
   version: z.literal(1),
   imageWidth: z.number().int().positive(),
@@ -31,6 +53,9 @@ export const upsertFrameViewSchema = z.object({
   imageHeight: z.coerce.number().int().positive(),
   clipConfig: lensClipConfigSchema.nullable().optional(),
   clipStatus: z.enum(["draft", "ready"]).optional(),
+  /** Editor anchors/handles — persisted for lossless re-edit */
+  maskConfig: maskConfigSchema.nullable().optional(),
+  maskStatus: z.enum(["draft", "ready"]).optional(),
 });
 
 export type UpsertFrameViewDTO = z.infer<typeof upsertFrameViewSchema>;

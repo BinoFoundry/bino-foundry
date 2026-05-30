@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PolygonEditor } from "@/render/mask/PolygonEditor";
 import { EditorTool } from "@/render/mask/editor-interaction";
-import type { LensPolygon } from "@/render/mask/mask-types";
+import { defaultLensSet, type LensPolygon } from "@/render/mask/mask-types";
+
+const FRAME_LENS_TABS = defaultLensSet();
 import { loadImage } from "@/render/engine/canvas/lens-compositor";
 
 export interface PolygonEditorShellProps {
@@ -17,6 +19,8 @@ export interface PolygonEditorShellProps {
   renderPreview?: (lenses: LensPolygon[], imgW: number, imgH: number, thumb: HTMLCanvasElement) => void;
   /** Show left/right lens tabs (frame mask). Off for single-path bead crop. */
   showLensTabs?: boolean;
+  /** Label for the single path when showLensTabs is false. */
+  singlePathLabel?: string;
   previewLabel?: string;
   handlesLabel?: string;
   helpText?: string;
@@ -35,9 +39,10 @@ export function PolygonEditorShell({
   onLensesChange,
   renderPreview,
   showLensTabs = true,
+  singlePathLabel = "Crop path",
   previewLabel = "Mask preview",
   handlesLabel = "Curve handles",
-  helpText = "Draw: click to add anchors · Select · Pan (H) or Space · scroll to zoom · Del removes · C toggles curve",
+  helpText = "Draw: click to add points · Shift+click edge to insert · Select (V) then Del to remove · Undo ⌘Z / Redo ⇧⌘Z · Pan (H) or Space · scroll to zoom · C toggles curve",
   className,
   headerExtra,
   footerExtra,
@@ -58,6 +63,17 @@ export function PolygonEditorShell({
   const [showPreview, setShowPreview] = useState(true);
   const [showHandles, setShowHandles] = useState(true);
   const [editorReady, setEditorReady] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const syncHistory = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    setCanUndo(editor.canUndo());
+    setCanRedo(editor.canRedo());
+  }, []);
+  const syncHistoryRef = useRef(syncHistory);
+  syncHistoryRef.current = syncHistory;
 
   const emitChange = useCallback(() => {
     const editor = editorRef.current;
@@ -78,7 +94,10 @@ export function PolygonEditorShell({
     if (thumb && renderPreview && imgW > 0 && imgH > 0) {
       renderPreview(lenses, imgW, imgH, thumb);
     }
-  }, [renderPreview]);
+    syncHistory();
+  }, [renderPreview, syncHistory]);
+  const emitChangeRef = useRef(emitChange);
+  emitChangeRef.current = emitChange;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -119,8 +138,9 @@ export function PolygonEditorShell({
 
         editor = new PolygonEditor(canvas, image, getInitialLensesRef.current(), {
           tool: EditorTool.DRAW,
-          onChange: emitChange,
+          onChange: () => emitChangeRef.current(),
           onToolChange: (t) => setTool(t),
+          onHistoryChange: () => syncHistoryRef.current(),
         });
         editorRef.current = editor;
 
@@ -154,7 +174,7 @@ export function PolygonEditorShell({
       editor?.destroy();
       editorRef.current = null;
     };
-  }, [imageUrl, emitChange]);
+  }, [imageUrl]);
 
   const runEditor = (fn: (e: PolygonEditor) => void) => {
     const editor = editorRef.current;
@@ -189,29 +209,36 @@ export function PolygonEditorShell({
           <>
             <span className="mx-1 text-border">|</span>
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Lens</span>
-            {lensSummaries.map((lens, i) => (
-              <Button
-                key={lens.id}
-                type="button"
-                size="sm"
-                variant={activeLens === i ? "default" : "outline"}
-                disabled={!editorReady}
-                onClick={() =>
-                  runEditor((e) => {
-                    e.setActiveLens(i);
-                    setActiveLens(i);
-                  })
-                }
-              >
-                {lens.label} ({lens.count})
-              </Button>
-            ))}
+            {FRAME_LENS_TABS.map((tab, i) => {
+              const count = lensSummaries.find((s) => s.id === tab.id)?.count ?? 0;
+              return (
+                <Button
+                  key={tab.id}
+                  type="button"
+                  size="sm"
+                  variant={activeLens === i ? "default" : "outline"}
+                  disabled={!editorReady}
+                  onClick={() =>
+                    runEditor((e) => {
+                      e.setActiveLens(i);
+                      setActiveLens(i);
+                    })
+                  }
+                >
+                  {tab.label} ({count})
+                </Button>
+              );
+            })}
           </>
-        ) : lensSummaries[0] ? (
+        ) : (
           <span className="ml-2 text-xs text-muted-foreground">
-            {lensSummaries[0].label}: {lensSummaries[0].count} points
+            {singlePathLabel}:{" "}
+            {lensSummaries.find((s) => s.id === "crop")?.count ??
+              lensSummaries[0]?.count ??
+              0}{" "}
+            points
           </span>
-        ) : null}
+        )}
         {headerExtra}
       </div>
 
@@ -220,10 +247,19 @@ export function PolygonEditorShell({
           type="button"
           size="sm"
           variant="ghost"
-          disabled={!editorReady}
-          onClick={() => runEditor((e) => e.undoLastPoint())}
+          disabled={!editorReady || !canUndo}
+          onClick={() => runEditor((e) => e.undo())}
         >
-          Undo point
+          Undo
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={!editorReady || !canRedo}
+          onClick={() => runEditor((e) => e.redo())}
+        >
+          Redo
         </Button>
         <Button
           type="button"

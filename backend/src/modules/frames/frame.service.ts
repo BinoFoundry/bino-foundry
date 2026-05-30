@@ -23,7 +23,7 @@ function mapRenderViewRow(row: Record<string, unknown>): Record<string, unknown>
     plateUrl: row.plate_url,
     width: Number(row.image_width),
     height: Number(row.image_height),
-    clipConfig: row.clip_config ?? row.mask_config ?? null,
+    clipConfig: row.clip_config ?? null,
     clipStatus: row.clip_status ?? row.mask_status ?? "draft",
     maskConfig: row.mask_config ?? null,
     maskStatus: row.mask_status ?? "draft",
@@ -103,6 +103,8 @@ function normalizeRenderViews(
   height: number;
   clipConfig: unknown | null;
   clipStatus: "draft" | "ready";
+  maskConfig: unknown | null;
+  maskStatus: "draft" | "ready";
 }> {
   if (!renderViews?.length) return [];
 
@@ -113,6 +115,8 @@ function normalizeRenderViews(
     height: number;
     clipConfig: unknown | null;
     clipStatus: "draft" | "ready";
+    maskConfig: unknown | null;
+    maskStatus: "draft" | "ready";
   }>();
 
   for (const v of renderViews) {
@@ -126,8 +130,10 @@ function normalizeRenderViews(
       plateUrl: v.plateUrl.trim(),
       width: Math.floor(v.width),
       height: Math.floor(v.height),
-      clipConfig: v.clipConfig ?? v.maskConfig ?? null,
-      clipStatus: v.clipStatus ?? v.maskStatus ?? "draft",
+      clipConfig: v.clipConfig ?? null,
+      clipStatus: v.clipStatus ?? "draft",
+      maskConfig: v.maskConfig ?? null,
+      maskStatus: v.maskStatus ?? v.clipStatus ?? "draft",
     });
   }
 
@@ -156,8 +162,8 @@ async function syncFrameRenderViews(
     image_height: v.height,
     clip_config: v.clipConfig,
     clip_status: v.clipStatus,
-    mask_config: null,
-    mask_status: v.clipStatus,
+    mask_config: v.maskConfig,
+    mask_status: v.maskStatus,
   }));
 
   const { error: upsertErr } = await supabase

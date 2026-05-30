@@ -9,6 +9,7 @@ export { EditorTool } from "./editor-interaction";
 export {
   createMaskConfig,
   defaultLensSet,
+  ensureFrameLensSet,
   isMaskConfigValid,
   migrateAnchors,
   MASK_CONFIG_VERSION,

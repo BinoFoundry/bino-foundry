@@ -9,10 +9,12 @@ import {
   type ReactNode,
 } from "react";
 
+import { beadSizesApi } from "@/services/api/bead-sizes";
 import { beadsApi } from "@/services/api/beads";
 import { catalogueApi } from "@/services/api";
 import { isApiError } from "@/services/api/errors";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { FrameEntry } from "@/types/catalogue";
 
 import {
@@ -34,6 +36,9 @@ export interface CatalogueActions {
   addBeadType: (entry: Pick<BeadTypeEntry, "name" | "description">) => Promise<void>;
   updateBeadType: (entry: BeadTypeEntry) => Promise<void>;
   deleteBeadType: (id: string) => Promise<void>;
+  addBeadSize: (entry: Omit<BeadSizeEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  updateBeadSize: (entry: BeadSizeEntry) => Promise<void>;
+  deleteBeadSize: (id: string) => Promise<void>;
   addFrame: (entry: FrameEntry) => Promise<void>;
   updateFrame: (entry: FrameEntry) => Promise<void>;
   deleteFrame: (id: string) => Promise<void>;
@@ -65,12 +70,13 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, beadTypes, beadLibraries] = await Promise.all([
+      const [frames, beadTypes, beadSizes, beadLibraries] = await Promise.all([
         catalogueApi.listFrames(),
         beadsApi.listTypes(),
+        beadSizesApi.list(true),
         beadsApi.listLibraries(),
       ]);
-      const next: CatalogueStore = { frames, beadTypes, beadLibraries };
+      const next: CatalogueStore = { frames, beadTypes, beadSizes, beadLibraries };
       saveToStorage(next);
       syncCatalogueSnapshot(next);
       setStore(next);
@@ -153,6 +159,30 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     [refreshFromApi],
   );
 
+  const addBeadSize = useCallback(
+    async (entry: Omit<BeadSizeEntry, "id" | "createdAt" | "updatedAt">) => {
+      await beadSizesApi.create(entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
+
+  const updateBeadSize = useCallback(
+    async (entry: BeadSizeEntry) => {
+      await beadSizesApi.update(entry.id, entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
+
+  const deleteBeadSize = useCallback(
+    async (id: string) => {
+      await beadSizesApi.delete(id);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
+
   const addFrame = useCallback(
     async (entry: FrameEntry) => {
       await catalogueApi.createFrame(entry);
@@ -195,6 +225,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addBeadType,
       updateBeadType,
       deleteBeadType,
+      addBeadSize,
+      updateBeadSize,
+      deleteBeadSize,
       addFrame,
       updateFrame,
       deleteFrame,
@@ -212,6 +245,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addBeadType,
       updateBeadType,
       deleteBeadType,
+      addBeadSize,
+      updateBeadSize,
+      deleteBeadSize,
       addFrame,
       updateFrame,
       deleteFrame,

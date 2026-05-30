@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { lensClipConfigSchema } from "../rendering/rendering.validation.js";
+import { lensClipConfigSchema, maskConfigSchema } from "../rendering/rendering.validation.js";
 
 const lensColorSchema = z.object({
   colorName: z.string().min(1),
@@ -14,8 +14,8 @@ const renderViewSchema = z.object({
   height: z.coerce.number().int().positive(),
   clipConfig: lensClipConfigSchema.nullable().optional(),
   clipStatus: z.enum(["draft", "ready"]).optional(),
-  /** Legacy editor state — not persisted to clip_config on sync */
-  maskConfig: z.unknown().nullable().optional(),
+  /** Editor anchors/handles — persisted alongside clip_config for re-edit */
+  maskConfig: maskConfigSchema.nullable().optional(),
   maskStatus: z.enum(["draft", "ready"]).optional(),
 });
 

@@ -25,18 +25,39 @@ export function defaultBeadCropLens(): LensPolygon[] {
   return [createLensPolygon(CROP_PATH_ID, "Crop boundary", [])];
 }
 
+/** Always return the single crop-path slot (same idea as ensureFrameLensSet for frames). */
+export function ensureBeadCropLens(lenses: LensPolygon[]): LensPolygon[] {
+  const def = defaultBeadCropLens()[0];
+  const existing = lenses.find((l) => l.id === CROP_PATH_ID) ?? lenses[0];
+  if (!existing) return defaultBeadCropLens();
+  return [
+    {
+      id: CROP_PATH_ID,
+      label: existing.label || def.label,
+      points: migrateAnchors(existing.points),
+    },
+  ];
+}
+
 export function beadCropConfigToEditorLenses(config: BeadCropConfig | null | undefined): LensPolygon[] {
   const points = getBeadCropPoints(config);
   if (points.length) {
-    return [
+    return ensureBeadCropLens([
       createLensPolygon(
         CROP_PATH_ID,
         "Crop boundary",
         migrateAnchors(points as PathAnchor[]),
       ),
-    ];
+    ]);
   }
   return defaultBeadCropLens();
+}
+
+/** Stable editor mount key — must not include updatedAt. */
+export function beadCropEditorPlateKey(originalUrl: string, config?: BeadCropConfig | null): string {
+  const w = config?.imageWidth ?? 0;
+  const h = config?.imageHeight ?? 0;
+  return `${originalUrl.trim()}|${w}x${h}`;
 }
 
 export function editorLensesToBeadCropConfig(

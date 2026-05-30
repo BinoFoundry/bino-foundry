@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from "react";
+import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PolygonEditorShell } from "@/render/editor/PolygonEditorShell";
 import {
   beadCropConfigToEditorLenses,
+  beadCropEditorPlateKey,
   exportCroppedBeadBlob,
   isBeadCropEditorValid,
   upgradeBeadCropOnSave,
@@ -20,26 +22,36 @@ import {
 interface BeadCropEditorProps {
   originalUrl: string;
   initialCrop?: BeadCropConfig | null;
-  onChange?: (config: BeadCropConfig | null, valid: boolean) => void;
+  /** Live path edits (draft only — does not update parent form state). */
+  onDraftChange?: (config: BeadCropConfig | null, valid: boolean) => void;
+  /** Committed crop path saved to bead record (no processed PNG). */
+  onSaveCrop?: (config: BeadCropConfig) => void;
   onProcessedUpload?: (processedUrl: string, config: BeadCropConfig) => void;
   className?: string;
 }
 
-/** Manual path/curve crop editor (same interaction model as frame mask editor). */
+/**
+ * Manual path/curve bead crop (same editor model as frame lens clips).
+ * Live edits stay in draftRef; parent commits on Save crop / Save processed asset.
+ */
 export function BeadCropEditor({
   originalUrl,
   initialCrop,
-  onChange,
+  onDraftChange,
+  onSaveCrop,
   onProcessedUpload,
   className,
 }: BeadCropEditorProps) {
   const [busy, setBusy] = useState(false);
   const [exportStatus, setExportStatus] = useState("");
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  const [pathReady, setPathReady] = useState(false);
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
+  const onSaveCropRef = useRef(onSaveCrop);
+  onSaveCropRef.current = onSaveCrop;
   const initialCropRef = useRef(initialCrop);
   initialCropRef.current = initialCrop;
-  const latestConfigRef = useRef<BeadCropConfig | null>(null);
+  const draftRef = useRef<BeadCropConfig | null>(initialCrop ?? null);
 
   const handleLensesChange = useCallback(
     (lenses: LensPolygon[], meta: { imgW: number; imgH: number; valid: boolean }) => {
@@ -50,9 +62,9 @@ export function BeadCropEditor({
         meta.imgH,
         originalUrl,
       );
-      latestConfigRef.current = meta.valid ? config : null;
-      const valid = meta.valid && isBeadCropConfigValid(config);
-      onChangeRef.current?.(valid ? config : null, valid);
+      draftRef.current = meta.valid ? config : null;
+      setPathReady(meta.valid && isBeadCropConfigValid(config));
+      onDraftChangeRef.current?.(meta.valid ? config : null, meta.valid && isBeadCropConfigValid(config));
     },
     [originalUrl],
   );
@@ -68,8 +80,20 @@ export function BeadCropEditor({
     ctx.drawImage(mask, 0, 0, imgW, imgH, 0, 0, imgW * scale, imgH * scale);
   }, []);
 
+  const commitCropPath = () => {
+    const config = draftRef.current;
+    if (!config || !isBeadCropConfigValid(config)) {
+      alert("Draw a closed crop path (≥3 points) before saving.");
+      return;
+    }
+    const committed = { ...config, updatedAt: Date.now() };
+    draftRef.current = committed;
+    onSaveCropRef.current?.(committed);
+    setExportStatus("Crop path saved — export processed asset when ready");
+  };
+
   const handleExport = async () => {
-    const config = latestConfigRef.current;
+    let config = draftRef.current;
     if (!config || !isBeadCropConfigValid(config)) {
       setExportStatus("Draw a closed crop path (≥3 points) first");
       return;
@@ -80,10 +104,10 @@ export function BeadCropEditor({
       const blob = await exportCroppedBeadBlob(config);
       const file = new File([blob], "bead-cropped.png", { type: "image/png" });
       const uploaded = await uploadApi.uploadImage(file);
-      const next = { ...config, processedUrl: uploaded.url };
-      latestConfigRef.current = next;
+      const next = { ...config, processedUrl: uploaded.url, updatedAt: Date.now() };
+      draftRef.current = next;
       onProcessedUpload?.(uploaded.url, next);
-      onChangeRef.current?.(next, true);
+      onSaveCropRef.current?.(next);
       setExportStatus("Processed asset uploaded to storage");
     } catch (e) {
       setExportStatus(e instanceof Error ? e.message : "Export failed");
@@ -92,42 +116,59 @@ export function BeadCropEditor({
     }
   };
 
+  const cropReady = initialCrop && isBeadCropConfigValid(initialCrop);
+
   return (
-    <div className={cn("space-y-2", className)}>
-      <PolygonEditorShell
-        imageUrl={originalUrl}
-        getInitialLenses={() => beadCropConfigToEditorLenses(initialCropRef.current)}
-        onLensesChange={handleLensesChange}
-        renderPreview={renderPreview}
-        showLensTabs={false}
-        previewLabel="Crop preview"
-        handlesLabel="Bézier handles"
-        helpText="Draw the visible bead boundary · Pan (H) or Space · scroll to zoom · Shift+click edge inserts point · Del removes · C toggles curve"
-        headerExtra={
+    <div className={cn("space-y-3 rounded-xl border border-border bg-muted/20 p-4", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">Crop path</p>
+          <p className="text-xs text-muted-foreground">
+            <span className={cropReady || pathReady ? "text-emerald-600" : "text-amber-600"}>
+              {cropReady ? "Saved path ready" : pathReady ? "Path ready — save crop" : "Draw the bead outline"}
+            </span>
+            {initialCrop?.processedUrl ? " · Processed asset on file" : null}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="secondary" disabled={!pathReady} onClick={commitCropPath}>
+            <Check className="mr-1.5 h-3.5 w-3.5" />
+            Save crop
+          </Button>
           <Button
             type="button"
             size="sm"
             variant="luxe"
-            className="ml-auto"
-            disabled={busy}
+            disabled={busy || !pathReady}
             onClick={() => void handleExport()}
           >
             {busy ? "Uploading…" : "Save processed asset"}
           </Button>
-        }
-        footerExtra={
-          exportStatus ? (
-            <p className="w-full text-xs text-muted-foreground">{exportStatus}</p>
-          ) : null
-        }
+        </div>
+      </div>
+
+      <PolygonEditorShell
+        imageUrl={originalUrl}
+        getInitialLenses={() => beadCropConfigToEditorLenses(draftRef.current ?? initialCropRef.current)}
+        onLensesChange={handleLensesChange}
+        renderPreview={renderPreview}
+        showLensTabs={false}
+        singlePathLabel="Crop boundary"
+        previewLabel="Crop preview"
+        handlesLabel="Bézier handles"
+        helpText="Draw the visible bead boundary · Shift+click edge inserts point · Select (V) + Del removes · Undo ⌘Z · Redo ⇧⌘Z · Pan (H) or Space · C toggles curve"
       />
+
+      {exportStatus ? <p className="text-xs text-muted-foreground">{exportStatus}</p> : null}
       {initialCrop ? (
         <p className="text-[10px] text-muted-foreground">
           {initialCrop.version === 2
-            ? "Editing saved crop path."
-            : "Legacy rect crop loaded as corner points — refine and save processed asset."}
+            ? "Editing saved crop path. Use Save crop to store path changes; Save processed asset exports PNG for the strand."
+            : "Legacy rect crop loaded as corner points — refine, Save crop, then export processed asset."}
         </p>
       ) : null}
     </div>
   );
 }
+
+export { beadCropEditorPlateKey };

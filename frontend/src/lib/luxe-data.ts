@@ -12,6 +12,9 @@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+import { DEFAULT_BRACELET_PRICING_RULES } from "@bino-foundry/shared/types";
+
+import { calculateUnitPrice } from "@/features/bracelet/pricing";
 import { DEFAULT_CRYSTALS } from "@/data/crystals";
 import { DEFAULT_FRAMES, type FrameEntry } from "@/data/glasses";
 import { getCatalogueSnapshot } from "@/data/index";
@@ -51,7 +54,8 @@ export const ZODIAC_ANIMALS: string[] = [
 
 // ── Business-logic helpers ───────────────────────────────────────────────────
 
-export type BeadSize = 6 | 8 | 10;
+/** Bead diameter in millimeters (options come from `bead_sizes` table). */
+export type BeadSize = number;
 
 /** @deprecated Use beadTypeSlug on BeadLibraryEntry */
 export type ItemType = string;
@@ -64,16 +68,14 @@ export interface PlacedBead {
 }
 
 export function getPlacedBeadPrice(item: PlacedBead): number {
-  const base = item.bead.price;
-  const slug = item.bead.beadTypeSlug ?? "crystal";
-  if (slug === "crystal" || slug === "accent") {
-    return calculateBeadPrice(base, item.beadSize);
-  }
-  return base;
+  return calculateUnitPrice(item.bead, item.beadSize, DEFAULT_BRACELET_PRICING_RULES);
 }
 
-export function calculateBeadPrice(basePrice: number, beadSize: BeadSize): number {
-  const multiplier = beadSize === 6 ? 0.8 : beadSize === 8 ? 1.0 : 1.3;
+export function calculateBeadPrice(
+  basePrice: number,
+  beadSize: BeadSize,
+  multiplier = 1,
+): number {
   return basePrice * multiplier;
 }
 

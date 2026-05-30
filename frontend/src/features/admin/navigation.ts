@@ -1,4 +1,4 @@
-import { Gem, Glasses, Image, LayoutDashboard, Settings2, Sun } from "lucide-react";
+import { Gem, Glasses, Image, LayoutDashboard, Ruler, Settings2, Sun } from "lucide-react";
 
 import type { AdminNavItem, AdminSection } from "./types";
 
@@ -29,6 +29,13 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Bead types",
     description: "Crystal, Charm, Spacer, and custom categories",
     icon: Settings2,
+    group: "products",
+  },
+  {
+    id: "bead-sizes",
+    label: "Bead sizes",
+    description: "Bracelet mm options and price multipliers",
+    icon: Ruler,
     group: "products",
   },
   {

@@ -1,0 +1,13 @@
+import { Router } from "express";
+
+import { beadSizeHandlers } from "./bead-size.controller.js";
+
+export function createBeadSizeRoutes(): Router {
+  const router = Router();
+  router.get("/", beadSizeHandlers.list);
+  router.get("/:id", beadSizeHandlers.retrieve);
+  router.post("/", beadSizeHandlers.create);
+  router.put("/:id", beadSizeHandlers.update);
+  router.delete("/:id", beadSizeHandlers.remove);
+  return router;
+}

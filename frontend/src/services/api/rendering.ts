@@ -1,5 +1,6 @@
 import type { FrameRenderBundle, FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
 import type { LensClipConfig } from "@bino-foundry/shared/types";
+import type { MaskConfig } from "@/render/mask/mask-types";
 
 import { apiRequest } from "./client";
 
@@ -9,6 +10,8 @@ export interface UpsertFrameViewPayload {
   imageHeight: number;
   clipConfig?: LensClipConfig | null;
   clipStatus?: "draft" | "ready";
+  maskConfig?: MaskConfig | null;
+  maskStatus?: "draft" | "ready";
 }
 
 function mapView(row: Record<string, unknown>): FrameRenderView {
@@ -20,8 +23,8 @@ function mapView(row: Record<string, unknown>): FrameRenderView {
     height: Number(row.height),
     clipConfig: (row.clipConfig as LensClipConfig | null) ?? null,
     clipStatus: (row.clipStatus as "draft" | "ready") ?? "draft",
-    maskConfig: null,
-    maskStatus: (row.clipStatus as "draft" | "ready") ?? "draft",
+    maskConfig: (row.maskConfig as MaskConfig | null) ?? null,
+    maskStatus: (row.maskStatus as "draft" | "ready") ?? "draft",
   };
 }
 
@@ -57,6 +60,8 @@ export const renderingApi = {
       height: row.height,
       clipConfig: row.clipConfig,
       clipStatus: row.clipStatus,
+      maskConfig: row.maskConfig,
+      maskStatus: row.maskStatus,
     });
   },
 

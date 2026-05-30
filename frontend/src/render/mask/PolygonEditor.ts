@@ -12,6 +12,11 @@ import {
   EditorInteractionState,
   EditorTool,
 } from "./editor-interaction";
+import {
+  applyEditorState,
+  captureEditorState,
+  MAX_EDITOR_HISTORY,
+} from "./lens-history";
 import { migrateAnchors, normalizeAnchor } from "./mask-types";
 
 const CLICK_THRESHOLD_PX = 7;
@@ -37,6 +42,14 @@ export class PolygonEditor {
     }));
     this.onChange = options.onChange ?? (() => {});
     this.onToolChange = options.onToolChange ?? (() => {});
+    this.onHistoryChange = options.onHistoryChange ?? (() => {});
+
+    /** @type {import('./lens-history.js').EditorHistorySnapshot[]} */
+    this._historyPast = [];
+    /** @type {import('./lens-history.js').EditorHistorySnapshot[]} */
+    this._historyFuture = [];
+    this._historyApplying = false;
+    this._historyRecordedForGesture = false;
 
     this.activeLensIndex = 0;
     this.selectedPointIndex = -1;
@@ -337,6 +350,7 @@ export class PolygonEditor {
         handleIn: pt.handleIn ? { ...pt.handleIn } : null,
         handleOut: pt.handleOut ? { ...pt.handleOut } : null,
       };
+      this._historyRecordedForGesture = false;
       this.interaction = {
         mode: 'dragHandle',
         handleType: handleHit.type,
@@ -359,6 +373,7 @@ export class PolygonEditor {
         handleIn: pt.handleIn ? { ...pt.handleIn } : null,
         handleOut: pt.handleOut ? { ...pt.handleOut } : null,
       };
+      this._historyRecordedForGesture = false;
       this.interaction = {
         mode: 'dragAnchor',
         lensIndex: this.activeLensIndex,
@@ -414,6 +429,10 @@ export class PolygonEditor {
 
     if (i.mode === 'dragAnchor' || i.mode === 'dragHandle') {
       if (!i.activated && dist < DRAG_THRESHOLD_PX) return;
+      if (!i.activated && !this._historyRecordedForGesture) {
+        this._recordHistory();
+        this._historyRecordedForGesture = true;
+      }
       i.activated = true;
 
       const ip = this.screenToImage(e.clientX, e.clientY);
@@ -487,6 +506,7 @@ export class PolygonEditor {
   }
 
   addPointAt(ix, iy) {
+    this._recordHistory();
     const clamped = this.clampImageCoords(ix, iy);
     const lens = this.activeLens;
     const anchor = normalizeAnchor(normFromPx(clamped.x, clamped.y, this.imgW, this.imgH));
@@ -523,6 +543,7 @@ export class PolygonEditor {
     if (tool === EditorTool.DRAW && i.shiftKey && lens.points.length > 0) {
       const edge = hitTestPathEdge(ip.x, ip.y, lens.points, this.imgW, this.imgH, 12 / this.scale);
       if (edge) {
+        this._recordHistory();
         lens.points = insertPointOnSegment(lens.points, edge.segIndex, edge.t, this.imgW, this.imgH);
         this.selectedPointIndex = edge.insertAt;
         this.emitChange();
@@ -549,6 +570,7 @@ export class PolygonEditor {
   }
 
   toggleSegmentAt(index) {
+    this._recordHistory();
     const lens = this.activeLens;
     lens.points = toggleSegmentCurved(lens.points, index, this.imgW, this.imgH);
     this.selectedPointIndex = index;
@@ -614,6 +636,15 @@ export class PolygonEditor {
         this.toggleSegmentAt(this.selectedPointIndex);
       }
     }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      if (e.shiftKey) this.redo();
+      else this.undo();
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+      e.preventDefault();
+      this.redo();
+    }
   }
 
   onKeyUp(e) {
@@ -631,6 +662,7 @@ export class PolygonEditor {
   removeSelectedPoint() {
     const lens = this.activeLens;
     if (this.selectedPointIndex < 0 || !lens.points.length) return;
+    this._recordHistory();
     lens.points.splice(this.selectedPointIndex, 1);
     this.selectedPointIndex = Math.min(this.selectedPointIndex, lens.points.length - 1);
     this.emitChange();
@@ -638,19 +670,70 @@ export class PolygonEditor {
   }
 
   clearActiveLens() {
+    this._recordHistory();
     this.activeLens.points = [];
     this.selectedPointIndex = -1;
     this.emitChange();
     this.draw();
   }
 
+  /** @deprecated Use undo() for full history. */
   undoLastPoint() {
-    const lens = this.activeLens;
-    if (!lens.points.length) return;
-    lens.points.pop();
-    this.selectedPointIndex = lens.points.length - 1;
+    this.undo();
+  }
+
+  _recordHistory() {
+    if (this._historyApplying) return;
+    this._historyPast.push(captureEditorState(this));
+    if (this._historyPast.length > MAX_EDITOR_HISTORY) {
+      this._historyPast.shift();
+    }
+    this._historyFuture = [];
+    this._notifyHistory();
+  }
+
+  _notifyHistory() {
+    this.onHistoryChange();
+  }
+
+  canUndo() {
+    return this._historyPast.length > 0;
+  }
+
+  canRedo() {
+    return this._historyFuture.length > 0;
+  }
+
+  undo() {
+    if (!this.canUndo()) return false;
+    this._historyApplying = true;
+    try {
+      this._historyFuture.unshift(captureEditorState(this));
+      const snap = this._historyPast.pop();
+      if (snap) applyEditorState(this, snap);
+    } finally {
+      this._historyApplying = false;
+    }
     this.emitChange();
     this.draw();
+    this._notifyHistory();
+    return true;
+  }
+
+  redo() {
+    if (!this.canRedo()) return false;
+    this._historyApplying = true;
+    try {
+      this._historyPast.push(captureEditorState(this));
+      const snap = this._historyFuture.shift();
+      if (snap) applyEditorState(this, snap);
+    } finally {
+      this._historyApplying = false;
+    }
+    this.emitChange();
+    this.draw();
+    this._notifyHistory();
+    return true;
   }
 
   emitChange() {

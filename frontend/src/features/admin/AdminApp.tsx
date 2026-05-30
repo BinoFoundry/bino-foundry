@@ -6,6 +6,7 @@ import { AdminDashboardPage } from "./modules/dashboard/AdminDashboardPage";
 import { MediaManagerPage } from "./modules/media/MediaManagerPage";
 import { SunglassesPricingPage } from "./modules/pricing/SunglassesPricingPage";
 import { BeadsAdminPage } from "./modules/products/BeadsAdminPage";
+import { BeadSizesAdminPage } from "./modules/products/BeadSizesAdminPage";
 import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
 import { FramesAdminPage } from "./modules/products/FramesAdminPage";
 import type { AdminSection } from "./types";
@@ -26,6 +27,8 @@ function AdminSectionView({
       return <BeadsAdminPage />;
     case "bead-types":
       return <BeadTypesAdminPage />;
+    case "bead-sizes":
+      return <BeadSizesAdminPage />;
     case "pricing":
       return <SunglassesPricingPage />;
     case "media":

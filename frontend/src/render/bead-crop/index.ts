@@ -1,8 +1,10 @@
 export { loadImage } from "./image-loader";
 export {
   beadCropConfigToEditorLenses,
+  beadCropEditorPlateKey,
   beadCropPathToPreviewCanvas,
   defaultBeadCropLens,
+  ensureBeadCropLens,
   editorLensesToBeadCropConfig,
   exportCroppedBeadBlob,
   isBeadCropEditorValid,
@@ -18,10 +20,16 @@ export {
 export {
   getBeadImageUrl,
   getBeadSlotDimensions,
+  buildStrandLoopPath,
+  getGuideEmptySlotShellStyle,
+  getGuideSlotDimensions,
+  getPartialEmptySlotShellStyle,
   getEmptySlotShellStyle,
   getMaxSlotExtent,
   getPlacedBeadImageFilter,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
+  STRAND_CORD,
+  mmToBasePx,
   type BeadSlotDimensions,
 } from "./strand-bead";

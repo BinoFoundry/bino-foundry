@@ -48,6 +48,10 @@
     --gold: 43 85% 38%;
     --gold-light: 43 60% 70%;
     --gold-glow: 43 85% 38% / 0.15;
+
+    /* Bracelet strand cord — follows theme, not a fixed tan */
+    --strand-cord: var(--muted-foreground);
+    --strand-cord-active: var(--foreground);
   }
 
   .dark {
@@ -70,6 +74,9 @@
     --border: 0 0% 18%;
     --input: 0 0% 18%;
     --ring: 43 85% 38%;
+
+    --strand-cord: var(--muted-foreground);
+    --strand-cord-active: var(--foreground);
   }
 }
 

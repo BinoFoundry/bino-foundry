@@ -18,6 +18,7 @@ Bracelet catalogue uses one system:
 | State | `@/state/catalogue` — `beadTypes`, `beadLibraries` |
 | Admin | **Bead library**, **Bead types** |
 | Crop | `@/render/bead-crop`, `@/render/editor/PolygonEditorShell`, `BeadCropEditor` |
+| Builder | `@/features/bracelet` — pricing, summary, config serialization, `useBraceletBuilder` |
 
 Legacy `/crystals`, `/charms`, `/spacers` routes removed after migration.
 

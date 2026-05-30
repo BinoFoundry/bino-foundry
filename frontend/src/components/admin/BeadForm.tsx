@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { BeadCropEditor } from "@/features/admin/components/BeadCropEditor";
+import { BeadCropEditor, beadCropEditorPlateKey } from "@/features/admin/components/BeadCropEditor";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 import { isApiError, uploadApi } from "@/services/api";
-import type { BeadCropConfig } from "@bino-foundry/shared/types";
+import { isBeadCropConfigValid, type BeadCropConfig } from "@bino-foundry/shared/types";
 
 interface BeadFormProps {
   initial?: BeadLibraryEntry;
@@ -39,7 +39,9 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
   const [form, setForm] = useState<BeadLibraryEntry>(initial ?? blank);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showCrop, setShowCrop] = useState(Boolean(initial?.originalImage || initial?.image));
+  const [editingCrop, setEditingCrop] = useState(Boolean(initial?.originalImage || initial?.image));
+  const [cropEditSession, setCropEditSession] = useState(0);
+  const draftCropRef = useRef<BeadCropConfig | null>(initial?.cropConfig ?? null);
 
   const originalUrl = form.originalImage?.trim() || form.image?.trim() || "";
 
@@ -60,7 +62,9 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
         cropStatus: "draft",
         cropConfig: null,
       }));
-      setShowCrop(true);
+      draftCropRef.current = null;
+      setCropEditSession((s) => s + 1);
+      setEditingCrop(true);
     } catch (err) {
       const msg = isApiError(err) ? err.message : "Failed to upload image.";
       alert(msg);
@@ -70,17 +74,23 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
     }
   };
 
-  const handleCropChange = (config: BeadCropConfig | null, valid: boolean) => {
-    if (!config) return;
+  /** Live edits — draft only (avoids editor remount / form thrash). */
+  const handleCropDraft = (config: BeadCropConfig | null, _valid: boolean) => {
+    draftCropRef.current = config;
+  };
+
+  const handleSaveCrop = (config: BeadCropConfig) => {
+    draftCropRef.current = config;
     setForm((f) => ({
       ...f,
       cropConfig: config,
-      cropStatus: valid ? "ready" : "draft",
+      cropStatus: isBeadCropConfigValid(config) ? "ready" : "draft",
       originalImage: config.originalUrl,
     }));
   };
 
   const handleProcessed = (processedUrl: string, config: BeadCropConfig) => {
+    draftCropRef.current = config;
     setForm((f) => ({
       ...f,
       processedImage: processedUrl,
@@ -90,17 +100,32 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
     }));
   };
 
+  const openCropEditor = () => {
+    draftCropRef.current = form.cropConfig ?? draftCropRef.current;
+    setCropEditSession((s) => s + 1);
+    setEditingCrop(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving || !form.name.trim() || !form.beadTypeId) return;
     const id = form.id || form.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const cropConfig = draftCropRef.current ?? form.cropConfig;
     setSaving(true);
     try {
-      await onSave({ ...form, id });
+      await onSave({
+        ...form,
+        id,
+        cropConfig: cropConfig ?? form.cropConfig,
+        cropStatus:
+          cropConfig && isBeadCropConfigValid(cropConfig) ? "ready" : form.cropStatus ?? "draft",
+      });
     } finally {
       setSaving(false);
     }
   };
+
+  const cropReady = Boolean(form.cropConfig && isBeadCropConfigValid(form.cropConfig));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -160,19 +185,55 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
               <input type="file" accept="image/*" className="absolute inset-0 opacity-0" onChange={handleUpload} disabled={uploading} />
             </label>
             <p className="text-xs text-muted-foreground">
-              Upload source asset, then crop below. Status: {form.cropStatus ?? "draft"}
+              Upload source asset, then draw crop path below. Status:{" "}
+              <span className={cropReady ? "text-emerald-600" : "text-amber-600"}>
+                {cropReady ? "crop ready" : form.cropStatus ?? "draft"}
+              </span>
             </p>
           </div>
         </div>
       </div>
 
-      {showCrop && originalUrl ? (
-        <BeadCropEditor
-          originalUrl={originalUrl}
-          initialCrop={form.cropConfig ?? undefined}
-          onChange={handleCropChange}
-          onProcessedUpload={handleProcessed}
-        />
+      {originalUrl ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={editingCrop ? "default" : "secondary"}
+              onClick={() => {
+                if (editingCrop) {
+                  const draft = draftCropRef.current;
+                  if (draft && isBeadCropConfigValid(draft)) {
+                    handleSaveCrop(draft);
+                  }
+                  setEditingCrop(false);
+                } else {
+                  openCropEditor();
+                }
+              }}
+            >
+              {editingCrop ? "Hide crop editor" : "Edit crop"}
+            </Button>
+          </div>
+          {editingCrop ? (
+            <BeadCropEditor
+              key={`${beadCropEditorPlateKey(originalUrl, form.cropConfig)}|s${cropEditSession}`}
+              originalUrl={originalUrl}
+              initialCrop={draftCropRef.current ?? form.cropConfig ?? undefined}
+              onDraftChange={handleCropDraft}
+              onSaveCrop={handleSaveCrop}
+              onProcessedUpload={handleProcessed}
+            />
+          ) : (
+            <img
+              src={form.processedImage?.trim() || originalUrl}
+              alt=""
+              className="mx-auto max-h-40 rounded-lg border border-border object-contain"
+              crossOrigin="anonymous"
+            />
+          )}
+        </div>
       ) : null}
 
       <div className="flex justify-end gap-2 border-t border-border pt-2">

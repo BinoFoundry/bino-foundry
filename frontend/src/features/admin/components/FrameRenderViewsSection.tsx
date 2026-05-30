@@ -6,7 +6,7 @@ import { isApiError, uploadApi } from "@/services/api";
 import { isApiFrameId, renderingApi } from "@/services/api/rendering";
 import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES, FRAME_VIEW_LABELS } from "@/types/frame-rendering";
-import { maskConfigToLensClipConfig } from "@/render/lens-clip";
+import { editorPlateKey, maskConfigToLensClipConfig, resolveMaskConfigForEditor } from "@/render/lens-clip";
 import { isMaskConfigValid, type MaskConfig } from "@/render/mask";
 import { isLensClipConfigValid } from "@bino-foundry/shared/types";
 
@@ -51,8 +51,9 @@ interface FrameRenderViewsSectionProps {
 export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRenderViewsSectionProps) {
   const [uploading, setUploading] = useState<FrameViewAxis | null>(null);
   const [editingView, setEditingView] = useState<FrameViewAxis | null>(null);
+  /** Bumped only when user opens the editor — stable during live edits (avoids remount loop). */
+  const [editSession, setEditSession] = useState<Partial<Record<FrameViewAxis, number>>>({});
   const draftRef = useRef<Partial<Record<FrameViewAxis, MaskConfig | null>>>({});
-  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getView = useCallback(
     (axis: FrameViewAxis) => views.find((v) => v.view === axis) ?? emptyView(axis),
@@ -70,31 +71,10 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
     [onChange, views],
   );
 
-  const scheduleDraftSync = useCallback(
-    (axis: FrameViewAxis, mask: MaskConfig | null, valid: boolean) => {
-      draftRef.current[axis] = mask;
-      const clip = valid && mask && isMaskConfigValid(mask) ? maskConfigToLensClipConfig(mask) : null;
-      const clipReady = Boolean(clip && isLensClipConfigValid(clip));
-
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = setTimeout(() => {
-        patchView(axis, {
-          maskConfig: mask,
-          maskStatus: clipReady ? "ready" : "draft",
-          clipConfig: clip,
-          clipStatus: clipReady ? "ready" : "draft",
-        });
-      }, 250);
-    },
-    [patchView],
-  );
-
-  useEffect(
-    () => () => {
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    },
-    [],
-  );
+  /** Live edits stay in draftRef only — do not patch parent (would change keys / re-render loop). */
+  const handleEditorChange = useCallback((axis: FrameViewAxis, mask: MaskConfig | null) => {
+    draftRef.current[axis] = mask;
+  }, []);
 
   const handleUpload = async (axis: FrameViewAxis, file: File) => {
     setUploading(axis);
@@ -144,6 +124,8 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
           imageHeight: Math.max(1, Math.floor(view.height)),
           clipConfig,
           clipStatus: "ready",
+          maskConfig: mask,
+          maskStatus: "ready",
         });
       } catch (err) {
         console.warn("API clip sync failed (saved in form state)", err);
@@ -213,7 +195,35 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
                       type="button"
                       size="sm"
                       variant={isEditing ? "default" : "secondary"}
-                      onClick={() => setEditingView(isEditing ? null : axis)}
+                      onClick={() => {
+                        if (isEditing) {
+                          const mask = draftRef.current[axis];
+                          if (mask && isMaskConfigValid(mask)) {
+                            const clip = maskConfigToLensClipConfig(mask);
+                            const cur = getView(axis);
+                            const clipReady = Boolean(clip && isLensClipConfigValid(clip));
+                            patchView(axis, {
+                              maskConfig: {
+                                ...mask,
+                                updatedAt: cur.maskConfig?.updatedAt ?? mask.updatedAt,
+                              },
+                              maskStatus: clipReady ? "ready" : "draft",
+                              clipConfig: clip
+                                ? {
+                                    ...clip,
+                                    updatedAt: cur.clipConfig?.updatedAt ?? clip.updatedAt,
+                                  }
+                                : null,
+                              clipStatus: clipReady ? "ready" : "draft",
+                            });
+                          }
+                        } else {
+                          const restored = resolveMaskConfigForEditor(view);
+                          if (restored) draftRef.current[axis] = restored;
+                          setEditSession((s) => ({ ...s, [axis]: (s[axis] ?? 0) + 1 }));
+                        }
+                        setEditingView(isEditing ? null : axis);
+                      }}
                     >
                       {isEditing ? "Hide clip editor" : "Edit clip"}
                     </Button>
@@ -230,12 +240,12 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
 
             {hasPlate && isEditing ? (
               <FrameMaskEditor
-                key={view.plateUrl}
+                key={`${editorPlateKey(view)}|s${editSession[axis] ?? 0}`}
                 plateUrl={view.plateUrl}
                 width={view.width}
                 height={view.height}
-                initialMask={view.maskConfig}
-                onChange={(config, valid) => scheduleDraftSync(axis, config, valid)}
+                initialMask={draftRef.current[axis] ?? resolveMaskConfigForEditor(view)}
+                onChange={(config) => handleEditorChange(axis, config)}
               />
             ) : hasPlate ? (
               <img

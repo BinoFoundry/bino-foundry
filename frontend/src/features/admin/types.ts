@@ -6,6 +6,7 @@ export type AdminSection =
   | "frames"
   | "beads"
   | "bead-types"
+  | "bead-sizes"
   | "pricing"
   | "media";
 

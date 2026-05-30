@@ -14,6 +14,8 @@ export interface FrameRenderViewRow {
   height: number;
   clipConfig: unknown | null;
   clipStatus: "draft" | "ready";
+  maskConfig: unknown | null;
+  maskStatus: "draft" | "ready";
 }
 
 function isClipConfigValid(config: unknown): boolean {
@@ -37,6 +39,8 @@ function mapViewRow(row: Record<string, unknown>): FrameRenderViewRow {
     height: Number(row.image_height),
     clipConfig: row.clip_config ?? null,
     clipStatus: (row.clip_status as "draft" | "ready") ?? "draft",
+    maskConfig: row.mask_config ?? null,
+    maskStatus: (row.mask_status as "draft" | "ready") ?? "draft",
   };
 }
 
@@ -88,8 +92,8 @@ export class RenderingService {
       image_height: payload.imageHeight,
       clip_config: payload.clipConfig ?? null,
       clip_status: clipStatus,
-      mask_config: null,
-      mask_status: clipStatus,
+      mask_config: payload.maskConfig ?? null,
+      mask_status: payload.maskStatus ?? clipStatus,
     };
 
     const { data, error } = await supabase

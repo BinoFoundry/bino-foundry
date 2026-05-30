@@ -14,7 +14,14 @@ const TYPE_FOOTPRINT: Record<string, { width: number; height: number }> = {
   spacer: { width: 0.5, height: 0.5 },
 };
 
-const MM_BASE_PX: Record<BeadSize, number> = { 6: 22, 8: 28, 10: 36 };
+/** Reference: 8 mm bead ≈ 28 px at scale factor 1. */
+const MM_REFERENCE = 8;
+const PX_AT_REFERENCE = 28;
+
+export function mmToBasePx(sizeMm: number, scaleFactor: number): number {
+  const mm = Math.max(4, Math.min(24, sizeMm));
+  return (mm / MM_REFERENCE) * PX_AT_REFERENCE * scaleFactor;
+}
 
 export interface BeadSlotDimensions {
   width: number;
@@ -31,7 +38,7 @@ export function getBeadSlotDimensions(
   const typeScale = TYPE_FOOTPRINT[slug] ?? TYPE_FOOTPRINT.crystal;
   const customW = meta?.strandScale?.width;
   const customH = meta?.strandScale?.height;
-  const base = MM_BASE_PX[beadSize] * scaleFactor;
+  const base = mmToBasePx(beadSize, scaleFactor);
   return {
     width: base * (customW ?? typeScale.width),
     height: base * (customH ?? typeScale.height),
@@ -39,7 +46,7 @@ export function getBeadSlotDimensions(
 }
 
 export function getMaxSlotExtent(slots: { width: number; height: number }[]): number {
-  if (!slots.length) return MM_BASE_PX[8];
+  if (!slots.length) return mmToBasePx(8, 1);
   return Math.max(...slots.map((s) => Math.max(s.width, s.height)));
 }
 
@@ -61,15 +68,59 @@ export function getStrandBeadImageStyle(bead: BeadLibraryEntry | null | undefine
   };
 }
 
-export function getEmptySlotShellStyle(dim: BeadSlotDimensions): CSSProperties {
+/** Uniform placeholder size for empty-strand guide (scales with canvas). */
+export function getGuideSlotDimensions(scaleFactor: number, beadSizeMm = 8): BeadSlotDimensions {
+  const base = mmToBasePx(beadSizeMm, scaleFactor) * 0.9;
+  return { width: base, height: base };
+}
+
+/** Cord / elastic string behind beads (uses theme CSS variables). */
+export const STRAND_CORD = {
+  stroke: "hsl(var(--strand-cord) / 0.55)",
+  strokeDrag: "hsl(var(--strand-cord-active) / 0.65)",
+  widthFactor: 3.4,
+  opacity: 0.92,
+  opacityComplete: 0.55,
+} as const;
+
+/** Visible placeholders when the strand has no beads yet. */
+export function getGuideEmptySlotShellStyle(dim: BeadSlotDimensions): CSSProperties {
   return {
     width: dim.width,
     height: dim.height,
-    background: "transparent",
-    border: "1px dashed hsl(var(--border) / 0.7)",
-    borderRadius: 4,
-    boxShadow: "none",
+    background: "hsl(var(--muted) / 0.55)",
+    border: "1.5px dashed hsl(var(--primary) / 0.4)",
+    borderRadius: "50%",
+    boxShadow:
+      "inset 0 1px 3px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.08)",
   };
+}
+
+/** Unfilled slots while the bracelet is still being filled in. */
+export function getPartialEmptySlotShellStyle(dim: BeadSlotDimensions): CSSProperties {
+  return {
+    width: dim.width,
+    height: dim.height,
+    background: "hsl(var(--muted) / 0.42)",
+    border: "1.5px dashed hsl(var(--primary) / 0.28)",
+    borderRadius: "50%",
+    boxShadow: "inset 0 1px 2px rgba(255,255,255,0.18)",
+  };
+}
+
+/** @deprecated Prefer partial style until the strand is complete. */
+export function getEmptySlotShellStyle(dim: BeadSlotDimensions): CSSProperties {
+  return getPartialEmptySlotShellStyle(dim);
+}
+
+/** Closed loop through slot centers (bracelet cord / strand path). */
+export function buildStrandLoopPath(slots: { x: number; y: number }[]): string {
+  if (slots.length < 2) return "";
+  let d = `M ${slots[0].x} ${slots[0].y}`;
+  for (let i = 1; i < slots.length; i++) {
+    d += ` L ${slots[i].x} ${slots[i].y}`;
+  }
+  return `${d} Z`;
 }
 
 export function getPlacedBeadShellStyle(
