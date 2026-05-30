@@ -123,17 +123,34 @@
     scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
+  .admin-scroll-pane {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .admin-scroll-pane::-webkit-scrollbar,
   .customiser-options-scroll::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
   }
 
+  .admin-scroll-pane::-webkit-scrollbar-thumb,
   .customiser-options-scroll::-webkit-scrollbar-thumb {
     border-radius: 9999px;
     background-color: hsl(var(--border));
   }
 
+  .admin-scroll-pane::-webkit-scrollbar-track,
   .customiser-options-scroll::-webkit-scrollbar-track {
     background: transparent;
   }

@@ -37,6 +37,7 @@ export interface CatalogueActions {
     entry: Pick<BeadTypeEntry, "name" | "description"> & {
       displayOrder?: number;
       isActive?: boolean;
+      usesSizePricing?: boolean;
     },
   ) => Promise<void>;
   updateBeadType: (entry: BeadTypeEntry) => Promise<void>;

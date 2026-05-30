@@ -1,4 +1,4 @@
-import { useId, useMemo } from "react";
+import { memo, useId, useMemo } from "react";
 
 import { cn } from "@/lib/utils";
 import { resolveLensClipRenderSettings } from "@/render/lens-clip/clip-settings";
@@ -24,11 +24,7 @@ export interface SvgClipCompositorViewProps {
   className?: string;
 }
 
-/**
- * Sunglasses tint via SVG clipPath + gradient layers (no canvas mask bitmap).
- * Preserves plate highlights using a screened copy of the photo inside each clip.
- */
-export function SvgClipCompositorView({
+function SvgClipCompositorViewInner({
   plate,
   tintTop,
   tintBottom,
@@ -54,6 +50,7 @@ export function SvgClipCompositorView({
   const { width: w, height: h } = plate;
   const tintId = `${uid}-tint`;
   const lenses = plate.clipConfig.lenses.filter((l) => l.pathD?.trim());
+  const isSolidTint = tintTop.toLowerCase() === tintBottom.toLowerCase();
 
   return (
     <CompositorViewport aspectRatio={aspectRatio} label={label} className={className}>
@@ -67,8 +64,15 @@ export function SvgClipCompositorView({
         >
           <defs>
             <linearGradient id={tintId} x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor={tintTop} />
-              <stop offset="100%" stopColor={tintBottom} />
+              {isSolidTint ? (
+                <stop offset="0%" stopColor={tintTop} />
+              ) : (
+                <>
+                  <stop offset="0%" stopColor={tintTop} />
+                  <stop offset="55%" stopColor={tintTop} stopOpacity={0.92} />
+                  <stop offset="100%" stopColor={tintBottom} />
+                </>
+              )}
             </linearGradient>
             {lenses.map((lens) => (
               <clipPath key={`${uid}-clip-${lens.id}`} id={`${uid}-clip-${lens.id}`} clipPathUnits="userSpaceOnUse">
@@ -77,7 +81,6 @@ export function SvgClipCompositorView({
             ))}
           </defs>
 
-          {/* Full frame plate (shadows + frame structure) */}
           <image
             href={plate.plateUrl}
             x={0}
@@ -88,7 +91,17 @@ export function SvgClipCompositorView({
             crossOrigin="anonymous"
           />
 
-          {/* Dynamic lens tint inside each clip */}
+          {lenses.map((lens) => (
+            <g
+              key={`${uid}-sh-${lens.id}`}
+              clipPath={`url(#${uid}-clip-${lens.id})`}
+              style={{ mixBlendMode: "multiply" }}
+              opacity={render.shadowStrength}
+            >
+              <rect x={0} y={0} width={w} height={h} fill="#0f172a" />
+            </g>
+          ))}
+
           {lenses.map((lens) => (
             <g
               key={`${uid}-tint-${lens.id}`}
@@ -100,7 +113,6 @@ export function SvgClipCompositorView({
             </g>
           ))}
 
-          {/* Lens-region highlights from original plate */}
           {lenses.map((lens) => (
             <g
               key={`${uid}-hi-${lens.id}`}
@@ -124,3 +136,15 @@ export function SvgClipCompositorView({
     </CompositorViewport>
   );
 }
+
+export const SvgClipCompositorView = memo(
+  SvgClipCompositorViewInner,
+  (prev, next) =>
+    prev.plate?.plateUrl === next.plate?.plateUrl &&
+    prev.tintTop === next.tintTop &&
+    prev.tintBottom === next.tintBottom &&
+    prev.lensOpacity === next.lensOpacity &&
+    prev.aspectRatio === next.aspectRatio &&
+    prev.label === next.label &&
+    prev.plate?.clipConfig === next.plate?.clipConfig,
+);

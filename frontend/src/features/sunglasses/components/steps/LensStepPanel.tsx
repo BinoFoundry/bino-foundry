@@ -15,6 +15,15 @@ interface LensStepPanelProps {
   onSelectTint: (tintId: string) => void;
 }
 
+function tintSwatchStyle(tint: LensTintEntry): React.CSSProperties {
+  if (tint.category === "classic" || tint.gradientTop === tint.gradientBottom) {
+    return { background: tint.gradientTop };
+  }
+  return {
+    background: `linear-gradient(180deg, ${tint.gradientTop} 0%, ${tint.gradientBottom} 100%)`,
+  };
+}
+
 function TintSwatch({
   tint,
   active,
@@ -35,12 +44,11 @@ function TintSwatch({
     >
       <span
         className="h-12 w-full rounded-lg border border-black/10 shadow-inner"
-        style={{
-          background: `linear-gradient(180deg, ${tint.gradientTop} 0%, ${tint.gradientBottom} 100%)`,
-        }}
+        style={tintSwatchStyle(tint)}
         aria-hidden
       />
       <span className="text-center text-xs font-medium text-foreground">{tint.name}</span>
+      <span className="font-mono text-[10px] text-muted-foreground">{tint.code}</span>
       {tint.priceSurcharge > 0 && (
         <span className="text-[10px] text-muted-foreground">+${tint.priceSurcharge}</span>
       )}
@@ -58,48 +66,66 @@ export function LensStepPanel({
   onPolarizedChange,
   onSelectTint,
 }: LensStepPanelProps) {
+  const polarizedSurcharge = polarizedOption?.priceSurcharge ?? 0;
+
   return (
     <div className="space-y-4">
       <div>
         <h3 className="font-display text-base font-bold text-foreground">Lens options</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Tint is applied dynamically to the lens only — the frame stays unchanged in real time.
+          Choose standard or polarised lenses, then pick a tint. Colour is applied to the lens only — the frame stays
+          unchanged in real time.
         </p>
       </div>
 
-      {polarizedOption && (
-        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
-          <div>
-            <Label htmlFor="polarized-toggle" className="font-semibold">
-              {polarizedOption.label}
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              +${polarizedOption.priceSurcharge}
-              {polarizedOption.description ? ` · ${polarizedOption.description}` : ""}
-            </p>
+      <div className="rounded-xl border border-border bg-muted/20 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lens type</p>
+        <p className="mt-1 text-sm font-medium text-foreground">
+          {polarized ? "Polarised lenses" : "Standard lenses (non-polarised)"}
+        </p>
+        {polarizedOption && (
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+            <div>
+              <Label htmlFor="polarized-toggle" className="font-semibold">
+                Upgrade to {polarizedOption.label}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {polarized ? "Enabled" : "Off — standard lenses"}
+                {polarizedSurcharge > 0 ? ` · +$${polarizedSurcharge}` : ""}
+                {polarizedOption.description ? ` · ${polarizedOption.description}` : ""}
+              </p>
+            </div>
+            <Switch id="polarized-toggle" checked={polarized} onCheckedChange={onPolarizedChange} />
           </div>
-          <Switch id="polarized-toggle" checked={polarized} onCheckedChange={onPolarizedChange} />
-        </div>
-      )}
+        )}
+      </div>
 
-      <Tabs defaultValue="gradient" className="w-full">
+      <Tabs defaultValue={gradientTints.length ? "gradient" : "classic"} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="classic">Classic</TabsTrigger>
           <TabsTrigger value="gradient">Gradient</TabsTrigger>
         </TabsList>
         <TabsContent value="classic" className="mt-4">
-          <div className="grid grid-cols-2 gap-3">
-            {classicTints.map((tint) => (
-              <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
-            ))}
-          </div>
+          {classicTints.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No classic tints in catalogue.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {classicTints.map((tint) => (
+                <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
+              ))}
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="gradient" className="mt-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {gradientTints.map((tint) => (
-              <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
-            ))}
-          </div>
+          {gradientTints.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No gradient tints in catalogue.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {gradientTints.map((tint) => (
+                <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -109,3 +135,4 @@ export function LensStepPanel({
     </div>
   );
 }
+

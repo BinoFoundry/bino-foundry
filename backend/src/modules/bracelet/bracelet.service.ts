@@ -1,96 +1,23 @@
 import { randomBytes } from "node:crypto";
 
-import { DEFAULT_BRACELET_PRICING_RULES, type BraceletPricingRules } from "@bino-foundry/shared/types";
-
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
 import type { CreateBraceletConfigDTO } from "./bracelet.validation.js";
-
-const PRICING_KEY = "bracelet.pricing_v1";
-
-function parsePricingRules(value: unknown) {
-  if (!value || typeof value !== "object") return DEFAULT_BRACELET_PRICING_RULES;
-  const o = value as Record<string, unknown>;
-  return {
-    sizeMultipliers:
-      (o.sizeMultipliers as Record<string, number>) ?? DEFAULT_BRACELET_PRICING_RULES.sizeMultipliers,
-    sizePricedTypeSlugs:
-      (o.sizePricedTypeSlugs as string[]) ?? DEFAULT_BRACELET_PRICING_RULES.sizePricedTypeSlugs,
-    currencyCode:
-      typeof o.currencyCode === "string" ? o.currencyCode : DEFAULT_BRACELET_PRICING_RULES.currencyCode,
-  };
-}
+import { loadBraceletPricingContext, unitPriceWithContext } from "./bracelet-pricing.js";
 
 function newPublicId(): string {
   return `brc_${randomBytes(8).toString("hex")}`;
 }
 
-function unitPriceForSlug(
-  base: number,
-  slug: string,
-  beadSizeMm: number,
-  rules: ReturnType<typeof parsePricingRules>,
-): number {
-  if (!rules.sizePricedTypeSlugs.includes(slug)) return base;
-  const mult = rules.sizeMultipliers[String(beadSizeMm)] ?? 1;
-  return base * mult;
-}
-
 export class BraceletService {
-  async getPricingRules() {
-    const supabase = getSupabaseServiceRole();
-    const { data, error } = await supabase
-      .from("config_kv")
-      .select("value, description")
-      .eq("key", PRICING_KEY)
-      .maybeSingle();
-
-    assertNoDbError(error);
-    return {
-      ...parsePricingRules(data?.value ?? null),
-      description: typeof data?.description === "string" ? data.description : "",
-    };
-  }
-
-  async updatePricingRules(payload: BraceletPricingRules & { description?: string }) {
-    const supabase = getSupabaseServiceRole();
-    const { description, ...rules } = payload;
-    const value = {
-      sizeMultipliers: rules.sizeMultipliers,
-      sizePricedTypeSlugs: rules.sizePricedTypeSlugs,
-      currencyCode: rules.currencyCode,
-    };
-
-    const { data, error } = await supabase
-      .from("config_kv")
-      .upsert(
-        {
-          key: PRICING_KEY,
-          value,
-          description:
-            description?.trim() ||
-            "Bracelet builder size multipliers and priced type slugs",
-        },
-        { onConflict: "key" },
-      )
-      .select("value, description")
-      .single();
-
-    assertNoDbError(error);
-    return {
-      ...parsePricingRules(data?.value ?? value),
-      description: typeof data?.description === "string" ? data.description : "",
-    };
-  }
-
   async createConfiguration(dto: CreateBraceletConfigDTO) {
     if (!dto.items.length) {
       throw new ValidationError("At least one bead must be placed to save a configuration");
     }
 
     const supabase = getSupabaseServiceRole();
-    const rules = await this.getPricingRules();
+    const pricing = await loadBraceletPricingContext();
     const publicIds = [...new Set(dto.items.map((i) => i.beadLibraryId))];
 
     const { data: beads, error: beadErr } = await supabase
@@ -124,7 +51,7 @@ export class BraceletService {
     let subtotal = 0;
     const itemRows = dto.items.map((item) => {
       const bead = beadByPublicId.get(item.beadLibraryId)!;
-      const unit = unitPriceForSlug(bead.unitPrice, bead.slug, item.beadSizeMm, rules);
+      const unit = unitPriceWithContext(bead.unitPrice, bead.slug, item.beadSizeMm, pricing);
       subtotal += unit;
       return {
         strand_index: item.strandIndex,
@@ -145,7 +72,7 @@ export class BraceletService {
         wrist_size_cm_a: dto.wristSizeCmA,
         wrist_size_cm_b: dto.wristSizeCmB,
         default_bead_size_mm: dto.defaultBeadSizeMm,
-        currency_code: rules.currencyCode,
+        currency_code: pricing.currencyCode,
         subtotal,
         item_count: dto.items.length,
       })

@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useCatalogue } from "@/state/catalogue";
-import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
-import type { FrameOption } from "@/lib/luxe-data";
-import { FRAME_BASE_PRICE } from "@/lib/luxe-data";
+import { AssetLoader } from "@/render/assets/asset-loader";
 import { buildCustomiserCompositorConfig } from "@/render/adapters/customiser-config";
 import { calculateSunglassesTotal, formatConfigSummary } from "@/render/engine/pricing";
 import { lensTintEntryToGradient } from "@/render/state/sunglasses-render-reducer";
 import { useSunglassesRenderState } from "@/render/hooks/useSunglassesRenderState";
+import { useCatalogue } from "@/state/catalogue";
+import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
+import type { FrameOption } from "@/lib/luxe-data";
+import { FRAME_BASE_PRICE } from "@/lib/luxe-data";
+
+import { loadCustomiserSession, saveCustomiserSession } from "../utils/customiser-session";
 
 const EMPTY_FRAME: FrameOption = {
   id: "fallback",
@@ -18,9 +21,12 @@ const EMPTY_FRAME: FrameOption = {
   lensColors: [],
 };
 
+const plateLoader = new AssetLoader();
+
 export function useSunglassesCustomiserState(onPriceChange?: (price: number) => void) {
   const { frames: allFrames } = useCatalogue();
   const sunglassesCatalog = useSunglassesCatalog();
+  const sessionHydrated = useRef(false);
 
   const frames = useMemo(
     () => allFrames.filter((f) => f.isActive !== false),
@@ -38,7 +44,8 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
   const selectedTintEntry = useMemo(() => {
     if (!sunglassesCatalog.lensTints.length) return null;
     if (selectedTintId) {
-      return sunglassesCatalog.getTintById(selectedTintId) ?? sunglassesCatalog.lensTints[0];
+      const found = sunglassesCatalog.getTintById(selectedTintId);
+      if (found) return found;
     }
     return sunglassesCatalog.lensTints[0];
   }, [selectedTintId, sunglassesCatalog]);
@@ -62,13 +69,34 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
   });
 
   useEffect(() => {
-    if (frames.length && !frameSkuId) {
+    if (sessionHydrated.current || !frames.length || !sunglassesCatalog.lensTints.length) return;
+    const saved = loadCustomiserSession();
+    if (saved?.frameSkuId && frames.some((f) => f.id === saved.frameSkuId)) {
+      setFrameSkuId(saved.frameSkuId);
+    } else {
+      setFrameSkuId(frames[0].id);
+    }
+    if (saved?.selectedTintId && sunglassesCatalog.getTintById(saved.selectedTintId)) {
+      setSelectedTintId(saved.selectedTintId);
+    } else {
+      setSelectedTintId(sunglassesCatalog.lensTints[0]?.id ?? null);
+    }
+    if (saved?.options) {
+      render.dispatch({ type: "SET_OPTIONS", options: saved.options });
+    }
+    sessionHydrated.current = true;
+  }, [frames, sunglassesCatalog, render.dispatch]);
+
+  useEffect(() => {
+    if (!sessionHydrated.current) return;
+    if (!frameSkuId && frames.length) {
       setFrameSkuId(frames[0].id);
     }
   }, [frames, frameSkuId]);
 
   useEffect(() => {
-    if (sunglassesCatalog.lensTints.length && !selectedTintId) {
+    if (!sessionHydrated.current) return;
+    if (!selectedTintId && sunglassesCatalog.lensTints.length) {
       setSelectedTintId(sunglassesCatalog.lensTints[0].id);
     }
   }, [sunglassesCatalog.lensTints, selectedTintId]);
@@ -82,6 +110,23 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
       render.setTint(lensTintEntryToGradient(selectedTintEntry));
     }
   }, [selectedTintEntry, render.setTint]);
+
+  useEffect(() => {
+    if (!sessionHydrated.current || !frameSkuId) return;
+    saveCustomiserSession({
+      frameSkuId,
+      selectedTintId,
+      options: render.config.options,
+    });
+  }, [frameSkuId, selectedTintId, render.config.options]);
+
+  useEffect(() => {
+    const urls =
+      frameSku.renderViews
+        ?.filter((v) => v.plateUrl?.trim())
+        .map((v) => v.plateUrl) ?? [];
+    void plateLoader.preloadMany(urls);
+  }, [frameSku.id, frameSku.renderViews]);
 
   const compositorConfig = useMemo(
     () =>
@@ -113,7 +158,9 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
     onPriceChange?.(totalPrice);
   }, [totalPrice, onPriceChange]);
 
-  const selectFrameSku = useCallback((id: string) => setFrameSkuId(id), []);
+  const selectFrameSku = useCallback((id: string) => {
+    setFrameSkuId(id);
+  }, []);
 
   const selectTintById = useCallback((tintId: string) => {
     setSelectedTintId(tintId);

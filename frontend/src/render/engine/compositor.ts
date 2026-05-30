@@ -32,7 +32,7 @@ export function buildCompositorStack(
   const dynamicOnly = config.renderMode === "customiser-dynamic";
   const layers: CompositorLayerSpec[] = [];
 
-  if (view === "side") {
+  if (view === "side" || view === "three_quarter") {
     layers.push(
       layer("frame-side", "frame-vector", {
         variant: "side",

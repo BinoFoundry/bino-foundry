@@ -55,12 +55,12 @@ Unified bead catalogue for bracelet builder.
 
 ## Pricing configuration support
 
-- [x] Edit **bracelet pricing** rules (`config_kv` `bracelet.pricing_v1` or successor UI)
-- [x] Edit **sunglasses** option pricing (polarised, prescription surcharges)
+- [x] Edit **bracelet pricing** rules — **Bracelet pricing** admin section (form UI: currency, size multipliers, priced bead types)
+- [x] Edit **sunglasses** option pricing — **Sunglasses config** admin section (lens tints + add-on options)
 - [x] Frame **base price** on frame records
 - [x] Bead **price multipliers** per `bead_sizes` row
 - [x] JSON validation before save; human-readable errors
-- [x] Optional: audit/description field per config key (`config_kv.description` on bracelet pricing)
+- [x] Optional: audit/description field per config key — not exposed in UI (auto-managed server-side)
 - [x] Builder totals match admin-configured rules after save (sunglasses + bracelet pricing engines read API/catalogue)
 
 **Verify:** [x] Change polarised surcharge and 10mm multiplier → both builders show updated totals.
@@ -73,7 +73,7 @@ Unified bead catalogue for bracelet builder.
 - [x] Search on large lists (`useAdminList`)
 - [x] Pagination on large lists (`useAdminList` + `AdminListPagination`, 25 per page)
 - [x] Responsive admin layout
-- [x] `config_kv` editor for bracelet pricing (bracelet tab under **Pricing & config**)
+- [x] `config_kv` bracelet pricing editor — **Bracelet pricing** sidebar (separate from Sunglasses config)
 
 ---
 

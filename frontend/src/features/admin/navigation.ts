@@ -1,4 +1,4 @@
-import { Gem, Glasses, Image, LayoutDashboard, Ruler, Settings2, Sun } from "lucide-react";
+import { Gem, Glasses, Image, LayoutDashboard, Ruler, Settings, Settings2, Sun } from "lucide-react";
 
 import type { AdminNavItem, AdminSection } from "./types";
 
@@ -27,7 +27,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   {
     id: "bead-types",
     label: "Bead types",
-    description: "Crystal, Charm, Spacer, and custom categories",
+    description: "Categories and size-based pricing flags",
     icon: Settings2,
     group: "products",
   },
@@ -39,11 +39,18 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     group: "products",
   },
   {
-    id: "pricing",
-    label: "Pricing & config",
-    description: "Sunglasses tints/options and bracelet pricing rules",
+    id: "general-settings",
+    label: "General settings",
+    description: "Site-wide currency and defaults",
+    icon: Settings,
+    group: "settings",
+  },
+  {
+    id: "sunglasses-config",
+    label: "Sunglasses config",
+    description: "Lens tints and builder add-on options",
     icon: Sun,
-    group: "configuration",
+    group: "sunglasses",
   },
   {
     id: "media",
@@ -57,7 +64,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
 export const ADMIN_NAV_GROUPS: { id: AdminNavItem["group"]; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "products", label: "Products" },
-  { id: "configuration", label: "Pricing & config" },
+  { id: "settings", label: "Settings" },
+  { id: "sunglasses", label: "Sunglasses" },
   { id: "assets", label: "Media" },
 ];
 

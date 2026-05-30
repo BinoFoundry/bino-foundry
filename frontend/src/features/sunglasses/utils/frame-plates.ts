@@ -5,6 +5,7 @@ import type { FrameOption } from "@/lib/luxe-data";
 export const NO_PREVIEW_MESSAGE: Record<CompositorView, string> = {
   front: "Front view preview unavailable",
   side: "Side view preview unavailable",
+  three_quarter: "45° view preview unavailable",
 };
 
 export function getFrameRenderView(

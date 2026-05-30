@@ -121,7 +121,9 @@ export function BraceletSummaryPanel({
             ${pricing.total.toFixed(2)}
           </span>
         </div>
-        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">{BRACELET_COPY.priceNote}</p>
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+          {BRACELET_COPY.priceNote(pricing.currencyCode)}
+        </p>
       </div>
     </div>
   );

@@ -3,53 +3,33 @@ import {
   type BraceletBeadSizeMm,
   type BraceletPricingBreakdown,
   type BraceletPricingLineItem,
-  type BraceletPricingRules,
 } from "@bino-foundry/shared/types";
 
 import { calculateBeadCount, type BeadSize, type PlacedBead } from "@/lib/luxe-data";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
 
-export function parseBraceletPricingRules(raw: unknown): BraceletPricingRules {
-  if (!raw || typeof raw !== "object") return DEFAULT_BRACELET_PRICING_RULES;
-  const o = raw as Record<string, unknown>;
-  const mult = o.sizeMultipliers;
-  const slugs = o.sizePricedTypeSlugs;
-  return {
-    sizeMultipliers:
-      mult && typeof mult === "object"
-        ? Object.fromEntries(
-            Object.entries(mult as Record<string, unknown>).map(([k, v]) => [k, Number(v) || 1]),
-          )
-        : DEFAULT_BRACELET_PRICING_RULES.sizeMultipliers,
-    sizePricedTypeSlugs: Array.isArray(slugs)
-      ? slugs.map(String)
-      : DEFAULT_BRACELET_PRICING_RULES.sizePricedTypeSlugs,
-    currencyCode:
-      typeof o.currencyCode === "string" ? o.currencyCode : DEFAULT_BRACELET_PRICING_RULES.currencyCode,
-  };
+export function sizeMultiplierForMm(beadSizeMm: number, beadSizes?: BeadSizeEntry[]): number {
+  const fromDb = beadSizes?.find((s) => s.sizeMm === beadSizeMm && s.isActive !== false);
+  return fromDb?.priceMultiplier ?? 1;
 }
 
-export function sizeMultiplierForMm(
-  beadSizeMm: number,
-  rules: BraceletPricingRules,
-  beadSizes?: BeadSizeEntry[],
-): number {
-  const fromDb = beadSizes?.find((s) => s.sizeMm === beadSizeMm && s.isActive !== false);
-  if (fromDb) return fromDb.priceMultiplier;
-  return rules.sizeMultipliers[String(beadSizeMm)] ?? 1;
+function beadTypeUsesSizePricing(beadTypes: BeadTypeEntry[], slug: string): boolean {
+  const type = beadTypes.find((t) => t.slug === slug);
+  if (type && typeof type.usesSizePricing === "boolean") return type.usesSizePricing;
+  return DEFAULT_BRACELET_PRICING_RULES.sizePricedTypeSlugs.includes(slug);
 }
 
 export function calculateUnitPrice(
   bead: BeadLibraryEntry,
   beadSizeMm: BraceletBeadSizeMm,
-  rules: BraceletPricingRules,
+  beadTypes: BeadTypeEntry[],
   beadSizes?: BeadSizeEntry[],
 ): number {
   const base = bead.price;
   const slug = bead.beadTypeSlug ?? "crystal";
-  if (!rules.sizePricedTypeSlugs.includes(slug)) return base;
-  return base * sizeMultiplierForMm(beadSizeMm, rules, beadSizes);
+  if (!beadTypeUsesSizePricing(beadTypes, slug)) return base;
+  return base * sizeMultiplierForMm(beadSizeMm, beadSizes);
 }
 
 function aggregateLineItems(items: BraceletPricingLineItem[]): BraceletPricingLineItem[] {
@@ -74,7 +54,7 @@ export function buildBraceletPricing(
   wristA: number,
   wristB: number,
   defaultSize: BeadSize,
-  rules: BraceletPricingRules,
+  currencyCode: string,
   beadTypes: BeadTypeEntry[],
   beadSizes?: BeadSizeEntry[],
 ): BraceletPricingBreakdown {
@@ -86,7 +66,7 @@ export function buildBraceletPricing(
   const allPlaced = [...placedA, ...(twinning ? placedB : [])];
 
   for (const placed of allPlaced) {
-    const unit = calculateUnitPrice(placed.bead, placed.beadSize, rules, beadSizes);
+    const unit = calculateUnitPrice(placed.bead, placed.beadSize, beadTypes, beadSizes);
     rawItems.push({
       beadLibraryId: placed.bead.id,
       beadName: placed.bead.name,
@@ -120,7 +100,7 @@ export function buildBraceletPricing(
   }
 
   return {
-    currencyCode: rules.currencyCode,
+    currencyCode,
     lineItems,
     byType: [...byTypeMap.values()].sort((a, b) => b.subtotal - a.subtotal),
     placedCount: allPlaced.length,

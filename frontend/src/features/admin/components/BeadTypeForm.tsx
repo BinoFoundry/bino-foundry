@@ -19,6 +19,7 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
     description: "",
     displayOrder: 0,
     isActive: true,
+    usesSizePricing: false,
   };
   const [form, setForm] = useState<BeadTypeEntry>(initial ?? blank);
   const [saving, setSaving] = useState(false);
@@ -75,6 +76,20 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
             Active in builder
           </label>
         </div>
+        <label className="flex items-start gap-2 rounded-lg border border-border/60 px-3 py-2.5 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={form.usesSizePricing === true}
+            onChange={(e) => setForm({ ...form, usesSizePricing: e.target.checked })}
+          />
+          <span>
+            <span className="block font-medium text-foreground">Size-based pricing</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Multiply unit price by the bead size multiplier (set under Bead sizes).
+            </span>
+          </span>
+        </label>
         {initial?.slug ? (
           <p className="font-mono text-[10px] text-muted-foreground">Slug: {initial.slug}</p>
         ) : null}

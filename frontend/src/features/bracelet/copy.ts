@@ -18,7 +18,7 @@ export const BRACELET_COPY = {
   summaryRemaining: (n: number) =>
     `${n} open ${n === 1 ? "space" : "spaces"} left on the strand`,
   estimatedTotal: "Estimated total",
-  priceNote: "All prices in USD · Final total confirmed at checkout",
+  priceNote: (currency: string) => `All prices in ${currency} · Final total confirmed at checkout`,
 
   strandGuideTitle: "Your bracelet layout",
   strandSlots: (n: number, mm: number) => `${n} bead spaces · ${mm} mm size`,

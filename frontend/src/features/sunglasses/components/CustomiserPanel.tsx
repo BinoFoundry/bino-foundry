@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,11 +19,12 @@ interface CustomiserPanelProps {
   flow: ReturnType<typeof useCustomiserFlow>;
   state: CustomiserState;
   className?: string;
+  currencyCode?: string;
 }
 
 const POLARIZED_CODE = "polarized";
 
-export function CustomiserPanel({ flow, state, className }: CustomiserPanelProps) {
+export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }: CustomiserPanelProps) {
   const {
     frames,
     frameSku,
@@ -76,6 +78,9 @@ export function CustomiserPanel({ flow, state, className }: CustomiserPanelProps
         frameSku={frameSku}
         tintName={config.tint.name}
         selectedTintEntry={selectedTintEntry}
+        polarized={isOptionEnabled(POLARIZED_CODE)}
+        polarizedLabel={polarizedOption?.label}
+        polarizedSurcharge={polarizedOption?.priceSurcharge}
         builderOptions={sunglassesCatalog.builderOptions}
         selectedOptions={config.options}
         requiresManualFollowUp={requiresManualFollowUp}
@@ -86,10 +91,37 @@ export function CustomiserPanel({ flow, state, className }: CustomiserPanelProps
     ),
   };
 
+  const buildQuoteSummary = () => {
+    const lines = [
+      `Frame: ${frameSku.name} ($${frameSku.price})`,
+      `Lens: ${isOptionEnabled(POLARIZED_CODE) ? polarizedOption?.label ?? "Polarised" : "Standard (non-polarised)"}`,
+      `Tint: ${config.tint.name}${selectedTintEntry ? ` (${selectedTintEntry.code})` : ""}`,
+      ...optionsStepChoices
+        .filter((o) => isOptionEnabled(o.code))
+        .map((o) => `${o.label}: yes (+$${o.priceSurcharge})`),
+      `Total: $${totalPrice} ${currencyCode}`,
+    ];
+    return lines.join("\n");
+  };
+
+  const handleRequestQuote = async () => {
+    const summary = buildQuoteSummary();
+    try {
+      await navigator.clipboard.writeText(summary);
+      toast.success(
+        requiresManualFollowUp
+          ? "Configuration copied — we will follow up for prescription details."
+          : "Configuration copied — share with our team to request a quote.",
+      );
+    } catch {
+      toast.message("Your configuration", { description: summary });
+    }
+  };
+
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div
-        className="customiser-options-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5"
+        className="customiser-options-scroll admin-scroll-pane min-h-0 flex-1 px-0.5"
         aria-label="Customiser options"
       >
         <div className="pb-2">{stepContent[flow.step]}</div>
@@ -106,8 +138,8 @@ export function CustomiserPanel({ flow, state, className }: CustomiserPanelProps
             <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         ) : (
-          <Button type="button" size="sm" disabled className="opacity-60">
-            Ready to order
+          <Button type="button" size="sm" onClick={() => void handleRequestQuote()}>
+            {requiresManualFollowUp ? "Request consultation" : "Request quote"}
           </Button>
         )}
       </div>

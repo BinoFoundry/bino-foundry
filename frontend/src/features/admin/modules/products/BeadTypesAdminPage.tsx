@@ -54,6 +54,7 @@ export function BeadTypesAdminPage() {
                     description: entry.description,
                     displayOrder: entry.displayOrder,
                     isActive: entry.isActive,
+                    usesSizePricing: entry.usesSizePricing,
                   });
                 } else {
                   await cat.updateBeadType(entry);
@@ -100,6 +101,9 @@ export function BeadTypesAdminPage() {
                   <p className="font-mono text-[10px] text-muted-foreground">{t.slug}</p>
                   {t.isActive === false ? (
                     <AdminStatusBadge label="Inactive" variant="danger" />
+                  ) : null}
+                  {t.usesSizePricing ? (
+                    <AdminStatusBadge label="Size-priced" variant="success" />
                   ) : null}
                   {t.description ? (
                     <p className="line-clamp-1 text-xs text-muted-foreground">{t.description}</p>

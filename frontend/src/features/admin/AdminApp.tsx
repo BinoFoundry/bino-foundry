@@ -4,7 +4,8 @@ import { AdminLayout } from "./components/AdminLayout";
 import { AdminMobileNav } from "./components/AdminMobileNav";
 import { AdminDashboardPage } from "./modules/dashboard/AdminDashboardPage";
 import { MediaManagerPage } from "./modules/media/MediaManagerPage";
-import { PricingConfigPage } from "./modules/pricing/PricingConfigPage";
+import { GeneralSettingsPage } from "./modules/settings/GeneralSettingsPage";
+import { SunglassesConfigPage } from "./modules/pricing/SunglassesConfigPage";
 import { BeadsAdminPage } from "./modules/products/BeadsAdminPage";
 import { BeadSizesAdminPage } from "./modules/products/BeadSizesAdminPage";
 import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
@@ -29,8 +30,10 @@ function AdminSectionView({
       return <BeadTypesAdminPage />;
     case "bead-sizes":
       return <BeadSizesAdminPage />;
-    case "pricing":
-      return <PricingConfigPage />;
+    case "general-settings":
+      return <GeneralSettingsPage />;
+    case "sunglasses-config":
+      return <SunglassesConfigPage />;
     case "media":
       return <MediaManagerPage />;
     default:

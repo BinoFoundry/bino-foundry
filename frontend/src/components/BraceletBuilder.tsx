@@ -11,7 +11,6 @@ import {
   StrandViewport,
   StrandZoomControls,
   useBraceletBuilder,
-  useBraceletPricingRules,
   useStrandZoom,
 } from "@/features/bracelet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -64,8 +63,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const { rules: pricingRules } = useBraceletPricingRules();
-  const builder = useBraceletBuilder({ onPriceChange, pricingRules });
+  const builder = useBraceletBuilder({ onPriceChange });
   const { containerRef, strandSize } = useCanvasSize(isMobile, builder.twinning, libraryOpen);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);

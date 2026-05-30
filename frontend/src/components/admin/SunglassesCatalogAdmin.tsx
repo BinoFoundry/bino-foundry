@@ -43,8 +43,8 @@ export function SunglassesCatalogAdmin() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex gap-2 border-b border-border px-6 py-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 gap-2 border-b border-border px-4 py-3 sm:px-6">
         {(
           [
             ["tints", "Lens tints"],
@@ -62,7 +62,7 @@ export function SunglassesCatalogAdmin() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="admin-scroll-pane p-4 sm:p-6">
         {section === "tints" && (
           <CatalogSection
             title="Lens tints"
@@ -80,48 +80,61 @@ export function SunglassesCatalogAdmin() {
               })
             }
           >
-            {catalog.lensTints.map((tint) => (
-              <CatalogRow
-                key={tint.id}
-                title={tint.name}
-                subtitle={`${tint.category} · ${tint.code} · +$${tint.priceSurcharge}`}
-                active={tint.isActive}
-                swatchStyle={tintPreviewStyle(tint.category, tint.gradientTop, tint.gradientBottom)}
-                onEdit={() => setEditingTint(tint)}
-                onDelete={() => setConfirmDeleteTintId(tint.id)}
-                confirmDelete={confirmDeleteTintId === tint.id}
-                onConfirmDelete={async () => {
-                  try {
-                    await catalog.deleteLensTint(tint.id);
-                    setConfirmDeleteTintId(null);
-                  } catch (err) {
-                    alert(isApiError(err) ? err.message : "Delete failed");
-                  }
-                }}
-                onCancelDelete={() => setConfirmDeleteTintId(null)}
-              />
-            ))}
-            {editingTint && (
+            {editingTint && !editingTint.id ? (
               <TintEditor
+                key="new-tint"
                 entry={editingTint}
                 onCancel={() => setEditingTint(null)}
                 onSave={async (entry) => {
-                  if (entry.id) await catalog.updateLensTint(entry);
-                  else
-                    await catalog.createLensTint({
-                      code: entry.code,
-                      name: entry.name,
-                      category: entry.category,
-                      gradientTop: entry.gradientTop,
-                      gradientBottom: entry.gradientBottom,
-                      priceSurcharge: entry.priceSurcharge,
-                      displayOrder: entry.displayOrder,
-                      isActive: entry.isActive,
-                    });
+                  await catalog.createLensTint({
+                    code: entry.code,
+                    name: entry.name,
+                    category: entry.category,
+                    gradientTop: entry.gradientTop,
+                    gradientBottom: entry.gradientBottom,
+                    priceSurcharge: entry.priceSurcharge,
+                    displayOrder: entry.displayOrder,
+                    isActive: entry.isActive,
+                  });
                   setEditingTint(null);
                 }}
               />
-            )}
+            ) : null}
+            {catalog.lensTints.map((tint) => (
+              <div key={tint.id} className="space-y-2">
+                <CatalogRow
+                  title={tint.name}
+                  subtitle={`${tint.category} · ${tint.code} · +$${tint.priceSurcharge}`}
+                  active={tint.isActive}
+                  selected={editingTint?.id === tint.id}
+                  swatchStyle={tintPreviewStyle(tint.category, tint.gradientTop, tint.gradientBottom)}
+                  onEdit={() => setEditingTint(tint)}
+                  onDelete={() => setConfirmDeleteTintId(tint.id)}
+                  confirmDelete={confirmDeleteTintId === tint.id}
+                  onConfirmDelete={async () => {
+                    try {
+                      await catalog.deleteLensTint(tint.id);
+                      setConfirmDeleteTintId(null);
+                      if (editingTint?.id === tint.id) setEditingTint(null);
+                    } catch (err) {
+                      alert(isApiError(err) ? err.message : "Delete failed");
+                    }
+                  }}
+                  onCancelDelete={() => setConfirmDeleteTintId(null)}
+                />
+                {editingTint?.id === tint.id ? (
+                  <TintEditor
+                    key={tint.id}
+                    entry={editingTint}
+                    onCancel={() => setEditingTint(null)}
+                    onSave={async (entry) => {
+                      await catalog.updateLensTint(entry);
+                      setEditingTint(null);
+                    }}
+                  />
+                ) : null}
+              </div>
+            ))}
           </CatalogSection>
         )}
 
@@ -142,47 +155,60 @@ export function SunglassesCatalogAdmin() {
               })
             }
           >
-            {catalog.builderOptions.map((option) => (
-              <CatalogRow
-                key={option.id}
-                title={option.label}
-                subtitle={`${option.code} · +$${option.priceSurcharge}`}
-                active={option.isActive}
-                onEdit={() => setEditingOption(option)}
-                onDelete={() => setConfirmDeleteOptionId(option.id)}
-                confirmDelete={confirmDeleteOptionId === option.id}
-                onConfirmDelete={async () => {
-                  try {
-                    await catalog.deleteBuilderOption(option.id);
-                    setConfirmDeleteOptionId(null);
-                  } catch (err) {
-                    alert(isApiError(err) ? err.message : "Delete failed");
-                  }
-                }}
-                onCancelDelete={() => setConfirmDeleteOptionId(null)}
-              />
-            ))}
-            {editingOption && (
+            {editingOption && !editingOption.id ? (
               <OptionEditor
+                key="new-option"
                 entry={editingOption}
                 onCancel={() => setEditingOption(null)}
                 onSave={async (entry) => {
-                  if (entry.id) await catalog.updateBuilderOption(entry);
-                  else
-                    await catalog.createBuilderOption({
-                      code: entry.code,
-                      label: entry.label,
-                      description: entry.description,
-                      priceSurcharge: entry.priceSurcharge,
-                      requiresManualFollowUp: entry.requiresManualFollowUp,
-                      tooltipText: entry.tooltipText,
-                      displayOrder: entry.displayOrder,
-                      isActive: entry.isActive,
-                    });
+                  await catalog.createBuilderOption({
+                    code: entry.code,
+                    label: entry.label,
+                    description: entry.description,
+                    priceSurcharge: entry.priceSurcharge,
+                    requiresManualFollowUp: entry.requiresManualFollowUp,
+                    tooltipText: entry.tooltipText,
+                    displayOrder: entry.displayOrder,
+                    isActive: entry.isActive,
+                  });
                   setEditingOption(null);
                 }}
               />
-            )}
+            ) : null}
+            {catalog.builderOptions.map((option) => (
+              <div key={option.id} className="space-y-2">
+                <CatalogRow
+                  title={option.label}
+                  subtitle={`${option.code} · +$${option.priceSurcharge}`}
+                  active={option.isActive}
+                  selected={editingOption?.id === option.id}
+                  onEdit={() => setEditingOption(option)}
+                  onDelete={() => setConfirmDeleteOptionId(option.id)}
+                  confirmDelete={confirmDeleteOptionId === option.id}
+                  onConfirmDelete={async () => {
+                    try {
+                      await catalog.deleteBuilderOption(option.id);
+                      setConfirmDeleteOptionId(null);
+                      if (editingOption?.id === option.id) setEditingOption(null);
+                    } catch (err) {
+                      alert(isApiError(err) ? err.message : "Delete failed");
+                    }
+                  }}
+                  onCancelDelete={() => setConfirmDeleteOptionId(null)}
+                />
+                {editingOption?.id === option.id ? (
+                  <OptionEditor
+                    key={option.id}
+                    entry={editingOption}
+                    onCancel={() => setEditingOption(null)}
+                    onSave={async (entry) => {
+                      await catalog.updateBuilderOption(entry);
+                      setEditingOption(null);
+                    }}
+                  />
+                ) : null}
+              </div>
+            ))}
           </CatalogSection>
         )}
 
@@ -218,6 +244,7 @@ function CatalogRow({
   title,
   subtitle,
   active,
+  selected = false,
   swatchStyle,
   onEdit,
   onDelete,
@@ -228,6 +255,7 @@ function CatalogRow({
   title: string;
   subtitle: string;
   active: boolean;
+  selected?: boolean;
   swatchStyle?: React.CSSProperties;
   onEdit: () => void;
   onDelete: () => void;
@@ -236,7 +264,11 @@ function CatalogRow({
   onCancelDelete?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+    <div
+      className={`flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 ${
+        selected ? "border-primary/50 ring-1 ring-primary/20" : "border-border"
+      }`}
+    >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {swatchStyle ? (
           <span
@@ -255,9 +287,11 @@ function CatalogRow({
         <AdminDeleteConfirm onCancel={onCancelDelete} onConfirm={onConfirmDelete} />
       ) : (
         <div className="flex shrink-0 gap-1">
-          <Button size="icon" variant="ghost" onClick={onEdit} aria-label="Edit">
-            <Pencil className="h-4 w-4" />
-          </Button>
+          {!selected ? (
+            <Button size="icon" variant="ghost" onClick={onEdit} aria-label="Edit">
+              <Pencil className="h-4 w-4" />
+            </Button>
+          ) : null}
           <Button size="icon" variant="ghost" onClick={onDelete} aria-label="Delete">
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -307,7 +341,7 @@ function TintEditor({
 
   return (
     <form
-      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      className="ml-2 space-y-3 rounded-xl border border-primary/30 border-l-2 border-l-primary bg-primary/5 p-4 sm:ml-4"
       onSubmit={(e) => {
         e.preventDefault();
         const err = validateHexFields(
@@ -397,7 +431,7 @@ function OptionEditor({
   const [form, setForm] = useState(entry);
   return (
     <form
-      className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4"
+      className="ml-2 space-y-3 rounded-xl border border-primary/30 border-l-2 border-l-primary bg-primary/5 p-4 sm:ml-4"
       onSubmit={(e) => {
         e.preventDefault();
         void onSave(form);

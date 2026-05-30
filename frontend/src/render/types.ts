@@ -49,7 +49,7 @@ export interface SunglassesCompositorConfig {
   };
 }
 
-export type CompositorView = "front" | "side";
+export type CompositorView = "front" | "side" | "three_quarter";
 
 export interface CompositorLayerSpec {
   id: string;

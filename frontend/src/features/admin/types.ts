@@ -7,7 +7,8 @@ export type AdminSection =
   | "beads"
   | "bead-types"
   | "bead-sizes"
-  | "pricing"
+  | "sunglasses-config"
+  | "general-settings"
   | "media";
 
 export interface AdminNavItem {
@@ -15,7 +16,7 @@ export interface AdminNavItem {
   label: string;
   description: string;
   icon: LucideIcon;
-  group: "overview" | "products" | "configuration" | "assets";
+  group: "overview" | "products" | "settings" | "sunglasses" | "assets";
 }
 
 export interface AdminListController<T> {

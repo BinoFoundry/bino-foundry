@@ -1,2 +1,2 @@
-/** @deprecated Use PricingConfigPage */
-export { PricingConfigPage as SunglassesPricingPage } from "./PricingConfigPage";
+/** @deprecated Use SunglassesConfigPage */
+export { SunglassesConfigPage as SunglassesPricingPage } from "./SunglassesConfigPage";

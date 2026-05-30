@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  DEFAULT_BRACELET_PRICING_RULES,
-  type BraceletConfigurationPayload,
-  type BraceletPricingRules,
-} from "@bino-foundry/shared/types";
+import type { BraceletConfigurationPayload } from "@bino-foundry/shared/types";
 
+import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
 import type { BeadSize, PlacedBead } from "@/lib/luxe-data";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -38,14 +35,13 @@ function resolveDefaultSizeMm(sizes: BeadSizeEntry[]): number {
 
 export interface UseBraceletBuilderOptions {
   onPriceChange?: (total: number) => void;
-  pricingRules?: BraceletPricingRules;
 }
 
 export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
-  const { onPriceChange, pricingRules: pricingRulesProp } = options;
+  const { onPriceChange } = options;
   const { beadTypes, beadSizes } = useCatalogue();
-
-  const pricingRules = pricingRulesProp ?? DEFAULT_BRACELET_PRICING_RULES;
+  const { data: siteSettings } = useSiteGeneralSettings();
+  const currencyCode = siteSettings.currencyCode;
   const activeSizes = useMemo(
     () => [...beadSizes].filter((s) => s.isActive !== false).sort((a, b) => a.sizeMm - b.sizeMm),
     [beadSizes],
@@ -102,7 +98,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         wristSizeA,
         wristSizeB,
         defaultBeadSize,
-        pricingRules,
+        currencyCode,
         beadTypes,
         activeSizes,
       ),
@@ -113,7 +109,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       wristSizeA,
       wristSizeB,
       defaultBeadSize,
-      pricingRules,
+      currencyCode,
       beadTypes,
       activeSizes,
     ],
