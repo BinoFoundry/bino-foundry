@@ -1,3 +1,8 @@
+import type {
+  GradientDirection,
+  LensTintCategory,
+} from "@bino-foundry/shared/types";
+
 import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
 
 /** Discriminated layer kinds (bottom → top paint order). */
@@ -14,6 +19,12 @@ export interface TintGradient {
   name: string;
   top: string;
   bottom: string;
+  category?: LensTintCategory;
+  opacity?: number;
+  gradientDirection?: GradientDirection;
+  gradientAngle?: number;
+  gradientMidPosition?: number;
+  gradientIntensity?: number;
 }
 
 /** Builder toggle state keyed by `sunglasses_builder_options.code`. */

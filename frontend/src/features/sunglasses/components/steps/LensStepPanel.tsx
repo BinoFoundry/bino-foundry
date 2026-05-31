@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { tintPreviewStyle } from "@/features/admin/lib/adminHex";
 import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
 
 interface LensStepPanelProps {
@@ -13,15 +14,6 @@ interface LensStepPanelProps {
   lensDisclaimer: string;
   onPolarizedChange: (value: boolean) => void;
   onSelectTint: (tintId: string) => void;
-}
-
-function tintSwatchStyle(tint: LensTintEntry): React.CSSProperties {
-  if (tint.category === "classic" || tint.gradientTop === tint.gradientBottom) {
-    return { background: tint.gradientTop };
-  }
-  return {
-    background: `linear-gradient(180deg, ${tint.gradientTop} 0%, ${tint.gradientBottom} 100%)`,
-  };
 }
 
 function TintSwatch({
@@ -44,7 +36,7 @@ function TintSwatch({
     >
       <span
         className="h-12 w-full rounded-lg border border-black/10 shadow-inner"
-        style={tintSwatchStyle(tint)}
+        style={tintPreviewStyle(tint)}
         aria-hidden
       />
       <span className="text-center text-xs font-medium text-foreground">{tint.name}</span>

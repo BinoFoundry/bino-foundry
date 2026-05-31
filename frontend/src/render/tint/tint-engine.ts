@@ -1,3 +1,4 @@
+import { buildCssTintBackground, normalizeTintRenderSpec } from "./lens-tint-spec";
 import type { TintGradient } from "../types";
 
 /** Map visible-light transmission (0–100) to overlay opacity (prototype-style). */
@@ -6,15 +7,20 @@ export function vltToOpacity(vlt: number): number {
 }
 
 export function buildLensGradientStops(tint: TintGradient): { top: string; bottom: string } {
-  return { top: tint.top, bottom: tint.bottom };
+  const spec = normalizeTintRenderSpec({ name: tint.name, top: tint.top, bottom: tint.bottom, ...tint });
+  return { top: spec.top, bottom: spec.bottom };
 }
 
-export function buildCssTintGradient(tint: TintGradient, gradientMode = true, opacity = 0.65): string {
-  const { top, bottom } = buildLensGradientStops(tint);
-  if (!gradientMode || top === bottom) {
-    return top;
-  }
-  return `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`;
+export function buildCssTintGradient(tint: TintGradient, gradientMode = true, opacity?: number): string {
+  const spec = normalizeTintRenderSpec({
+    name: tint.name,
+    top: tint.top,
+    bottom: tint.bottom,
+    ...tint,
+    opacity: opacity ?? tint.opacity,
+  });
+  if (!gradientMode) return spec.top;
+  return buildCssTintBackground(spec);
 }
 
 export function withAlpha(hex: string, alpha: number): string {

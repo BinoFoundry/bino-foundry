@@ -23,13 +23,7 @@ export interface InitialSunglassesCatalogSlice {
   frameLabel?: string;
 }
 
-export function lensTintEntryToGradient(entry: LensTintEntry): TintGradient {
-  return {
-    name: entry.name,
-    top: entry.gradientTop,
-    bottom: entry.gradientBottom,
-  };
-}
+export { lensTintEntryToGradient } from "../tint/lens-tint-spec";
 
 export function createInitialSunglassesConfig(
   basePrice: number,

@@ -67,8 +67,7 @@ export function buildCompositorStack(
   } else if (!useRasterBase || raster?.useGradientOverlay) {
     layers.push(
       layer("lens-gradient", "lens-gradient", {
-        top: config.tint.top,
-        bottom: config.tint.bottom,
+        tint: config.tint,
       }),
     );
   }

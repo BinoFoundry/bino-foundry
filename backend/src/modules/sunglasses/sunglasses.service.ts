@@ -9,13 +9,19 @@ import type {
 } from "./sunglasses.validation.js";
 
 function mapLensTint(row: Record<string, unknown>) {
+  const category = row.category === "classic" ? "classic" : "gradient";
   return {
     id: row.id,
     code: row.code,
     name: row.name,
-    category: row.category,
+    category,
     gradientTop: row.gradient_top,
     gradientBottom: row.gradient_bottom,
+    opacity: Number(row.opacity ?? (category === "classic" ? 0.52 : 0.58)),
+    gradientDirection: row.gradient_direction ?? "top-to-bottom",
+    gradientAngle: Number(row.gradient_angle ?? 180),
+    gradientMidPosition: Number(row.gradient_mid_position ?? 50),
+    gradientIntensity: Number(row.gradient_intensity ?? 0.55),
     priceSurcharge: Number(row.price_surcharge),
     displayOrder: row.display_order,
     isActive: row.is_active,
@@ -106,7 +112,13 @@ export class SunglassesCatalogService {
         name: payload.name,
         category: payload.category,
         gradient_top: payload.gradientTop,
-        gradient_bottom: payload.gradientBottom,
+        gradient_bottom:
+          payload.category === "classic" ? payload.gradientTop : payload.gradientBottom,
+        opacity: payload.opacity ?? (payload.category === "classic" ? 0.52 : 0.58),
+        gradient_direction: payload.gradientDirection ?? "top-to-bottom",
+        gradient_angle: payload.gradientAngle ?? 180,
+        gradient_mid_position: payload.gradientMidPosition ?? 50,
+        gradient_intensity: payload.gradientIntensity ?? 0.55,
         price_surcharge: payload.priceSurcharge ?? 0,
         display_order: payload.displayOrder ?? 0,
         is_active: payload.isActive ?? true,
@@ -126,6 +138,14 @@ export class SunglassesCatalogService {
     if (payload.category !== undefined) patch.category = payload.category;
     if (payload.gradientTop !== undefined) patch.gradient_top = payload.gradientTop;
     if (payload.gradientBottom !== undefined) patch.gradient_bottom = payload.gradientBottom;
+    if (payload.category === "classic" && payload.gradientTop !== undefined) {
+      patch.gradient_bottom = payload.gradientTop;
+    }
+    if (payload.opacity !== undefined) patch.opacity = payload.opacity;
+    if (payload.gradientDirection !== undefined) patch.gradient_direction = payload.gradientDirection;
+    if (payload.gradientAngle !== undefined) patch.gradient_angle = payload.gradientAngle;
+    if (payload.gradientMidPosition !== undefined) patch.gradient_mid_position = payload.gradientMidPosition;
+    if (payload.gradientIntensity !== undefined) patch.gradient_intensity = payload.gradientIntensity;
     if (payload.priceSurcharge !== undefined) patch.price_surcharge = payload.priceSurcharge;
     if (payload.displayOrder !== undefined) patch.display_order = payload.displayOrder;
     if (payload.isActive !== undefined) patch.is_active = payload.isActive;

@@ -49,8 +49,7 @@ export function SunglassesCompositor({
           height: plateView.height,
           clipConfig,
         }}
-        tintTop={config.tint.top}
-        tintBottom={config.tint.bottom}
+        tint={config.tint}
         aspectRatio={aspectRatio}
         label={label}
         className={className}

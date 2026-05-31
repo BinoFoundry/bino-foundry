@@ -11,6 +11,7 @@ import {
 
 import { sunglassesApi } from "@/services/api/sunglasses";
 import { isApiError } from "@/services/api/errors";
+import { normalizeSunglassesCatalog } from "@/types/normalize-lens-tint";
 import type {
   BuilderOptionEntry,
   LensTintEntry,
@@ -56,7 +57,7 @@ export function SunglassesCatalogProvider({ children }: { children: ReactNode })
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const data = await sunglassesApi.getCatalog();
+      const data = normalizeSunglassesCatalog(await sunglassesApi.getCatalog());
       setCatalog(data);
     } catch (error) {
       const message = isApiError(error)
@@ -75,7 +76,7 @@ export function SunglassesCatalogProvider({ children }: { children: ReactNode })
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const data = await sunglassesApi.getAdminCatalog();
+      const data = normalizeSunglassesCatalog(await sunglassesApi.getAdminCatalog());
       setCatalog(data);
     } catch (error) {
       const message = isApiError(error)

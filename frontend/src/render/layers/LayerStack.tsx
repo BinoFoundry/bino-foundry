@@ -1,4 +1,4 @@
-import type { CompositorLayerSpec } from "../types";
+import type { CompositorLayerSpec, TintGradient } from "../types";
 import { RasterImageLayer } from "./RasterImageLayer";
 import { SvgFrameLayer } from "./SvgFrameLayer";
 import { SvgHighlightLayer } from "./SvgHighlightLayer";
@@ -23,14 +23,17 @@ export function LayerStack({ layers, instanceId = "cmp" }: LayerStackProps) {
             return <SvgShadowLayer key={spec.id} zIndex={spec.zIndex} opacity={spec.opacity} />;
 
           case "lens-gradient": {
-            const top = String(spec.payload.top ?? "#4a5568");
-            const bottom = String(spec.payload.bottom ?? "#2d3748");
+            const tintPayload = spec.payload.tint as TintGradient | undefined;
+            const tint: TintGradient = tintPayload ?? {
+              name: String(spec.payload.name ?? "Tint"),
+              top: String(spec.payload.top ?? "#4a5568"),
+              bottom: String(spec.payload.bottom ?? "#2d3748"),
+            };
             return (
               <SvgLensLayer
                 key={spec.id}
                 zIndex={spec.zIndex}
-                top={top}
-                bottom={bottom}
+                tint={tint}
                 gradientId={`${instanceId}-lens`}
               />
             );

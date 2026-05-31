@@ -1,4 +1,6 @@
-export type LensTintCategory = "classic" | "gradient";
+import type { GradientDirection, LensTintCategory } from "@bino-foundry/shared/types";
+
+export type { GradientDirection, LensTintCategory };
 
 export interface LensTintEntry {
   id: string;
@@ -7,6 +9,11 @@ export interface LensTintEntry {
   category: LensTintCategory;
   gradientTop: string;
   gradientBottom: string;
+  opacity: number;
+  gradientDirection: GradientDirection;
+  gradientAngle: number;
+  gradientMidPosition: number;
+  gradientIntensity: number;
   priceSurcharge: number;
   displayOrder: number;
   isActive: boolean;

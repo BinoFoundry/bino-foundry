@@ -14,4 +14,5 @@ export interface ApiErrorPayload {
 export * from "./bead-crop.js";
 export * from "./bracelet-config.js";
 export * from "./lens-clip.js";
+export * from "./lens-tint-render.js";
 export * from "./site-settings.js";

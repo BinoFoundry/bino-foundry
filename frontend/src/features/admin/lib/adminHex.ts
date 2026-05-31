@@ -1,5 +1,8 @@
 import type { CSSProperties } from "react";
 
+import { buildCssTintBackground, normalizeTintRenderSpec } from "@/render/tint/lens-tint-spec";
+import type { LensTintEntry } from "@/types/sunglasses-catalog";
+
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
 
 export function isValidHexColor(value: string): boolean {
@@ -24,17 +27,32 @@ export function validateHexFields(
   return null;
 }
 
-/** CSS background for classic (solid) or gradient tint preview. */
-export function tintPreviewStyle(
-  category: "classic" | "gradient",
-  top: string,
-  bottom: string,
-): CSSProperties {
-  if (category === "classic") {
-    const c = isValidHexColor(top) ? top : "#888";
-    return { background: c };
-  }
-  const t = isValidHexColor(top) ? top : "#888";
-  const b = isValidHexColor(bottom) ? bottom : t;
-  return { background: `linear-gradient(180deg, ${t} 0%, ${b} 100%)` };
+/** CSS background matching compositor gradient stops and direction. */
+export function tintPreviewStyle(entry: Pick<
+  LensTintEntry,
+  | "name"
+  | "category"
+  | "gradientTop"
+  | "gradientBottom"
+  | "opacity"
+  | "gradientDirection"
+  | "gradientAngle"
+  | "gradientMidPosition"
+  | "gradientIntensity"
+>): CSSProperties {
+  const spec = normalizeTintRenderSpec({
+    name: entry.name || "Preview",
+    top: isValidHexColor(entry.gradientTop) ? entry.gradientTop : "#888888",
+    bottom: isValidHexColor(entry.gradientBottom) ? entry.gradientBottom : entry.gradientTop,
+    category: entry.category,
+    opacity: entry.opacity,
+    gradientDirection: entry.gradientDirection,
+    gradientAngle: entry.gradientAngle,
+    gradientMidPosition: entry.gradientMidPosition,
+    gradientIntensity: entry.gradientIntensity,
+  });
+  return {
+    background: buildCssTintBackground(spec),
+    opacity: Math.min(1, spec.opacity + 0.15),
+  };
 }

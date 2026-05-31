@@ -60,14 +60,18 @@ describe("lensTintEntryToGradient", () => {
       category: "gradient",
       gradientTop: "#112233",
       gradientBottom: "#445566",
+      opacity: 0.58,
+      gradientDirection: "top-to-bottom",
+      gradientAngle: 180,
+      gradientMidPosition: 50,
+      gradientIntensity: 0.55,
       priceSurcharge: 5,
       displayOrder: 0,
       isActive: true,
     });
-    expect(gradient).toEqual({
-      name: "Ocean",
-      top: "#112233",
-      bottom: "#445566",
-    });
+    expect(gradient.name).toBe("Ocean");
+    expect(gradient.top).toBe("#112233");
+    expect(gradient.bottom).toBe("#445566");
+    expect(gradient.opacity).toBe(0.58);
   });
 });

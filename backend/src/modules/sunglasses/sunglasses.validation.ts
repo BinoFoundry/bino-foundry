@@ -1,7 +1,9 @@
+import { GRADIENT_DIRECTIONS, LENS_TINT_CATEGORIES } from "@bino-foundry/shared/types";
 import { z } from "zod";
 
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Expected #RRGGBB hex colour");
-const tintCategory = z.enum(["classic", "gradient"]);
+const tintCategory = z.enum(LENS_TINT_CATEGORIES);
+const gradientDirection = z.enum(GRADIENT_DIRECTIONS);
 
 export const lensTintIdParam = z.object({ id: z.string().uuid() });
 export const builderOptionIdParam = z.object({ id: z.string().uuid() });
@@ -11,6 +13,11 @@ const lensTintFields = {
   category: tintCategory,
   gradientTop: hexColor,
   gradientBottom: hexColor,
+  opacity: z.number().min(0.05).max(1),
+  gradientDirection: gradientDirection,
+  gradientAngle: z.number().int().min(0).max(359),
+  gradientMidPosition: z.number().int().min(0).max(100),
+  gradientIntensity: z.number().min(0).max(1),
   priceSurcharge: z.number().nonnegative(),
   displayOrder: z.number().int().nonnegative(),
   isActive: z.boolean(),
@@ -18,6 +25,11 @@ const lensTintFields = {
 
 export const lensTintCreateDto = z.object({
   ...lensTintFields,
+  opacity: lensTintFields.opacity.default(0.58),
+  gradientDirection: lensTintFields.gradientDirection.default("top-to-bottom"),
+  gradientAngle: lensTintFields.gradientAngle.default(180),
+  gradientMidPosition: lensTintFields.gradientMidPosition.default(50),
+  gradientIntensity: lensTintFields.gradientIntensity.default(0.55),
   priceSurcharge: lensTintFields.priceSurcharge.default(0),
   displayOrder: lensTintFields.displayOrder.default(0),
   isActive: lensTintFields.isActive.default(true),
