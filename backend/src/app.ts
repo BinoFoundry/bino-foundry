@@ -4,6 +4,8 @@ import express, { type Application } from "express";
 import { corsOriginAllowlist, getEnv } from "./config/env.js";
 import { NotFoundError } from "./lib/errors.js";
 import { createErrorHandler } from "./middleware/error-handler.js";
+import { logger } from "./lib/logger.js";
+import { mutationRateLimit } from "./middleware/rate-limit.js";
 import { requestContextMiddleware } from "./middleware/request-context.js";
 import { createCatalogRoutes } from "./routes/catalog.routes.js";
 import { openApiDocument } from "./openapi/document.js";
@@ -47,6 +49,7 @@ export function createApplication(): Application {
   }
 
   app.use(requestContextMiddleware);
+  app.use(mutationRateLimit);
   app.use(cors(buildCorsConfiguration()));
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -75,7 +78,7 @@ export function createApplication(): Application {
   });
 
   app.use((_req, _res, next) => next(new NotFoundError("Route not found")));
-  app.use(createErrorHandler());
+  app.use(createErrorHandler(logger));
 
   return app;
 }

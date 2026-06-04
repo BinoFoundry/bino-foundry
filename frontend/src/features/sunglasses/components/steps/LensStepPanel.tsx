@@ -1,3 +1,5 @@
+import { memo, useMemo } from "react";
+
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +18,7 @@ interface LensStepPanelProps {
   onSelectTint: (tintId: string) => void;
 }
 
-function TintSwatch({
+const TintSwatch = memo(function TintSwatch({
   tint,
   active,
   onSelect,
@@ -25,12 +27,17 @@ function TintSwatch({
   active: boolean;
   onSelect: (id: string) => void;
 }) {
+  const label = `${tint.name}, ${tint.code}${tint.priceSurcharge > 0 ? `, plus ${tint.priceSurcharge} dollars` : ""}`;
+
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={active}
+      aria-label={label}
       onClick={() => onSelect(tint.id)}
       className={cn(
-        "flex flex-col items-center gap-2 rounded-xl border p-3 transition-all",
+        "flex flex-col items-center gap-2 rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active ? "border-primary bg-primary/5 ring-2 ring-primary/30" : "border-border hover:border-primary/40",
       )}
     >
@@ -46,6 +53,34 @@ function TintSwatch({
       )}
     </button>
   );
+});
+
+function TintGrid({
+  tints,
+  activeTintId,
+  onSelectTint,
+  groupLabel,
+}: {
+  tints: LensTintEntry[];
+  activeTintId: string | null;
+  onSelectTint: (id: string) => void;
+  groupLabel: string;
+}) {
+  if (!tints.length) {
+    return <p className="text-sm text-muted-foreground">No tints in this category yet.</p>;
+  }
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={groupLabel}
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+    >
+      {tints.map((tint) => (
+        <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
+      ))}
+    </div>
+  );
 }
 
 export function LensStepPanel({
@@ -59,6 +94,10 @@ export function LensStepPanel({
   onSelectTint,
 }: LensStepPanelProps) {
   const polarizedSurcharge = polarizedOption?.priceSurcharge ?? 0;
+  const defaultTab = useMemo(
+    () => (gradientTints.length && !classicTints.length ? "gradient" : "classic"),
+    [classicTints.length, gradientTints.length],
+  );
 
   return (
     <div className="space-y-4">
@@ -92,32 +131,26 @@ export function LensStepPanel({
         )}
       </div>
 
-      <Tabs defaultValue={gradientTints.length ? "gradient" : "classic"} className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="classic">Classic</TabsTrigger>
           <TabsTrigger value="gradient">Gradient</TabsTrigger>
         </TabsList>
         <TabsContent value="classic" className="mt-4">
-          {classicTints.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No classic tints in catalogue.</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {classicTints.map((tint) => (
-                <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
-              ))}
-            </div>
-          )}
+          <TintGrid
+            tints={classicTints}
+            activeTintId={activeTintId}
+            onSelectTint={onSelectTint}
+            groupLabel="Classic lens tints"
+          />
         </TabsContent>
         <TabsContent value="gradient" className="mt-4">
-          {gradientTints.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No gradient tints in catalogue.</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {gradientTints.map((tint) => (
-                <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
-              ))}
-            </div>
-          )}
+          <TintGrid
+            tints={gradientTints}
+            activeTintId={activeTintId}
+            onSelectTint={onSelectTint}
+            groupLabel="Gradient lens tints"
+          />
         </TabsContent>
       </Tabs>
 
@@ -127,4 +160,3 @@ export function LensStepPanel({
     </div>
   );
 }
-

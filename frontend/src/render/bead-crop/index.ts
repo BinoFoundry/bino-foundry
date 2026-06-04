@@ -29,6 +29,7 @@ export {
   getPlacedBeadImageFilter,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
+  getStrandBeadRasterSize,
   STRAND_CORD,
   mmToBasePx,
   type BeadSlotDimensions,

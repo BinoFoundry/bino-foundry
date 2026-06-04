@@ -37,12 +37,28 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 
-Milestone docs: apply all ten before M1 sign-off — [docs/MILESTONE1_SIGNOFF.md](../../docs/MILESTONE1_SIGNOFF.md).
+M1 sign-off: migrations through `000010`. M2 launch: also apply `000011`–`000014` — [docs/MILESTONE2_OVERVIEW.md](../../docs/MILESTONE2_OVERVIEW.md).
 
 ### Naming & money rules
 
 See [../schema/CONVENTIONS.md](../schema/CONVENTIONS.md).
 
+11. `000011_site_settings.sql` — site-wide settings KV (`site.settings_v1`).
+12. `000012_bead_type_size_pricing.sql` — `bead_types.uses_size_pricing`.
+13. `000013_lens_tint_render_settings.sql` — tint opacity/gradient columns.
+14. `000014_auth_rls_m2.sql` — catalogue **RLS** (anon read-only), bracelet `owner_user_id` / `order_reference`.
+
 ### Row Level Security
 
-Phase 1 ships **without** RLS policies: the Express backend will use the **service role** for writes and can narrow access later. Enable RLS in a future migration once auth is tied to Supabase JWT.
+Migration **`000014_auth_rls_m2.sql`** enables RLS on catalogue tables: `anon` / `authenticated` may **SELECT** active rows; **writes** go through the Express API with the **service role** only. See [docs/MILESTONE2_AUTH.md](../../docs/MILESTONE2_AUTH.md).
+
+### CI/CD
+
+```bash
+# Apply all migrations in order (example)
+for f in database/migrations/000*.sql; do
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+done
+```
+
+Or `supabase db push` after linking the project.

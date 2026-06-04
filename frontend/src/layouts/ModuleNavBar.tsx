@@ -18,8 +18,9 @@ export function ModuleNavBar({ items, active, onSelect, variant = "tabs" }: Modu
             key={id}
             type="button"
             onClick={() => onSelect(id)}
+            aria-current={active === id ? "page" : undefined}
             className={cn(
-              "flex items-center gap-3 rounded-md px-4 py-3 text-sm font-body transition-all duration-200",
+              "flex items-center gap-3 rounded-md px-4 py-3 text-sm font-body transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               active === id
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -40,8 +41,9 @@ export function ModuleNavBar({ items, active, onSelect, variant = "tabs" }: Modu
           key={id}
           type="button"
           onClick={() => onSelect(id)}
+          aria-current={active === id ? "page" : undefined}
           className={cn(
-            "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-body transition-all duration-200",
+            "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-body transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             active === id
               ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",

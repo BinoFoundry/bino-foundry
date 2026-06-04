@@ -102,12 +102,25 @@ export function BraceletSummaryPanel({
         </p>
       ) : (
         <div className="space-y-2">
-          <MaterialGroup title="Crystals" icon={Gem} rows={summary.crystals} />
-          <MaterialGroup title="Charms" icon={Sparkles} rows={summary.charms} />
-          <MaterialGroup title="Spacers" icon={Gem} rows={summary.spacers} />
-          {summary.other.length > 0 ? (
-            <MaterialGroup title="Other accents" icon={Sparkles} rows={summary.other} />
-          ) : null}
+          {summary.materialSections?.length
+            ? summary.materialSections.map((section) => (
+                <MaterialGroup
+                  key={section.slug}
+                  title={section.title}
+                  icon={section.slug === "charm" ? Sparkles : Gem}
+                  rows={section.rows}
+                />
+              ))
+            : (
+              <>
+                <MaterialGroup title="Crystals" icon={Gem} rows={summary.crystals} />
+                <MaterialGroup title="Charms" icon={Sparkles} rows={summary.charms} />
+                <MaterialGroup title="Spacers" icon={Gem} rows={summary.spacers} />
+                {summary.other.length > 0 ? (
+                  <MaterialGroup title="Other accents" icon={Sparkles} rows={summary.other} />
+                ) : null}
+              </>
+            )}
           {remaining > 0 ? (
             <p className="text-center text-[11px] text-muted-foreground">{BRACELET_COPY.summaryRemaining(remaining)}</p>
           ) : null}

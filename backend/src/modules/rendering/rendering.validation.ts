@@ -69,3 +69,20 @@ export const frameIdParam = z.object({
 export const frameViewParams = frameIdParam.extend({
   viewAxis: viewAxisParamSchema,
 });
+
+export const frameBatchQuerySchema = z.object({
+  ids: z
+    .string()
+    .min(1)
+    .transform((raw) =>
+      raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.string().uuid()).min(1).max(24)),
+});
+
+export const validateClipBodySchema = z.object({
+  clipConfig: z.unknown(),
+});

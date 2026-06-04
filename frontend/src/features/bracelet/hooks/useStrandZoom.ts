@@ -231,6 +231,50 @@ export function useStrandZoom(refs: StrandZoomRefs, layout: StrandZoomLayout, in
     return () => el.removeEventListener("wheel", onWheel);
   }, [containerRef]);
 
+  useEffect(() => {
+    const el = viewportRef?.current ?? containerRef?.current;
+    if (!el) return;
+
+    let pinchDistance = 0;
+    let pinchStartZoom = 1;
+
+    const touchDistance = (touches: TouchList) => {
+      if (touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      pinchDistance = touchDistance(e.touches);
+      pinchStartZoom = zoomSmoothRef.current;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || pinchDistance <= 0) return;
+      e.preventDefault();
+      const dist = touchDistance(e.touches);
+      const ratio = dist / pinchDistance;
+      setZoomTarget(clampZoom(pinchStartZoom * ratio));
+    };
+
+    const onTouchEnd = () => {
+      pinchDistance = 0;
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd);
+    el.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [containerRef, viewportRef]);
+
   const onPanPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (!panMode || e.button !== 0) return;

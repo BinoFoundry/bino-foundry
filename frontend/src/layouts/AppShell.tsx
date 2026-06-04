@@ -55,7 +55,7 @@ export function AppShell({
             aria-expanded={mobileNavOpen}
             aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileNavOpen((o) => !o)}
-            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -63,7 +63,7 @@ export function AppShell({
       </header>
 
       {mobileNavOpen && (
-        <div className="animate-fade-in border-b border-border bg-background/95 backdrop-blur-sm md:hidden">
+        <div className="motion-safe-animate border-b border-border bg-background/95 backdrop-blur-sm md:hidden">
           <nav className="flex flex-col gap-1 p-2">
             <ModuleNavBar items={NAV_ITEMS} active={activeModule} onSelect={goTo} variant="stack" />
           </nav>

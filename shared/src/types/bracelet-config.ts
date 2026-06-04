@@ -71,11 +71,19 @@ export interface BraceletStrandSummary {
   placedCount: number;
 }
 
+export interface BraceletMaterialSection {
+  title: string;
+  slug: string;
+  rows: { name: string; quantity: number; subtotal: number }[];
+}
+
 export interface BraceletBuilderSummary {
   strands: BraceletStrandSummary[];
   twinning: boolean;
   defaultBeadSizeMm: BraceletBeadSizeMm;
   beadSizeLabel?: string;
+  /** Grouped by admin bead type (display order). */
+  materialSections: BraceletMaterialSection[];
   crystals: { name: string; quantity: number; subtotal: number }[];
   charms: { name: string; quantity: number; subtotal: number }[];
   spacers: { name: string; quantity: number; subtotal: number }[];

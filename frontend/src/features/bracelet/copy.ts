@@ -37,4 +37,12 @@ export const BRACELET_COPY = {
   panModeOn: "Pan mode — drag to move the view",
   panModeOff: "Exit pan mode",
   panRequiresZoom: "Zoom in first to pan around the bracelet",
+
+  beadsPruned: (n: number) =>
+    `${n} ${n === 1 ? "bead was" : "beads were"} removed because the strand has fewer spaces at this size.`,
+  selectedBeadHint: "Tap an open circle on the strand to place this bead",
+  selectedBeadLabel: "Selected bead",
+  clearSelection: "Clear selection",
+  libraryEmpty: (typeName: string) => `No ${typeName.toLowerCase()} in the collection yet.`,
+  librarySearchEmpty: "No beads match your search.",
 } as const;

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/common";
 import type { FrameOption } from "@/lib/luxe-data";
 
 import { getFrontPlateUrl } from "../../utils/frame-plates";
@@ -27,12 +28,24 @@ function FrameCardThumbnail({ frame }: { frame: FrameOption }) {
 
   return (
     <div className="flex aspect-[5/3] w-full items-center justify-center rounded-md border border-dashed border-border bg-muted/20 px-2 text-center text-[10px] leading-tight text-muted-foreground">
-      No preview
+      No preview image
     </div>
   );
 }
 
 export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: FrameStepPanelProps) {
+  if (frames.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-display text-base font-bold text-foreground">Choose your frame</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">Select a frame style from the catalogue.</p>
+        </div>
+        <EmptyState message="No frames are available yet. Please check back soon." title="No frames yet" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -40,16 +53,23 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
         <p className="mt-0.5 text-sm text-muted-foreground">Select a frame style from the catalogue.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-2">
+      <div
+        role="radiogroup"
+        aria-label="Frame styles"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-2"
+      >
         {frames.map((frame) => {
           const active = frame.id === selectedFrameId;
           return (
             <button
               key={frame.id}
               type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={`${frame.name}, ${frame.price} dollars`}
               onClick={() => onSelectFrame(frame.id)}
               className={cn(
-                "flex min-w-0 flex-col rounded-xl border p-2 text-left transition-all",
+                "flex min-w-0 flex-col rounded-xl border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active
                   ? "border-primary bg-primary/5 ring-1 ring-primary/30"
                   : "border-border bg-card hover:border-primary/40",
@@ -69,10 +89,6 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
           );
         })}
       </div>
-
-      {frames.length === 0 && (
-        <p className="text-sm text-muted-foreground">No frames in catalogue yet.</p>
-      )}
     </div>
   );
 }

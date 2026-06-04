@@ -35,7 +35,8 @@ export function StrandZoomControls({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-10 w-10 sm:h-8 sm:w-8"
+        aria-label={BRACELET_COPY.zoomOut}
         title={BRACELET_COPY.zoomOut}
         onClick={onZoomOut}
         disabled={zoom <= STRAND_ZOOM_MIN}
@@ -52,7 +53,8 @@ export function StrandZoomControls({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-10 w-10 sm:h-8 sm:w-8"
+        aria-label={BRACELET_COPY.zoomIn}
         title={BRACELET_COPY.zoomIn}
         onClick={onZoomIn}
         disabled={zoom >= STRAND_ZOOM_MAX}
@@ -63,8 +65,9 @@ export function StrandZoomControls({
         type="button"
         variant={panMode ? "secondary" : "ghost"}
         size="icon"
-        className="h-8 w-8"
+        className="h-10 w-10 sm:h-8 sm:w-8"
         title={canPan ? (panMode ? BRACELET_COPY.panModeOff : BRACELET_COPY.panModeOn) : BRACELET_COPY.panRequiresZoom}
+        aria-label={canPan ? (panMode ? BRACELET_COPY.panModeOff : BRACELET_COPY.panModeOn) : BRACELET_COPY.panRequiresZoom}
         aria-pressed={panMode}
         onClick={onTogglePanMode}
         disabled={!canPan}
@@ -75,7 +78,8 @@ export function StrandZoomControls({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-10 w-10 sm:h-8 sm:w-8"
+        aria-label={BRACELET_COPY.zoomReset}
         title={BRACELET_COPY.zoomReset}
         onClick={onReset}
       >

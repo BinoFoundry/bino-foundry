@@ -11,7 +11,7 @@ Machine-readable spec: `/api/openapi.json` · UI: `/api/docs` — [SWAGGER.md](.
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/status` | R | Status + `appEnv` |
-| GET | `/health` | R | Minimal liveness |
+| GET | `/health` | R | DB + storage checks (`503` if degraded) |
 
 ## Frames
 
@@ -83,6 +83,28 @@ Seeded slugs: `crystal`, `charm`, `spacer`, `separator`, `accent`, `connector`.
 | `prescription` | Options step |
 
 Pricing: `price_surcharge` on options and lens tints; frame base from `frames.base_price`.
+
+## Bracelet configurations
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/bracelet/configurations` | User JWT | List saved designs for signed-in user |
+| POST | `/bracelet/configurations` | W or user JWT | Save design (`brc_…` id returned) |
+| GET | `/bracelet/configurations/:id` | R | Load design; `?validate=true` re-checks bead catalogue |
+| POST | `/bracelet/configurations/:id/recalculate-pricing` | R | Refresh line totals from current DB prices |
+| PATCH | `/bracelet/configurations/:id/status` | W | e.g. `saved` → `ordered` (+ optional `orderReference`) |
+
+**W** = `x-api-key` or admin JWT in production. User JWT = `Authorization: Bearer <supabase_access_token>`.
+
+## Rendering (frame plates + lens clips)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/rendering/frames/batch?ids=uuid,uuid` | R | Bundles for up to 24 frames (picker) |
+| GET | `/rendering/frames/:frameId/bundle` | R | All views for one frame |
+| POST | `/rendering/validate-clip` | W | Body `{ clipConfig }` → `{ valid, message }` |
+| PUT | `/rendering/frames/:frameId/views/:viewAxis` | W | Upsert plate + clip |
+| DELETE | `/rendering/frames/:frameId/views/:viewAxis` | W | Remove view |
 
 ## Upload
 

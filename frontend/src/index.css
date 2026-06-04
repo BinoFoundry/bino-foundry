@@ -22,7 +22,7 @@
     --secondary-foreground: 0 0% 11%;
 
     --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted-foreground: 0 0% 38%;
 
     --accent: 43 85% 38%;
     --accent-foreground: 50 20% 98.4%;
@@ -153,6 +153,41 @@
   .admin-scroll-pane::-webkit-scrollbar-track,
   .customiser-options-scroll::-webkit-scrollbar-track {
     background: transparent;
+  }
+
+  .motion-safe-animate {
+    animation: fade-in 0.5s ease-out;
+  }
+
+  .motion-safe-spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .motion-safe-animate,
+    .animate-fade-in,
+    .animate-slide-in,
+    .animate-slide-up {
+      animation: none !important;
+    }
+
+    .motion-safe-spin,
+    .animate-spin {
+      animation: none !important;
+    }
+
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

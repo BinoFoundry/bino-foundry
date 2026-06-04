@@ -1,13 +1,16 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import AdvancedSunglassesBuilder from "@/components/AdvancedSunglassesBuilder";
 import BraceletBuilder from "@/components/BraceletBuilder";
-import CatalogueAdmin from "@/components/admin/CatalogueAdmin";
-import { ErrorState } from "@/components/common";
-import { LoadingState } from "@/components/common";
+import { ErrorState, LoadingState } from "@/components/common";
+import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { AppShell, BuilderViewport, type AppModule } from "@/layouts";
 import { useCatalogue } from "@/state/catalogue";
+
+const AdminApp = lazy(() =>
+  import("@/features/admin").then((m) => ({ default: m.AdminApp })),
+);
 
 function parseModule(raw: string | undefined): AppModule {
   if (raw === "bracelet" || raw === "sunglasses" || raw === "admin") return raw;
@@ -38,7 +41,7 @@ const Index = () => {
         <LoadingState label="Loading catalogue…" className="h-full" />
       ) : catalogue.hydrateError ? (
         <ErrorState
-          message={catalogue.hydrateError}
+          message={CUSTOMER_COPY.catalogueLoadFailed}
           onRetry={() => void catalogue.refreshFromApi()}
           className="m-6"
         />
@@ -47,7 +50,11 @@ const Index = () => {
           activeModule={activeModule}
           bracelet={<BraceletBuilder onPriceChange={onBraceletPriceChange} />}
           sunglasses={<AdvancedSunglassesBuilder onPriceChange={onSunglassesPriceChange} />}
-          admin={<CatalogueAdmin />}
+          admin={
+            <Suspense fallback={<LoadingState label="Loading admin…" className="h-full" />}>
+              <AdminApp />
+            </Suspense>
+          }
         />
       )}
     </AppShell>

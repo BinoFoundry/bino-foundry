@@ -21,6 +21,7 @@
     "lint": "npm run lint --workspace frontend",
     "test": "npm run test --workspace frontend",
     "test:watch": "npm run test:watch --workspace frontend",
+    "test:e2e": "npm run test:e2e --workspace frontend",
     "server": "npm run start --workspace backend",
     "start:backend": "npm run start --workspace backend",
     "start:api:prod": "bash scripts/start-api-production.sh",

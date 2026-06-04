@@ -1,7 +1,12 @@
-import type { BraceletBuilderSummary, BraceletPricingBreakdown } from "@bino-foundry/shared/types";
+import type {
+  BraceletBuilderSummary,
+  BraceletMaterialSection,
+  BraceletPricingBreakdown,
+} from "@bino-foundry/shared/types";
 
 import type { PlacedBead } from "@/lib/luxe-data";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
+import type { BeadTypeEntry } from "@/types/beads";
 
 import { BRACELET_COPY } from "./copy";
 import { strandCapacity } from "./capacity";
@@ -25,6 +30,44 @@ function groupByProductKind(pricing: BraceletPricingBreakdown) {
   }
 
   return { crystals, charms, spacers, other };
+}
+
+function buildMaterialSections(
+  pricing: BraceletPricingBreakdown,
+  beadTypes: BeadTypeEntry[],
+): BraceletMaterialSection[] {
+  const activeTypes = [...beadTypes]
+    .filter((t) => t.isActive !== false)
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+
+  const slugToType = new Map(activeTypes.map((t) => [t.slug, t]));
+  const buckets = new Map<string, BraceletMaterialSection>();
+
+  for (const item of pricing.lineItems) {
+    const type = slugToType.get(item.beadTypeSlug);
+    const slug = item.beadTypeSlug || "other";
+    const title = type?.name ?? item.beadTypeSlug.replace(/-/g, " ");
+    if (!buckets.has(slug)) {
+      buckets.set(slug, { slug, title, rows: [] });
+    }
+    buckets.get(slug)!.rows.push({
+      name: item.beadName,
+      quantity: item.quantity,
+      subtotal: item.lineTotal,
+    });
+  }
+
+  const ordered: BraceletMaterialSection[] = [];
+  for (const t of activeTypes) {
+    const section = buckets.get(t.slug);
+    if (section?.rows.length) ordered.push(section);
+  }
+  for (const [slug, section] of buckets) {
+    if (!activeTypes.some((t) => t.slug === slug) && section.rows.length) {
+      ordered.push(section);
+    }
+  }
+  return ordered;
 }
 
 export function formatBraceletConfigSummary(
@@ -52,11 +95,13 @@ export function buildBraceletBuilderSummary(
   defaultSizeMm: number,
   pricing: BraceletPricingBreakdown,
   beadSizes?: BeadSizeEntry[],
+  beadTypes: BeadTypeEntry[] = [],
 ): BraceletBuilderSummary {
   const capacityA = strandCapacity(wristA, defaultSizeMm);
   const capacityB = twinning ? strandCapacity(wristB, defaultSizeMm) : 0;
   const sizeLabel = beadSizes?.find((s) => s.sizeMm === defaultSizeMm)?.label ?? `${defaultSizeMm} mm`;
   const { crystals, charms, spacers, other } = groupByProductKind(pricing);
+  const materialSections = buildMaterialSections(pricing, beadTypes);
 
   const strands = [
     {
@@ -82,6 +127,7 @@ export function buildBraceletBuilderSummary(
     twinning,
     defaultBeadSizeMm: defaultSizeMm,
     beadSizeLabel: sizeLabel,
+    materialSections,
     crystals,
     charms,
     spacers,

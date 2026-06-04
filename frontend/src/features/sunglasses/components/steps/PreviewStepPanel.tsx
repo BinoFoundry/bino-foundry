@@ -1,4 +1,5 @@
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
 import type { FrameOption } from "@/lib/luxe-data";
@@ -16,6 +17,7 @@ interface PreviewStepPanelProps {
   basePrice: number;
   totalPrice: number;
   lensDisclaimer: string;
+  onRequestQuote?: () => void;
 }
 
 export function PreviewStepPanel({
@@ -31,6 +33,7 @@ export function PreviewStepPanel({
   basePrice,
   totalPrice,
   lensDisclaimer,
+  onRequestQuote,
 }: PreviewStepPanelProps) {
   const otherAddOns = builderOptions.filter(
     (o) => o.code !== "polarized" && selectedOptions[o.code],
@@ -40,7 +43,9 @@ export function PreviewStepPanel({
     <div className="space-y-6">
       <div>
         <h3 className="font-display text-lg font-bold text-foreground">Final preview</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Review your configuration before requesting a quote.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Review your design. When you are ready, use the button below to copy your configuration for our team.
+        </p>
       </div>
 
       <div className="glass-panel space-y-4 rounded-[2rem] p-6">
@@ -64,15 +69,6 @@ export function PreviewStepPanel({
           <span className="text-muted-foreground">Lens tint</span>
           <span className="text-right font-medium text-foreground">
             {tintName}
-            {selectedTintEntry ? (
-              <span className="block font-mono text-[10px] text-muted-foreground">
-                {selectedTintEntry.code} · {selectedTintEntry.gradientTop}
-                {selectedTintEntry.category === "gradient" &&
-                selectedTintEntry.gradientBottom !== selectedTintEntry.gradientTop
-                  ? ` → ${selectedTintEntry.gradientBottom}`
-                  : ""}
-              </span>
-            ) : null}
             {selectedTintEntry && selectedTintEntry.priceSurcharge > 0 ? (
               <span className="block text-xs text-muted-foreground">+${selectedTintEntry.priceSurcharge}</span>
             ) : null}
@@ -82,7 +78,7 @@ export function PreviewStepPanel({
           <div key={option.id} className="flex justify-between gap-4 text-sm">
             <span className="text-muted-foreground">{option.label}</span>
             <span className="font-medium text-foreground">
-              Yes
+              Included
               {option.priceSurcharge > 0 ? ` (+$${option.priceSurcharge})` : ""}
             </span>
           </div>
@@ -95,18 +91,42 @@ export function PreviewStepPanel({
         )}
         <Separator />
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Estimated total</span>
           <span className="font-display text-3xl font-black text-primary">${totalPrice}</span>
         </div>
       </div>
 
-      {requiresManualFollowUp && (
-        <Alert variant="default">
-          <AlertDescription className="text-sm font-medium">
-            Prescription selected — our team will contact you to confirm lens details before any order is placed.
-          </AlertDescription>
-        </Alert>
-      )}
+      <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next step</p>
+        {requiresManualFollowUp ? (
+          <>
+            <Alert>
+              <AlertTitle>Prescription lenses</AlertTitle>
+              <AlertDescription className="text-sm">
+                You selected options that need a prescription. We will contact you to confirm lens power and fit before
+                any order is placed. Online checkout is not available for this configuration.
+              </AlertDescription>
+            </Alert>
+            {onRequestQuote ? (
+              <Button type="button" variant="luxe" className="w-full" onClick={onRequestQuote}>
+                Request consultation
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-foreground">
+              Your sunglasses are ready to order as configured. Copy your design summary and send it to our team to
+              request a quote.
+            </p>
+            {onRequestQuote ? (
+              <Button type="button" variant="luxe" className="w-full" onClick={onRequestQuote}>
+                Request quote
+              </Button>
+            ) : null}
+          </>
+        )}
+      </div>
 
       {lensDisclaimer && (
         <p className="text-[10px] leading-relaxed text-muted-foreground">* {lensDisclaimer}</p>

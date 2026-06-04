@@ -13,6 +13,8 @@ import {
   useBraceletBuilder,
   useStrandZoom,
 } from "@/features/bracelet";
+import { CUSTOMER_COPY } from "@/lib/customer-copy";
+import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { braceletApi } from "@/services/api/bracelet";
 import { isApiError } from "@/services/api/errors";
@@ -101,7 +103,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const handleSaveConfiguration = async () => {
     if (builder.pricing.placedCount === 0) {
-      setSaveStatus("Add at least one bead to save your design");
+      setSaveStatus(CUSTOMER_COPY.saveDesignNeedBeads);
       return;
     }
     setSaving(true);
@@ -116,9 +118,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         status: "saved",
         items: payload.items,
       });
-      setSaveStatus(`Design saved · ref ${saved.id}`);
+      setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(saved.id));
     } catch (err) {
-      setSaveStatus(isApiError(err) ? err.message : "Could not save design");
+      setSaveStatus(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
     } finally {
       setSaving(false);
     }
@@ -146,8 +148,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             aria-label={BRACELET_COPY.wristLabel}
           />
           <span className="text-[10px] text-muted-foreground sm:text-xs">cm</span>
-          <span className="hidden text-[10px] text-muted-foreground sm:inline">
-            · {builder.beadCountA} spaces
+          <span className="text-[10px] text-muted-foreground">
+            · {builder.placedBeadsA.length}/{builder.beadCountA}
           </span>
         </div>
 
@@ -166,8 +168,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               step={0.5}
             />
             <span className="text-[10px] text-muted-foreground sm:text-xs">cm</span>
-            <span className="hidden text-[10px] text-muted-foreground sm:inline">
-              · {builder.beadCountB} spaces
+            <span className="text-[10px] text-muted-foreground">
+              · {builder.placedBeadsB.length}/{builder.beadCountB}
             </span>
           </div>
         ) : null}
@@ -227,7 +229,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div
           ref={containerRef}
-          className={`relative flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-5 ${
+          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5 ${
             libraryOpen && !isMobile ? "lg:pl-[260px]" : ""
           }`}
         >
@@ -239,6 +241,32 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             }}
             onClose={() => setLibraryOpen(false)}
           />
+
+          {builder.selectedBead && isMobile ? (
+            <div className="absolute left-3 right-3 top-2 z-30 flex items-center gap-2 rounded-lg border border-primary/25 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-sm sm:left-4">
+              {getBeadDisplayImageUrl(builder.selectedBead) ? (
+                <img
+                  src={getBeadDisplayImageUrl(builder.selectedBead)!}
+                  alt=""
+                  className="h-8 w-8 shrink-0 object-contain"
+                  style={getStrandBeadImageStyle(builder.selectedBead)}
+                />
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-foreground">{builder.selectedBead.name}</p>
+                <p className="text-[10px] text-muted-foreground">{BRACELET_COPY.selectedBeadHint}</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-xs"
+                onClick={() => builder.setSelectedBead(null)}
+              >
+                {BRACELET_COPY.clearSelection}
+              </Button>
+            </div>
+          ) : null}
 
           <StrandZoomControls
             zoom={zoom}

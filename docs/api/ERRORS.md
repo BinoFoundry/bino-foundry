@@ -31,10 +31,11 @@ Failed requests return JSON with a consistent envelope (except legacy edge cases
 | HTTP | Code | When |
 |------|------|------|
 | 400 | `VALIDATION_ERROR` | Zod / body validation failed |
-| 401 | `UNAUTHORIZED` | Missing or wrong `x-api-key` on mutation |
+| 401 | `UNAUTHORIZED` | Missing or wrong `x-api-key` / JWT on protected mutation |
 | 404 | `NOT_FOUND` | Entity missing |
-| 409 | `CONFLICT` | Duplicate slug / public_id |
-| 500 | `UNKNOWN` | Unexpected server error |
+| 409 | `CONFLICT` | Duplicate slug / public_id / invalid status transition |
+| 429 | `RATE_LIMITED` | Too many mutation requests from one IP |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |
 
 Implementation: [`backend/src/lib/errors.ts`](../../backend/src/lib/errors.ts), [`backend/src/middleware/error-handler.ts`](../../backend/src/middleware/error-handler.ts).
 
@@ -57,5 +58,6 @@ try {
 | Outcome | Body |
 |---------|------|
 | Catalogue CRUD success | Raw entity JSON (no `success: true` wrapper) |
-| Health | `{ "status": "ok", ... }` |
+| New M2 endpoints (list designs, recalculate pricing, validate clip) | `{ "data": …, "meta": { "requestId": "…" } }` |
+| Health | `{ "status": "ok", "checks": { "database", "storage" } }` |
 | Error | Envelope above |

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Check, Loader2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,11 @@ import { editorPlateKey, maskConfigToLensClipConfig, resolveMaskConfigForEditor 
 import { isMaskConfigValid, type MaskConfig } from "@/render/mask";
 import { isLensClipConfigValid } from "@bino-foundry/shared/types";
 
-import { FrameMaskEditor } from "./FrameMaskEditor";
+import { LoadingState } from "@/components/common";
+
+const FrameMaskEditor = lazy(() =>
+  import("./FrameMaskEditor").then((m) => ({ default: m.FrameMaskEditor })),
+);
 
 function emptyView(view: FrameViewAxis): FrameRenderView {
   return {
@@ -239,14 +243,16 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
             </div>
 
             {hasPlate && isEditing ? (
-              <FrameMaskEditor
-                key={`${editorPlateKey(view)}|s${editSession[axis] ?? 0}`}
-                plateUrl={view.plateUrl}
-                width={view.width}
-                height={view.height}
-                initialMask={draftRef.current[axis] ?? resolveMaskConfigForEditor(view)}
-                onChange={(config) => handleEditorChange(axis, config)}
-              />
+              <Suspense fallback={<LoadingState label="Loading clip editor…" className="h-48" />}>
+                <FrameMaskEditor
+                  key={`${editorPlateKey(view)}|s${editSession[axis] ?? 0}`}
+                  plateUrl={view.plateUrl}
+                  width={view.width}
+                  height={view.height}
+                  initialMask={draftRef.current[axis] ?? resolveMaskConfigForEditor(view)}
+                  onChange={(config) => handleEditorChange(axis, config)}
+                />
+              </Suspense>
             ) : hasPlate ? (
               <img
                 src={view.plateUrl}

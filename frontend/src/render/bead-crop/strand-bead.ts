@@ -141,3 +141,15 @@ export function getPlacedBeadShellStyle(
 export function getPlacedBeadImageFilter(): CSSProperties["filter"] {
   return "drop-shadow(0 1px 2px rgba(0,0,0,0.2)) drop-shadow(0 3px 8px rgba(0,0,0,0.12))";
 }
+
+/** Hint raster decode size for sharp strand rendering at layout pixel dimensions. */
+export function getStrandBeadRasterSize(
+  dim: BeadSlotDimensions,
+  dpr = typeof globalThis !== "undefined" ? globalThis.devicePixelRatio || 1 : 1,
+): { width: number; height: number } {
+  const scale = Math.min(3, Math.max(1, dpr));
+  return {
+    width: Math.ceil(dim.width * scale),
+    height: Math.ceil(dim.height * scale),
+  };
+}

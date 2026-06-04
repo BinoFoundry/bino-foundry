@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { cn } from "@/lib/utils";
 
 import type { CustomiserStep } from "../constants";
@@ -44,6 +45,33 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
   const optionsStepChoices = sunglassesCatalog.builderOptions.filter(
     (o) => o.code !== POLARIZED_CODE,
   );
+
+  const buildQuoteSummary = () => {
+    const lines = [
+      `Frame: ${frameSku.name} ($${frameSku.price})`,
+      `Lens: ${isOptionEnabled(POLARIZED_CODE) ? polarizedOption?.label ?? "Polarised" : "Standard (non-polarised)"}`,
+      `Tint: ${config.tint.name}${selectedTintEntry ? ` (${selectedTintEntry.code})` : ""}`,
+      ...optionsStepChoices
+        .filter((o) => isOptionEnabled(o.code))
+        .map((o) => `${o.label}: yes (+$${o.priceSurcharge})`),
+      `Total: $${totalPrice} ${currencyCode}`,
+    ];
+    return lines.join("\n");
+  };
+
+  const handleRequestQuote = async () => {
+    const summary = buildQuoteSummary();
+    try {
+      await navigator.clipboard.writeText(summary);
+      toast.success(
+        requiresManualFollowUp
+          ? CUSTOMER_COPY.quoteCopiedPrescription
+          : CUSTOMER_COPY.quoteCopiedReady,
+      );
+    } catch {
+      toast.message(CUSTOMER_COPY.quoteCopyFallbackTitle, { description: summary });
+    }
+  };
 
   const stepContent: Record<CustomiserStep, ReactNode> = {
     frame: (
@@ -87,35 +115,9 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
         basePrice={frameSku.price}
         totalPrice={totalPrice}
         lensDisclaimer={sunglassesCatalog.lensDisclaimer}
+        onRequestQuote={() => void handleRequestQuote()}
       />
     ),
-  };
-
-  const buildQuoteSummary = () => {
-    const lines = [
-      `Frame: ${frameSku.name} ($${frameSku.price})`,
-      `Lens: ${isOptionEnabled(POLARIZED_CODE) ? polarizedOption?.label ?? "Polarised" : "Standard (non-polarised)"}`,
-      `Tint: ${config.tint.name}${selectedTintEntry ? ` (${selectedTintEntry.code})` : ""}`,
-      ...optionsStepChoices
-        .filter((o) => isOptionEnabled(o.code))
-        .map((o) => `${o.label}: yes (+$${o.priceSurcharge})`),
-      `Total: $${totalPrice} ${currencyCode}`,
-    ];
-    return lines.join("\n");
-  };
-
-  const handleRequestQuote = async () => {
-    const summary = buildQuoteSummary();
-    try {
-      await navigator.clipboard.writeText(summary);
-      toast.success(
-        requiresManualFollowUp
-          ? "Configuration copied — we will follow up for prescription details."
-          : "Configuration copied — share with our team to request a quote.",
-      );
-    } catch {
-      toast.message("Your configuration", { description: summary });
-    }
   };
 
   return (
@@ -128,17 +130,17 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
       </div>
 
       <div className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border/80 pt-3">
-        <Button type="button" variant="outline" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
+        <Button type="button" variant="luxe-outline" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
           <ChevronLeft className="mr-1 h-4 w-4" />
           Back
         </Button>
         {!flow.isLast ? (
-          <Button type="button" size="sm" onClick={flow.goNext}>
+          <Button type="button" variant="luxe" size="sm" onClick={flow.goNext}>
             Continue
             <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         ) : (
-          <Button type="button" size="sm" onClick={() => void handleRequestQuote()}>
+          <Button type="button" variant="luxe" size="sm" onClick={() => void handleRequestQuote()}>
             {requiresManualFollowUp ? "Request consultation" : "Request quote"}
           </Button>
         )}

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus, X } from "lucide-react";
 import {
   DndContext,
@@ -30,6 +31,7 @@ import {
   getPlacedBeadImageFilter,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
+  getStrandBeadRasterSize,
   STRAND_CORD,
   type BeadSlotDimensions,
 } from "@/render/bead-crop";
@@ -61,6 +63,7 @@ interface SortableBeadProps {
   onBeadRemove?: (position: number) => void;
   isDragActive: boolean;
   emptyGuideMode: EmptySlotGuideMode;
+  showRemoveAlways?: boolean;
 }
 
 function SortableBead({
@@ -73,6 +76,7 @@ function SortableBead({
   onBeadRemove,
   isDragActive,
   emptyGuideMode,
+  showRemoveAlways = false,
 }: SortableBeadProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({
     id: `bead-${position}`,
@@ -121,6 +125,8 @@ function SortableBead({
           src={imgSrc}
           alt=""
           draggable={false}
+          decoding="async"
+          {...getStrandBeadRasterSize(slotDim)}
           className="pointer-events-none h-full w-full select-none"
           style={{
             ...getStrandBeadImageStyle(bead.bead),
@@ -155,7 +161,9 @@ function SortableBead({
           type="button"
           title={BRACELET_COPY.removeBead}
           aria-label={BRACELET_COPY.removeBead}
-          className="absolute -right-1 -top-1 z-30 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`absolute -right-1 -top-1 z-30 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:bg-destructive hover:text-destructive-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            showRemoveAlways ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+          }`}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
@@ -183,6 +191,7 @@ const SortableCircularStrand = ({
   size = 320,
   layoutKey = 0,
 }: SortableCircularStrandProps) => {
+  const isMobile = useIsMobile();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -413,6 +422,7 @@ const SortableCircularStrand = ({
                 emptyGuideMode={
                   slot.placed ? "none" : isStrandEmpty ? "prominent" : "moderate"
                 }
+                showRemoveAlways={isMobile}
               />
             ))}
           </SortableContext>

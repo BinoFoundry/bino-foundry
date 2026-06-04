@@ -22,7 +22,7 @@ export const createBraceletConfigDto = z
     twinning: v.twinning ?? false,
     wristSizeCmA: v.wristSizeCmA,
     wristSizeCmB: v.wristSizeCmB ?? 16,
-    defaultBeadSizeMm: (v.defaultBeadSizeMm ?? 8) as 6 | 8 | 10,
+    defaultBeadSizeMm: v.defaultBeadSizeMm ?? 8,
     items: v.items,
     status: (v.status ?? "saved") as "draft" | "saved",
   }));
@@ -31,11 +31,16 @@ export const braceletConfigIdParam = z.object({
   id: z.string().min(1),
 });
 
+export const updateBraceletStatusDto = z.object({
+  status: z.enum(["saved", "ordered", "archived"]),
+  orderReference: z.string().trim().min(1).max(128).optional(),
+});
+
 export type CreateBraceletConfigDTO = {
   twinning: boolean;
   wristSizeCmA: number;
   wristSizeCmB: number;
-  defaultBeadSizeMm: 6 | 8 | 10;
+  defaultBeadSizeMm: number;
   items: z.infer<typeof braceletConfigItemDto>[];
   status: "draft" | "saved";
 };

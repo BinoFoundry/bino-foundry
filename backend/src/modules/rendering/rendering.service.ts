@@ -1,6 +1,7 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
+import { isClipConfigValid } from "../../lib/clip-validation.js";
 import type { UpsertFrameViewDTO } from "./rendering.validation.js";
 
 export type FrameViewAxis = "front" | "side" | "three_quarter";
@@ -16,17 +17,6 @@ export interface FrameRenderViewRow {
   clipStatus: "draft" | "ready";
   maskConfig: unknown | null;
   maskStatus: "draft" | "ready";
-}
-
-function isClipConfigValid(config: unknown): boolean {
-  if (!config || typeof config !== "object") return false;
-  const c = config as { version?: number; lenses?: unknown[] };
-  if (c.version !== 1) return false;
-  if (!Array.isArray(c.lenses) || c.lenses.length === 0) return false;
-  return c.lenses.some((l) => {
-    const pathD = (l as { pathD?: string }).pathD;
-    return typeof pathD === "string" && pathD.trim().length > 8;
-  });
 }
 
 function mapViewRow(row: Record<string, unknown>): FrameRenderViewRow {
@@ -104,6 +94,46 @@ export class RenderingService {
 
     assertNoDbError(error);
     return mapViewRow(data as Record<string, unknown>);
+  }
+
+  async getBundlesBatch(frameIds: string[]): Promise<{ frames: { frameId: string; views: FrameRenderViewRow[] }[] }> {
+    if (!frameIds.length) return { frames: [] };
+    if (frameIds.length > 24) {
+      throw new ValidationError("At most 24 frame ids per batch request");
+    }
+
+    const supabase = getSupabaseServiceRole();
+    const { data, error } = await supabase
+      .from("frame_render_views")
+      .select("*")
+      .in("frame_id", frameIds)
+      .order("frame_id")
+      .order("view_axis", { ascending: true });
+
+    assertNoDbError(error);
+
+    const byFrame = new Map<string, FrameRenderViewRow[]>();
+    for (const row of data ?? []) {
+      const mapped = mapViewRow(row as Record<string, unknown>);
+      const list = byFrame.get(mapped.frameId) ?? [];
+      list.push(mapped);
+      byFrame.set(mapped.frameId, list);
+    }
+
+    return {
+      frames: frameIds.map((frameId) => ({
+        frameId,
+        views: byFrame.get(frameId) ?? [],
+      })),
+    };
+  }
+
+  validateClipConfig(clipConfig: unknown): { valid: boolean; message: string | null } {
+    const valid = isClipConfigValid(clipConfig);
+    return {
+      valid,
+      message: valid ? null : "clipConfig must be version 1 with at least one lens path (pathD)",
+    };
   }
 
   async removeView(frameId: string, viewAxis: FrameViewAxis): Promise<{ message: string }> {

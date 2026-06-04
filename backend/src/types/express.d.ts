@@ -3,8 +3,10 @@ declare global {
     interface Request {
       /** Populated via `requestContextMiddleware` */
       requestId?: string;
-      /** Present when authenticated via admin API key on mutation routes */
-      auth?: { scheme: "api-key" };
+      /** Set by auth middleware on protected routes */
+      auth?:
+        | { scheme: "api-key" }
+        | { scheme: "jwt"; userId: string; email?: string; isAdmin: boolean };
     }
   }
 }

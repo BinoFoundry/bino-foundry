@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { BraceletConfigurationPayload } from "@bino-foundry/shared/types";
 
+import { toast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
+import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import type { BeadSize, PlacedBead } from "@/lib/luxe-data";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -39,6 +42,7 @@ export interface UseBraceletBuilderOptions {
 
 export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const { onPriceChange } = options;
+  const isMobile = useIsMobile();
   const { beadTypes, beadSizes } = useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currencyCode = siteSettings.currencyCode;
@@ -68,14 +72,23 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const bumpLayout = useCallback(() => setLayoutRevision((n) => n + 1), []);
 
   useEffect(() => {
+    let removed = 0;
     setPlacedBeadsA((prev) => {
       const next = prunePlacedBeads(prev, beadCountA);
+      removed += prev.length - next.length;
       return next.length === prev.length ? prev : next;
     });
     setPlacedBeadsB((prev) => {
       const next = prunePlacedBeads(prev, beadCountB);
+      removed += prev.length - next.length;
       return next.length === prev.length ? prev : next;
     });
+    if (removed > 0) {
+      toast({
+        title: CUSTOMER_COPY.braceletLayoutUpdated,
+        description: CUSTOMER_COPY.beadsRemoved(removed),
+      });
+    }
     bumpLayout();
   }, [wristSizeA, wristSizeB, defaultBeadSize, beadCountA, beadCountB, bumpLayout]);
 
@@ -126,8 +139,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         defaultBeadSize,
         pricing,
         activeSizes,
+        beadTypes,
       ),
-    [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, defaultBeadSize, pricing, activeSizes],
+    [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, defaultBeadSize, pricing, activeSizes, beadTypes],
   );
 
   const configuration = useMemo(
@@ -236,9 +250,11 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const handleSelectBead = useCallback(
     (bead: BeadLibraryEntry) => {
       setSelectedBead(bead);
-      autoPlaceItem({ position: 0, bead, beadSize: defaultBeadSize });
+      if (!isMobile) {
+        autoPlaceItem({ position: 0, bead, beadSize: defaultBeadSize });
+      }
     },
-    [autoPlaceItem, defaultBeadSize],
+    [autoPlaceItem, defaultBeadSize, isMobile],
   );
 
   const handleReset = useCallback(() => {

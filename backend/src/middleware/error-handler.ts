@@ -21,7 +21,7 @@ export function createErrorHandler(logger: Logger = console): ErrorRequestHandle
     const payload = {
       success: false,
       error: {
-        code: httpErr.code ?? "UNKNOWN",
+        code: httpErr.code ?? "INTERNAL_ERROR",
         message: httpErr.message,
         details: httpErr.details ?? null,
       },

@@ -1,7 +1,7 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ErrorState } from "@/components/common";
-import { LoadingState } from "@/components/common";
+import { ErrorState, LoadingState } from "@/components/common";
+import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
 
 import { CustomiserPanel } from "./components/CustomiserPanel";
@@ -30,7 +30,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
   if (sunglassesCatalog.hydrateError && sunglassesCatalog.lensTints.length === 0) {
     return (
       <ErrorState
-        message={sunglassesCatalog.hydrateError}
+        message={CUSTOMER_COPY.sunglassesLoadFailed}
         onRetry={() => void sunglassesCatalog.refreshFromApi()}
         className="m-6"
       />
@@ -47,9 +47,9 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
             value={flow.step}
             onValueChange={(value) => flow.goTo(value as CustomiserStep)}
           >
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-4" aria-label="Customisation steps">
               {CUSTOMISER_STEPS.map((s) => (
-                <TabsTrigger key={s.id} value={s.id} className="text-[10px] px-1">
+                <TabsTrigger key={s.id} value={s.id} className="min-h-11 px-1 text-[10px]">
                   {s.shortLabel}
                 </TabsTrigger>
               ))}

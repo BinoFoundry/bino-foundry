@@ -15,7 +15,7 @@ export function LoadingState({ label = "Loading…", className }: LoadingStatePr
       role="status"
       aria-live="polite"
     >
-      <span className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <span className="motion-safe-spin h-8 w-8 rounded-full border-2 border-primary border-t-transparent" />
       {label}
     </div>
   );

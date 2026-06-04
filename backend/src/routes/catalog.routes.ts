@@ -1,6 +1,8 @@
 import { Router } from "express";
 
-import { requireMutationApiKey } from "../middleware/auth-mutations.js";
+import { asyncHandler } from "../lib/async-handler.js";
+import { attachJwtAuth } from "../middleware/auth-jwt.js";
+import { requireMutationAuth } from "../middleware/auth-mutations.js";
 import { createBeadLibraryRoutes } from "../modules/bead-libraries/bead-library.routes.js";
 import { createBeadTypeRoutes } from "../modules/bead-types/bead-type.routes.js";
 import { createBeadSizeRoutes } from "../modules/bead-sizes/bead-size.routes.js";
@@ -14,13 +16,16 @@ import { createUploadRoutes } from "../modules/upload/upload.routes.js";
 export function createCatalogRoutes(): Router {
   const router = Router();
 
-  router.use(requireMutationApiKey);
+  router.use(asyncHandler(attachJwtAuth));
+
+  router.use("/bracelet", createBraceletRoutes());
+
+  router.use(asyncHandler(requireMutationAuth));
   router.use("/rendering", createRenderingRoutes());
   router.use("/frames", createFrameRoutes());
   router.use("/bead-types", createBeadTypeRoutes());
   router.use("/bead-sizes", createBeadSizeRoutes());
   router.use("/bead-libraries", createBeadLibraryRoutes());
-  router.use("/bracelet", createBraceletRoutes());
   router.use("/sunglasses", createSunglassesRoutes());
   router.use("/settings", createSettingsRoutes());
   router.use("/upload", createUploadRoutes());

@@ -1,6 +1,6 @@
 # Milestone 2 — Guide (core builder development)
 
-**Status:** Not started.
+**Status:** In progress — Builders and admin M2 complete; backend auth/RLS implemented ([MILESTONE2_BACKEND_CHECKLIST.md](./MILESTONE2_BACKEND_CHECKLIST.md)); commerce optional.
 
 **Single guide for Milestone 2.** Use this file for scope, contract deliverables, work order, and sign-off. Detailed task checklists are linked per deliverable.
 
@@ -26,7 +26,7 @@ Milestone 1 delivered architecture and working foundations ([MILESTONE1_SIGNOFF.
 1. **Admin** — glasses, tints, crystals/accessories, pricing (unblocks correct builder data)
 2. **Sunglasses** — frame, lens, tint, preview + [render quality](./MILESTONE2_RENDER_CHECKLIST.md)
 3. **Bracelet** — categorization, sizing, quantity, responsive, asset scaling
-4. **[Backend](./MILESTONE2_BACKEND_CHECKLIST.md)** — auth / RLS before public launch (supporting, not a proposal bullet)
+4. **[Backend](./MILESTONE2_BACKEND_CHECKLIST.md)** — auth / RLS before public launch (supporting; largely complete)
 
 Optional later: [Commerce](./MILESTONE2_COMMERCE_CHECKLIST.md) (not in proposal list).
 

@@ -23,7 +23,10 @@ const envSchema = z
     /** Comma-separated origins; required in staging/production when SPA is on another host */
     CORS_ORIGINS: z.preprocess(emptyAsUndefined, z.string().optional()),
     SUPABASE_URL: z.preprocess(emptyAsUndefined, z.string().url().optional()),
+    SUPABASE_ANON_KEY: z.preprocess(emptyAsUndefined, z.string().optional()),
     SUPABASE_SERVICE_ROLE_KEY: z.preprocess(emptyAsUndefined, z.string().optional()),
+    /** Max mutation requests per IP per minute (0 = disabled) */
+    RATE_LIMIT_MUTATIONS_PER_MIN: z.coerce.number().int().min(0).default(120),
     /** Set to `1` or `true` when API sits behind nginx/Caddy TLS termination */
     TRUST_PROXY: z
       .preprocess((v) => v === "1" || v === "true" || v === true, z.boolean())
@@ -52,6 +55,13 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "CORS_ORIGINS is required when APP_ENV is staging or production",
         path: ["CORS_ORIGINS"],
+      });
+    }
+    if (!data.ADMIN_API_KEY?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "ADMIN_API_KEY is required when APP_ENV is staging or production",
+        path: ["ADMIN_API_KEY"],
       });
     }
   });
