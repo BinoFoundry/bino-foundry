@@ -6,13 +6,42 @@ import {
 } from "@bino-foundry/shared/types";
 import type { BeadLibraryEntry } from "@/types/beads";
 
-/** URL shown on the bracelet strand (processed asset when ready). */
+function cropConfigProcessedUrl(config: BeadCropConfig | null | undefined): string {
+  if (!config || typeof config !== "object") return "";
+  const url = "processedUrl" in config ? config.processedUrl : undefined;
+  return typeof url === "string" ? url.trim() : "";
+}
+
+function resolveOriginalUrl(bead: BeadLibraryEntry): string {
+  return bead.originalImage?.trim() || "";
+}
+
+/** True when we have a distinct cropped/exported asset (not the full original plate). */
+export function hasDistinctProcessedAsset(bead: BeadLibraryEntry | null | undefined): boolean {
+  if (!bead) return false;
+  const original = resolveOriginalUrl(bead);
+  const processed = bead.processedImage?.trim() || cropConfigProcessedUrl(bead.cropConfig);
+  return Boolean(processed && (!original || processed !== original));
+}
+
+/** URL shown on the bracelet strand (processed PNG when available, else original for path clip). */
 export function getBeadDisplayImageUrl(bead: BeadLibraryEntry | null | undefined): string | null {
   if (!bead) return null;
-  const processed = bead.processedImage?.trim();
-  if (processed) return processed;
-  const image = bead.image?.trim();
-  return image || null;
+
+  const original = resolveOriginalUrl(bead);
+  const processed =
+    bead.processedImage?.trim() || cropConfigProcessedUrl(bead.cropConfig) || "";
+
+  if (processed && (!original || processed !== original)) {
+    return processed;
+  }
+
+  if (original) return original;
+
+  const legacy = bead.image?.trim();
+  if (legacy && (!original || legacy !== original)) return legacy;
+
+  return legacy || null;
 }
 
 /** CSS clip-path from v2 path (dynamic crop without processed asset). */
@@ -43,11 +72,12 @@ export function beadCropObjectStyles(config: BeadCropConfig | null | undefined):
   return undefined;
 }
 
-/** Inline styles for strand bead image (processed asset or path clip). */
+/** Inline styles for strand bead image (processed asset or path clip on original). */
 export function beadDisplayImageStyles(
   bead: BeadLibraryEntry | null | undefined,
 ): CSSProperties | undefined {
-  if (!bead || bead.processedImage?.trim()) return undefined;
+  if (!bead) return undefined;
+  if (hasDistinctProcessedAsset(bead)) return undefined;
   const clip = beadCropClipPathStyles(bead.cropConfig);
   if (clip) return clip;
   return beadCropObjectStyles(bead.cropConfig);

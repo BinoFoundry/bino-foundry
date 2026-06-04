@@ -115,9 +115,19 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
     const cropConfig = draftCropRef.current ?? form.cropConfig;
     setSaving(true);
     try {
+      const cropProcessed =
+        cropConfig && "processedUrl" in cropConfig && typeof cropConfig.processedUrl === "string"
+          ? cropConfig.processedUrl.trim()
+          : "";
+      const processedImage = form.processedImage?.trim() || cropProcessed;
+      const originalImage = form.originalImage?.trim() || originalUrl;
+
       await onSave({
         ...form,
         id,
+        originalImage,
+        processedImage,
+        image: processedImage || originalImage,
         cropConfig: cropConfig ?? form.cropConfig,
         cropStatus:
           cropConfig && isBeadCropConfigValid(cropConfig) ? "ready" : form.cropStatus ?? "draft",

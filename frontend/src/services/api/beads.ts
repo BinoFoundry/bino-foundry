@@ -59,6 +59,10 @@ export const beadsApi = {
   },
 
   updateLibrary(publicId: string, payload: Partial<BeadLibraryEntry>): Promise<BeadLibraryEntry> {
+    const originalImage =
+      payload.originalImage?.trim() ||
+      (payload.image && !payload.processedImage ? payload.image : undefined);
+
     return apiRequest<BeadLibraryEntry>(`/bead-libraries/${encodeURIComponent(publicId)}`, {
       method: "PUT",
       body: {
@@ -66,9 +70,8 @@ export const beadsApi = {
         price: payload.price,
         beadTypeId: payload.beadTypeId,
         description: payload.description,
-        originalImage: payload.originalImage,
+        originalImage,
         processedImage: payload.processedImage,
-        image: payload.image,
         metadata: payload.metadata,
         cropConfig: payload.cropConfig,
         cropStatus: payload.cropStatus,

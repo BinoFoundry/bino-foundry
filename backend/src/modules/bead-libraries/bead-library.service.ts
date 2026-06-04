@@ -18,10 +18,23 @@ function mergeSpecs(existing: unknown, patch: Specs): Specs {
   return { ...base, ...patch };
 }
 
+function processedUrlFromCropConfig(cropConfig: unknown): string {
+  if (!cropConfig || typeof cropConfig !== "object") return "";
+  const url = (cropConfig as { processedUrl?: string }).processedUrl;
+  return typeof url === "string" ? url.trim() : "";
+}
+
 function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown> {
   const beadType = row.bead_types as Record<string, unknown> | null | undefined;
-  const processed = String(row.processed_image_url ?? "").trim();
   const original = String(row.original_image_url ?? "").trim();
+  let processed = String(row.processed_image_url ?? "").trim();
+  if (processed && original && processed === original) {
+    processed = "";
+  }
+  if (!processed) {
+    processed = processedUrlFromCropConfig(row.crop_config);
+    if (processed && original && processed === original) processed = "";
+  }
   const displayImage = processed || original;
 
   return {
@@ -145,13 +158,12 @@ export class BeadLibraryService {
     if (payload.processedImage !== undefined) {
       updates.processed_image_url = payload.processedImage.trim();
     }
-    if (payload.image !== undefined) {
-      const url = payload.image.trim();
-      updates.processed_image_url = url;
-      specs = mergeSpecs(specs, { legacy_image_url: url });
-    }
     if (payload.cropConfig !== undefined) {
       updates.crop_config = payload.cropConfig;
+      const fromCrop = processedUrlFromCropConfig(payload.cropConfig);
+      if (fromCrop && payload.processedImage === undefined) {
+        updates.processed_image_url = fromCrop;
+      }
       if (payload.cropStatus === undefined && isBeadCropConfigValid(payload.cropConfig)) {
         updates.crop_status = "ready";
       }
