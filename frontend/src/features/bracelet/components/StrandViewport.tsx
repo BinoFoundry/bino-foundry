@@ -15,7 +15,11 @@ interface StrandViewportProps {
   children: ReactNode;
 }
 
-/** Transformed layer holding strand canvases; pan uses a full-area overlay in pan mode. */
+/**
+ * Transformed layer holding strand canvases.
+ * Pan uses viewport-level pointer handlers with hit-testing — no full-screen overlay,
+ * so beads and drop targets stay interactive while pan mode is on.
+ */
 export function StrandViewport({
   viewportRef,
   contentRef,
@@ -31,19 +35,15 @@ export function StrandViewport({
   return (
     <div
       ref={viewportRef}
-      className="relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden"
+      data-strand-viewport
+      className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden ${
+        panMode ? (isPanning ? "cursor-grabbing" : "cursor-grab") : ""
+      }`}
+      onPointerDown={panMode ? onPointerDown : undefined}
+      onPointerMove={panMode ? onPointerMove : undefined}
+      onPointerUp={panMode ? onPointerUp : undefined}
+      onPointerCancel={panMode ? onPointerCancel : undefined}
     >
-      {panMode ? (
-        <div
-          className={`absolute inset-0 z-20 touch-none ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
-          aria-hidden
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-        />
-      ) : null}
-
       <div
         ref={contentRef}
         className="inline-flex w-max max-w-none flex-wrap items-center justify-center gap-4 sm:gap-6"

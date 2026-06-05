@@ -6,25 +6,23 @@ import {
   type BraceletPricingBreakdown,
 } from "@bino-foundry/shared/types";
 
-import type { PlacedBead } from "@/lib/luxe-data";
+import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 
 function strandItems(placed: PlacedBead[], strandIndex: 0 | 1): BraceletConfigurationItemRef[] {
   return placed.map((b) => ({
     strandIndex,
     slotPosition: b.position,
     beadLibraryId: b.bead.id,
-    beadSizeMm: b.beadSize,
+    beadSizeMm: placedBeadSizeMm(b),
   }));
 }
 
-/** Checkout-ready payload (IDs + pricing only — no images or crop paths). */
 export function serializeBraceletConfiguration(
   placedA: PlacedBead[],
   placedB: PlacedBead[],
   twinning: boolean,
   wristA: number,
   wristB: number,
-  defaultBeadSizeMm: PlacedBead["beadSize"],
   pricing: BraceletPricingBreakdown,
   status: BraceletConfigStatus = "draft",
 ): BraceletConfigurationPayload {
@@ -39,7 +37,6 @@ export function serializeBraceletConfiguration(
     twinning,
     wristSizeCmA: wristA,
     wristSizeCmB: wristB,
-    defaultBeadSizeMm: defaultBeadSizeMm,
     items,
     pricing,
     updatedAt: new Date().toISOString(),

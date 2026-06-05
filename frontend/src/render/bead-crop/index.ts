@@ -32,5 +32,6 @@ export {
   getStrandBeadRasterSize,
   STRAND_CORD,
   mmToBasePx,
+  STRAND_BEAD_VISUAL_SCALE,
   type BeadSlotDimensions,
 } from "./strand-bead";

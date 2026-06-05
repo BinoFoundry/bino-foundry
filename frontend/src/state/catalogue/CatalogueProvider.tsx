@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { beadSizesApi } from "@/services/api/bead-sizes";
+import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { beadsApi } from "@/services/api/beads";
 import { catalogueApi } from "@/services/api";
 import { isApiError } from "@/services/api/errors";
@@ -76,13 +77,14 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, beadTypes, beadSizes, beadLibraries] = await Promise.all([
+      const [frames, beadTypes, beadSizes, beadLibrarySizes, beadLibraries] = await Promise.all([
         catalogueApi.listFrames(),
         beadsApi.listTypes(),
         beadSizesApi.list(true),
+        beadLibrarySizesApi.list(),
         beadsApi.listLibraries(),
       ]);
-      const next: CatalogueStore = { frames, beadTypes, beadSizes, beadLibraries };
+      const next: CatalogueStore = { frames, beadTypes, beadSizes, beadLibrarySizes, beadLibraries };
       saveToStorage(next);
       syncCatalogueSnapshot(next);
       setStore(next);

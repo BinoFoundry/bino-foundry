@@ -5,11 +5,11 @@ import type {
 } from "@bino-foundry/shared/types";
 
 import type { PlacedBead } from "@/lib/luxe-data";
-import type { BeadSizeEntry } from "@/types/bead-sizes";
+
 import type { BeadTypeEntry } from "@/types/beads";
 
 import { BRACELET_COPY } from "./copy";
-import { strandCapacity } from "./capacity";
+import { estimateWristFit, formatWristFitRange } from "./wrist-fit";
 
 const CRYSTAL_SLUGS = new Set(["crystal", "accent"]);
 const CHARM_SLUGS = new Set(["charm"]);
@@ -22,7 +22,11 @@ function groupByProductKind(pricing: BraceletPricingBreakdown) {
   const other: { name: string; quantity: number; subtotal: number }[] = [];
 
   for (const item of pricing.lineItems) {
-    const row = { name: item.beadName, quantity: item.quantity, subtotal: item.lineTotal };
+    const row = {
+      name: item.sizeLabel || `${item.beadName} (${item.beadSizeMm} mm)`,
+      quantity: item.quantity,
+      subtotal: item.lineTotal,
+    };
     if (CRYSTAL_SLUGS.has(item.beadTypeSlug)) crystals.push(row);
     else if (CHARM_SLUGS.has(item.beadTypeSlug)) charms.push(row);
     else if (SPACER_SLUGS.has(item.beadTypeSlug)) spacers.push(row);
@@ -40,18 +44,16 @@ function buildMaterialSections(
     .filter((t) => t.isActive !== false)
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
-  const slugToType = new Map(activeTypes.map((t) => [t.slug, t]));
   const buckets = new Map<string, BraceletMaterialSection>();
 
   for (const item of pricing.lineItems) {
-    const type = slugToType.get(item.beadTypeSlug);
     const slug = item.beadTypeSlug || "other";
-    const title = type?.name ?? item.beadTypeSlug.replace(/-/g, " ");
+    const title = activeTypes.find((t) => t.slug === slug)?.name ?? slug.replace(/-/g, " ");
     if (!buckets.has(slug)) {
       buckets.set(slug, { slug, title, rows: [] });
     }
     buckets.get(slug)!.rows.push({
-      name: item.beadName,
+      name: item.sizeLabel || item.beadName,
       quantity: item.quantity,
       subtotal: item.lineTotal,
     });
@@ -70,20 +72,30 @@ function buildMaterialSections(
   return ordered;
 }
 
+function joinedWristFitLabel(
+  twinning: boolean,
+  fitA: { minCm: number; maxCm: number; lengthMm: number; beadCount: number },
+  fitB?: { minCm: number; maxCm: number; lengthMm: number; beadCount: number },
+): string {
+  if (!twinning || !fitB) return formatWristFitRange(fitA);
+  return `A: ${formatWristFitRange(fitA)} · B: ${formatWristFitRange(fitB)}`;
+}
+
 export function formatBraceletConfigSummary(
   twinning: boolean,
   wristA: number,
   wristB: number,
-  defaultSizeMm: number,
-  placedCount: number,
-  capacity: number,
+  pricing: BraceletPricingBreakdown,
+  wristFitLabel: string,
 ): string {
   const wrist = twinning
     ? `${wristA} cm & ${wristB} cm wrists`
     : `${wristA} cm wrist`;
-  const sizeLabel =
-    `${defaultSizeMm} mm beads · ${placedCount} of ${capacity} placed`;
-  return `${wrist} · ${sizeLabel}`;
+  const { strandA, strandB } = pricing.strandFit;
+  const length = twinning && strandB
+    ? `${strandA.usedMm + strandB.usedMm} mm total length`
+    : `${strandA.usedMm} mm strand length`;
+  return `${wrist} · ${length} · ${wristFitLabel} · ${pricing.placedCount} pieces`;
 }
 
 export function buildBraceletBuilderSummary(
@@ -92,14 +104,15 @@ export function buildBraceletBuilderSummary(
   twinning: boolean,
   wristA: number,
   wristB: number,
-  defaultSizeMm: number,
+  selectedSizeOfferKey: string | null,
+  selectedSizeLabel: string | undefined,
   pricing: BraceletPricingBreakdown,
-  beadSizes?: BeadSizeEntry[],
   beadTypes: BeadTypeEntry[] = [],
 ): BraceletBuilderSummary {
-  const capacityA = strandCapacity(wristA, defaultSizeMm);
-  const capacityB = twinning ? strandCapacity(wristB, defaultSizeMm) : 0;
-  const sizeLabel = beadSizes?.find((s) => s.sizeMm === defaultSizeMm)?.label ?? `${defaultSizeMm} mm`;
+  const { strandA, strandB } = pricing.strandFit;
+  const wristFitA = estimateWristFit(placedA);
+  const wristFitB = twinning ? estimateWristFit(placedB) : undefined;
+  const wristFitLabel = joinedWristFitLabel(twinning, wristFitA, wristFitB);
   const { crystals, charms, spacers, other } = groupByProductKind(pricing);
   const materialSections = buildMaterialSections(pricing, beadTypes);
 
@@ -108,38 +121,40 @@ export function buildBraceletBuilderSummary(
       index: 0 as const,
       label: twinning ? BRACELET_COPY.wristTwinA : "Your bracelet",
       wristSizeCm: wristA,
-      capacity: capacityA,
+      maxSlots: strandA.maxSlots,
       placedCount: placedA.length,
+      usedMm: strandA.usedMm,
+      wristCircumferenceMm: strandA.wristCircumferenceMm,
+      remainingMm: strandA.remainingMm,
     },
   ];
-  if (twinning) {
+  if (twinning && strandB) {
     strands.push({
       index: 1 as const,
       label: BRACELET_COPY.wristTwinB,
       wristSizeCm: wristB,
-      capacity: capacityB,
+      maxSlots: strandB.maxSlots,
       placedCount: placedB.length,
+      usedMm: strandB.usedMm,
+      wristCircumferenceMm: strandB.wristCircumferenceMm,
+      remainingMm: strandB.remainingMm,
     });
   }
 
   return {
     strands,
     twinning,
-    defaultBeadSizeMm: defaultSizeMm,
-    beadSizeLabel: sizeLabel,
+    wristFit: wristFitA,
+    wristFitA,
+    wristFitB,
+    selectedSizeOfferKey,
+    selectedSizeLabel,
     materialSections,
     crystals,
     charms,
     spacers,
     other,
     pricing,
-    configSummary: formatBraceletConfigSummary(
-      twinning,
-      wristA,
-      wristB,
-      defaultSizeMm,
-      pricing.placedCount,
-      pricing.capacityCount,
-    ),
+    configSummary: formatBraceletConfigSummary(twinning, wristA, wristB, pricing, wristFitLabel),
   };
 }

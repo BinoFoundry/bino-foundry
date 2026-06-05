@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, type RefObject } from "react";
-import { ClipboardCopy, Copy, Library, RotateCcw, Save } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import BeadLibrary from "@/components/BeadLibrary";
@@ -7,12 +7,14 @@ import SortableCircularStrand from "@/components/SortableCircularStrand";
 import {
   BraceletSummaryPanel,
   BRACELET_COPY,
+  formatWristFitRange,
   StrandStage,
   StrandViewport,
   StrandZoomControls,
   useBraceletBuilder,
   useStrandZoom,
 } from "@/features/bracelet";
+import { measureStrandCanvasSize } from "@/features/bracelet/strand-viewport";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -31,23 +33,15 @@ function useCanvasSize(isMobile: boolean, twinning: boolean, libraryOpen: boolea
     const measure = () => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const w = rect.width;
-      const h = rect.height;
-      const summaryOffset = !isMobile ? 320 : 0;
-
-      if (isMobile) {
-        if (twinning) {
-          setStrandSize(Math.max(150, Math.min(220, (w - 24) / 2, h - 140)));
-        } else {
-          setStrandSize(Math.max(200, Math.min(340, w - 32, h - 120)));
-        }
-      } else {
-        const sidebarOffset = libraryOpen ? 260 : 0;
-        const availableW = w - sidebarOffset - summaryOffset - 48;
-        const strandCount = twinning ? 2 : 1;
-        const maxByWidth = (availableW - (twinning ? 32 : 0)) / strandCount;
-        setStrandSize(Math.max(260, Math.min(440, maxByWidth, h - 48)));
-      }
+      setStrandSize(
+        measureStrandCanvasSize({
+          containerWidth: rect.width,
+          containerHeight: rect.height,
+          isMobile,
+          twinning,
+          libraryOpen,
+        }),
+      );
     };
 
     measure();
@@ -64,9 +58,13 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [libraryOpen, setLibraryOpen] = useState(() => !window.matchMedia("(max-width: 767px)").matches);
   const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [hoverA, setHoverA] = useState<number | null>(null);
+  const [hoverB, setHoverB] = useState<number | null>(null);
+  const [libraryDragActive, setLibraryDragActive] = useState(false);
 
   const builder = useBraceletBuilder({ onPriceChange });
   const { containerRef, strandSize } = useCanvasSize(isMobile, builder.twinning, libraryOpen);
+  const canvasZoomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const {
@@ -86,19 +84,39 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     onPanPointerCancel,
   } = useStrandZoom(
     {
-      containerRef: containerRef as RefObject<HTMLElement | null>,
+      zoomSurfaceRef: canvasZoomRef as RefObject<HTMLElement | null>,
+      containerRef: canvasZoomRef as RefObject<HTMLElement | null>,
       viewportRef: viewportRef as RefObject<HTMLElement | null>,
       contentRef: contentRef as RefObject<HTMLElement | null>,
     },
     { strandSize, twinning: builder.twinning },
+    1,
+    { suspendPan: libraryDragActive },
   );
   const strandRenderSize = Math.round(strandSize * zoomSmooth);
 
-  const layoutKey = `${builder.layoutRevision}-${builder.beadCountA}-${builder.beadCountB}-${builder.defaultBeadSize}-${builder.wristSizeA}-${builder.wristSizeB}`;
+  const layoutKey = `${builder.layoutRevision}-${builder.placedBeadsA.map((b) => `${b.position}:${b.size.offerKey}`).join(",")}-${builder.placedBeadsB.map((b) => `${b.position}:${b.size.offerKey}`).join(",")}`;
 
-  const handleSlotClick = (bracelet: "A" | "B", position: number, size: number) => {
-    const result = builder.handleSlotClick(bracelet, position);
-    if (result?.openLibrary) setLibraryOpen(true);
+  const guideMm = builder.activeSizeOffer?.sizeMm ?? 8;
+
+  useEffect(() => {
+    if (!libraryDragActive) return;
+    const onDragEnd = () => {
+      setLibraryDragActive(false);
+      setHoverA(null);
+      setHoverB(null);
+    };
+    window.addEventListener("dragend", onDragEnd);
+    return () => window.removeEventListener("dragend", onDragEnd);
+  }, [libraryDragActive]);
+
+  const builderActions = {
+    libraryOpen,
+    onToggleLibrary: () => setLibraryOpen((open) => !open),
+    twinning: builder.twinning,
+    onToggleTwinning: builder.handleToggleTwinning,
+    onDuplicateToB: builder.handleDuplicateBraceletToB,
+    duplicateDisabled: builder.placedBeadsA.length === 0,
   };
 
   const handleSaveConfiguration = async () => {
@@ -114,7 +132,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         twinning: payload.twinning,
         wristSizeCmA: payload.wristSizeCmA,
         wristSizeCmB: payload.wristSizeCmB,
-        defaultBeadSizeMm: payload.defaultBeadSizeMm,
         status: "saved",
         items: payload.items,
       });
@@ -126,124 +143,27 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     }
   };
 
-  const sizeOptions = builder.activeBeadSizes.length
-    ? builder.activeBeadSizes
-    : [{ sizeMm: 8, label: "8 mm", priceMultiplier: 1, id: "", isActive: true }];
-
   return (
     <div className="relative flex h-full w-full flex-1 flex-col animate-fade-in">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5 sm:gap-4 sm:px-6 sm:py-3">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <label className="font-body text-[10px] uppercase tracking-wider text-muted-foreground sm:text-xs">
-            {builder.twinning ? BRACELET_COPY.wristTwinA : BRACELET_COPY.wristLabel}
-          </label>
-          <input
-            type="number"
-            value={builder.wristSizeA}
-            onChange={(e) => builder.setWristA(Number(e.target.value))}
-            className="w-14 rounded-md border border-border bg-background px-2 py-1 font-body text-sm focus:outline-none focus:ring-1 focus:ring-primary sm:w-16"
-            min={14}
-            max={20}
-            step={0.5}
-            aria-label={BRACELET_COPY.wristLabel}
-          />
-          <span className="text-[10px] text-muted-foreground sm:text-xs">cm</span>
-          <span className="text-[10px] text-muted-foreground">
-            · {builder.placedBeadsA.length}/{builder.beadCountA}
-          </span>
-        </div>
-
-        {builder.twinning ? (
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <label className="font-body text-[10px] uppercase tracking-wider text-muted-foreground sm:text-xs">
-              {BRACELET_COPY.wristTwinB}
-            </label>
-            <input
-              type="number"
-              value={builder.wristSizeB}
-              onChange={(e) => builder.setWristB(Number(e.target.value))}
-              className="w-14 rounded-md border border-border bg-background px-2 py-1 font-body text-sm focus:outline-none focus:ring-1 focus:ring-primary sm:w-16"
-              min={14}
-              max={20}
-              step={0.5}
-            />
-            <span className="text-[10px] text-muted-foreground sm:text-xs">cm</span>
-            <span className="text-[10px] text-muted-foreground">
-              · {builder.placedBeadsB.length}/{builder.beadCountB}
-            </span>
-          </div>
-        ) : null}
-
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <label className="hidden font-body text-[10px] uppercase tracking-wider text-muted-foreground sm:inline">
-            {BRACELET_COPY.beadSizeLabel}
-          </label>
-          <div className="flex overflow-hidden rounded-md border border-border">
-            {sizeOptions.map((s) => (
-              <button
-                key={s.id || s.sizeMm}
-                type="button"
-                onClick={() => builder.setDefaultBeadSize(s.sizeMm)}
-                className={`px-2.5 py-1 font-body text-xs transition-colors sm:px-3 ${
-                  builder.defaultBeadSize === s.sizeMm
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <Button variant="luxe-outline" size="sm" className="text-xs" onClick={() => setLibraryOpen(!libraryOpen)}>
-            <Library className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{BRACELET_COPY.library}</span>
-          </Button>
-          <Button variant="luxe-outline" size="sm" className="text-xs" onClick={builder.handleToggleTwinning}>
-            <Copy className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">
-              {builder.twinning ? "Single bracelet" : BRACELET_COPY.twinOff}
-            </span>
-          </Button>
-          {builder.twinning ? (
-            <Button
-              variant="luxe-outline"
-              size="sm"
-              className="text-xs"
-              title={BRACELET_COPY.duplicateToPairHint}
-              disabled={builder.placedBeadsA.length === 0}
-              onClick={builder.handleDuplicateBraceletToB}
-            >
-              <ClipboardCopy className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{BRACELET_COPY.duplicateToPair}</span>
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={builder.handleReset} title={BRACELET_COPY.reset}>
-            <RotateCcw className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
-
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div
           ref={containerRef}
           className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5 ${
-            libraryOpen && !isMobile ? "lg:pl-[260px]" : ""
+            libraryOpen && !isMobile ? "lg:pl-[272px]" : ""
           }`}
         >
           <BeadLibrary
             open={libraryOpen}
-            onSelectBead={(bead) => {
-              builder.handleSelectBead(bead);
+            onLibraryDragActiveChange={setLibraryDragActive}
+            onSelectBead={(bead, variant) => {
+              builder.handleSelectBead(bead, variant);
               if (isMobile) setLibraryOpen(false);
             }}
             onClose={() => setLibraryOpen(false)}
           />
 
           {builder.selectedBead && isMobile ? (
-            <div className="absolute left-3 right-3 top-2 z-30 flex items-center gap-2 rounded-lg border border-primary/25 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-sm sm:left-4">
+            <div className="absolute left-3 right-3 top-2 z-30 flex items-center gap-2 rounded-lg border border-primary/25 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-sm">
               {getBeadDisplayImageUrl(builder.selectedBead) ? (
                 <img
                   src={getBeadDisplayImageUrl(builder.selectedBead)!}
@@ -253,16 +173,12 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                 />
               ) : null}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-foreground">{builder.selectedBead.name}</p>
-                <p className="text-[10px] text-muted-foreground">{BRACELET_COPY.selectedBeadHint}</p>
+                <p className="truncate text-xs font-medium">{builder.selectedBead.name}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {builder.activeSizeOffer?.label ?? BRACELET_COPY.selectedBeadHint}
+                </p>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="shrink-0 text-xs"
-                onClick={() => builder.setSelectedBead(null)}
-              >
+              <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => builder.setSelectedBead(null)}>
                 {BRACELET_COPY.clearSelection}
               </Button>
             </div>
@@ -277,10 +193,28 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             onReset={reset}
             onTogglePanMode={togglePanMode}
             className={`absolute bottom-3 z-30 sm:bottom-4 ${
-              libraryOpen && !isMobile ? "left-[268px] sm:left-[276px]" : "left-3 sm:left-4"
+              libraryOpen && !isMobile ? "left-[280px]" : "left-3 sm:left-4"
             }`}
           />
 
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute bottom-3 right-3 z-30 h-10 w-10 border border-border/80 bg-background/90 shadow-sm backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive sm:bottom-4 sm:right-4 sm:h-9 sm:w-9"
+            title={BRACELET_COPY.clearStrand}
+            aria-label={BRACELET_COPY.clearStrand}
+            disabled={builder.pricing.placedCount === 0}
+            onClick={builder.handleReset}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+
+          <div
+            ref={canvasZoomRef}
+            className="relative flex min-h-0 w-full flex-1 flex-col"
+            data-strand-zoom-surface
+          >
           <StrandViewport
             viewportRef={viewportRef}
             contentRef={contentRef}
@@ -296,15 +230,24 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               <SortableCircularStrand
                 key={`a-${layoutKey}`}
                 layoutKey={layoutKey}
-                beadCount={builder.beadCountA}
                 placedBeads={builder.placedBeadsA}
-                onBeadsReorder={(beads) => builder.handleBeadsReorder("A", beads)}
-                onSlotClick={(pos, size) => handleSlotClick("A", pos, size)}
-                onBeadDrop={(pos, bead) => builder.handleBeadDrop("A", pos, bead)}
+                onBeadsReorder={(from, to) => builder.handleBeadsReorder("A", from, to)}
+                onSlotClick={(pos) => {
+                  const result = builder.handleSlotClick("A", pos);
+                  if (result?.openLibrary) setLibraryOpen(true);
+                }}
+                onBeadDrop={(pos, data) => builder.handleBeadDrop("A", pos, data)}
                 onBeadRemove={(pos) => builder.handleRemoveBead("A", pos)}
                 label={builder.twinning ? BRACELET_COPY.wristTwinA : undefined}
                 wristSize={builder.wristSizeA}
-                defaultBeadSizeMm={builder.defaultBeadSize}
+                guideSizeMm={guideMm}
+                hoverPosition={hoverA}
+                onHoverPosition={setHoverA}
+                selectedPosition={
+                  builder.selectedStrandBead?.bracelet === "A" ? builder.selectedStrandBead.position : null
+                }
+                libraryDragActive={libraryDragActive}
+                panMode={panMode}
                 size={strandRenderSize}
               />
             </StrandStage>
@@ -314,31 +257,65 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                 <SortableCircularStrand
                   key={`b-${layoutKey}`}
                   layoutKey={layoutKey}
-                  beadCount={builder.beadCountB}
                   placedBeads={builder.placedBeadsB}
-                  onBeadsReorder={(beads) => builder.handleBeadsReorder("B", beads)}
-                  onSlotClick={(pos, size) => handleSlotClick("B", pos, size)}
-                  onBeadDrop={(pos, bead) => builder.handleBeadDrop("B", pos, bead)}
+                  onBeadsReorder={(from, to) => builder.handleBeadsReorder("B", from, to)}
+                  onSlotClick={(pos) => {
+                    const result = builder.handleSlotClick("B", pos);
+                    if (result?.openLibrary) setLibraryOpen(true);
+                  }}
+                  onBeadDrop={(pos, data) => builder.handleBeadDrop("B", pos, data)}
                   onBeadRemove={(pos) => builder.handleRemoveBead("B", pos)}
                   label={BRACELET_COPY.wristTwinB}
                   wristSize={builder.wristSizeB}
-                  defaultBeadSizeMm={builder.defaultBeadSize}
+                  guideSizeMm={guideMm}
+                  hoverPosition={hoverB}
+                  onHoverPosition={setHoverB}
+                  selectedPosition={
+                    builder.selectedStrandBead?.bracelet === "B" ? builder.selectedStrandBead.position : null
+                  }
+                  libraryDragActive={libraryDragActive}
+                  panMode={panMode}
                   size={strandRenderSize}
                 />
               </StrandStage>
             ) : null}
           </StrandViewport>
+          </div>
         </div>
 
         <div className="hidden shrink-0 lg:flex">
-          <BraceletSummaryPanel summary={builder.summary} />
+          <BraceletSummaryPanel summary={builder.summary} builderActions={builderActions} />
         </div>
       </div>
 
-      <BraceletSummaryPanel summary={builder.summary} collapsible className="lg:hidden" />
+      <BraceletSummaryPanel
+        summary={builder.summary}
+        builderActions={builderActions}
+        collapsible
+        className="lg:hidden"
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 font-body text-[10px] text-muted-foreground sm:px-6 sm:py-3 sm:text-xs">
-        <span>{builder.summary.configSummary}</span>
+        <span>
+          {builder.summary.twinning && builder.summary.wristFitB ? (
+            <>
+              {BRACELET_COPY.wristTwinA}: {formatWristFitRange(builder.summary.wristFitA)}
+              {builder.summary.wristFitA.beadCount > 0
+                ? ` · ${builder.summary.wristFitA.lengthMm} mm`
+                : ""}
+              {" · "}
+              {BRACELET_COPY.wristTwinB}: {formatWristFitRange(builder.summary.wristFitB)}
+              {builder.summary.wristFitB.beadCount > 0 ? ` · ${builder.summary.wristFitB.lengthMm} mm` : ""}
+            </>
+          ) : (
+            <>
+              {formatWristFitRange(builder.summary.wristFitA)}
+              {builder.summary.wristFitA.beadCount > 0
+                ? ` · ${builder.summary.wristFitA.lengthMm} mm length`
+                : ""}
+            </>
+          )}
+        </span>
         <div className="flex items-center gap-2">
           {saveStatus ? <span className="text-foreground/80">{saveStatus}</span> : null}
           <Button

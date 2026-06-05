@@ -597,7 +597,16 @@ export class PolygonEditor {
     this.draw();
   }
 
+  /** Ignore editor shortcuts while the user is typing in a form field. */
+  _isTypingInFormField(e) {
+    const el = e.target;
+    if (!(el instanceof HTMLElement)) return false;
+    return Boolean(el.closest('input, textarea, select, [contenteditable="true"]'));
+  }
+
   onKeyDown(e) {
+    if (this._isTypingInFormField(e)) return;
+
     if (e.code === 'Space' && !e.repeat) {
       this.spacePan = true;
       this.cursorState.applySpacePan(true);
@@ -605,7 +614,6 @@ export class PolygonEditor {
       return;
     }
     if (e.key === 'Shift') this._shiftHeld = true;
-    if (e.target.matches('input, textarea, select')) return;
 
     if (e.key === 'v' || e.key === 'V') {
       this.setTool(EditorTool.SELECT);
@@ -648,6 +656,8 @@ export class PolygonEditor {
   }
 
   onKeyUp(e) {
+    if (this._isTypingInFormField(e)) return;
+
     if (e.code === 'Space') {
       this.spacePan = false;
       this.cursorState.applySpacePan(false);

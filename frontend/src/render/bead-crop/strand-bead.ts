@@ -14,13 +14,19 @@ const TYPE_FOOTPRINT: Record<string, { width: number; height: number }> = {
   spacer: { width: 0.5, height: 0.5 },
 };
 
-/** Reference: 8 mm bead ≈ 28 px at scale factor 1. */
+/** Baseline mm→px curve (8 mm → 28 px at scale factor 1, before visual scale). */
 const MM_REFERENCE = 8;
 const PX_AT_REFERENCE = 28;
 
+/**
+ * Display-only strand density. Does not affect wrist fit, slot counts, pricing, or DB mm values.
+ * Applied uniformly so variant ratios (e.g. 6 mm < 8 mm < 12 mm) stay identical.
+ */
+export const STRAND_BEAD_VISUAL_SCALE = 1.32;
+
 export function mmToBasePx(sizeMm: number, scaleFactor: number): number {
   const mm = Math.max(4, Math.min(24, sizeMm));
-  return (mm / MM_REFERENCE) * PX_AT_REFERENCE * scaleFactor;
+  return (mm / MM_REFERENCE) * PX_AT_REFERENCE * scaleFactor * STRAND_BEAD_VISUAL_SCALE;
 }
 
 export interface BeadSlotDimensions {
@@ -70,7 +76,7 @@ export function getStrandBeadImageStyle(bead: BeadLibraryEntry | null | undefine
 
 /** Uniform placeholder size for empty-strand guide (scales with canvas). */
 export function getGuideSlotDimensions(scaleFactor: number, beadSizeMm = 8): BeadSlotDimensions {
-  const base = mmToBasePx(beadSizeMm, scaleFactor) * 0.9;
+  const base = mmToBasePx(beadSizeMm, scaleFactor) * 0.94;
   return { width: base, height: base };
 }
 

@@ -1,41 +1,21 @@
-import {
-  DEFAULT_BRACELET_PRICING_RULES,
-  type BraceletBeadSizeMm,
-  type BraceletPricingBreakdown,
-  type BraceletPricingLineItem,
+import type {
+  BraceletBeadSizeMm,
+  BraceletPricingBreakdown,
+  BraceletPricingLineItem,
+  BraceletStrandFitMetrics,
 } from "@bino-foundry/shared/types";
 
-import { calculateBeadCount, type BeadSize, type PlacedBead } from "@/lib/luxe-data";
-import type { BeadSizeEntry } from "@/types/bead-sizes";
-import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
+import type { BeadTypeEntry } from "@/types/beads";
+import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
-export function sizeMultiplierForMm(beadSizeMm: number, beadSizes?: BeadSizeEntry[]): number {
-  const fromDb = beadSizes?.find((s) => s.sizeMm === beadSizeMm && s.isActive !== false);
-  return fromDb?.priceMultiplier ?? 1;
-}
-
-function beadTypeUsesSizePricing(beadTypes: BeadTypeEntry[], slug: string): boolean {
-  const type = beadTypes.find((t) => t.slug === slug);
-  if (type && typeof type.usesSizePricing === "boolean") return type.usesSizePricing;
-  return DEFAULT_BRACELET_PRICING_RULES.sizePricedTypeSlugs.includes(slug);
-}
-
-export function calculateUnitPrice(
-  bead: BeadLibraryEntry,
-  beadSizeMm: BraceletBeadSizeMm,
-  beadTypes: BeadTypeEntry[],
-  beadSizes?: BeadSizeEntry[],
-): number {
-  const base = bead.price;
-  const slug = bead.beadTypeSlug ?? "crystal";
-  if (!beadTypeUsesSizePricing(beadTypes, slug)) return base;
-  return base * sizeMultiplierForMm(beadSizeMm, beadSizes);
-}
+import { buildStrandFitMetrics, maxStrandSlots, MIN_BEAD_SIZE_MM } from "./capacity";
+import { minActiveOfferSizeMm } from "./library-sizes";
 
 function aggregateLineItems(items: BraceletPricingLineItem[]): BraceletPricingLineItem[] {
   const map = new Map<string, BraceletPricingLineItem>();
   for (const item of items) {
-    const key = `${item.beadLibraryId}|${item.beadSizeMm}`;
+    const key = item.offerKey;
     const existing = map.get(key);
     if (existing) {
       existing.quantity += 1;
@@ -53,25 +33,29 @@ export function buildBraceletPricing(
   twinning: boolean,
   wristA: number,
   wristB: number,
-  defaultSize: BeadSize,
-  currencyCode: string,
   beadTypes: BeadTypeEntry[],
-  beadSizes?: BeadSizeEntry[],
+  currencyCode: string,
+  beadLibrarySizes: BeadLibrarySizeOffer[],
 ): BraceletPricingBreakdown {
-  const capacityA = calculateBeadCount(wristA, defaultSize);
-  const capacityB = twinning ? calculateBeadCount(wristB, defaultSize) : 0;
-  const capacityCount = capacityA + capacityB;
+  const minMm = minActiveOfferSizeMm(beadLibrarySizes);
+  const strandA: BraceletStrandFitMetrics = buildStrandFitMetrics(wristA, placedA, minMm);
+  const strandB: BraceletStrandFitMetrics | undefined = twinning
+    ? buildStrandFitMetrics(wristB, placedB, minMm)
+    : undefined;
+  const totalMaxSlots = strandA.placedCount + (strandB?.placedCount ?? 0);
 
   const rawItems: BraceletPricingLineItem[] = [];
   const allPlaced = [...placedA, ...(twinning ? placedB : [])];
 
   for (const placed of allPlaced) {
-    const unit = calculateUnitPrice(placed.bead, placed.beadSize, beadTypes, beadSizes);
+    const unit = placed.size.unitPrice;
     rawItems.push({
       beadLibraryId: placed.bead.id,
+      beadSizeMm: placedBeadSizeMm(placed) as BraceletBeadSizeMm,
+      offerKey: placed.size.offerKey,
       beadName: placed.bead.name,
+      sizeLabel: placed.size.label,
       beadTypeSlug: placed.bead.beadTypeSlug ?? "crystal",
-      beadSizeMm: placed.beadSize as BraceletBeadSizeMm,
       quantity: 1,
       unitPrice: unit,
       lineTotal: unit,
@@ -104,7 +88,12 @@ export function buildBraceletPricing(
     lineItems,
     byType: [...byTypeMap.values()].sort((a, b) => b.subtotal - a.subtotal),
     placedCount: allPlaced.length,
-    capacityCount,
+    capacityCount: allPlaced.length,
+    strandFit: {
+      strandA,
+      strandB,
+      totalMaxSlots,
+    },
     subtotal,
     total: subtotal,
   };

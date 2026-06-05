@@ -1,6 +1,6 @@
 /** Bracelet builder / checkout configuration (relational + minimal render refs). */
 
-export const BRACELET_CONFIG_VERSION = 1 as const;
+export const BRACELET_CONFIG_VERSION = 3 as const;
 
 /** Millimeters — options loaded from `bead_sizes` table. */
 export type BraceletBeadSizeMm = number;
@@ -31,12 +31,24 @@ export interface BraceletConfigurationItemRef {
 
 export interface BraceletPricingLineItem {
   beadLibraryId: string;
-  beadName: string;
-  beadTypeSlug: string;
   beadSizeMm: BraceletBeadSizeMm;
+  /** Stable key `${beadLibraryId}-${sizeMm}` for aggregation. */
+  offerKey: string;
+  beadName: string;
+  sizeLabel: string;
+  beadTypeSlug: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+}
+
+/** Wrist-fit metrics for one strand (mixed bead sizes). */
+export interface BraceletStrandFitMetrics {
+  wristCircumferenceMm: number;
+  usedMm: number;
+  remainingMm: number;
+  maxSlots: number;
+  placedCount: number;
 }
 
 export interface BraceletPricingBreakdown {
@@ -44,7 +56,14 @@ export interface BraceletPricingBreakdown {
   lineItems: BraceletPricingLineItem[];
   byType: { slug: string; name: string; quantity: number; subtotal: number }[];
   placedCount: number;
+  /** @deprecated Use strandFit.totalMaxSlots — max discrete slots at smallest catalog mm. */
   capacityCount: number;
+  /** Per-strand wrist fit (sum of item mm vs wrist circumference). */
+  strandFit: {
+    strandA: BraceletStrandFitMetrics;
+    strandB?: BraceletStrandFitMetrics;
+    totalMaxSlots: number;
+  };
   subtotal: number;
   total: number;
 }
@@ -56,7 +75,8 @@ export interface BraceletConfigurationPayload {
   twinning: boolean;
   wristSizeCmA: number;
   wristSizeCmB: number;
-  defaultBeadSizeMm: BraceletBeadSizeMm;
+  /** Optional placement default for new beads (not used for strand fit). */
+  defaultBeadSizeMm?: BraceletBeadSizeMm;
   items: BraceletConfigurationItemRef[];
   pricing: BraceletPricingBreakdown;
   /** ISO timestamp when snapshot was taken. */
@@ -67,8 +87,12 @@ export interface BraceletStrandSummary {
   index: 0 | 1;
   label: string;
   wristSizeCm: number;
-  capacity: number;
+  /** Max slot positions (smallest catalog mm). */
+  maxSlots: number;
   placedCount: number;
+  usedMm: number;
+  wristCircumferenceMm: number;
+  remainingMm: number;
 }
 
 export interface BraceletMaterialSection {
@@ -77,11 +101,25 @@ export interface BraceletMaterialSection {
   rows: { name: string; quantity: number; subtotal: number }[];
 }
 
+/** Estimated wrist circumference range from bead composition (cm). */
+export interface BraceletWristFitEstimate {
+  minCm: number;
+  maxCm: number;
+  lengthMm: number;
+  beadCount: number;
+}
+
 export interface BraceletBuilderSummary {
   strands: BraceletStrandSummary[];
   twinning: boolean;
-  defaultBeadSizeMm: BraceletBeadSizeMm;
-  beadSizeLabel?: string;
+  /** Primary display fit for strand A (kept for backwards compatibility). */
+  wristFit: BraceletWristFitEstimate;
+  /** Per-bracelet fit estimates; independent in matching mode. */
+  wristFitA: BraceletWristFitEstimate;
+  wristFitB?: BraceletWristFitEstimate;
+  /** Size offer key (`libraryId-mm`) selected when placing from the library. */
+  selectedSizeOfferKey: string | null;
+  selectedSizeLabel?: string;
   /** Grouped by admin bead type (display order). */
   materialSections: BraceletMaterialSection[];
   crystals: { name: string; quantity: number; subtotal: number }[];

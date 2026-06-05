@@ -3,6 +3,7 @@ import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BeadCropEditor, beadCropEditorPlateKey } from "@/features/admin/components/BeadCropEditor";
+import { BeadLibrarySizesPanel } from "@/features/admin/components/BeadLibrarySizesPanel";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 import { isApiError, uploadApi } from "@/services/api";
@@ -145,9 +146,12 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
         <div className="col-span-2">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Name *</label>
           <input
+            type="text"
             required
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
+            placeholder="e.g. Gold Spacer, Rose Quartz"
+            autoComplete="off"
             className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-body focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
@@ -263,6 +267,14 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
             />
           )}
         </div>
+      ) : null}
+
+      {form.id ? (
+        <BeadLibrarySizesPanel
+          beadLibraryId={form.id}
+          basePrice={form.price}
+          beadTypeSlug={cat.beadTypes.find((t) => t.id === form.beadTypeId)?.slug}
+        />
       ) : null}
 
       <div className="flex justify-end gap-2 border-t border-border pt-2">

@@ -1,17 +1,24 @@
 import { ChevronDown, ChevronUp, Gem, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-import type { BraceletBuilderSummary } from "@bino-foundry/shared/types";
+import type {
+  BraceletBuilderSummary,
+  BraceletStrandSummary,
+  BraceletWristFitEstimate,
+} from "@bino-foundry/shared/types";
 
 import { cn } from "@/lib/utils";
 
 import { BRACELET_COPY } from "../copy";
+import { formatWristFitRange } from "../wrist-fit";
+import { BraceletBuilderActions, type BraceletBuilderActionsProps } from "./BraceletBuilderActions";
 
 interface BraceletSummaryPanelProps {
   summary: BraceletBuilderSummary;
   className?: string;
   collapsible?: boolean;
   defaultOpen?: boolean;
+  builderActions?: BraceletBuilderActionsProps;
 }
 
 function MaterialGroup({
@@ -49,50 +56,86 @@ function MaterialGroup({
   );
 }
 
+function StrandFitCard({
+  strand,
+  fit,
+  showStrandLabel,
+}: {
+  strand: BraceletStrandSummary;
+  fit: BraceletWristFitEstimate;
+  showStrandLabel: boolean;
+}) {
+  const fillPct = strand.wristCircumferenceMm
+    ? Math.round((strand.usedMm / strand.wristCircumferenceMm) * 100)
+    : 0;
+
+  return (
+    <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-transparent to-transparent p-4">
+      {showStrandLabel ? (
+        <p className="font-display text-sm font-semibold text-foreground">{strand.label}</p>
+      ) : (
+        <p className="font-display text-sm font-semibold text-foreground">{BRACELET_COPY.summaryWristFit}</p>
+      )}
+      <p className={`text-sm text-foreground/90 ${showStrandLabel ? "mt-1" : "mt-1"}`}>
+        {formatWristFitRange(fit)}
+      </p>
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+        <div>
+          <dt className="text-muted-foreground">{BRACELET_COPY.summaryLength}</dt>
+          <dd className="font-medium tabular-nums text-foreground">{fit.lengthMm} mm</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">{BRACELET_COPY.summaryBeadCount}</dt>
+          <dd className="font-medium tabular-nums text-foreground">{fit.beadCount}</dd>
+        </div>
+      </dl>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary/80 transition-all duration-300"
+          style={{ width: `${fillPct}%` }}
+        />
+      </div>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">
+        {strand.usedMm} mm on strand
+        {strand.remainingMm > 0
+          ? ` · ${Math.round(strand.remainingMm)} mm available`
+          : fit.beadCount > 0
+            ? " · strand complete"
+            : ""}
+      </p>
+    </div>
+  );
+}
+
 export function BraceletSummaryPanel({
   summary,
   className,
   collapsible = false,
   defaultOpen = true,
+  builderActions,
 }: BraceletSummaryPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
   const { pricing } = summary;
-  const remaining = pricing.capacityCount - pricing.placedCount;
-  const fillPct = pricing.capacityCount
-    ? Math.round((pricing.placedCount / pricing.capacityCount) * 100)
-    : 0;
+
+  const strandFitCards = summary.strands.map((strand, i) => ({
+    strand,
+    fit: i === 0 ? summary.wristFitA : summary.wristFitB ?? summary.wristFitA,
+  }));
 
   const body = (
     <div className="space-y-4">
-      <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-transparent to-transparent p-4">
-        <p className="text-xs leading-relaxed text-muted-foreground">{summary.configSummary}</p>
-        {summary.beadSizeLabel ? (
-          <p className="mt-2 text-[11px] text-foreground/80">
-            Selected bead size: <span className="font-medium">{summary.beadSizeLabel}</span>
-          </p>
-        ) : null}
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary/80 transition-all duration-300"
-            style={{ width: `${fillPct}%` }}
-          />
-        </div>
-        <p className="mt-1.5 text-[10px] text-muted-foreground">
-          {pricing.placedCount} of {pricing.capacityCount} spaces filled
-        </p>
-      </div>
+      {builderActions ? (
+        <BraceletBuilderActions {...builderActions} />
+      ) : null}
 
-      <div className="grid gap-2">
-        {summary.strands.map((s) => (
-          <div
-            key={s.index}
-            className="rounded-lg border border-border/70 bg-card/80 px-3 py-2.5 shadow-sm"
-          >
-            <p className="font-display text-sm font-medium text-foreground">{s.label}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {s.wristSizeCm} cm wrist · {s.placedCount} of {s.capacity} beads
-            </p>
-          </div>
+      <div className={summary.twinning ? "grid gap-3" : undefined}>
+        {strandFitCards.map(({ strand, fit }) => (
+          <StrandFitCard
+            key={strand.index}
+            strand={strand}
+            fit={fit}
+            showStrandLabel={summary.twinning}
+          />
         ))}
       </div>
 
@@ -116,14 +159,8 @@ export function BraceletSummaryPanel({
                 <MaterialGroup title="Crystals" icon={Gem} rows={summary.crystals} />
                 <MaterialGroup title="Charms" icon={Sparkles} rows={summary.charms} />
                 <MaterialGroup title="Spacers" icon={Gem} rows={summary.spacers} />
-                {summary.other.length > 0 ? (
-                  <MaterialGroup title="Other accents" icon={Sparkles} rows={summary.other} />
-                ) : null}
               </>
             )}
-          {remaining > 0 ? (
-            <p className="text-center text-[11px] text-muted-foreground">{BRACELET_COPY.summaryRemaining(remaining)}</p>
-          ) : null}
         </div>
       )}
 
@@ -152,7 +189,9 @@ export function BraceletSummaryPanel({
         <div className="border-b border-border/80 px-4 py-4">
           <h2 className="font-display text-base font-semibold text-foreground">{BRACELET_COPY.summaryTitle}</h2>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4">{body}</div>
+        <div className="flex-1 overflow-y-auto px-4 py-4" data-scroll-isolate="true" onWheel={(e) => e.stopPropagation()}>
+          {body}
+        </div>
       </aside>
     );
   }
@@ -170,7 +209,15 @@ export function BraceletSummaryPanel({
         </div>
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </button>
-      {open ? <div className="max-h-[45vh] overflow-y-auto px-4 pb-4">{body}</div> : null}
+      {open ? (
+        <div
+          className="max-h-[45vh] overflow-y-auto px-4 pb-4"
+          data-scroll-isolate="true"
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {body}
+        </div>
+      ) : null}
     </div>
   );
 }

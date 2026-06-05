@@ -12,13 +12,11 @@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-import { DEFAULT_BRACELET_PRICING_RULES } from "@bino-foundry/shared/types";
-
-import { calculateUnitPrice } from "@/features/bracelet/pricing";
 import { DEFAULT_CRYSTALS } from "@/data/crystals";
 import { DEFAULT_FRAMES, type FrameEntry } from "@/data/glasses";
 import { getCatalogueSnapshot } from "@/data/index";
 import type { BeadLibraryEntry } from "@/types/beads";
+import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
 // Re-export entry types under the legacy names used across the app
 export type { CrystalEntry as CrystalBead } from "@/data/crystals";
@@ -60,15 +58,19 @@ export type BeadSize = number;
 /** @deprecated Use beadTypeSlug on BeadLibraryEntry */
 export type ItemType = string;
 
-/** Unified placed bead on the strand. */
+/** Unified placed bead on the strand (per-library enabled size + price). */
 export interface PlacedBead {
   position: number;
   bead: BeadLibraryEntry;
-  beadSize: BeadSize;
+  size: BeadLibrarySizeOffer;
+}
+
+export function placedBeadSizeMm(item: PlacedBead): BeadSize {
+  return item.size.sizeMm;
 }
 
 export function getPlacedBeadPrice(item: PlacedBead): number {
-  return calculateUnitPrice(item.bead, item.beadSize, DEFAULT_BRACELET_PRICING_RULES);
+  return item.size.unitPrice;
 }
 
 export function calculateBeadPrice(

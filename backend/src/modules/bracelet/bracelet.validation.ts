@@ -2,12 +2,26 @@ import { z } from "zod";
 
 const beadSizeMm = z.number().int().min(4).max(24);
 
-export const braceletConfigItemDto = z.object({
-  strandIndex: z.union([z.literal(0), z.literal(1)]),
-  slotPosition: z.number().int().min(0),
-  beadLibraryId: z.string().min(1),
-  beadSizeMm: beadSizeMm,
-});
+export const braceletConfigItemDto = z
+  .object({
+    strandIndex: z.union([z.literal(0), z.literal(1)]),
+    slotPosition: z.number().int().min(0),
+    beadLibraryId: z.string().min(1),
+    beadSizeMm: beadSizeMm,
+    /** @deprecated Use beadLibraryId + beadSizeMm — accepted for older clients. */
+    beadVariantId: z.string().min(1).optional(),
+  })
+  .transform((item) => ({
+    ...item,
+    beadSizeMm:
+      item.beadSizeMm ??
+      (item.beadVariantId?.match(/-(\d+)$/)?.[1]
+        ? Number(item.beadVariantId.match(/-(\d+)$/)![1])
+        : undefined),
+  }))
+  .refine((item) => item.beadSizeMm !== undefined, {
+    message: "beadSizeMm is required",
+  });
 
 export const createBraceletConfigDto = z
   .object({
@@ -22,7 +36,7 @@ export const createBraceletConfigDto = z
     twinning: v.twinning ?? false,
     wristSizeCmA: v.wristSizeCmA,
     wristSizeCmB: v.wristSizeCmB ?? 16,
-    defaultBeadSizeMm: v.defaultBeadSizeMm ?? 8,
+    defaultBeadSizeMm: v.defaultBeadSizeMm ?? null,
     items: v.items,
     status: (v.status ?? "saved") as "draft" | "saved",
   }));
@@ -40,7 +54,7 @@ export type CreateBraceletConfigDTO = {
   twinning: boolean;
   wristSizeCmA: number;
   wristSizeCmB: number;
-  defaultBeadSizeMm: number;
+  defaultBeadSizeMm: number | null;
   items: z.infer<typeof braceletConfigItemDto>[];
   status: "draft" | "saved";
 };

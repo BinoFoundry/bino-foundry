@@ -12,7 +12,6 @@ export interface CreateBraceletConfigBody {
   twinning: boolean;
   wristSizeCmA: number;
   wristSizeCmB: number;
-  defaultBeadSizeMm: number;
   status?: "draft" | "saved";
   items: {
     strandIndex: 0 | 1;

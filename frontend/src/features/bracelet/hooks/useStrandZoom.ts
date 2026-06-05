@@ -7,6 +7,13 @@ import {
   type RefObject,
 } from "react";
 
+import { shouldApplyCanvasWheelZoom, shouldStartCanvasPan } from "../interaction";
+
+export interface StrandZoomOptions {
+  /** When true, pan gestures are ignored (e.g. library HTML5 drag in progress). */
+  suspendPan?: boolean;
+}
+
 export const STRAND_ZOOM_MIN = 0.55;
 export const STRAND_ZOOM_MAX = 3;
 const ZOOM_BUTTON_STEP = 0.08;
@@ -14,7 +21,7 @@ const ZOOM_WHEEL_SENSITIVITY = 0.0011;
 const ZOOM_SMOOTH_FACTOR = 0.28;
 const ZOOM_SNAP_EPSILON = 0.006;
 const TWIN_STRAND_GAP_PX = 24;
-const STRAND_CHROME_Y_PX = 72;
+const STRAND_CHROME_Y_PX = 52;
 
 export interface StrandPan {
   x: number;
@@ -27,6 +34,8 @@ export interface StrandZoomLayout {
 }
 
 export interface StrandZoomRefs {
+  /** Element that receives wheel / pinch zoom (strand canvas only — not library or summary). */
+  zoomSurfaceRef?: RefObject<HTMLElement | null>;
   containerRef?: RefObject<HTMLElement | null>;
   viewportRef?: RefObject<HTMLElement | null>;
   contentRef?: RefObject<HTMLElement | null>;
@@ -90,8 +99,14 @@ function computePanBounds(
 }
 
 /** Strand zoom (layout size) + pan offset for inspecting zoomed areas. */
-export function useStrandZoom(refs: StrandZoomRefs, layout: StrandZoomLayout, initial = 1) {
-  const { containerRef, viewportRef, contentRef } = refs;
+export function useStrandZoom(
+  refs: StrandZoomRefs,
+  layout: StrandZoomLayout,
+  initial = 1,
+  options: StrandZoomOptions = {},
+) {
+  const { zoomSurfaceRef, containerRef, viewportRef, contentRef } = refs;
+  const { suspendPan = false } = options;
   const layoutRef = useRef<StrandZoomLayout & { zoom: number }>({ ...layout, zoom: initial });
 
   const [zoomTarget, setZoomTarget] = useState(initial);
@@ -217,22 +232,24 @@ export function useStrandZoom(refs: StrandZoomRefs, layout: StrandZoomLayout, in
   }, [containerRef, viewportRef, contentRef, measurePanBounds]);
 
   useEffect(() => {
-    const el = containerRef?.current;
+    const el = zoomSurfaceRef?.current ?? viewportRef?.current;
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
       if (e.deltaY === 0) return;
+      if (!shouldApplyCanvasWheelZoom(e, el)) return;
       e.preventDefault();
+      e.stopPropagation();
       const factor = Math.exp(-e.deltaY * ZOOM_WHEEL_SENSITIVITY);
       setZoomTarget((z) => clampZoom(z * factor));
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [containerRef]);
+  }, [zoomSurfaceRef, viewportRef]);
 
   useEffect(() => {
-    const el = viewportRef?.current ?? containerRef?.current;
+    const el = zoomSurfaceRef?.current ?? viewportRef?.current ?? containerRef?.current;
     if (!el) return;
 
     let pinchDistance = 0;
@@ -277,9 +294,9 @@ export function useStrandZoom(refs: StrandZoomRefs, layout: StrandZoomLayout, in
 
   const onPanPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
-      if (!panMode || e.button !== 0) return;
+      if (!panMode || suspendPan || e.button !== 0) return;
+      if (!shouldStartCanvasPan(e.target)) return;
       e.preventDefault();
-      e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
       panDragRef.current = {
         startX: e.clientX,
@@ -290,7 +307,7 @@ export function useStrandZoom(refs: StrandZoomRefs, layout: StrandZoomLayout, in
       isPanningRef.current = true;
       setIsPanning(true);
     },
-    [panMode],
+    [panMode, suspendPan],
   );
 
   const onPanPointerMove = useCallback(

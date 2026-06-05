@@ -1,53 +1,58 @@
 import { describe, expect, it } from "vitest";
 
 import type { PlacedBead } from "@/lib/luxe-data";
+import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
+import type { BeadLibraryEntry } from "@/types/beads";
 
-import { countPrunedBeads, prunePlacedBeads, strandCapacity } from "./capacity";
+import {
+  canPlaceBeadSize,
+  prunePlacedBeads,
+  strandRemainingMm,
+  strandUsedMm,
+  wristCircumferenceMm,
+} from "./capacity";
 
-function bead(position: number): PlacedBead {
-  return {
-    position,
-    beadSize: 8,
-    bead: {
-      id: `b-${position}`,
-      name: "Test",
-      price: 1,
-      image: "",
-      beadTypeId: "t1",
-      beadTypeSlug: "crystal",
-      description: "",
-    },
+function bead(position: number, mm: number): PlacedBead {
+  const lib: BeadLibraryEntry = {
+    id: `b-${position}`,
+    name: "Test",
+    price: 1,
+    image: "",
+    beadTypeId: "t1",
+    beadTypeSlug: "crystal",
+    description: "",
   };
+  const s: BeadLibrarySizeOffer = {
+    id: `v-${mm}`,
+    beadLibraryId: lib.id,
+    beadSizeId: `s-${mm}`,
+    sizeMm: mm,
+    unitPrice: mm,
+    label: `${mm} mm`,
+    offerKey: `b-${position}-${mm}`,
+  };
+  return { position, bead: lib, size: s };
 }
 
-describe("strandCapacity", () => {
-  it("scales inversely with bead mm for the same wrist", () => {
-    const wrist = 16;
-    expect(strandCapacity(wrist, 6)).toBeGreaterThan(strandCapacity(wrist, 10));
+describe("wrist fit (advisory)", () => {
+  it("sums variant mm for composition length", () => {
+    const placed = [bead(0, 6), bead(1, 8), bead(2, 4)];
+    expect(strandUsedMm(placed)).toBe(18);
+    expect(strandRemainingMm(16, placed)).toBe(142);
   });
 
-  it("increases when wrist grows at fixed mm", () => {
-    expect(strandCapacity(18, 8)).toBeGreaterThan(strandCapacity(16, 8));
-  });
-
-  it("matches product formula round((wrist*10)/mm) with min 8", () => {
-    expect(strandCapacity(16, 8)).toBe(20);
-    expect(strandCapacity(16, 10)).toBe(16);
-    expect(strandCapacity(14, 10)).toBe(14);
-    expect(strandCapacity(10, 12)).toBe(8);
+  it("never blocks placement by wrist or slot count", () => {
+    const placed = [bead(0, 10), bead(1, 10)];
+    expect(canPlaceBeadSize(14, placed, 40)).toBe(true);
   });
 });
 
 describe("prunePlacedBeads", () => {
-  it("drops beads outside new capacity and keeps order", () => {
-    const placed = [bead(0), bead(5), bead(19), bead(25)];
-    const next = prunePlacedBeads(placed, 20);
-    expect(next.map((b) => b.position)).toEqual([0, 5, 19]);
-  });
-
-  it("reports prune count", () => {
-    const placed = [bead(0), bead(21), bead(22)];
-    expect(countPrunedBeads(placed, 20)).toBe(2);
-    expect(countPrunedBeads(placed, 25)).toBe(0);
+  it("normalizes sequence without removing beads", () => {
+    const placed = [bead(2, 8), bead(0, 6), bead(1, 4)];
+    const next = prunePlacedBeads(placed);
+    expect(next.map((b) => b.position)).toEqual([0, 1, 2]);
+    expect(strandUsedMm(next)).toBe(18);
+    expect(strandUsedMm(next)).toBeLessThanOrEqual(wristCircumferenceMm(14) + 100);
   });
 });

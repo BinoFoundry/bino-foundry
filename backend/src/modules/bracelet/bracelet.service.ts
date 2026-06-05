@@ -4,7 +4,8 @@ import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
 import type { CreateBraceletConfigDTO } from "./bracelet.validation.js";
-import { loadBraceletPricingContext, unitPriceWithContext } from "./bracelet-pricing.js";
+import { beadLibrarySizeService } from "../bead-library-sizes/bead-library-size.service.js";
+import { settingsService } from "../settings/settings.service.js";
 
 function newPublicId(): string {
   return `brc_${randomBytes(8).toString("hex")}`;
@@ -62,24 +63,45 @@ export class BraceletService {
     }
 
     const supabase = getSupabaseServiceRole();
-    const pricing = await loadBraceletPricingContext();
+    const siteSettings = await settingsService.getGeneralSettings();
+    const resolveKeys = dto.items.map((i) => ({
+      beadLibraryId: i.beadLibraryId,
+      beadSizeMm: i.beadSizeMm!,
+    }));
+    const sizeByKey = await beadLibrarySizeService.resolveForConfiguration(resolveKeys);
     const publicIds = [...new Set(dto.items.map((i) => i.beadLibraryId))];
     const beadByPublicId = await this.resolveBeads(publicIds);
     this.validateItemsAgainstCatalog(publicIds, beadByPublicId);
 
+    const missingSizes: string[] = [];
     let subtotal = 0;
     const itemRows = dto.items.map((item) => {
       const bead = beadByPublicId.get(item.beadLibraryId)!;
-      const unit = unitPriceWithContext(bead.unitPrice, bead.slug, item.beadSizeMm, pricing);
+      const key = `${item.beadLibraryId}:${item.beadSizeMm}`;
+      const offer = sizeByKey.get(key);
+      if (!offer) {
+        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
+        return null;
+      }
+      if (offer.libraryUuid !== bead.id) {
+        throw new ValidationError(`Size ${item.beadSizeMm}mm is not enabled for bead ${item.beadLibraryId}`);
+      }
+      const unit = offer.unitPrice;
       subtotal += unit;
       return {
         strand_index: item.strandIndex,
         slot_position: item.slotPosition,
         bead_library_id: bead.id,
-        bead_size_mm: item.beadSizeMm,
+        bead_library_size_id: offer.id,
+        bead_size_mm: offer.sizeMm,
         unit_price_snapshot: unit,
       };
     });
+
+    if (missingSizes.length) {
+      throw new ValidationError(`Size not enabled for bead: ${[...new Set(missingSizes)].join(", ")}`);
+    }
+    const rows = itemRows.filter((r): r is NonNullable<typeof r> => r !== null);
 
     const publicId = newPublicId();
     const { data: config, error: configErr } = await supabase
@@ -90,8 +112,8 @@ export class BraceletService {
         twinning: dto.twinning,
         wrist_size_cm_a: dto.wristSizeCmA,
         wrist_size_cm_b: dto.wristSizeCmB,
-        default_bead_size_mm: dto.defaultBeadSizeMm,
-        currency_code: pricing.currencyCode,
+        default_bead_size_mm: dto.defaultBeadSizeMm ?? null,
+        currency_code: siteSettings.currencyCode,
         subtotal,
         item_count: dto.items.length,
         owner_user_id: ownerUserId ?? null,
@@ -104,7 +126,7 @@ export class BraceletService {
 
     const configId = (config as { id: string }).id;
     const { error: itemsErr } = await supabase.from("bracelet_configuration_items").insert(
-      itemRows.map((row) => ({ configuration_id: configId, ...row })),
+      rows.map((row) => ({ configuration_id: configId, ...row })),
     );
 
     assertNoDbError(itemsErr);
@@ -129,7 +151,7 @@ export class BraceletService {
     const { data: items, error: itemsErr } = await supabase
       .from("bracelet_configuration_items")
       .select(
-        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_libraries(public_id, name, is_active, bead_types(slug))",
+        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_size_id, bead_library_sizes(unit_price, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, bead_types(slug))",
       )
       .eq("configuration_id", configId)
       .order("strand_index")
@@ -141,13 +163,19 @@ export class BraceletService {
       const r = row as Record<string, unknown>;
       const lib = r.bead_libraries as Record<string, unknown> | null;
       const type = lib?.bead_types as { slug?: string } | null;
+      const offer = r.bead_library_sizes as Record<string, unknown> | null;
+      const sizeRow = offer?.bead_sizes as { size_mm?: number; label?: string } | null;
+      const sizeMm = Number(r.bead_size_mm ?? sizeRow?.size_mm ?? 0);
+      const libraryPublicId = String(lib?.public_id ?? "");
       return {
         strandIndex: r.strand_index,
         slotPosition: r.slot_position,
-        beadLibraryId: lib?.public_id,
+        beadLibraryId: libraryPublicId,
+        beadSizeMm: sizeMm,
+        offerKey: libraryPublicId ? `${libraryPublicId}-${sizeMm}` : "",
         beadName: lib?.name,
+        sizeLabel: sizeRow?.label ?? `${sizeMm} mm`,
         beadTypeSlug: type?.slug,
-        beadSizeMm: r.bead_size_mm,
         unitPrice: Number(r.unit_price_snapshot),
         beadActive: lib?.is_active !== false,
       };
@@ -213,20 +241,28 @@ export class BraceletService {
 
   async recalculatePricing(publicId: string) {
     const existing = await this.getConfiguration(publicId, { validateCatalog: true });
-    const pricing = await loadBraceletPricingContext();
+    const resolveKeys = existing.items.map((i) => ({
+      beadLibraryId: String(i.beadLibraryId),
+      beadSizeMm: Number(i.beadSizeMm),
+    }));
+    const sizeByKey = await beadLibrarySizeService.resolveForConfiguration(resolveKeys);
     const beadIds = [...new Set(existing.items.map((i) => String(i.beadLibraryId)))];
     const beadMap = await this.resolveBeads(beadIds);
 
     let subtotal = 0;
     const lineItems = existing.items.map((item) => {
       const bead = beadMap.get(String(item.beadLibraryId))!;
-      const unit = unitPriceWithContext(bead.unitPrice, bead.slug, Number(item.beadSizeMm), pricing);
+      const key = `${item.beadLibraryId}:${item.beadSizeMm}`;
+      const offer = sizeByKey.get(key);
+      const unit = offer?.unitPrice ?? Number(item.unitPrice);
       subtotal += unit;
       return {
         beadLibraryId: item.beadLibraryId,
-        beadName: bead.name,
-        beadTypeSlug: item.beadTypeSlug,
         beadSizeMm: item.beadSizeMm,
+        offerKey: offer ? `${item.beadLibraryId}-${offer.sizeMm}` : item.offerKey,
+        beadName: bead.name,
+        sizeLabel: offer?.label ?? item.sizeLabel,
+        beadTypeSlug: item.beadTypeSlug,
         unitPrice: unit,
         lineTotal: unit,
       };
@@ -234,7 +270,7 @@ export class BraceletService {
 
     return {
       configurationId: existing.id,
-      currencyCode: pricing.currencyCode,
+      currencyCode: existing.currencyCode,
       subtotal,
       itemCount: existing.itemCount,
       lineItems,

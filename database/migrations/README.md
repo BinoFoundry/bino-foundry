@@ -34,6 +34,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 8. `000008_svg_lens_clip_config.sql` — **`clip_config`** / **`clip_status`** on `frame_render_views`; adds `three_quarter` view axis. Sunglasses tint uses SVG clip paths (replaces canvas mask bitmap workflow for new saves).
 9. `000009_bracelet_configurations.sql` — saved bracelet designs (`bracelet_configurations`, `bracelet_configuration_items`); seeds `bracelet.pricing_v1` in `config_kv`.
 10. `000010_bead_sizes.sql` — admin-managed bead sizes (`bead_sizes`) for slot capacity and pricing multipliers.
+11. `000015_bracelet_per_item_sizing.sql` — optional `default_bead_size_mm` (placement hint); per-item `bead_size_mm` is source of truth for fit.
+12. `000016_bead_variants.sql` — `bead_variants` (legacy; superseded by 000017).
+13. `000017_bead_library_sizes.sql` — `bead_library_sizes` junction (library × global `bead_sizes` + per-size price); migrates variants; drops `bead_variants`.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 
