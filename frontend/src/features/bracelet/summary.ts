@@ -9,7 +9,7 @@ import type { PlacedBead } from "@/lib/luxe-data";
 import type { BeadTypeEntry } from "@/types/beads";
 
 import { BRACELET_COPY } from "./copy";
-import { estimateWristFit, formatWristFitRange } from "./wrist-fit";
+import { estimateWristFit, formatTargetWristLabel } from "./wrist-fit";
 
 const CRYSTAL_SLUGS = new Set(["crystal", "accent"]);
 const CHARM_SLUGS = new Set(["charm"]);
@@ -72,13 +72,9 @@ function buildMaterialSections(
   return ordered;
 }
 
-function joinedWristFitLabel(
-  twinning: boolean,
-  fitA: { minCm: number; maxCm: number; lengthMm: number; beadCount: number },
-  fitB?: { minCm: number; maxCm: number; lengthMm: number; beadCount: number },
-): string {
-  if (!twinning || !fitB) return formatWristFitRange(fitA);
-  return `A: ${formatWristFitRange(fitA)} · B: ${formatWristFitRange(fitB)}`;
+function joinedWristFitLabel(twinning: boolean, wristA: number, wristB: number): string {
+  if (!twinning) return formatTargetWristLabel(wristA);
+  return `${BRACELET_COPY.wristTwinA}: ${formatTargetWristLabel(wristA)} · ${BRACELET_COPY.wristTwinB}: ${formatTargetWristLabel(wristB)}`;
 }
 
 export function formatBraceletConfigSummary(
@@ -112,7 +108,7 @@ export function buildBraceletBuilderSummary(
   const { strandA, strandB } = pricing.strandFit;
   const wristFitA = estimateWristFit(placedA);
   const wristFitB = twinning ? estimateWristFit(placedB) : undefined;
-  const wristFitLabel = joinedWristFitLabel(twinning, wristFitA, wristFitB);
+  const wristFitLabel = joinedWristFitLabel(twinning, wristA, wristB);
   const { crystals, charms, spacers, other } = groupByProductKind(pricing);
   const materialSections = buildMaterialSections(pricing, beadTypes);
 
@@ -126,6 +122,9 @@ export function buildBraceletBuilderSummary(
       usedMm: strandA.usedMm,
       wristCircumferenceMm: strandA.wristCircumferenceMm,
       remainingMm: strandA.remainingMm,
+      capacityPercent: strandA.capacityPercent,
+      isOverCapacity: strandA.isOverCapacity,
+      overCapacityMm: strandA.overCapacityMm,
     },
   ];
   if (twinning && strandB) {
@@ -138,6 +137,9 @@ export function buildBraceletBuilderSummary(
       usedMm: strandB.usedMm,
       wristCircumferenceMm: strandB.wristCircumferenceMm,
       remainingMm: strandB.remainingMm,
+      capacityPercent: strandB.capacityPercent,
+      isOverCapacity: strandB.isOverCapacity,
+      overCapacityMm: strandB.overCapacityMm,
     });
   }
 

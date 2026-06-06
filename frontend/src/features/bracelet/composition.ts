@@ -37,11 +37,11 @@ export function computeVisualLayoutCircumferenceMm(
   guideMm: number,
   wristSizeCm: number,
 ): number {
-  const composition = strandCircumferenceMm(placed, guideMm);
+  const wristMm = wristSizeCm * 10;
   if (normalizeFromSlots(placed).length === 0) {
-    return EMPTY_GUIDE_SLOT_COUNT * guideMm;
+    return Math.max(wristMm, EMPTY_GUIDE_SLOT_COUNT * guideMm);
   }
-  return Math.max(composition, wristSizeCm * 10, EMPTY_GUIDE_SLOT_COUNT * guideMm);
+  return Math.max(wristMm, EMPTY_GUIDE_SLOT_COUNT * guideMm);
 }
 
 /** Composition length (mm) — drives pricing/fit, independent of wrist target. */
@@ -93,4 +93,11 @@ export function removeBeadAt(placed: PlacedBead[], index: number): PlacedBead[] 
   const sorted = normalizeFromSlots(placed);
   if (index < 0 || index >= sorted.length) return sorted;
   return normalizeSequence(sorted.filter((_, i) => i !== index));
+}
+
+/** Swap bead at index — preserves position and sequence order. */
+export function replaceBeadAt(placed: PlacedBead[], index: number, bead: PlacedBead): PlacedBead[] {
+  const sorted = normalizeFromSlots(placed);
+  if (index < 0 || index >= sorted.length) return sorted;
+  return normalizeSequence(sorted.map((b, i) => (i === index ? { ...bead, position: i } : b)));
 }

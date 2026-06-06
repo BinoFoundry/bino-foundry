@@ -5,7 +5,9 @@ import {
   computeStrandPathLayout,
   evenBeadAngleRad,
   evenBeadAngleStepRad,
+  insertionIndexFromPointerAngle,
   polarToCartesian,
+  resolveStrandDropTarget,
   tangentRotationDeg,
 } from "./strand-path";
 
@@ -47,8 +49,49 @@ describe("beadIndexFromPointerAngle", () => {
   });
 });
 
+describe("insertionIndexFromPointerAngle", () => {
+  it("maps pointer to gap indices between beads", () => {
+    expect(insertionIndexFromPointerAngle(-Math.PI / 2, 4)).toBe(0);
+    expect(insertionIndexFromPointerAngle(-Math.PI / 4, 4)).toBe(1);
+    expect(insertionIndexFromPointerAngle(0, 4)).toBe(1);
+    expect(insertionIndexFromPointerAngle(Math.PI / 4, 4)).toBe(2);
+  });
+});
+
+describe("resolveStrandDropTarget", () => {
+  it("returns insert for empty strand", () => {
+    expect(resolveStrandDropTarget(0, 0)).toEqual({ mode: "insert", index: 0 });
+  });
+
+  it("prefers replace when pointer is near bead center", () => {
+    expect(resolveStrandDropTarget(-Math.PI / 2, 4)).toEqual({ mode: "replace", index: 0 });
+    expect(resolveStrandDropTarget(0, 4)).toEqual({ mode: "replace", index: 1 });
+  });
+
+  it("prefers insert when pointer is nearer a gap", () => {
+    const gapAngle = -Math.PI / 2 + evenBeadAngleStepRad(4) / 2;
+    expect(resolveStrandDropTarget(gapAngle, 4)).toEqual({ mode: "insert", index: 1 });
+  });
+});
+
 describe("computeStrandPathLayout", () => {
-  it("places beads at even polar angles regardless of bead size", () => {
+  it("uses elastic arc-length spacing when layoutCircumferenceMm is provided", () => {
+    const layout = computeStrandPathLayout({
+      beads: [
+        { index: 0, beadMm: 6 },
+        { index: 1, beadMm: 12 },
+        { index: 2, beadMm: 6 },
+      ],
+      layoutCircumferenceMm: 160,
+      centerX: 200,
+      centerY: 200,
+      radius: 120,
+    });
+    expect(layout[1]!.arcSpan).toBeGreaterThan(layout[0]!.arcSpan);
+    expect(layout[1]!.arcSpan).toBeGreaterThan(layout[2]!.arcSpan);
+  });
+
+  it("places beads at even polar angles when bead mm weights are absent", () => {
     const layout = computeStrandPathLayout({
       beads: [
         { index: 0, beadMm: 12, extentPx: 40 },

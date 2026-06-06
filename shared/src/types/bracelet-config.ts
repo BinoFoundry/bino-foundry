@@ -44,9 +44,16 @@ export interface BraceletPricingLineItem {
 
 /** Wrist-fit metrics for one strand (mixed bead sizes). */
 export interface BraceletStrandFitMetrics {
+  /** Selected wrist target (mm). */
   wristCircumferenceMm: number;
+  /** Sum of placed bead diameters (mm). */
   usedMm: number;
+  /** Target minus used; negative when over capacity. */
   remainingMm: number;
+  /** Used / target as 0–100+ (can exceed 100). */
+  capacityPercent: number;
+  isOverCapacity: boolean;
+  overCapacityMm: number;
   maxSlots: number;
   placedCount: number;
 }
@@ -87,12 +94,14 @@ export interface BraceletStrandSummary {
   index: 0 | 1;
   label: string;
   wristSizeCm: number;
-  /** Max slot positions (smallest catalog mm). */
   maxSlots: number;
   placedCount: number;
   usedMm: number;
   wristCircumferenceMm: number;
   remainingMm: number;
+  capacityPercent: number;
+  isOverCapacity: boolean;
+  overCapacityMm: number;
 }
 
 export interface BraceletMaterialSection {

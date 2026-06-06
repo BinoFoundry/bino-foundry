@@ -6,6 +6,7 @@ import { requireMutationAuth } from "../middleware/auth-mutations.js";
 import { createBeadLibraryRoutes } from "../modules/bead-libraries/bead-library.routes.js";
 import { createBeadTypeRoutes } from "../modules/bead-types/bead-type.routes.js";
 import { createBeadSizeRoutes } from "../modules/bead-sizes/bead-size.routes.js";
+import { createWristSizeRoutes } from "../modules/wrist-sizes/wrist-size.routes.js";
 import { beadLibrarySizeHandlers } from "../modules/bead-library-sizes/bead-library-size.controller.js";
 import { createBraceletRoutes } from "../modules/bracelet/bracelet.routes.js";
 import { createFrameRoutes } from "../modules/frames/frame.routes.js";
@@ -29,6 +30,7 @@ export function createCatalogRoutes(): Router {
   router.use("/frames", createFrameRoutes());
   router.use("/bead-types", createBeadTypeRoutes());
   router.use("/bead-sizes", createBeadSizeRoutes());
+  router.use("/wrist-sizes", createWristSizeRoutes());
   router.use("/bead-libraries", createBeadLibraryRoutes());
   router.use("/sunglasses", createSunglassesRoutes());
   router.use("/settings", createSettingsRoutes());

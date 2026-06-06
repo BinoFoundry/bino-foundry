@@ -7,6 +7,7 @@ export type AdminSection =
   | "beads"
   | "bead-types"
   | "bead-sizes"
+  | "wrist-sizes"
   | "sunglasses-config"
   | "general-settings"
   | "media";

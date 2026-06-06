@@ -1,3 +1,9 @@
+import type { PlacedBead } from "@/lib/luxe-data";
+import { getMaxSlotExtent } from "@/render/bead-crop";
+
+import { resolveStrandRingLayout } from "./strand-ring-geometry";
+import type { WristSizeBounds } from "./strand-ring";
+
 /**
  * Display-only viewport sizing for the bracelet builder canvas.
  * Does not affect wrist fit, pricing, or variant mm values.
@@ -6,15 +12,18 @@
 /** Design baseline for strand layout (see strand-layout.ts). */
 export const STRAND_LAYOUT_BASELINE_PX = 260;
 
+/** Minimal padding around the strand bounding box — prevents edge clipping only. */
+export const STRAND_CONTENT_PADDING_PX = 8;
+
 /** Fraction of available width/height used for the square strand canvas. */
-export const STRAND_VIEWPORT_FILL = 0.96;
+export const STRAND_VIEWPORT_FILL = 1;
 
-export const STRAND_RING_EDGE_PADDING_PX = 3;
+export const STRAND_RING_EDGE_PADDING_PX = 2;
 
-export const STRAND_TARGET_BBOX_FILL = 0.92;
+export const STRAND_TARGET_BBOX_FILL = 0.96;
 
 /** Max extra uniform boost when auto-fitting strand bbox into the canvas. */
-export const STRAND_MAX_LAYOUT_FILL = 1.42;
+export const STRAND_MAX_LAYOUT_FILL = 1.28;
 
 export interface StrandViewportMeasureInput {
   containerWidth: number;
@@ -29,28 +38,104 @@ export interface StrandViewportMeasureInput {
  */
 export function measureStrandCanvasSize(input: StrandViewportMeasureInput): number {
   const { containerWidth: w, containerHeight: h, isMobile, twinning, libraryOpen } = input;
-  const summaryOffset = !isMobile ? 320 : 0;
+  const summaryOffset = !isMobile ? 300 : 0;
 
   if (isMobile) {
     if (twinning) {
-      const side = Math.min((w - 16) / 2, h - 72);
+      const side = Math.min((w - 4) / 2, h - 24);
       return Math.round(
-        Math.max(168, Math.min(280, side * STRAND_VIEWPORT_FILL)),
+        Math.max(168, Math.min(320, side * STRAND_VIEWPORT_FILL)),
       );
     }
-    const side = Math.min(w - 20, h - 64);
+    const side = Math.min(w - 4, h - 20);
     return Math.round(
-      Math.max(220, Math.min(400, side * STRAND_VIEWPORT_FILL)),
+      Math.max(240, Math.min(480, side * STRAND_VIEWPORT_FILL)),
     );
   }
 
-  const sidebarOffset = libraryOpen ? 272 : 0;
-  const availableW = w - sidebarOffset - summaryOffset - 28;
+  const sidebarOffset = libraryOpen ? 256 : 0;
+  const availableW = w - sidebarOffset - summaryOffset - 4;
   const strandCount = twinning ? 2 : 1;
-  const gap = twinning ? 24 : 0;
+  const gap = twinning ? 12 : 0;
   const maxByWidth = (availableW - gap) / strandCount;
-  const maxByHeight = h - 16;
+  const maxByHeight = h;
   const side = Math.min(maxByWidth, maxByHeight) * STRAND_VIEWPORT_FILL;
 
-  return Math.round(Math.max(300, Math.min(580, side)));
+  return Math.round(Math.max(320, Math.min(760, side)));
+}
+
+export interface StrandContentBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/** Bounding box of ring + placed beads in layout coordinates. */
+export function computeStrandContentBounds(
+  slots: { x: number; y: number; width: number; height: number }[],
+  radius: number,
+  center: number,
+): StrandContentBounds {
+  let minX = center - radius;
+  let maxX = center + radius;
+  let minY = center - radius;
+  let maxY = center + radius;
+
+  for (const slot of slots) {
+    const hw = slot.width / 2;
+    const hh = slot.height / 2;
+    minX = Math.min(minX, slot.x - hw);
+    maxX = Math.max(maxX, slot.x + hw);
+    minY = Math.min(minY, slot.y - hh);
+    maxY = Math.max(maxY, slot.y + hh);
+  }
+
+  return { minX, maxX, minY, maxY };
+}
+
+/** Square canvas side length that fully contains the strand bounds. */
+export function squareCanvasSizeForBounds(
+  bounds: StrandContentBounds,
+  paddingPx: number,
+): number {
+  const w = bounds.maxX - bounds.minX + paddingPx * 2;
+  const h = bounds.maxY - bounds.minY + paddingPx * 2;
+  return Math.ceil(Math.max(w, h, 1));
+}
+
+/**
+ * Layout canvas size for a strand — at least the viewport budget, expanded when beads need more room.
+ */
+export function computeLayoutCanvasSize(params: {
+  placed: PlacedBead[];
+  wristSizeCm: number;
+  wristSizeBounds: WristSizeBounds;
+  viewportBudgetPx: number;
+  guideSizeMm: number;
+}): number {
+  const { placed, wristSizeCm, wristSizeBounds, viewportBudgetPx, guideSizeMm } = params;
+  const layout = resolveStrandRingLayout({
+    placed,
+    wristSizeCm,
+    wristSizeBounds,
+    canvasSize: viewportBudgetPx,
+    guideSizeMm,
+  });
+  if (!layout) return viewportBudgetPx;
+
+  const maxExtent = getMaxSlotExtent(layout.prelimDims);
+  const padding =
+    STRAND_RING_EDGE_PADDING_PX * layout.scaleFactor + STRAND_CONTENT_PADDING_PX;
+  const required = Math.ceil(2 * (layout.resolved.radiusPx + maxExtent / 2 + padding));
+  return Math.max(viewportBudgetPx, required);
+}
+
+/** Scale factor to fit a layout canvas into the viewport budget (never upscales above 1). */
+export function computeStrandAutoFitScale(
+  viewportBudgetPx: number,
+  layoutCanvasPx: number,
+): number {
+  if (layoutCanvasPx <= 0 || viewportBudgetPx <= 0) return 1;
+  return Math.min(1, viewportBudgetPx / layoutCanvasPx);
 }

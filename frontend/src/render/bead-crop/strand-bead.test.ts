@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mmToBasePx } from "./strand-bead";
+import { mmToBasePx, STRAND_BEAD_VISUAL_SCALE } from "./strand-bead";
 
 describe("mmToBasePx", () => {
   const sf = 1;
@@ -19,5 +19,10 @@ describe("mmToBasePx", () => {
     const eight = mmToBasePx(8, sf);
     const twelve = mmToBasePx(12, sf);
     expect(twelve / eight).toBeCloseTo(12 / 8, 5);
+  });
+
+  it("uses a balanced display scale multiplier", () => {
+    expect(STRAND_BEAD_VISUAL_SCALE).toBeGreaterThan(0.85);
+    expect(STRAND_BEAD_VISUAL_SCALE).toBeLessThan(1.05);
   });
 });

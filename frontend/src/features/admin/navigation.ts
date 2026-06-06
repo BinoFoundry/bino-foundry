@@ -1,4 +1,4 @@
-import { Gem, Glasses, Image, LayoutDashboard, Ruler, Settings, Settings2, Sun } from "lucide-react";
+import { CircleDot, Gem, Glasses, Image, LayoutDashboard, Ruler, Settings, Settings2, Sun } from "lucide-react";
 
 import type { AdminNavItem, AdminSection } from "./types";
 
@@ -36,6 +36,13 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Bead sizes",
     description: "Bracelet mm options and price multipliers",
     icon: Ruler,
+    group: "products",
+  },
+  {
+    id: "wrist-sizes",
+    label: "Wrist sizes",
+    description: "Customer wrist targets and bracelet capacity",
+    icon: CircleDot,
     group: "products",
   },
   {

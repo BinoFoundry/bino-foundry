@@ -1,13 +1,10 @@
-import type { BraceletWristFitEstimate } from "@bino-foundry/shared/types";
+import type { BraceletStrandFitMetrics, BraceletWristFitEstimate } from "@bino-foundry/shared/types";
 
 import type { PlacedBead } from "@/lib/luxe-data";
-import { placedBeadSizeMm } from "@/lib/luxe-data";
 
 import { strandUsedMm } from "./capacity";
 
-/** Comfort band: strand length maps to wrist circumference ±5%. */
-const FIT_TOLERANCE = 0.05;
-
+/** @deprecated Composition-derived estimate — prefer wrist-target capacity metrics in UI. */
 export function estimateWristFit(placed: PlacedBead[]): BraceletWristFitEstimate {
   const lengthMm = strandUsedMm(placed);
   if (lengthMm <= 0) {
@@ -17,29 +14,53 @@ export function estimateWristFit(placed: PlacedBead[]): BraceletWristFitEstimate
   return {
     lengthMm,
     beadCount: placed.length,
-    minCm: Math.round(centerCm * (1 - FIT_TOLERANCE) * 10) / 10,
-    maxCm: Math.round(centerCm * (1 + FIT_TOLERANCE) * 10) / 10,
+    minCm: Math.round(centerCm * 10) / 10,
+    maxCm: Math.round(centerCm * 10) / 10,
   };
 }
 
-export function formatWristFitRange(fit: BraceletWristFitEstimate): string {
-  if (fit.beadCount === 0) return "Add beads to see wrist fit";
-  if (fit.minCm === fit.maxCm) return `Fits ~${fit.minCm} cm wrist`;
-  return `Fits ${fit.minCm} cm – ${fit.maxCm} cm wrists`;
+export function formatCapacityCm(mm: number): string {
+  return `${(mm / 10).toFixed(1)} cm`;
+}
+
+export function formatTargetWristLabel(targetCm: number): string {
+  return `${targetCm} cm bracelet`;
+}
+
+export function formatCapacitySummary(
+  metrics: Pick<
+    BraceletStrandFitMetrics,
+    "wristCircumferenceMm" | "usedMm" | "remainingMm" | "capacityPercent" | "isOverCapacity"
+  >,
+  targetCm: number,
+): string {
+  if (metrics.usedMm <= 0) {
+    return `${targetCm} cm target · ${formatCapacityCm(metrics.wristCircumferenceMm)} available`;
+  }
+  if (metrics.isOverCapacity) {
+    return `Over capacity by ${formatCapacityCm(Math.abs(metrics.remainingMm))}`;
+  }
+  return `${formatCapacityCm(metrics.usedMm)} used · ${formatCapacityCm(Math.max(0, metrics.remainingMm))} remaining · ${metrics.capacityPercent}%`;
+}
+
+/** Footer / legacy helper — wrist-target first wording. */
+export function formatWristFitRange(
+  fit: BraceletWristFitEstimate,
+  targetCm?: number,
+): string {
+  if (targetCm) return formatTargetWristLabel(targetCm);
+  if (fit.beadCount === 0) return "Select your wrist size to begin";
+  return `${(fit.lengthMm / 10).toFixed(1)} cm on strand`;
 }
 
 export function wristTargetStatus(
-  targetWristCm: number,
+  _targetWristCm: number,
   usedMm: number,
   wristCircumferenceMm: number,
-): "under" | "ideal" | "over" {
-  if (usedMm <= 0) return "under";
+): "empty" | "under" | "ideal" | "over" {
+  if (usedMm <= 0) return "empty";
   const ratio = usedMm / wristCircumferenceMm;
-  if (ratio < 0.88) return "under";
-  if (ratio > 1.02) return "over";
-  return "ideal";
-}
-
-export function placedBeadSizeMmFromPlaced(placed: PlacedBead[]): number[] {
-  return placed.map(placedBeadSizeMm);
+  if (ratio > 1) return "over";
+  if (ratio >= 0.92) return "ideal";
+  return "under";
 }

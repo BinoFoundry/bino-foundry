@@ -1,0 +1,229 @@
+import { STRAND_PATH_START_ANGLE } from "./strand-path";
+
+export interface ElasticBeadLayout {
+  angles: number[];
+  arcSpans: number[];
+  gapMm: number;
+  insertionAngles: number[];
+  isOverCapacity: boolean;
+}
+
+function normalizeAngleRad(a: number): number {
+  let x = a % (2 * Math.PI);
+  if (x < 0) x += 2 * Math.PI;
+  return x;
+}
+
+/** Midpoint angle on the ring between two boundary angles (short arc). */
+export function midpointAngleRad(a: number, b: number): number {
+  const na = normalizeAngleRad(a);
+  const nb = normalizeAngleRad(b);
+  let delta = nb - na;
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+  return normalizeAngleRad(na + delta / 2);
+}
+
+/**
+ * Elastic arc-length distribution along a wrist-sized circumference.
+ * Each entry in `beadArcMm` is the arc length that bead must occupy (physical mm or visual mm).
+ */
+export function computeElasticBeadLayout(
+  beadArcMm: number[],
+  layoutCircumferenceMm: number,
+  startAngle = STRAND_PATH_START_ANGLE,
+  minGapPx = 0,
+): ElasticBeadLayout {
+  const n = beadArcMm.length;
+  if (!n || layoutCircumferenceMm <= 0) {
+    return {
+      angles: [],
+      arcSpans: [],
+      gapMm: 0,
+      insertionAngles: [startAngle],
+      isOverCapacity: false,
+    };
+  }
+
+  const totalBeadMm = beadArcMm.reduce((sum, mm) => sum + mm, 0);
+  const minTotalGap = n * minGapPx;
+  const isOverCapacity = totalBeadMm + minTotalGap > layoutCircumferenceMm + 1e-6;
+
+  const gapMm = isOverCapacity
+    ? 0
+    : Math.max(minGapPx, (layoutCircumferenceMm - totalBeadMm) / n);
+
+  const angles: number[] = [];
+  const arcSpans: number[] = [];
+
+  if (isOverCapacity) {
+    let cursorMm = 0;
+    for (let i = 0; i < n; i++) {
+      const arcMm = (beadArcMm[i]! / totalBeadMm) * layoutCircumferenceMm;
+      const centerMm = cursorMm + arcMm / 2;
+      angles.push(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI);
+      arcSpans.push((arcMm / layoutCircumferenceMm) * 2 * Math.PI);
+      cursorMm += arcMm;
+    }
+  } else {
+    // Anchor first bead center at startAngle; grow clockwise along the ring.
+    let cursorMm = -beadArcMm[0]! / 2;
+    for (let i = 0; i < n; i++) {
+      const mm = beadArcMm[i]!;
+      const centerMm = cursorMm + mm / 2;
+      angles.push(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI);
+      arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
+      cursorMm += mm + gapMm;
+    }
+  }
+
+  const insertionAngles: number[] = [];
+  if (n === 1) {
+    const beadAngle = angles[0]!;
+    const span = arcSpans[0]!;
+    const halfEmpty = (2 * Math.PI - span) / 2;
+    insertionAngles.push(normalizeAngleRad(beadAngle - span / 2 - halfEmpty / 2));
+    insertionAngles.push(normalizeAngleRad(beadAngle + span / 2 + halfEmpty / 2));
+  } else {
+    for (let i = 0; i <= n; i++) {
+      if (i === 0) {
+        const last = angles[n - 1]!;
+        const lastSpan = arcSpans[n - 1]!;
+        const first = angles[0]!;
+        const firstSpan = arcSpans[0]!;
+        insertionAngles.push(
+          midpointAngleRad(last + lastSpan / 2, first - firstSpan / 2),
+        );
+      } else if (i === n) {
+        const prev = angles[n - 1]!;
+        const prevSpan = arcSpans[n - 1]!;
+        const first = angles[0]!;
+        const firstSpan = arcSpans[0]!;
+        insertionAngles.push(
+          midpointAngleRad(prev + prevSpan / 2, first - firstSpan / 2),
+        );
+      } else {
+        const prev = angles[i - 1]!;
+        const prevSpan = arcSpans[i - 1]!;
+        const curr = angles[i]!;
+        const currSpan = arcSpans[i]!;
+        insertionAngles.push(
+          midpointAngleRad(prev + prevSpan / 2, curr - currSpan / 2),
+        );
+      }
+    }
+  }
+
+  return { angles, arcSpans, gapMm, insertionAngles, isOverCapacity };
+}
+
+export interface LayoutAngleSector {
+  index: number;
+  angle: number;
+  arcSpan: number;
+}
+
+export function beadIndexFromLayoutSectors(
+  pointerAngle: number,
+  sectors: LayoutAngleSector[],
+): number {
+  if (!sectors.length) return 0;
+  const target = normalizeAngleRad(pointerAngle);
+
+  let bestIdx = sectors[0]!.index;
+  let bestDist = Infinity;
+
+  for (const sector of sectors) {
+    const center = normalizeAngleRad(sector.angle);
+    const half = sector.arcSpan / 2;
+    let dist = Math.abs(target - center);
+    if (dist > Math.PI) dist = 2 * Math.PI - dist;
+    if (dist <= half + 0.001 && dist < bestDist) {
+      bestDist = dist;
+      bestIdx = sector.index;
+    }
+  }
+
+  if (bestDist === Infinity) {
+    for (const sector of sectors) {
+      const center = normalizeAngleRad(sector.angle);
+      let dist = Math.abs(target - center);
+      if (dist > Math.PI) dist = 2 * Math.PI - dist;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = sector.index;
+      }
+    }
+  }
+
+  return bestIdx;
+}
+
+export function insertionIndexFromLayoutGaps(
+  pointerAngle: number,
+  insertionAngles: number[],
+): number {
+  if (insertionAngles.length <= 1) return 0;
+  const target = normalizeAngleRad(pointerAngle);
+  let bestIdx = 0;
+  let bestDist = Infinity;
+  insertionAngles.forEach((angle, i) => {
+    const gap = normalizeAngleRad(angle);
+    let dist = Math.abs(target - gap);
+    if (dist > Math.PI) dist = 2 * Math.PI - dist;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  });
+  return bestIdx;
+}
+
+export function angularDistanceRad(a: number, b: number): number {
+  const delta = Math.abs(normalizeAngleRad(a) - normalizeAngleRad(b));
+  return Math.min(delta, 2 * Math.PI - delta);
+}
+
+export type StrandInsertTarget = { mode: "insert"; index: number };
+
+/** Nearest gap insertion index only (no bead replacement). */
+export function resolveLibraryInsertTarget(
+  pointerAngle: number,
+  insertionAngles: number[],
+): StrandInsertTarget {
+  return {
+    mode: "insert",
+    index: insertionIndexFromLayoutGaps(pointerAngle, insertionAngles),
+  };
+}
+
+export function resolveDropTargetFromLayout(
+  pointerAngle: number,
+  sectors: LayoutAngleSector[],
+  insertionAngles: number[],
+): { mode: "insert" | "replace"; index: number } {
+  if (!sectors.length) return { mode: "insert", index: 0 };
+
+  const beadIdx = beadIndexFromLayoutSectors(pointerAngle, sectors);
+  const insertIdx = insertionIndexFromLayoutGaps(pointerAngle, insertionAngles);
+  const beadAngle = sectors.find((s) => s.index === beadIdx)?.angle ?? pointerAngle;
+  const gapAngle = insertionAngles[insertIdx] ?? pointerAngle;
+  const toBead = angularDistanceRad(pointerAngle, beadAngle);
+  const toGap = angularDistanceRad(pointerAngle, gapAngle);
+
+  if (toBead <= toGap * 0.9) {
+    return { mode: "replace", index: beadIdx };
+  }
+  return { mode: "insert", index: insertIdx };
+}
+
+/** Convert rendered pixel extent to equivalent arc mm on the wrist circumference. */
+export function visualArcMmFromExtent(
+  extentPx: number,
+  radiusPx: number,
+  layoutCircumferenceMm: number,
+): number {
+  if (radiusPx <= 0 || extentPx <= 0) return 0;
+  const circumferencePx = 2 * Math.PI * radiusPx;
+  return (extentPx / circumferencePx) * layoutCircumferenceMm;
+}

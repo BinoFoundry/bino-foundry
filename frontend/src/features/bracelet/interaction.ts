@@ -35,7 +35,6 @@ export function shouldApplyCanvasWheelZoom(
 const PAN_BLOCKING_SELECTOR = [
   "[data-strand-slot]",
   "[data-bead-library-item]",
-  "[data-strand-drop-zone]",
   "button",
   "a",
   "input",
@@ -48,5 +47,5 @@ const PAN_BLOCKING_SELECTOR = [
 export function shouldStartCanvasPan(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   if (target.closest(PAN_BLOCKING_SELECTOR)) return false;
-  return !!target.closest("[data-strand-canvas], [data-strand-viewport]");
+  return !!target.closest("[data-strand-canvas], [data-strand-viewport], [data-strand-drop-zone]");
 }

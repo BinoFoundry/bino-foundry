@@ -22,7 +22,8 @@ const PX_AT_REFERENCE = 28;
  * Display-only strand density. Does not affect wrist fit, slot counts, pricing, or DB mm values.
  * Applied uniformly so variant ratios (e.g. 6 mm < 8 mm < 12 mm) stay identical.
  */
-export const STRAND_BEAD_VISUAL_SCALE = 1.32;
+/** Display-only; wrist capacity uses database mm values, not this multiplier. */
+export const STRAND_BEAD_VISUAL_SCALE = 0.96;
 
 export function mmToBasePx(sizeMm: number, scaleFactor: number): number {
   const mm = Math.max(4, Math.min(24, sizeMm));
@@ -54,6 +55,14 @@ export function getBeadSlotDimensions(
 export function getMaxSlotExtent(slots: { width: number; height: number }[]): number {
   if (!slots.length) return mmToBasePx(8, 1);
   return Math.max(...slots.map((s) => Math.max(s.width, s.height)));
+}
+
+/**
+ * Arc length along the ring tangent after strand rotation (width axis = tangent).
+ * Used for neighbor spacing — not max(width, height), which over-counts radial extent.
+ */
+export function getBeadTangentArcPx(dim: BeadSlotDimensions): number {
+  return dim.width;
 }
 
 export function getBeadImageUrl(bead: PlacedBead | null): string | null {

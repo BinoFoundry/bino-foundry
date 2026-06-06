@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Search, X, Info, Gem } from "lucide-react";
 
 import { BRACELET_COPY } from "@/features/bracelet/copy";
@@ -15,9 +15,15 @@ import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
+export interface LibraryDragPayload {
+  bead: BeadLibraryEntry;
+  size: BeadLibrarySizeOffer;
+}
+
 interface BeadLibraryProps {
   onSelectBead: (bead: BeadLibraryEntry, size?: BeadLibrarySizeOffer) => void;
   onLibraryDragActiveChange?: (active: boolean) => void;
+  onLibraryDragChange?: (active: boolean, payload?: LibraryDragPayload) => void;
   open: boolean;
   onClose: () => void;
 }
@@ -31,21 +37,52 @@ function startLibraryDrag(
   bead: BeadLibraryEntry,
   size: BeadLibrarySizeOffer,
   onLibraryDragActiveChange?: (active: boolean) => void,
+  onLibraryDragChange?: (active: boolean, payload?: LibraryDragPayload) => void,
 ) {
   e.dataTransfer.setData(BEAD_LIBRARY_DRAG_TYPE, dragPayload(bead, size));
   e.dataTransfer.setData("application/json", dragPayload(bead, size));
   e.dataTransfer.effectAllowed = "copy";
   onLibraryDragActiveChange?.(true);
+  onLibraryDragChange?.(true, { bead, size });
 }
 
-const BeadLibrary = ({ onSelectBead, onLibraryDragActiveChange, open, onClose }: BeadLibraryProps) => {
+const BeadLibrary = ({
+  onSelectBead,
+  onLibraryDragActiveChange,
+  onLibraryDragChange,
+  open,
+  onClose,
+}: BeadLibraryProps) => {
   const cat = useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currency = siteSettings.currencyCode;
   const [search, setSearch] = useState("");
   const [activeBeadTypeId, setActiveBeadTypeId] = useState<string>("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const suppressClickAfterDragRef = useRef(false);
   const isMobile = useIsMobile();
+
+  const endLibraryDrag = () => {
+    onLibraryDragActiveChange?.(false);
+    onLibraryDragChange?.(false);
+    suppressClickAfterDragRef.current = true;
+    window.setTimeout(() => {
+      suppressClickAfterDragRef.current = false;
+    }, 0);
+  };
+
+  const handleLibraryClick = (
+    bead: BeadLibraryEntry,
+    size: BeadLibrarySizeOffer | undefined,
+    options?: { toggleExpand?: boolean; expanded?: boolean },
+  ) => {
+    if (suppressClickAfterDragRef.current) return;
+    if (!size) return;
+    if (options?.toggleExpand) {
+      setExpandedId(options.expanded ? null : bead.id);
+    }
+    onSelectBead(bead, size);
+  };
 
   const activeTypes = useMemo(
     () =>
@@ -151,14 +188,16 @@ const BeadLibrary = ({ onSelectBead, onLibraryDragActiveChange, open, onClose }:
                       type="button"
                       data-bead-library-item
                       draggable={!isMobile && !!def}
-                      onDragStart={(e) => def && startLibraryDrag(e, bead, def, onLibraryDragActiveChange)}
-                      onDragEnd={() => onLibraryDragActiveChange?.(false)}
-                      onClick={() => {
-                        if (sizes.length > 1) {
-                          setExpandedId(expanded ? null : bead.id);
-                        }
-                        onSelectBead(bead, def);
-                      }}
+                      onDragStart={(e) =>
+                        def && startLibraryDrag(e, bead, def, onLibraryDragActiveChange, onLibraryDragChange)
+                      }
+                      onDragEnd={endLibraryDrag}
+                      onClick={() =>
+                        handleLibraryClick(bead, def, {
+                          toggleExpand: sizes.length > 1,
+                          expanded,
+                        })
+                      }
                       className="flex w-full items-center gap-2 p-2 text-left transition hover:bg-muted/50"
                     >
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center">
@@ -194,12 +233,12 @@ const BeadLibrary = ({ onSelectBead, onLibraryDragActiveChange, open, onClose }:
                             draggable={!isMobile}
                             onDragStart={(e) => {
                               e.stopPropagation();
-                              startLibraryDrag(e, bead, s, onLibraryDragActiveChange);
+                              startLibraryDrag(e, bead, s, onLibraryDragActiveChange, onLibraryDragChange);
                             }}
-                            onDragEnd={() => onLibraryDragActiveChange?.(false)}
+                            onDragEnd={endLibraryDrag}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onSelectBead(bead, s);
+                              handleLibraryClick(bead, s);
                             }}
                             className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/5"
                             title={`Drag ${s.label} onto your bracelet`}

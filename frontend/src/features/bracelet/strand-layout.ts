@@ -2,6 +2,7 @@
  * Circular strand layout: even polar distribution + viewport scaling helpers.
  */
 
+import { computeElasticBeadLayout } from "./strand-elastic-layout";
 import {
   computeStrandPathLayout,
   evenBeadAngleRad,
@@ -52,14 +53,22 @@ export function computeStrandBboxFillScale(
   return Math.max(1, Math.min(scale, maxScale));
 }
 
-/** Even polar angles for a bead sequence; insertion sits between last and first on the ring. */
+/** Elastic arc-length angles for a bead sequence on a wrist-sized circumference. */
 export function computeSequenceLayoutAngles(
   beadMm: number[],
-  _layoutCircumferenceMm?: number,
+  layoutCircumferenceMm?: number,
 ): { beadAngles: number[]; insertionAngle: number } {
   const n = beadMm.length;
   if (!n) {
     return { beadAngles: [], insertionAngle: STRAND_PATH_START_ANGLE };
+  }
+
+  if (layoutCircumferenceMm && layoutCircumferenceMm > 0) {
+    const elastic = computeElasticBeadLayout(beadMm, layoutCircumferenceMm);
+    return {
+      beadAngles: elastic.angles,
+      insertionAngle: elastic.insertionAngles[0] ?? STRAND_PATH_START_ANGLE,
+    };
   }
 
   const beadAngles = beadMm.map((_, i) => evenBeadAngleRad(i, n));
@@ -78,14 +87,36 @@ export {
   tangentRotationRad,
   beadTypeRotationOffsetDeg,
   beadIndexFromPointerAngle,
+  insertionAngleRad,
+  insertionIndexFromPointerAngle,
+  insertionSlotCount,
+  resolveStrandDropTarget,
   findNearestBeadIndexByAngle,
   pointerAngleOnCanvas,
   STRAND_PATH_START_ANGLE,
+  type StrandDropTarget,
   type StrandPathBeadInput,
   type StrandPathBeadLayout,
 } from "./strand-path";
 
-/** @deprecated Prefer `evenBeadAngleRad` — even distribution ignores mm weights. */
-export function computeWeightedSlotAngles(slots: StrandSlotLayoutInput[]): number[] {
-  return slots.map((slot) => evenBeadAngleRad(slot.index, slots.length));
+export function computeWeightedSlotAngles(
+  slots: StrandSlotLayoutInput[],
+  layoutCircumferenceMm?: number,
+): number[] {
+  if (!layoutCircumferenceMm || layoutCircumferenceMm <= 0) {
+    return slots.map((slot) => evenBeadAngleRad(slot.index, slots.length));
+  }
+  const elastic = computeElasticBeadLayout(
+    slots.map((s) => s.weightMm),
+    layoutCircumferenceMm,
+  );
+  return elastic.angles;
 }
+
+export {
+  computeElasticBeadLayout,
+  resolveDropTargetFromLayout,
+  visualArcMmFromExtent,
+  type ElasticBeadLayout,
+  type LayoutAngleSector,
+} from "./strand-elastic-layout";

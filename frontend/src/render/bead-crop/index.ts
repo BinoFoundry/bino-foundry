@@ -26,6 +26,7 @@ export {
   getPartialEmptySlotShellStyle,
   getEmptySlotShellStyle,
   getMaxSlotExtent,
+  getBeadTangentArcPx,
   getPlacedBeadImageFilter,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,

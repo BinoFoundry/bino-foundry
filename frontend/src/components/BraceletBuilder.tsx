@@ -1,20 +1,26 @@
-import { useRef, useState, useEffect, type RefObject } from "react";
-import { Save, Trash2 } from "lucide-react";
+import { useRef, useState, useEffect, useMemo, type RefObject } from "react";
+import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import BeadLibrary from "@/components/BeadLibrary";
-import SortableCircularStrand from "@/components/SortableCircularStrand";
+import BeadLibrary, { type LibraryDragPayload } from "@/components/BeadLibrary";
+import SortableCircularStrand, { type StrandDropHover } from "@/components/SortableCircularStrand";
 import {
   BraceletSummaryPanel,
   BRACELET_COPY,
-  formatWristFitRange,
   StrandStage,
   StrandViewport,
   StrandZoomControls,
   useBraceletBuilder,
   useStrandZoom,
+  CapacityAlertBanner,
+  WristSizeStep,
 } from "@/features/bracelet";
-import { measureStrandCanvasSize } from "@/features/bracelet/strand-viewport";
+import { resolveStrandRingLayout } from "@/features/bracelet/strand-ring-geometry";
+import {
+  computeLayoutCanvasSize,
+  computeStrandAutoFitScale,
+  measureStrandCanvasSize,
+} from "@/features/bracelet/strand-viewport";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -58,26 +64,80 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [libraryOpen, setLibraryOpen] = useState(() => !window.matchMedia("(max-width: 767px)").matches);
   const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
-  const [hoverA, setHoverA] = useState<number | null>(null);
-  const [hoverB, setHoverB] = useState<number | null>(null);
+  const [hoverA, setHoverA] = useState<StrandDropHover>(null);
+  const [hoverB, setHoverB] = useState<StrandDropHover>(null);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
+  const [libraryDragPreview, setLibraryDragPreview] = useState<LibraryDragPayload | null>(null);
+  const [panMode, setPanMode] = useState(false);
 
   const builder = useBraceletBuilder({ onPriceChange });
-  const { containerRef, strandSize } = useCanvasSize(isMobile, builder.twinning, libraryOpen);
+  const wristConfirmed = builder.wristSizeConfirmed;
+  const { containerRef, strandSize } = useCanvasSize(isMobile, builder.twinning, wristConfirmed && libraryOpen);
   const canvasZoomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const layoutKey = [
+    builder.layoutRevision,
+    builder.wristSizeA,
+    builder.wristSizeB,
+    builder.placedBeadsA.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
+    builder.placedBeadsB.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
+  ].join("|");
+
+  const guideMm = builder.activeSizeOffer?.sizeMm ?? 8;
+
+  const layoutCanvasSize = useMemo(() => {
+    const sizeA = computeLayoutCanvasSize({
+      placed: builder.placedBeadsA,
+      wristSizeCm: builder.wristSizeA,
+      wristSizeBounds: builder.wristSizeBounds,
+      viewportBudgetPx: strandSize,
+      guideSizeMm: guideMm,
+    });
+    if (!builder.twinning) return sizeA;
+    const sizeB = computeLayoutCanvasSize({
+      placed: builder.placedBeadsB,
+      wristSizeCm: builder.wristSizeB,
+      wristSizeBounds: builder.wristSizeBounds,
+      viewportBudgetPx: strandSize,
+      guideSizeMm: guideMm,
+    });
+    return Math.max(sizeA, sizeB);
+  }, [
+    builder.placedBeadsA,
+    builder.placedBeadsB,
+    builder.twinning,
+    builder.wristSizeA,
+    builder.wristSizeB,
+    builder.wristSizeBounds,
+    builder.layoutRevision,
+    strandSize,
+    guideMm,
+  ]);
+
+  const autoFitScale = useMemo(
+    () => computeStrandAutoFitScale(strandSize, layoutCanvasSize),
+    [strandSize, layoutCanvasSize],
+  );
+
+  const strandZoomLayout = useMemo(
+    () => ({
+      viewportSize: strandSize,
+      layoutCanvasSize,
+      autoFitScale,
+      twinning: builder.twinning,
+    }),
+    [strandSize, layoutCanvasSize, autoFitScale, builder.twinning],
+  );
+
   const {
     zoom,
-    zoomSmooth,
+    viewScale,
     pan,
-    panMode,
     isPanning,
-    canPan,
     zoomIn,
     zoomOut,
     reset,
-    togglePanMode,
     onPanPointerDown,
     onPanPointerMove,
     onPanPointerUp,
@@ -89,20 +149,62 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       viewportRef: viewportRef as RefObject<HTMLElement | null>,
       contentRef: contentRef as RefObject<HTMLElement | null>,
     },
-    { strandSize, twinning: builder.twinning },
+    strandZoomLayout,
     1,
-    { suspendPan: libraryDragActive },
+    { suspendPan: libraryDragActive, panMode },
   );
-  const strandRenderSize = Math.round(strandSize * zoomSmooth);
 
-  const layoutKey = `${builder.layoutRevision}-${builder.placedBeadsA.map((b) => `${b.position}:${b.size.offerKey}`).join(",")}-${builder.placedBeadsB.map((b) => `${b.position}:${b.size.offerKey}`).join(",")}`;
+  const visualLayoutA = useMemo(() => {
+    const layout = resolveStrandRingLayout({
+      placed: builder.placedBeadsA,
+      wristSizeCm: builder.wristSizeA,
+      wristSizeBounds: builder.wristSizeBounds,
+      canvasSize: strandSize,
+      guideSizeMm: guideMm,
+    });
+    if (!layout) return undefined;
+    return {
+      visuallyExpanded: layout.resolved.expanded,
+      visualOverCanvas: layout.resolved.isVisualOverCanvas,
+    };
+  }, [
+    builder.placedBeadsA,
+    builder.wristSizeA,
+    builder.wristSizeBounds,
+    builder.layoutRevision,
+    strandSize,
+    guideMm,
+  ]);
 
-  const guideMm = builder.activeSizeOffer?.sizeMm ?? 8;
+  const visualLayoutB = useMemo(() => {
+    if (!builder.twinning) return undefined;
+    const layout = resolveStrandRingLayout({
+      placed: builder.placedBeadsB,
+      wristSizeCm: builder.wristSizeB,
+      wristSizeBounds: builder.wristSizeBounds,
+      canvasSize: strandSize,
+      guideSizeMm: guideMm,
+    });
+    if (!layout) return undefined;
+    return {
+      visuallyExpanded: layout.resolved.expanded,
+      visualOverCanvas: layout.resolved.isVisualOverCanvas,
+    };
+  }, [
+    builder.twinning,
+    builder.placedBeadsB,
+    builder.wristSizeB,
+    builder.wristSizeBounds,
+    builder.layoutRevision,
+    strandSize,
+    guideMm,
+  ]);
 
   useEffect(() => {
     if (!libraryDragActive) return;
     const onDragEnd = () => {
       setLibraryDragActive(false);
+      setLibraryDragPreview(null);
       setHoverA(null);
       setHoverB(null);
     };
@@ -116,12 +218,16 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     twinning: builder.twinning,
     onToggleTwinning: builder.handleToggleTwinning,
     onDuplicateToB: builder.handleDuplicateBraceletToB,
-    duplicateDisabled: builder.placedBeadsA.length === 0,
+    duplicateDisabled: builder.placedBeadsA.length === 0 || !builder.canDuplicateToB,
   };
 
   const handleSaveConfiguration = async () => {
     if (builder.pricing.placedCount === 0) {
       setSaveStatus(CUSTOMER_COPY.saveDesignNeedBeads);
+      return;
+    }
+    if (builder.isOverCapacity) {
+      setSaveStatus(BRACELET_COPY.saveBlockedOverCapacity);
       return;
     }
     setSaving(true);
@@ -143,18 +249,37 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     }
   };
 
+  if (!wristConfirmed) {
+    return (
+      <div className="relative flex h-full w-full flex-1 flex-col animate-fade-in bg-gradient-to-b from-background via-background to-muted/20">
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6 sm:p-12">
+          <WristSizeStep
+            sizes={builder.wristSizes}
+            selectedId={builder.draftWristIdA}
+            onSelect={builder.selectDraftWristA}
+            onConfirm={builder.confirmWristSizes}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full w-full flex-1 flex-col animate-fade-in">
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div
           ref={containerRef}
-          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5 ${
-            libraryOpen && !isMobile ? "lg:pl-[272px]" : ""
+          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible bg-background p-1 max-sm:pb-[env(safe-area-inset-bottom)] sm:p-1.5 ${
+            libraryOpen && !isMobile ? "lg:pl-[256px]" : ""
           }`}
         >
           <BeadLibrary
             open={libraryOpen}
             onLibraryDragActiveChange={setLibraryDragActive}
+            onLibraryDragChange={(active, payload) => {
+              setLibraryDragActive(active);
+              setLibraryDragPreview(active ? (payload ?? null) : null);
+            }}
             onSelectBead={(bead, variant) => {
               builder.handleSelectBead(bead, variant);
               if (isMobile) setLibraryOpen(false);
@@ -184,16 +309,32 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             </div>
           ) : null}
 
+          <div className="pointer-events-none absolute left-3 right-3 top-2 z-30 flex flex-col gap-2 sm:left-auto sm:right-4 sm:max-w-sm">
+            {builder.isOverCapacity ? (
+              <CapacityAlertBanner
+                variant="over"
+                message={BRACELET_COPY.overCapacityBanner}
+                className="pointer-events-auto"
+              />
+            ) : null}
+            {builder.capacityNotice ? (
+              <CapacityAlertBanner
+                variant={builder.capacityNoticeVariant}
+                message={builder.capacityNotice}
+                onDismiss={() => builder.setCapacityNotice(null)}
+                className="pointer-events-auto"
+              />
+            ) : null}
+          </div>
           <StrandZoomControls
             zoom={zoom}
             panMode={panMode}
-            canPan={canPan}
+            onTogglePan={() => setPanMode((on) => !on)}
             onZoomIn={zoomIn}
             onZoomOut={zoomOut}
             onReset={reset}
-            onTogglePanMode={togglePanMode}
             className={`absolute bottom-3 z-30 sm:bottom-4 ${
-              libraryOpen && !isMobile ? "left-[280px]" : "left-3 sm:left-4"
+              libraryOpen && !isMobile ? "left-[264px]" : "left-3 sm:left-4"
             }`}
           />
 
@@ -215,121 +356,117 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             className="relative flex min-h-0 w-full flex-1 flex-col"
             data-strand-zoom-surface
           >
-          <StrandViewport
-            viewportRef={viewportRef}
-            contentRef={contentRef}
-            pan={pan}
-            panMode={panMode}
-            isPanning={isPanning}
-            onPointerDown={onPanPointerDown}
-            onPointerMove={onPanPointerMove}
-            onPointerUp={onPanPointerUp}
-            onPointerCancel={onPanPointerCancel}
-          >
-            <StrandStage className="shrink-0">
-              <SortableCircularStrand
-                key={`a-${layoutKey}`}
-                layoutKey={layoutKey}
-                placedBeads={builder.placedBeadsA}
-                onBeadsReorder={(from, to) => builder.handleBeadsReorder("A", from, to)}
-                onSlotClick={(pos) => {
-                  const result = builder.handleSlotClick("A", pos);
-                  if (result?.openLibrary) setLibraryOpen(true);
-                }}
-                onBeadDrop={(pos, data) => builder.handleBeadDrop("A", pos, data)}
-                onBeadRemove={(pos) => builder.handleRemoveBead("A", pos)}
-                label={builder.twinning ? BRACELET_COPY.wristTwinA : undefined}
-                wristSize={builder.wristSizeA}
-                guideSizeMm={guideMm}
-                hoverPosition={hoverA}
-                onHoverPosition={setHoverA}
-                selectedPosition={
-                  builder.selectedStrandBead?.bracelet === "A" ? builder.selectedStrandBead.position : null
-                }
-                libraryDragActive={libraryDragActive}
-                panMode={panMode}
-                size={strandRenderSize}
-              />
-            </StrandStage>
-
-            {builder.twinning ? (
+            <StrandViewport
+              viewportRef={viewportRef}
+              contentRef={contentRef}
+              pan={pan}
+              isPanning={isPanning}
+              viewScale={viewScale}
+              panMode={panMode}
+              onPointerDown={onPanPointerDown}
+              onPointerMove={onPanPointerMove}
+              onPointerUp={onPanPointerUp}
+              onPointerCancel={onPanPointerCancel}
+            >
               <StrandStage className="shrink-0">
                 <SortableCircularStrand
-                  key={`b-${layoutKey}`}
+                  key={`a-${layoutKey}`}
                   layoutKey={layoutKey}
-                  placedBeads={builder.placedBeadsB}
-                  onBeadsReorder={(from, to) => builder.handleBeadsReorder("B", from, to)}
+                  placedBeads={builder.placedBeadsA}
+                  onBeadsReorder={(from, to) => builder.handleBeadsReorder("A", from, to)}
                   onSlotClick={(pos) => {
-                    const result = builder.handleSlotClick("B", pos);
+                    const result = builder.handleSlotClick("A", pos);
                     if (result?.openLibrary) setLibraryOpen(true);
                   }}
-                  onBeadDrop={(pos, data) => builder.handleBeadDrop("B", pos, data)}
-                  onBeadRemove={(pos) => builder.handleRemoveBead("B", pos)}
-                  label={BRACELET_COPY.wristTwinB}
-                  wristSize={builder.wristSizeB}
+                  onBeadDrop={(target, data) => builder.handleBeadDrop("A", target, data)}
+                  onBeadRemove={(pos) => builder.handleRemoveBead("A", pos)}
+                  label={builder.twinning ? BRACELET_COPY.wristTwinA : undefined}
+                  wristSize={builder.wristSizeA}
+                  wristSizeBounds={builder.wristSizeBounds}
                   guideSizeMm={guideMm}
-                  hoverPosition={hoverB}
-                  onHoverPosition={setHoverB}
+                  hoverDropTarget={hoverA}
+                  onHoverDropTarget={setHoverA}
                   selectedPosition={
-                    builder.selectedStrandBead?.bracelet === "B" ? builder.selectedStrandBead.position : null
+                    builder.selectedStrandBead?.bracelet === "A" ? builder.selectedStrandBead.position : null
                   }
                   libraryDragActive={libraryDragActive}
-                  panMode={panMode}
-                  size={strandRenderSize}
+                  libraryDragPreview={libraryDragPreview}
+                  pathStartAngle={builder.strandAnchorAngleA}
+                  size={layoutCanvasSize}
                 />
               </StrandStage>
-            ) : null}
-          </StrandViewport>
+
+              {builder.twinning ? (
+                <StrandStage className="shrink-0">
+                  <SortableCircularStrand
+                    key={`b-${layoutKey}`}
+                    layoutKey={layoutKey}
+                    placedBeads={builder.placedBeadsB}
+                    onBeadsReorder={(from, to) => builder.handleBeadsReorder("B", from, to)}
+                    onSlotClick={(pos) => {
+                      const result = builder.handleSlotClick("B", pos);
+                      if (result?.openLibrary) setLibraryOpen(true);
+                    }}
+                    onBeadDrop={(target, data) => builder.handleBeadDrop("B", target, data)}
+                    onBeadRemove={(pos) => builder.handleRemoveBead("B", pos)}
+                    label={BRACELET_COPY.wristTwinB}
+                    wristSize={builder.wristSizeB}
+                    wristSizeBounds={builder.wristSizeBounds}
+                    guideSizeMm={guideMm}
+                    hoverDropTarget={hoverB}
+                    onHoverDropTarget={setHoverB}
+                    selectedPosition={
+                      builder.selectedStrandBead?.bracelet === "B" ? builder.selectedStrandBead.position : null
+                    }
+                    libraryDragActive={libraryDragActive}
+                    libraryDragPreview={libraryDragPreview}
+                    pathStartAngle={builder.strandAnchorAngleB}
+                    size={layoutCanvasSize}
+                  />
+                </StrandStage>
+              ) : null}
+            </StrandViewport>
           </div>
         </div>
 
         <div className="hidden shrink-0 lg:flex">
-          <BraceletSummaryPanel summary={builder.summary} builderActions={builderActions} />
+          <BraceletSummaryPanel
+            summary={builder.summary}
+            builderActions={builderActions}
+            wristSizes={builder.wristSizes}
+            wristSizeIdA={builder.wristSizeIdA}
+            wristSizeIdB={builder.wristSizeIdB}
+            onSelectWristA={builder.setWristA}
+            onSelectWristB={builder.setWristB}
+            wristSizeConfirmed={builder.wristSizeConfirmed}
+            visualLayoutA={visualLayoutA}
+            visualLayoutB={visualLayoutB}
+            onSave={() => void handleSaveConfiguration()}
+            saving={saving}
+            saveStatus={saveStatus}
+            saveDisabled={saving || builder.pricing.placedCount === 0 || builder.isOverCapacity}
+          />
         </div>
       </div>
 
       <BraceletSummaryPanel
         summary={builder.summary}
         builderActions={builderActions}
+        wristSizes={builder.wristSizes}
+        wristSizeIdA={builder.wristSizeIdA}
+        wristSizeIdB={builder.wristSizeIdB}
+        onSelectWristA={builder.setWristA}
+        onSelectWristB={builder.setWristB}
+        wristSizeConfirmed={builder.wristSizeConfirmed}
+        visualLayoutA={visualLayoutA}
+        visualLayoutB={visualLayoutB}
+        onSave={() => void handleSaveConfiguration()}
+        saving={saving}
+        saveStatus={saveStatus}
+        saveDisabled={saving || builder.pricing.placedCount === 0 || builder.isOverCapacity}
         collapsible
         className="lg:hidden"
       />
-
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 font-body text-[10px] text-muted-foreground sm:px-6 sm:py-3 sm:text-xs">
-        <span>
-          {builder.summary.twinning && builder.summary.wristFitB ? (
-            <>
-              {BRACELET_COPY.wristTwinA}: {formatWristFitRange(builder.summary.wristFitA)}
-              {builder.summary.wristFitA.beadCount > 0
-                ? ` · ${builder.summary.wristFitA.lengthMm} mm`
-                : ""}
-              {" · "}
-              {BRACELET_COPY.wristTwinB}: {formatWristFitRange(builder.summary.wristFitB)}
-              {builder.summary.wristFitB.beadCount > 0 ? ` · ${builder.summary.wristFitB.lengthMm} mm` : ""}
-            </>
-          ) : (
-            <>
-              {formatWristFitRange(builder.summary.wristFitA)}
-              {builder.summary.wristFitA.beadCount > 0
-                ? ` · ${builder.summary.wristFitA.lengthMm} mm length`
-                : ""}
-            </>
-          )}
-        </span>
-        <div className="flex items-center gap-2">
-          {saveStatus ? <span className="text-foreground/80">{saveStatus}</span> : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={saving || builder.pricing.placedCount === 0}
-            onClick={() => void handleSaveConfiguration()}
-          >
-            <Save className="mr-1.5 h-3.5 w-3.5" />
-            {saving ? BRACELET_COPY.saving : BRACELET_COPY.saveConfig}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 };

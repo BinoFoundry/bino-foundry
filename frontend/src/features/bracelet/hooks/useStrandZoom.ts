@@ -12,6 +12,8 @@ import { shouldApplyCanvasWheelZoom, shouldStartCanvasPan } from "../interaction
 export interface StrandZoomOptions {
   /** When true, pan gestures are ignored (e.g. library HTML5 drag in progress). */
   suspendPan?: boolean;
+  /** When false, canvas pan is disabled — editing interactions take priority. */
+  panMode?: boolean;
 }
 
 export const STRAND_ZOOM_MIN = 0.55;
@@ -20,6 +22,7 @@ const ZOOM_BUTTON_STEP = 0.08;
 const ZOOM_WHEEL_SENSITIVITY = 0.0011;
 const ZOOM_SMOOTH_FACTOR = 0.28;
 const ZOOM_SNAP_EPSILON = 0.006;
+const PAN_DRAG_THRESHOLD_PX = 5;
 const TWIN_STRAND_GAP_PX = 24;
 const STRAND_CHROME_Y_PX = 52;
 
@@ -29,12 +32,16 @@ export interface StrandPan {
 }
 
 export interface StrandZoomLayout {
-  strandSize: number;
+  /** Viewport square budget from container measurement. */
+  viewportSize: number;
+  /** Layout canvas side length (may exceed viewport when beads need room). */
+  layoutCanvasSize: number;
+  /** Fits layout canvas into viewport at zoom 1 (≤ 1). */
+  autoFitScale: number;
   twinning: boolean;
 }
 
 export interface StrandZoomRefs {
-  /** Element that receives wheel / pinch zoom (strand canvas only — not library or summary). */
   zoomSurfaceRef?: RefObject<HTMLElement | null>;
   containerRef?: RefObject<HTMLElement | null>;
   viewportRef?: RefObject<HTMLElement | null>;
@@ -45,10 +52,6 @@ function clampZoom(value: number) {
   return Math.max(STRAND_ZOOM_MIN, Math.min(STRAND_ZOOM_MAX, value));
 }
 
-function isDefaultZoom(zoom: number) {
-  return zoom <= 1 + ZOOM_SNAP_EPSILON;
-}
-
 function clampPan(pan: StrandPan, maxX: number, maxY: number): StrandPan {
   return {
     x: maxX > 0 ? Math.min(maxX, Math.max(-maxX, pan.x)) : 0,
@@ -56,7 +59,14 @@ function clampPan(pan: StrandPan, maxX: number, maxY: number): StrandPan {
   };
 }
 
-/** Sum child layout boxes so flex-wrap / twin strands report true width and height. */
+function panNeedsUpdate(prev: StrandPan, next: StrandPan): boolean {
+  return prev.x !== next.x || prev.y !== next.y;
+}
+
+function layoutSignature(layout: StrandZoomLayout): string {
+  return `${layout.viewportSize}|${layout.layoutCanvasSize}|${layout.autoFitScale}|${layout.twinning}`;
+}
+
 function measureContentExtent(content: HTMLElement) {
   let width = 0;
   let height = 0;
@@ -71,30 +81,32 @@ function measureContentExtent(content: HTMLElement) {
   };
 }
 
-function expectedContentSize(layout: StrandZoomLayout & { zoom: number }) {
-  const render = layout.strandSize * layout.zoom;
+function expectedContentSize(layout: StrandZoomLayout, userZoom: number) {
+  const scaled = layout.layoutCanvasSize * layout.autoFitScale * userZoom;
   return {
-    width: layout.twinning ? render * 2 + TWIN_STRAND_GAP_PX : render,
-    height: render + STRAND_CHROME_Y_PX,
+    width: layout.twinning ? scaled * 2 + TWIN_STRAND_GAP_PX : scaled,
+    height: scaled + STRAND_CHROME_Y_PX,
   };
 }
 
 function computePanBounds(
   container: HTMLElement,
   content: HTMLElement,
-  layout: StrandZoomLayout & { zoom: number },
+  layout: StrandZoomLayout,
+  userZoom: number,
 ) {
   const cw = container.clientWidth;
   const ch = container.clientHeight;
   const extent = measureContentExtent(content);
-  const expected = expectedContentSize(layout);
+  const viewScale = layout.autoFitScale * userZoom;
+  const expected = expectedContentSize(layout, userZoom);
   const contentW = Math.max(extent.width, expected.width);
   const contentH = Math.max(extent.height, expected.height);
-  const zoomSlack = Math.max(0, (layout.zoom - 1) * layout.strandSize * 0.5);
+  const zoomSlack = Math.max(0, (viewScale - layout.autoFitScale) * layout.layoutCanvasSize * 0.35);
 
   return {
-    maxX: Math.max(0, (contentW - cw) / 2, zoomSlack),
-    maxY: Math.max(0, (contentH - ch) / 2, zoomSlack),
+    maxX: Math.max(0, (contentW - cw) / 2 + zoomSlack),
+    maxY: Math.max(0, (contentH - ch) / 2 + zoomSlack),
   };
 }
 
@@ -106,39 +118,60 @@ export function useStrandZoom(
   options: StrandZoomOptions = {},
 ) {
   const { zoomSurfaceRef, containerRef, viewportRef, contentRef } = refs;
-  const { suspendPan = false } = options;
-  const layoutRef = useRef<StrandZoomLayout & { zoom: number }>({ ...layout, zoom: initial });
+  const { suspendPan = false, panMode = false } = options;
+  const layoutRef = useRef<StrandZoomLayout>(layout);
+  layoutRef.current = layout;
 
   const [zoomTarget, setZoomTarget] = useState(initial);
   const [zoomSmooth, setZoomSmooth] = useState(initial);
   const [pan, setPan] = useState<StrandPan>({ x: 0, y: 0 });
-  const [panMode, setPanMode] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
 
-  const panDragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const panDragRef = useRef<{
+    startX: number;
+    startY: number;
+    panX: number;
+    panY: number;
+    armed: boolean;
+    pointerId: number;
+  } | null>(null);
   const panBoundsRef = useRef({ maxX: 0, maxY: 0 });
   const isPanningRef = useRef(false);
   const panRef = useRef(pan);
   panRef.current = pan;
+  const zoomSmoothRef = useRef(initial);
 
   const clearPan = useCallback(() => {
     setPan({ x: 0, y: 0 });
-    setPanMode(false);
     setIsPanning(false);
     panDragRef.current = null;
     isPanningRef.current = false;
   }, []);
 
   const measurePanBounds = useCallback(() => {
-    layoutRef.current = { ...layout, zoom: zoomSmoothRef.current };
     const container = viewportRef?.current ?? containerRef?.current;
     const content = contentRef?.current;
     if (!container || !content) {
       panBoundsRef.current = { maxX: 0, maxY: 0 };
       return;
     }
-    panBoundsRef.current = computePanBounds(container, content, layoutRef.current);
-  }, [containerRef, viewportRef, contentRef, layout]);
+    panBoundsRef.current = computePanBounds(
+      container,
+      content,
+      layoutRef.current,
+      zoomSmoothRef.current,
+    );
+  }, [containerRef, viewportRef, contentRef]);
+
+  const clampPanInBounds = useCallback(() => {
+    if (isPanningRef.current) return;
+    measurePanBounds();
+    const { maxX, maxY } = panBoundsRef.current;
+    setPan((p) => {
+      const next = clampPan(p, maxX, maxY);
+      return panNeedsUpdate(p, next) ? next : p;
+    });
+  }, [measurePanBounds]);
 
   const setPanClamped = useCallback(
     (next: StrandPan) => {
@@ -149,14 +182,41 @@ export function useStrandZoom(
     [measurePanBounds],
   );
 
-  const nudgeZoom = useCallback((direction: 1 | -1) => {
-    setZoomTarget((z) => clampZoom(z + direction * ZOOM_BUTTON_STEP));
-  }, []);
+  const applyZoomAtPoint = useCallback(
+    (factor: number, clientX: number, clientY: number) => {
+      const viewport = viewportRef?.current ?? containerRef?.current;
+      if (!viewport) {
+        setZoomTarget((z) => clampZoom(z * factor));
+        return;
+      }
+      const rect = viewport.getBoundingClientRect();
+      const focalX = clientX - rect.left - rect.width / 2;
+      const focalY = clientY - rect.top - rect.height / 2;
+      const oldZoom = zoomSmoothRef.current;
+      const newZoom = clampZoom(oldZoom * factor);
+      if (Math.abs(newZoom - oldZoom) < ZOOM_SNAP_EPSILON) return;
+      const ratio = newZoom / oldZoom;
+      setPanClamped({
+        x: panRef.current.x - focalX * (ratio - 1),
+        y: panRef.current.y - focalY * (ratio - 1),
+      });
+      setZoomTarget(newZoom);
+    },
+    [containerRef, viewportRef, setPanClamped],
+  );
+
+  const nudgeZoom = useCallback(
+    (direction: 1 | -1) => {
+      const viewport = viewportRef?.current ?? containerRef?.current;
+      const cx = viewport ? viewport.getBoundingClientRect().left + viewport.clientWidth / 2 : 0;
+      const cy = viewport ? viewport.getBoundingClientRect().top + viewport.clientHeight / 2 : 0;
+      applyZoomAtPoint(1 + direction * ZOOM_BUTTON_STEP, cx, cy);
+    },
+    [applyZoomAtPoint, containerRef, viewportRef],
+  );
 
   const zoomIn = useCallback(() => nudgeZoom(1), [nudgeZoom]);
   const zoomOut = useCallback(() => nudgeZoom(-1), [nudgeZoom]);
-
-  const zoomSmoothRef = useRef(initial);
 
   const reset = useCallback(() => {
     setZoomTarget(1);
@@ -164,25 +224,6 @@ export function useStrandZoom(
     setZoomSmooth(1);
     clearPan();
   }, [clearPan]);
-
-  const togglePanMode = useCallback(() => {
-    setPanMode((on) => !on);
-    setIsPanning(false);
-    isPanningRef.current = false;
-    panDragRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    if (isDefaultZoom(zoomTarget)) {
-      zoomSmoothRef.current = 1;
-      setZoomSmooth(1);
-      setPan({ x: 0, y: 0 });
-      setPanMode(false);
-      setIsPanning(false);
-      panDragRef.current = null;
-      isPanningRef.current = false;
-    }
-  }, [zoomTarget]);
 
   useEffect(() => {
     let frame = 0;
@@ -206,14 +247,18 @@ export function useStrandZoom(
     return () => cancelAnimationFrame(frame);
   }, [zoomTarget]);
 
+  const layoutSig = layoutSignature(layout);
+
   useEffect(() => {
-    if (isDefaultZoom(zoomTarget)) return;
-    measurePanBounds();
-    if (!isPanningRef.current) {
-      const { maxX, maxY } = panBoundsRef.current;
-      setPan((p) => clampPan(p, maxX, maxY));
-    }
-  }, [zoomTarget, zoomSmooth, layout, measurePanBounds]);
+    if (panMode) return;
+    panDragRef.current = null;
+    isPanningRef.current = false;
+    setIsPanning(false);
+  }, [panMode]);
+
+  useEffect(() => {
+    clampPanInBounds();
+  }, [zoomTarget, layoutSig, clampPanInBounds]);
 
   useEffect(() => {
     const container = viewportRef?.current ?? containerRef?.current;
@@ -221,15 +266,12 @@ export function useStrandZoom(
     if (!container) return;
 
     const observer = new ResizeObserver(() => {
-      measurePanBounds();
-      if (isPanningRef.current) return;
-      const { maxX, maxY } = panBoundsRef.current;
-      setPan((p) => clampPan(p, maxX, maxY));
+      clampPanInBounds();
     });
     observer.observe(container);
     if (content) observer.observe(content);
     return () => observer.disconnect();
-  }, [containerRef, viewportRef, contentRef, measurePanBounds]);
+  }, [containerRef, viewportRef, contentRef, clampPanInBounds]);
 
   useEffect(() => {
     const el = zoomSurfaceRef?.current ?? viewportRef?.current;
@@ -241,12 +283,12 @@ export function useStrandZoom(
       e.preventDefault();
       e.stopPropagation();
       const factor = Math.exp(-e.deltaY * ZOOM_WHEEL_SENSITIVITY);
-      setZoomTarget((z) => clampZoom(z * factor));
+      applyZoomAtPoint(factor, e.clientX, e.clientY);
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomSurfaceRef, viewportRef]);
+  }, [zoomSurfaceRef, viewportRef, applyZoomAtPoint]);
 
   useEffect(() => {
     const el = zoomSurfaceRef?.current ?? viewportRef?.current ?? containerRef?.current;
@@ -254,6 +296,8 @@ export function useStrandZoom(
 
     let pinchDistance = 0;
     let pinchStartZoom = 1;
+    let pinchCenterX = 0;
+    let pinchCenterY = 0;
 
     const touchDistance = (touches: TouchList) => {
       if (touches.length < 2) return 0;
@@ -262,18 +306,42 @@ export function useStrandZoom(
       return Math.hypot(dx, dy);
     };
 
+    const touchCenter = (touches: TouchList) => {
+      if (touches.length < 2) return { x: 0, y: 0 };
+      return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2,
+      };
+    };
+
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 2) return;
       pinchDistance = touchDistance(e.touches);
       pinchStartZoom = zoomSmoothRef.current;
+      const c = touchCenter(e.touches);
+      pinchCenterX = c.x;
+      pinchCenterY = c.y;
     };
 
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length !== 2 || pinchDistance <= 0) return;
       e.preventDefault();
       const dist = touchDistance(e.touches);
-      const ratio = dist / pinchDistance;
-      setZoomTarget(clampZoom(pinchStartZoom * ratio));
+      const targetZoom = clampZoom(pinchStartZoom * (dist / pinchDistance));
+      const currentZoom = zoomSmoothRef.current;
+      if (Math.abs(targetZoom - currentZoom) < ZOOM_SNAP_EPSILON) return;
+      const scale = targetZoom / currentZoom;
+      const viewport = viewportRef?.current ?? containerRef?.current;
+      if (viewport) {
+        const rect = viewport.getBoundingClientRect();
+        const focalX = pinchCenterX - rect.left - rect.width / 2;
+        const focalY = pinchCenterY - rect.top - rect.height / 2;
+        setPanClamped({
+          x: panRef.current.x - focalX * (scale - 1),
+          y: panRef.current.y - focalY * (scale - 1),
+        });
+      }
+      setZoomTarget(targetZoom);
     };
 
     const onTouchEnd = () => {
@@ -290,41 +358,52 @@ export function useStrandZoom(
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [containerRef, viewportRef]);
+  }, [containerRef, viewportRef, zoomSurfaceRef, applyZoomAtPoint]);
 
   const onPanPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (!panMode || suspendPan || e.button !== 0) return;
       if (!shouldStartCanvasPan(e.target)) return;
-      e.preventDefault();
-      e.currentTarget.setPointerCapture(e.pointerId);
       panDragRef.current = {
         startX: e.clientX,
         startY: e.clientY,
         panX: panRef.current.x,
         panY: panRef.current.y,
+        armed: false,
+        pointerId: e.pointerId,
       };
-      isPanningRef.current = true;
-      setIsPanning(true);
     },
     [panMode, suspendPan],
   );
 
   const onPanPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!panDragRef.current) return;
-      const { startX, startY, panX, panY } = panDragRef.current;
+      const drag = panDragRef.current;
+      if (!drag || drag.pointerId !== e.pointerId) return;
+
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+
+      if (!drag.armed) {
+        if (Math.hypot(dx, dy) < PAN_DRAG_THRESHOLD_PX) return;
+        drag.armed = true;
+        isPanningRef.current = true;
+        setIsPanning(true);
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+
       setPanClamped({
-        x: panX + (e.clientX - startX),
-        y: panY + (e.clientY - startY),
+        x: drag.panX + dx,
+        y: drag.panY + dy,
       });
     },
     [setPanClamped],
   );
 
   const endPanDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!panDragRef.current) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+    const drag = panDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (drag.armed && e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
     panDragRef.current = null;
@@ -332,19 +411,18 @@ export function useStrandZoom(
     setIsPanning(false);
   }, []);
 
-  const canPan = zoomTarget > 1 + ZOOM_SNAP_EPSILON;
+  const viewScale = layout.autoFitScale * zoomSmooth;
 
   return {
     zoom: zoomTarget,
     zoomSmooth,
+    viewScale,
     pan,
-    panMode,
     isPanning,
-    canPan,
+    panMode,
     zoomIn,
     zoomOut,
     reset,
-    togglePanMode,
     onPanPointerDown,
     onPanPointerMove,
     onPanPointerUp: endPanDrag,

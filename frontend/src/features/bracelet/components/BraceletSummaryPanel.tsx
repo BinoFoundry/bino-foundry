@@ -1,17 +1,22 @@
-import { ChevronDown, ChevronUp, Gem, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Gem, Save, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-import type {
-  BraceletBuilderSummary,
-  BraceletStrandSummary,
-  BraceletWristFitEstimate,
-} from "@bino-foundry/shared/types";
+import type { BraceletBuilderSummary } from "@bino-foundry/shared/types";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { WristSizeEntry } from "@/types/wrist-sizes";
 
 import { BRACELET_COPY } from "../copy";
-import { formatWristFitRange } from "../wrist-fit";
+import { activeWristSizes } from "../wrist-sizes";
+import { WristSizePickerCards } from "./WristSizePickerCards";
 import { BraceletBuilderActions, type BraceletBuilderActionsProps } from "./BraceletBuilderActions";
+import { StrandCapacityCard } from "./StrandCapacityCard";
+
+export interface StrandVisualLayoutHint {
+  visuallyExpanded?: boolean;
+  visualOverCanvas?: boolean;
+}
 
 interface BraceletSummaryPanelProps {
   summary: BraceletBuilderSummary;
@@ -19,6 +24,18 @@ interface BraceletSummaryPanelProps {
   collapsible?: boolean;
   defaultOpen?: boolean;
   builderActions?: BraceletBuilderActionsProps;
+  wristSizes?: WristSizeEntry[];
+  wristSizeIdA?: string | null;
+  wristSizeIdB?: string | null;
+  onSelectWristA?: (entry: WristSizeEntry) => void;
+  onSelectWristB?: (entry: WristSizeEntry) => void;
+  wristSizeConfirmed?: boolean;
+  visualLayoutA?: StrandVisualLayoutHint;
+  visualLayoutB?: StrandVisualLayoutHint;
+  onSave?: () => void;
+  saving?: boolean;
+  saveStatus?: string;
+  saveDisabled?: boolean;
 }
 
 function MaterialGroup({
@@ -56,54 +73,27 @@ function MaterialGroup({
   );
 }
 
-function StrandFitCard({
-  strand,
-  fit,
-  showStrandLabel,
+function WristTargetPicker({
+  label,
+  sizes,
+  selectedId,
+  onSelect,
 }: {
-  strand: BraceletStrandSummary;
-  fit: BraceletWristFitEstimate;
-  showStrandLabel: boolean;
+  label: string;
+  sizes: WristSizeEntry[];
+  selectedId: string | null | undefined;
+  onSelect?: (entry: WristSizeEntry) => void;
 }) {
-  const fillPct = strand.wristCircumferenceMm
-    ? Math.round((strand.usedMm / strand.wristCircumferenceMm) * 100)
-    : 0;
-
+  if (!sizes.length || !onSelect) return null;
   return (
-    <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-transparent to-transparent p-4">
-      {showStrandLabel ? (
-        <p className="font-display text-sm font-semibold text-foreground">{strand.label}</p>
-      ) : (
-        <p className="font-display text-sm font-semibold text-foreground">{BRACELET_COPY.summaryWristFit}</p>
-      )}
-      <p className={`text-sm text-foreground/90 ${showStrandLabel ? "mt-1" : "mt-1"}`}>
-        {formatWristFitRange(fit)}
-      </p>
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        <div>
-          <dt className="text-muted-foreground">{BRACELET_COPY.summaryLength}</dt>
-          <dd className="font-medium tabular-nums text-foreground">{fit.lengthMm} mm</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">{BRACELET_COPY.summaryBeadCount}</dt>
-          <dd className="font-medium tabular-nums text-foreground">{fit.beadCount}</dd>
-        </div>
-      </dl>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary/80 transition-all duration-300"
-          style={{ width: `${fillPct}%` }}
-        />
-      </div>
-      <p className="mt-1.5 text-[10px] text-muted-foreground">
-        {strand.usedMm} mm on strand
-        {strand.remainingMm > 0
-          ? ` · ${Math.round(strand.remainingMm)} mm available`
-          : fit.beadCount > 0
-            ? " · strand complete"
-            : ""}
-      </p>
-    </div>
+    <WristSizePickerCards
+      label={label}
+      sizes={sizes}
+      selectedId={selectedId ?? null}
+      onSelect={onSelect}
+      variant="inline"
+      scrollable={sizes.length > 16}
+    />
   );
 }
 
@@ -113,30 +103,65 @@ export function BraceletSummaryPanel({
   collapsible = false,
   defaultOpen = true,
   builderActions,
+  wristSizes = [],
+  wristSizeIdA,
+  wristSizeIdB,
+  onSelectWristA,
+  onSelectWristB,
+  wristSizeConfirmed = false,
+  visualLayoutA,
+  visualLayoutB,
+  onSave,
+  saving = false,
+  saveStatus = "",
+  saveDisabled = false,
 }: BraceletSummaryPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
   const { pricing } = summary;
-
-  const strandFitCards = summary.strands.map((strand, i) => ({
-    strand,
-    fit: i === 0 ? summary.wristFitA : summary.wristFitB ?? summary.wristFitA,
-  }));
+  const wristOptions = activeWristSizes(wristSizes);
 
   const body = (
     <div className="space-y-4">
-      {builderActions ? (
-        <BraceletBuilderActions {...builderActions} />
+      {builderActions ? <BraceletBuilderActions {...builderActions} /> : null}
+
+      {wristSizeConfirmed && wristOptions.length > 0 && onSelectWristA ? (
+        <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
+          <p className="text-[10px] leading-snug text-muted-foreground">{BRACELET_COPY.wristChangeHint}</p>
+          <WristTargetPicker
+            label={summary.twinning ? BRACELET_COPY.wristTwinA : BRACELET_COPY.wristLabel}
+            sizes={wristOptions}
+            selectedId={wristSizeIdA}
+            onSelect={onSelectWristA}
+          />
+          {summary.twinning && onSelectWristB ? (
+            <WristTargetPicker
+              label={BRACELET_COPY.wristTwinB}
+              sizes={wristOptions}
+              selectedId={wristSizeIdB}
+              onSelect={onSelectWristB}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       <div className={summary.twinning ? "grid gap-3" : undefined}>
-        {strandFitCards.map(({ strand, fit }) => (
-          <StrandFitCard
-            key={strand.index}
-            strand={strand}
-            fit={fit}
-            showStrandLabel={summary.twinning}
-          />
-        ))}
+        {summary.strands.map((strand) => {
+          const visual =
+            strand.index === 0
+              ? visualLayoutA
+              : strand.index === 1
+                ? visualLayoutB
+                : undefined;
+          return (
+            <StrandCapacityCard
+              key={strand.index}
+              strand={strand}
+              showStrandLabel={summary.twinning}
+              visuallyExpanded={visual?.visuallyExpanded}
+              visualOverCanvas={visual?.visualOverCanvas}
+            />
+          );
+        })}
       </div>
 
       {pricing.placedCount === 0 ? (
@@ -175,6 +200,24 @@ export function BraceletSummaryPanel({
           {BRACELET_COPY.priceNote(pricing.currencyCode)}
         </p>
       </div>
+
+      {onSave ? (
+        <div className="space-y-2">
+          {saveStatus ? (
+            <p className="text-center text-[11px] leading-snug text-foreground/80">{saveStatus}</p>
+          ) : null}
+          <Button
+            type="button"
+            className="w-full"
+            size="lg"
+            disabled={saveDisabled}
+            onClick={onSave}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? BRACELET_COPY.saving : BRACELET_COPY.saveConfig}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 
@@ -189,7 +232,11 @@ export function BraceletSummaryPanel({
         <div className="border-b border-border/80 px-4 py-4">
           <h2 className="font-display text-base font-semibold text-foreground">{BRACELET_COPY.summaryTitle}</h2>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4" data-scroll-isolate="true" onWheel={(e) => e.stopPropagation()}>
+        <div
+          className="flex-1 overflow-y-auto px-4 py-4"
+          data-scroll-isolate="true"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {body}
         </div>
       </aside>

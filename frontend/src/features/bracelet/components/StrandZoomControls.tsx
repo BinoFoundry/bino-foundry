@@ -1,36 +1,50 @@
 import { Hand, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { BRACELET_COPY } from "../copy";
 import { STRAND_ZOOM_MAX, STRAND_ZOOM_MIN } from "../hooks/useStrandZoom";
 
 interface StrandZoomControlsProps {
   zoom: number;
   panMode: boolean;
-  canPan: boolean;
+  onTogglePan: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
-  onTogglePanMode: () => void;
   className?: string;
 }
 
 export function StrandZoomControls({
   zoom,
   panMode,
-  canPan,
+  onTogglePan,
   onZoomIn,
   onZoomOut,
   onReset,
-  onTogglePanMode,
   className,
 }: StrandZoomControlsProps) {
   return (
     <div
       role="toolbar"
       aria-label={BRACELET_COPY.zoomWheel}
-      className={`flex items-center gap-1 rounded-lg border border-border/80 bg-background/90 p-1 shadow-sm backdrop-blur-sm ${className ?? ""}`}
+      className={cn(
+        "flex items-center gap-1 rounded-lg border border-border/80 bg-background/90 p-1 shadow-sm backdrop-blur-sm",
+        className,
+      )}
     >
+      <Button
+        type="button"
+        variant={panMode ? "secondary" : "ghost"}
+        size="icon"
+        className="h-10 w-10 sm:h-8 sm:w-8"
+        aria-label={panMode ? BRACELET_COPY.panModeOff : BRACELET_COPY.panModeOn}
+        aria-pressed={panMode}
+        title={panMode ? BRACELET_COPY.panModeOff : BRACELET_COPY.panModeOn}
+        onClick={onTogglePan}
+      >
+        <Hand className="h-4 w-4" />
+      </Button>
       <Button
         type="button"
         variant="ghost"
@@ -60,19 +74,6 @@ export function StrandZoomControls({
         disabled={zoom >= STRAND_ZOOM_MAX}
       >
         <ZoomIn className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant={panMode ? "secondary" : "ghost"}
-        size="icon"
-        className="h-10 w-10 sm:h-8 sm:w-8"
-        title={canPan ? (panMode ? BRACELET_COPY.panModeOff : BRACELET_COPY.panModeOn) : BRACELET_COPY.panRequiresZoom}
-        aria-label={canPan ? (panMode ? BRACELET_COPY.panModeOff : BRACELET_COPY.panModeOn) : BRACELET_COPY.panRequiresZoom}
-        aria-pressed={panMode}
-        onClick={onTogglePanMode}
-        disabled={!canPan}
-      >
-        <Hand className="h-4 w-4" />
       </Button>
       <Button
         type="button"

@@ -39,7 +39,7 @@ describe("shouldStartCanvasPan", () => {
     document.body.removeChild(canvas);
   });
 
-  it("blocks pan on strand slots and drop zones", () => {
+  it("blocks pan on strand slots but allows empty drop zone", () => {
     const canvas = document.createElement("div");
     canvas.dataset.strandCanvas = "";
     const slot = document.createElement("button");
@@ -51,7 +51,7 @@ describe("shouldStartCanvasPan", () => {
     const drop = document.createElement("div");
     drop.dataset.strandDropZone = "";
     canvas.appendChild(drop);
-    expect(shouldStartCanvasPan(drop)).toBe(false);
+    expect(shouldStartCanvasPan(drop)).toBe(true);
     document.body.removeChild(canvas);
   });
 });

@@ -1,0 +1,208 @@
+import { describe, expect, it } from "vitest";
+
+import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
+import { getBeadSlotDimensions } from "@/render/bead-crop";
+
+import { computeElasticBeadLayout } from "./strand-elastic-layout";
+import {
+  adjacentPairsMeetGap,
+  beadLayoutArcPx,
+  beadSectorsOverlap,
+  computeResolvedRingRadiusPx,
+  resolveStrandRingLayout,
+  scaledBeadSpacingPx,
+} from "./strand-ring-geometry";
+import { computeMaxRingRadiusPx, computeWristRingRadiusPx, wristSizeBoundsFromCatalog } from "./strand-ring";
+
+const BOUNDS = wristSizeBoundsFromCatalog([14, 15, 16, 17, 18, 19]);
+
+function mockPlaced(mm: number, slug = "crystal"): PlacedBead {
+  return {
+    position: 0,
+    bead: { id: "b", name: "Test", beadTypeSlug: slug, beadTypeId: "t", image: "" },
+    size: { offerKey: `k-${mm}`, beadLibraryId: "b", sizeMm: mm, label: `${mm}mm`, priceMultiplier: 1 },
+  };
+}
+
+function layoutForWrist(
+  wristCm: number,
+  beads: PlacedBead[],
+  scaleFactor = 1,
+  canvasCenter = 200,
+) {
+  const canvasSize = canvasCenter * 2;
+  const layout = resolveStrandRingLayout({
+    placed: beads,
+    wristSizeCm: wristCm,
+    wristSizeBounds: BOUNDS,
+    canvasSize,
+    guideSizeMm: 8,
+    beadScaleBoost: scaleFactor,
+  });
+  if (!layout) throw new Error("expected layout");
+  const resolved = layout.resolved;
+  const pairGapPx = resolved.pairGapPx;
+  const circumferencePx = 2 * Math.PI * resolved.radiusPx;
+  const elastic = computeElasticBeadLayout(
+    resolved.beadArcPx,
+    circumferencePx,
+    undefined,
+    resolved.pairGapPx,
+  );
+  return { resolved, elastic, pairGapPx, scaleFactor: layout.scaleFactor, layout };
+}
+
+function assertCleanLayout(
+  wristCm: number,
+  beads: PlacedBead[],
+  scaleFactor = 1,
+  canvasCenter = 200,
+) {
+  const { resolved, elastic, pairGapPx } = layoutForWrist(wristCm, beads, scaleFactor, canvasCenter);
+  expect(beadSectorsOverlap(elastic.angles, elastic.arcSpans)).toBe(false);
+  expect(
+    adjacentPairsMeetGap(
+      elastic.angles,
+      resolved.beadArcPx,
+      resolved.radiusPx,
+      pairGapPx,
+    ),
+  ).toBe(true);
+  return resolved;
+}
+
+describe("computeResolvedRingRadiusPx", () => {
+  it("expands beyond wrist baseline when large rendered beads need more arc", () => {
+    const beads = [10, 10, 12, 10, 10, 12, 10].map((mm) => mockPlaced(mm, "charm"));
+    const { resolved, layout } = layoutForWrist(16, beads, 1.2);
+    expect(resolved.radiusPx).toBeGreaterThanOrEqual(layout.wristRadiusPx);
+    expect(resolved.expanded).toBe(true);
+    assertCleanLayout(16, beads, 1.2);
+  });
+
+  it("never clamps below overlap-free radius when layout exceeds canvas", () => {
+    const beads = Array.from({ length: 11 }, () => mockPlaced(12));
+    const scaleFactor = 1;
+    const center = 90;
+    const prelimDims = beads.map((b) =>
+      getBeadSlotDimensions(b, placedBeadSizeMm(b), scaleFactor),
+    );
+    const layoutArcs = prelimDims.map((d) => beadLayoutArcPx(d, scaleFactor));
+    const maxExtent = Math.max(...prelimDims.map((d) => Math.max(d.width, d.height)));
+    const wristRadius = computeWristRingRadiusPx(center, 14, scaleFactor, maxExtent, BOUNDS);
+    const maxRadius = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
+    const resolved = computeResolvedRingRadiusPx({
+      beadLayoutArcPx: layoutArcs,
+      wristRadiusPx: wristRadius,
+      maxRadiusPx: maxRadius,
+      scaleFactor,
+    });
+    const neededRadius =
+      (layoutArcs.reduce((s, a) => s + a, 0) + beads.length * resolved.pairGapPx) / (2 * Math.PI);
+    expect(resolved.radiusPx).toBeGreaterThanOrEqual(neededRadius - 0.5);
+    expect(resolved.radiusPx).toBeGreaterThan(maxRadius);
+    expect(resolved.isVisualOverCanvas).toBe(true);
+    assertCleanLayout(14, beads, scaleFactor, center);
+  });
+
+  it("keeps distinct wrist baselines for 14cm vs 19cm", () => {
+    const r14 = computeWristRingRadiusPx(200, 14, 1, 40, BOUNDS);
+    const r19 = computeWristRingRadiusPx(200, 19, 1, 40, BOUNDS);
+    expect(r19).toBeGreaterThan(r14);
+  });
+});
+
+describe("mixed bead sizes on 16cm wrist", () => {
+  it("does not overlap 6/8/10/12mm crystals", () => {
+    const beads = [6, 8, 10, 12, 8, 6].map((mm) => mockPlaced(mm));
+    assertCleanLayout(16, beads);
+  });
+});
+
+describe("adjacent mixed-size pairs", () => {
+  const pairs: Array<{ label: string; beads: PlacedBead[] }> = [
+    { label: "6mm + 10mm crystal", beads: [mockPlaced(6), mockPlaced(10)] },
+    { label: "8mm + 12mm crystal", beads: [mockPlaced(8), mockPlaced(12)] },
+    { label: "4mm spacer + 10mm crystal", beads: [mockPlaced(4, "spacer"), mockPlaced(10)] },
+    { label: "10mm charm + 6mm crystal", beads: [mockPlaced(10, "charm"), mockPlaced(6)] },
+    { label: "12mm + 4mm spacer + 10mm", beads: [mockPlaced(12), mockPlaced(4, "spacer"), mockPlaced(10)] },
+  ];
+
+  for (const { label, beads } of pairs) {
+    it(`${label} on 16cm — clean clearance`, () => {
+      assertCleanLayout(16, beads);
+    });
+  }
+});
+
+describe("wrist sizes 14–19 cm", () => {
+  const wristSizes = [14, 15, 16, 17, 18, 19];
+
+  it("preserves distinct wrist baselines when strand is empty", () => {
+    const radii = wristSizes.map((cm) =>
+      computeWristRingRadiusPx(200, cm, 1, 40, BOUNDS),
+    );
+    for (let i = 1; i < radii.length; i++) {
+      expect(radii[i]!).toBeGreaterThan(radii[i - 1]!);
+    }
+  });
+
+  const crystalCombos: number[][] = [
+    [8, 8, 8, 8, 8],
+    [6, 8, 10, 12, 8, 6],
+    [12, 12, 8, 8],
+    [10, 10, 10, 10],
+  ];
+
+  for (const wristCm of wristSizes) {
+    for (const combo of crystalCombos) {
+      it(`crystals ${combo.join("/")}mm on ${wristCm}cm — no overlap`, () => {
+        const beads = combo.map((mm) => mockPlaced(mm));
+        assertCleanLayout(wristCm, beads);
+      });
+    }
+
+    it(`charms + spacers on ${wristCm}cm — no overlap`, () => {
+      const beads = [
+        mockPlaced(10, "charm"),
+        mockPlaced(4, "spacer"),
+        mockPlaced(10, "charm"),
+        mockPlaced(8),
+        mockPlaced(4, "spacer"),
+        mockPlaced(12),
+      ];
+      assertCleanLayout(wristCm, beads);
+    });
+  }
+
+  it("meets or exceeds wrist baseline on small wrist with large beads", () => {
+    const beads = [12, 12, 10, 10, 10, 10, 12, 12].map((mm) => mockPlaced(mm));
+    const { resolved, layout } = layoutForWrist(14, beads);
+    expect(resolved.radiusPx).toBeGreaterThanOrEqual(layout.wristRadiusPx - 0.5);
+    assertCleanLayout(14, beads);
+  });
+
+  it("scales pair gap with layout scale factor", () => {
+    const beads = [8, 10, 8].map((mm) => mockPlaced(mm));
+    const base = layoutForWrist(16, beads, 1);
+    const boosted = layoutForWrist(16, beads, 1.25);
+    expect(boosted.pairGapPx).toBeGreaterThan(base.pairGapPx);
+    expect(scaledBeadSpacingPx(1.25).pairGapPx).toBeGreaterThan(scaledBeadSpacingPx(1).pairGapPx);
+    assertCleanLayout(16, beads, 1.25);
+  });
+});
+
+describe("resolveStrandRingLayout", () => {
+  it("uses wrist size as baseline only — visual layout may expand", () => {
+    const beads = [10, 10, 10, 10].map((mm) => mockPlaced(mm));
+    const result = resolveStrandRingLayout({
+      placed: beads,
+      wristSizeCm: 14,
+      wristSizeBounds: BOUNDS,
+      canvasSize: 400,
+      guideSizeMm: 8,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.resolved.radiusPx).toBeGreaterThanOrEqual(result!.wristRadiusPx);
+  });
+});

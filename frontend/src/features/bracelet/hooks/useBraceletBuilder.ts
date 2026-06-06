@@ -4,11 +4,18 @@ import type { BraceletConfigurationPayload } from "@bino-foundry/shared/types";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
-import { type PlacedBead } from "@/lib/luxe-data";
+import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
+import {
+  canPlaceBeadSize,
+  isStrandFull,
+  strandFitsOnWrist,
+  strandUsedMm,
+  wristCircumferenceMm,
+} from "../capacity";
 import {
   getBeadAtIndex,
   insertBeadAt,
@@ -16,7 +23,9 @@ import {
   normalizeFromSlots,
   normalizeSequence,
   removeBeadAt,
+  replaceBeadAt,
 } from "../composition";
+import { BRACELET_COPY } from "../copy";
 import {
   defaultSizeForLibrary,
   findSizeOffer,
@@ -24,13 +33,15 @@ import {
 } from "../library-sizes";
 import { buildBraceletPricing } from "../pricing";
 import { movePlacedBead } from "../sequence-reorder";
+import { STRAND_PATH_START_ANGLE } from "../strand-path";
 import { serializeBraceletConfiguration } from "../serialize";
 import { buildBraceletBuilderSummary } from "../summary";
-
-function clampWristSize(value: number) {
-  const clamped = Math.max(14, Math.min(20, value));
-  return Math.round(clamped * 2) / 2;
-}
+import {
+  activeWristSizes,
+  catalogueWristSizeBounds,
+  defaultWristSize,
+  findWristSizeById,
+} from "../wrist-sizes";
 
 function buildPlacedBead(
   bead: BeadLibraryEntry,
@@ -52,14 +63,47 @@ export interface UseBraceletBuilderOptions {
 export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const { onPriceChange } = options;
   const isMobile = useIsMobile();
-  const { beadTypes, beadLibrarySizes } = useCatalogue();
+  const { beadTypes, beadLibrarySizes, wristSizes } = useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currencyCode = siteSettings.currencyCode;
 
-  const [wristSizeA, setWristSizeA] = useState(16);
-  const [wristSizeB, setWristSizeB] = useState(16);
+  const activeWristOptions = useMemo(() => activeWristSizes(wristSizes), [wristSizes]);
+  const fallbackWrist = useMemo(() => defaultWristSize(wristSizes), [wristSizes]);
+  const wristSizeBounds = useMemo(() => catalogueWristSizeBounds(wristSizes), [wristSizes]);
+
+  const [wristSizeIdA, setWristSizeIdA] = useState<string | null>(null);
+  const [wristSizeIdB, setWristSizeIdB] = useState<string | null>(null);
+  const [draftWristIdA, setDraftWristIdA] = useState<string | null>(null);
+  const [draftWristIdB, setDraftWristIdB] = useState<string | null>(null);
+  const [wristSizeConfirmed, setWristSizeConfirmed] = useState(false);
+  const [capacityNotice, setCapacityNotice] = useState<string | null>(null);
+  const [capacityNoticeVariant, setCapacityNoticeVariant] = useState<"blocked" | "full">("blocked");
+
+  const publishCapacityNotice = useCallback((message: string, variant: "blocked" | "full" = "blocked") => {
+    setCapacityNotice(message);
+    setCapacityNoticeVariant(variant);
+  }, []);
+
+  useEffect(() => {
+    if (!capacityNotice) return;
+    const timer = window.setTimeout(() => setCapacityNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [capacityNotice]);
+
+  const wristSizeA = useMemo(() => {
+    const entry = findWristSizeById(wristSizes, wristSizeIdA ?? "");
+    return entry?.sizeCm ?? fallbackWrist?.sizeCm ?? 0;
+  }, [wristSizes, wristSizeIdA, fallbackWrist]);
+
+  const wristSizeB = useMemo(() => {
+    const entry = findWristSizeById(wristSizes, wristSizeIdB ?? "");
+    return entry?.sizeCm ?? wristSizeA;
+  }, [wristSizes, wristSizeIdB, wristSizeA]);
+
   const [placedBeadsA, setPlacedBeadsA] = useState<PlacedBead[]>([]);
   const [placedBeadsB, setPlacedBeadsB] = useState<PlacedBead[]>([]);
+  const [strandAnchorAngleA, setStrandAnchorAngleA] = useState(STRAND_PATH_START_ANGLE);
+  const [strandAnchorAngleB, setStrandAnchorAngleB] = useState(STRAND_PATH_START_ANGLE);
   const [twinning, setTwinning] = useState(false);
   const [selectedBead, setSelectedBead] = useState<BeadLibraryEntry | null>(null);
   const [selectedSizeOfferKey, setSelectedSizeOfferKey] = useState<string | null>(null);
@@ -161,6 +205,11 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     onPriceChange?.(pricing.total);
   }, [pricing.total, onPriceChange]);
 
+  const wristCmFor = useCallback(
+    (bracelet: "A" | "B") => (bracelet === "A" ? wristSizeA : wristSizeB),
+    [wristSizeA, wristSizeB],
+  );
+
   const applySizeOffer = useCallback(
     (size: BeadLibrarySizeOffer) => {
       setSelectedSizeOfferKey(size.offerKey);
@@ -172,6 +221,14 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       const target = getBeadAtIndex(placed, position);
       if (!target) return;
 
+      const wristCm = wristCmFor(bracelet);
+      const usedWithout = strandUsedMm(placed) - placedBeadSizeMm(target);
+      if (usedWithout + size.sizeMm > wristCircumferenceMm(wristCm)) {
+        publishCapacityNotice(BRACELET_COPY.capacityBlocked(size.sizeMm));
+        return;
+      }
+
+      setCapacityNotice(null);
       setPlaced(
         normalizeSequence(placed).map((b, i) =>
           i === position ? { ...b, size, bead: b.bead } : b,
@@ -179,7 +236,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       );
       bumpLayout();
     },
-    [selectedStrandBead, placedBeadsA, placedBeadsB, bumpLayout],
+    [selectedStrandBead, placedBeadsA, placedBeadsB, bumpLayout, wristCmFor, publishCapacityNotice],
   );
 
   const placeAt = useCallback(
@@ -189,15 +246,56 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       bead: BeadLibraryEntry,
       size: BeadLibrarySizeOffer,
     ) => {
-      const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
       const placed = bracelet === "A" ? placedBeadsA : placedBeadsB;
+      const wristCm = wristCmFor(bracelet);
+      if (!canPlaceBeadSize(wristCm, placed, size.sizeMm)) {
+        publishCapacityNotice(
+          isStrandFull(wristCm, placed)
+            ? BRACELET_COPY.capacityFull
+            : BRACELET_COPY.capacityBlocked(size.sizeMm),
+          isStrandFull(wristCm, placed) ? "full" : "blocked",
+        );
+        return false;
+      }
+
+      const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
       const newItem = buildPlacedBead(bead, size, position);
       setPlaced(insertBeadAt(placed, position, newItem));
       setSelectedStrandBead(null);
+      setCapacityNotice(null);
       bumpLayout();
       return true;
     },
-    [placedBeadsA, placedBeadsB, bumpLayout],
+    [placedBeadsA, placedBeadsB, bumpLayout, wristCmFor, publishCapacityNotice],
+  );
+
+  const replaceAt = useCallback(
+    (
+      bracelet: "A" | "B",
+      position: number,
+      bead: BeadLibraryEntry,
+      size: BeadLibrarySizeOffer,
+    ) => {
+      const placed = bracelet === "A" ? placedBeadsA : placedBeadsB;
+      const target = getBeadAtIndex(placed, position);
+      if (!target) return placeAt(bracelet, position, bead, size);
+
+      const wristCm = wristCmFor(bracelet);
+      const usedWithout = strandUsedMm(placed) - placedBeadSizeMm(target);
+      if (usedWithout + size.sizeMm > wristCircumferenceMm(wristCm)) {
+        publishCapacityNotice(BRACELET_COPY.capacityBlocked(size.sizeMm));
+        return false;
+      }
+
+      const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
+      const newItem = buildPlacedBead(bead, size, position);
+      setPlaced(replaceBeadAt(placed, position, newItem));
+      setSelectedStrandBead(null);
+      setCapacityNotice(null);
+      bumpLayout();
+      return true;
+    },
+    [placedBeadsA, placedBeadsB, placeAt, bumpLayout, wristCmFor, publishCapacityNotice],
   );
 
   const handleSlotClick = useCallback(
@@ -246,7 +344,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const handleBeadDrop = useCallback(
     (
       bracelet: "A" | "B",
-      position: number,
+      target: { mode: "insert" | "replace"; index: number; anchorAngleRad?: number },
       data: { bead?: BeadLibraryEntry; variantId?: string; sizeOfferKey?: string; beadSizeMm?: number },
     ) => {
       const bead = data?.bead;
@@ -258,10 +356,24 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         (activeSizeOffer && activeSizeOffer.beadLibraryId === bead.id ? activeSizeOffer : undefined) ||
         defaultSizeForLibrary(beadLibrarySizes, bead.id);
       if (!size) return;
-      placeAt(bracelet, position, bead, size);
+
+      const placed = bracelet === "A" ? placedBeadsA : placedBeadsB;
+      const wasEmpty = normalizeFromSlots(placed).length === 0;
+
+      if (target.mode === "replace") {
+        replaceAt(bracelet, target.index, bead, size);
+        return;
+      }
+
+      if (wasEmpty && target.anchorAngleRad !== undefined) {
+        const setAnchor = bracelet === "A" ? setStrandAnchorAngleA : setStrandAnchorAngleB;
+        setAnchor(target.anchorAngleRad);
+      }
+
+      placeAt(bracelet, target.index, bead, size);
       setHoverSlot(null);
     },
-    [beadLibrarySizes, activeSizeOffer, placeAt],
+    [beadLibrarySizes, activeSizeOffer, placeAt, replaceAt, placedBeadsA, placedBeadsB],
   );
 
   const handleBeadsReorder = useCallback(
@@ -276,7 +388,15 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const handleRemoveBead = useCallback(
     (bracelet: "A" | "B", position: number) => {
       const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
-      setPlaced((prev) => removeBeadAt(prev, position));
+      const setAnchor = bracelet === "A" ? setStrandAnchorAngleA : setStrandAnchorAngleB;
+      setPlaced((prev) => {
+        const next = removeBeadAt(prev, position);
+        if (normalizeFromSlots(next).length === 0) {
+          setAnchor(STRAND_PATH_START_ANGLE);
+        }
+        setCapacityNotice(null);
+        return next;
+      });
       setSelectedStrandBead((sel) =>
         sel?.bracelet === bracelet && sel.position === position ? null : sel,
       );
@@ -287,6 +407,10 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
 
   const handleDuplicateBraceletToB = useCallback(() => {
     if (!twinning) return;
+    if (!strandFitsOnWrist(wristSizeB, placedBeadsA)) {
+      publishCapacityNotice(BRACELET_COPY.overCapacityBanner, "full");
+      return;
+    }
     setPlacedBeadsB(
       normalizeSequence(placedBeadsA).map((b) => ({
         position: b.position,
@@ -294,16 +418,29 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         size: b.size,
       })),
     );
+    setStrandAnchorAngleB(strandAnchorAngleA);
+    setCapacityNotice(null);
     bumpLayout();
-  }, [twinning, placedBeadsA, bumpLayout]);
+  }, [twinning, placedBeadsA, wristSizeB, strandAnchorAngleA, bumpLayout, publishCapacityNotice]);
 
   const autoPlaceItem = useCallback(
     (bead: BeadLibraryEntry, size: BeadLibrarySizeOffer) => {
+      if (!canPlaceBeadSize(wristSizeA, placedBeadsA, size.sizeMm)) {
+        publishCapacityNotice(
+          isStrandFull(wristSizeA, placedBeadsA)
+            ? BRACELET_COPY.capacityFull
+            : BRACELET_COPY.capacityBlocked(size.sizeMm),
+          isStrandFull(wristSizeA, placedBeadsA) ? "full" : "blocked",
+        );
+        return false;
+      }
       const item = buildPlacedBead(bead, size, 0);
       setPlacedBeadsA((prev) => insertBeadWithAutoLayout(prev, item));
+      setCapacityNotice(null);
       bumpLayout();
+      return true;
     },
-    [bumpLayout],
+    [bumpLayout, wristSizeA, placedBeadsA, publishCapacityNotice],
   );
 
   const handleSelectBead = useCallback(
@@ -321,54 +458,134 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         }
       }
 
+      if (!isMobile && wristSizeConfirmed) {
+        if (!autoPlaceItem(bead, s)) return;
+        setSelectedBead(null);
+        setSelectedStrandBead(null);
+        setSelectedSizeOfferKey(null);
+        return;
+      }
+
       setSelectedBead(bead);
       setSelectedStrandBead(null);
       setSelectedSizeOfferKey(s.offerKey);
-      if (!isMobile) autoPlaceItem(bead, s);
+      if (wristSizeConfirmed && !canPlaceBeadSize(wristSizeA, placedBeadsA, s.sizeMm)) {
+        publishCapacityNotice(
+          isStrandFull(wristSizeA, placedBeadsA)
+            ? BRACELET_COPY.capacityFull
+            : BRACELET_COPY.capacityBlocked(s.sizeMm),
+          isStrandFull(wristSizeA, placedBeadsA) ? "full" : "blocked",
+        );
+      }
     },
     [
       beadLibrarySizes,
       isMobile,
+      wristSizeConfirmed,
       autoPlaceItem,
       selectedStrandBead,
       placedBeadsA,
       placedBeadsB,
+      wristSizeA,
       applySizeOffer,
+      publishCapacityNotice,
     ],
   );
 
   const handleReset = useCallback(() => {
     setPlacedBeadsA([]);
     setPlacedBeadsB([]);
+    setStrandAnchorAngleA(STRAND_PATH_START_ANGLE);
+    setStrandAnchorAngleB(STRAND_PATH_START_ANGLE);
     setSelectedBead(null);
     setSelectedStrandBead(null);
     setSelectedSizeOfferKey(null);
     setHoverSlot(null);
+    setCapacityNotice(null);
     bumpLayout();
   }, [bumpLayout]);
 
   const handleToggleTwinning = useCallback(() => {
     setTwinning((t) => {
-      if (t) setPlacedBeadsB([]);
-      return !t;
+      if (t) {
+        setPlacedBeadsB([]);
+        return false;
+      }
+      if (wristSizeConfirmed && wristSizeIdA && !wristSizeIdB) {
+        setWristSizeIdB(wristSizeIdA);
+        setDraftWristIdB(wristSizeIdA);
+      }
+      return true;
     });
     bumpLayout();
-  }, [bumpLayout]);
+  }, [bumpLayout, wristSizeConfirmed, wristSizeIdA, wristSizeIdB]);
+
+  const selectDraftWristA = useCallback((entry: { id: string }) => {
+    setDraftWristIdA(entry.id);
+  }, []);
+
+  const selectDraftWristB = useCallback((entry: { id: string }) => {
+    setDraftWristIdB(entry.id);
+  }, []);
+
+  const confirmWristSizes = useCallback(() => {
+    if (!draftWristIdA) return;
+    setWristSizeIdA(draftWristIdA);
+    setWristSizeIdB(twinning ? (draftWristIdB ?? draftWristIdA) : draftWristIdA);
+    setWristSizeConfirmed(true);
+    setCapacityNotice(null);
+    bumpLayout();
+  }, [draftWristIdA, draftWristIdB, twinning, bumpLayout]);
 
   const setWristA = useCallback(
-    (v: number) => {
-      setWristSizeA(clampWristSize(v));
+    (entry: { id: string; sizeCm: number }) => {
+      setWristSizeIdA(entry.id);
+      setDraftWristIdA(entry.id);
+      const fits = strandFitsOnWrist(entry.sizeCm, placedBeadsA);
+      if (!fits) {
+        publishCapacityNotice(BRACELET_COPY.wristChangeOverCapacity, "full");
+      } else {
+        setCapacityNotice(null);
+      }
       bumpLayout();
     },
-    [bumpLayout],
+    [bumpLayout, placedBeadsA, publishCapacityNotice],
   );
 
   const setWristB = useCallback(
-    (v: number) => {
-      setWristSizeB(clampWristSize(v));
+    (entry: { id: string; sizeCm: number }) => {
+      setWristSizeIdB(entry.id);
+      setDraftWristIdB(entry.id);
+      const fits = strandFitsOnWrist(entry.sizeCm, placedBeadsB);
+      if (!fits) {
+        publishCapacityNotice(BRACELET_COPY.wristChangeOverCapacity, "full");
+      } else if (!pricing.strandFit.strandA.isOverCapacity) {
+        setCapacityNotice(null);
+      }
       bumpLayout();
     },
-    [bumpLayout],
+    [bumpLayout, placedBeadsB, pricing.strandFit.strandA.isOverCapacity, publishCapacityNotice],
+  );
+
+  const isOverCapacity = useMemo(() => {
+    const overA = pricing.strandFit.strandA.isOverCapacity;
+    const overB = twinning && pricing.strandFit.strandB?.isOverCapacity;
+    return Boolean(overA || overB);
+  }, [pricing.strandFit, twinning]);
+
+  const isStrandFullA = useMemo(
+    () => isStrandFull(wristSizeA, placedBeadsA),
+    [wristSizeA, placedBeadsA],
+  );
+
+  const isStrandFullB = useMemo(
+    () => twinning && isStrandFull(wristSizeB, placedBeadsB),
+    [twinning, wristSizeB, placedBeadsB],
+  );
+
+  const canDuplicateToB = useMemo(
+    () => strandFitsOnWrist(wristSizeB, placedBeadsA),
+    [wristSizeB, placedBeadsA],
   );
 
   const toSavedPayload = useCallback(
@@ -386,10 +603,27 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   );
 
   return {
+    wristSizes: activeWristOptions,
+    wristSizeBounds,
     wristSizeA,
     wristSizeB,
+    wristSizeIdA,
+    wristSizeIdB,
+    draftWristIdA,
+    draftWristIdB,
+    wristSizeConfirmed,
+    confirmWristSizes,
+    selectDraftWristA,
+    selectDraftWristB,
     setWristA,
     setWristB,
+    isOverCapacity,
+    isStrandFullA,
+    isStrandFullB,
+    canDuplicateToB,
+    capacityNotice,
+    capacityNoticeVariant,
+    setCapacityNotice,
     selectedSizeOfferKey,
     setSelectedSizeOfferKey,
     activeSizeOffer,
@@ -397,6 +631,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     setSelectedStrandBead,
     placedBeadsA,
     placedBeadsB,
+    strandAnchorAngleA,
+    strandAnchorAngleB,
     twinning,
     selectedBead,
     setSelectedBead,

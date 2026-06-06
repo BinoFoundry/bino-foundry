@@ -2,14 +2,12 @@ import { calculateBeadCount, placedBeadSizeMm, type PlacedBead } from "@/lib/lux
 
 import { normalizeFromSlots } from "./composition";
 
-/** Smallest catalog mm — used for advisory wrist-fit estimates only. */
 export const MIN_BEAD_SIZE_MM = 4;
 
 export function wristCircumferenceMm(wristSizeCm: number): number {
   return wristSizeCm * 10;
 }
 
-/** Advisory estimate: how many smallest-mm beads fit a target wrist (not a placement cap). */
 export function maxStrandSlots(wristSizeCm: number, minBeadMm = MIN_BEAD_SIZE_MM): number {
   return calculateBeadCount(wristSizeCm, minBeadMm);
 }
@@ -18,38 +16,43 @@ export function strandUsedMm(placed: PlacedBead[]): number {
   return normalizeFromSlots(placed).reduce((sum, b) => sum + placedBeadSizeMm(b), 0);
 }
 
+/** Remaining mm on target wrist; negative when over capacity. */
 export function strandRemainingMm(wristSizeCm: number, placed: PlacedBead[]): number {
-  return Math.max(0, wristCircumferenceMm(wristSizeCm) - strandUsedMm(placed));
+  return wristCircumferenceMm(wristSizeCm) - strandUsedMm(placed);
 }
 
-/** Placement is never blocked — bracelet length grows with composition. */
 export function canPlaceBeadSize(
-  _wristSizeCm: number,
-  _placed: PlacedBead[],
-  _beadSizeMm: number,
+  wristSizeCm: number,
+  placed: PlacedBead[],
+  beadSizeMm: number,
 ): boolean {
-  return true;
+  return strandRemainingMm(wristSizeCm, placed) >= beadSizeMm;
 }
 
-/** Strand is never "full" — users can always add another bead. */
 export function isStrandFull(
-  _wristSizeCm: number,
-  _placed: PlacedBead[],
+  wristSizeCm: number,
+  placed: PlacedBead[],
+  nextBeadMm?: number,
 ): boolean {
-  return false;
+  const remaining = strandRemainingMm(wristSizeCm, placed);
+  if (nextBeadMm !== undefined) return remaining < nextBeadMm;
+  return remaining <= 0;
 }
 
 export function strandCapacity(wristSizeCm: number, beadSizeMm: number): number {
   return calculateBeadCount(wristSizeCm, beadSizeMm);
 }
 
-/** Keeps dense sequence indices; no wrist/slot pruning. */
 export function prunePlacedBeads(placed: PlacedBead[]): PlacedBead[] {
   return normalizeFromSlots(placed);
 }
 
 export function countPrunedBeads(before: PlacedBead[], after: PlacedBead[]): number {
   return Math.max(0, before.length - after.length);
+}
+
+export function strandFitsOnWrist(wristSizeCm: number, placed: PlacedBead[]): boolean {
+  return strandUsedMm(placed) <= wristCircumferenceMm(wristSizeCm);
 }
 
 export function buildStrandFitMetrics(
@@ -60,11 +63,18 @@ export function buildStrandFitMetrics(
   const wristMm = wristCircumferenceMm(wristSizeCm);
   const sorted = normalizeFromSlots(placed);
   const used = strandUsedMm(sorted);
+  const remainingMm = wristMm - used;
+  const capacityPercent = wristMm > 0 ? Math.round((used / wristMm) * 100) : 0;
+  const isOverCapacity = used > wristMm;
+  const overCapacityMm = Math.max(0, used - wristMm);
+
   return {
     wristCircumferenceMm: wristMm,
     usedMm: used,
-    remainingMm: Math.max(0, wristMm - used),
-    /** Advisory reference — smallest-mm capacity at target wrist. */
+    remainingMm,
+    capacityPercent,
+    isOverCapacity,
+    overCapacityMm,
     maxSlots: maxStrandSlots(wristSizeCm, minBeadMm),
     placedCount: sorted.length,
   };

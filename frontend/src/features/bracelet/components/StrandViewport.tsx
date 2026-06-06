@@ -6,8 +6,11 @@ interface StrandViewportProps {
   viewportRef: RefObject<HTMLDivElement | null>;
   contentRef: RefObject<HTMLDivElement | null>;
   pan: StrandPan;
-  panMode: boolean;
   isPanning: boolean;
+  /** Combined auto-fit + user zoom — visual only, does not change layout coordinates. */
+  viewScale?: number;
+  /** When true, viewport shows grab cursor for dedicated pan mode. */
+  panMode?: boolean;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -17,15 +20,15 @@ interface StrandViewportProps {
 
 /**
  * Transformed layer holding strand canvases.
- * Pan uses viewport-level pointer handlers with hit-testing — no full-screen overlay,
- * so beads and drop targets stay interactive while pan mode is on.
+ * Pan only activates when pan mode is enabled via the toolbar.
  */
 export function StrandViewport({
   viewportRef,
   contentRef,
   pan,
-  panMode,
   isPanning,
+  viewScale = 1,
+  panMode = false,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -36,19 +39,20 @@ export function StrandViewport({
     <div
       ref={viewportRef}
       data-strand-viewport
-      className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden ${
-        panMode ? (isPanning ? "cursor-grabbing" : "cursor-grab") : ""
+      className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-visible bg-transparent ${
+        isPanning ? "cursor-grabbing" : panMode ? "cursor-grab" : "cursor-default"
       }`}
-      onPointerDown={panMode ? onPointerDown : undefined}
-      onPointerMove={panMode ? onPointerMove : undefined}
-      onPointerUp={panMode ? onPointerUp : undefined}
-      onPointerCancel={panMode ? onPointerCancel : undefined}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <div
         ref={contentRef}
-        className="inline-flex w-max max-w-none flex-wrap items-center justify-center gap-4 sm:gap-6"
+        className="inline-flex w-max max-w-none flex-wrap items-center justify-center gap-2 sm:gap-3"
         style={{
-          transform: `translate(${pan.x}px, ${pan.y}px)`,
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${viewScale})`,
+          transformOrigin: "center center",
           transition: isPanning ? undefined : "transform 80ms ease-out",
         }}
       >

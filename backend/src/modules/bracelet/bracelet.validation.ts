@@ -26,8 +26,8 @@ export const braceletConfigItemDto = z
 export const createBraceletConfigDto = z
   .object({
     twinning: z.boolean().optional(),
-    wristSizeCmA: z.number().min(14).max(24),
-    wristSizeCmB: z.number().min(14).max(24).optional(),
+    wristSizeCmA: z.number().positive().max(50),
+    wristSizeCmB: z.number().positive().max(50).optional(),
     defaultBeadSizeMm: beadSizeMm.optional(),
     items: z.array(braceletConfigItemDto).min(1),
     status: z.enum(["draft", "saved"]).optional(),

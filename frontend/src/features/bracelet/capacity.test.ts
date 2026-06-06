@@ -5,6 +5,7 @@ import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadLibraryEntry } from "@/types/beads";
 
 import {
+  buildStrandFitMetrics,
   canPlaceBeadSize,
   prunePlacedBeads,
   strandRemainingMm,
@@ -34,16 +35,27 @@ function bead(position: number, mm: number): PlacedBead {
   return { position, bead: lib, size: s };
 }
 
-describe("wrist fit (advisory)", () => {
-  it("sums variant mm for composition length", () => {
+describe("wrist-target capacity", () => {
+  it("sums placed bead mm against wrist target", () => {
     const placed = [bead(0, 6), bead(1, 8), bead(2, 4)];
     expect(strandUsedMm(placed)).toBe(18);
     expect(strandRemainingMm(16, placed)).toBe(142);
   });
 
-  it("never blocks placement by wrist or slot count", () => {
-    const placed = [bead(0, 10), bead(1, 10)];
-    expect(canPlaceBeadSize(14, placed, 40)).toBe(true);
+  it("blocks placement when bead exceeds remaining target space", () => {
+    const placed = Array.from({ length: 16 }, (_, i) => bead(i, 10));
+    expect(strandRemainingMm(16, placed)).toBe(0);
+    expect(canPlaceBeadSize(16, placed, 8)).toBe(false);
+    expect(canPlaceBeadSize(16, [bead(0, 10)], 8)).toBe(true);
+  });
+
+  it("reports capacity percent and over-capacity state", () => {
+    const placed = [bead(0, 80), bead(1, 90)];
+    const metrics = buildStrandFitMetrics(16, placed);
+    expect(metrics.capacityPercent).toBeGreaterThan(100);
+    expect(metrics.isOverCapacity).toBe(true);
+    expect(metrics.overCapacityMm).toBeGreaterThan(0);
+    expect(metrics.remainingMm).toBeLessThan(0);
   });
 });
 

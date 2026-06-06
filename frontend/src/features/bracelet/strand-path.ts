@@ -1,11 +1,17 @@
 /**
- * Circular path layout: even polar positioning on the bracelet ring.
- * Position: θᵢ = (360° / n) × i (+ 12 o'clock start offset).
- * Rotation: tangent to the cord at θᵢ (visual orientation only — independent of θ formula).
+ * Circular path layout on the bracelet ring.
+ * Default: even polar positioning when bead mm weights are absent.
+ * Elastic: arc-length distribution from actual bead sizes when `layoutCircumferenceMm` is set.
  */
+import { computeElasticBeadLayout } from "./strand-elastic-layout";
 
 /** Default ring start — top of canvas (12 o'clock). */
 export const STRAND_PATH_START_ANGLE = -Math.PI / 2;
+
+/** Normalize any radian angle to (-π, π]. */
+export function normalizePathAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
 
 export interface StrandPathBeadInput {
   index: number;
@@ -94,31 +100,63 @@ export function beadTypeRotationOffsetDeg(beadTypeSlug?: string): number {
   }
 }
 
+function useElasticWeights(beads: StrandPathBeadInput[], layoutCircumferenceMm?: number): boolean {
+  if (!layoutCircumferenceMm || layoutCircumferenceMm <= 0) return false;
+  return beads.some((b) => (b.beadMm ?? 0) > 0);
+}
+
 /**
- * Place beads on a circular path with even angular distribution.
- * When n changes, every θᵢ is recomputed: θᵢ = (360° / n) × i.
+ * Place beads on a circular path.
+ * With `layoutCircumferenceMm` + per-bead `beadMm`, uses elastic arc-length distribution.
  */
 export function computeStrandPathLayout(params: {
   beads: StrandPathBeadInput[];
-  /** @deprecated Ignored for even distribution; kept for call-site compatibility. */
   layoutCircumferenceMm?: number;
   centerX: number;
   centerY: number;
   radius: number;
   startAngle?: number;
   rotationOffsetByIndex?: (index: number) => number;
+  /** Minimum arc gap between adjacent beads (same units as layoutCircumferenceMm). */
+  minGapPx?: number;
 }): StrandPathBeadLayout[] {
   const {
     beads,
+    layoutCircumferenceMm,
     centerX,
     centerY,
     radius,
     startAngle = STRAND_PATH_START_ANGLE,
     rotationOffsetByIndex,
+    minGapPx = 0,
   } = params;
 
   const n = beads.length;
   if (!n || radius <= 0) return [];
+
+  if (useElasticWeights(beads, layoutCircumferenceMm)) {
+    const beadArcMm = beads.map((b) => Math.max(0, b.beadMm ?? 0));
+    const elastic = computeElasticBeadLayout(
+      beadArcMm,
+      layoutCircumferenceMm!,
+      startAngle,
+      minGapPx,
+    );
+    return beads.map((bead, i) => {
+      const angle = elastic.angles[i]!;
+      const arcSpan = elastic.arcSpans[i]!;
+      const { x, y } = polarToCartesian(centerX, centerY, radius, angle);
+      const offset = rotationOffsetByIndex?.(bead.index) ?? 0;
+      return {
+        index: bead.index,
+        angle,
+        arcSpan,
+        x,
+        y,
+        rotationDeg: tangentRotationDeg(angle) + offset,
+      };
+    });
+  }
 
   const arcSpan = evenBeadAngleStepRad(n);
 
@@ -152,6 +190,72 @@ export function beadIndexFromPointerAngle(
   while (rel < 0) rel += 2 * Math.PI;
   while (rel >= 2 * Math.PI) rel -= 2 * Math.PI;
   return Math.floor((rel + step / 2) / step) % count;
+}
+
+/** Angle at insertion gap `insertIndex` (0 = before first bead; n = after last). */
+export function insertionAngleRad(
+  insertIndex: number,
+  beadCount: number,
+  startAngle = STRAND_PATH_START_ANGLE,
+): number {
+  if (beadCount <= 0) return startAngle;
+  const step = evenBeadAngleStepRad(beadCount);
+  return startAngle + step * (insertIndex - 0.5);
+}
+
+export function insertionSlotCount(beadCount: number): number {
+  return beadCount === 0 ? 1 : beadCount + 1;
+}
+
+/** Map pointer angle to insertion index (0..n) for gap-centered drop zones. */
+export function insertionIndexFromPointerAngle(
+  pointerAngle: number,
+  beadCount: number,
+  startAngle = STRAND_PATH_START_ANGLE,
+): number {
+  if (beadCount === 0) return 0;
+  const step = evenBeadAngleStepRad(beadCount);
+  let rel = pointerAngle - startAngle + step / 2;
+  while (rel < 0) rel += 2 * Math.PI;
+  while (rel >= 2 * Math.PI) rel -= 2 * Math.PI;
+  const gap = Math.floor(rel / step);
+  return Math.min(gap, beadCount);
+}
+
+function normalizeAngle(a: number): number {
+  let x = a % (2 * Math.PI);
+  if (x < 0) x += 2 * Math.PI;
+  return x;
+}
+
+function angularDistance(a: number, b: number): number {
+  const delta = Math.abs(normalizeAngle(a) - normalizeAngle(b));
+  return Math.min(delta, 2 * Math.PI - delta);
+}
+
+export type StrandDropTarget =
+  | { mode: "insert"; index: number; /** First-bead anchor on empty strand (radians). */ anchorAngleRad?: number }
+  | { mode: "replace"; index: number };
+
+/** Distinguish gap insertion vs bead replacement from pointer angle. */
+export function resolveStrandDropTarget(
+  pointerAngle: number,
+  beadCount: number,
+  startAngle = STRAND_PATH_START_ANGLE,
+): StrandDropTarget {
+  if (beadCount === 0) return { mode: "insert", index: 0 };
+
+  const beadIdx = beadIndexFromPointerAngle(pointerAngle, beadCount, startAngle);
+  const insertIdx = insertionIndexFromPointerAngle(pointerAngle, beadCount, startAngle);
+  const beadAngle = evenBeadAngleRad(beadIdx, beadCount, startAngle);
+  const gapAngle = insertionAngleRad(insertIdx, beadCount, startAngle);
+  const toBead = angularDistance(pointerAngle, beadAngle);
+  const toGap = angularDistance(pointerAngle, gapAngle);
+
+  if (toBead <= toGap * 0.92) {
+    return { mode: "replace", index: beadIdx };
+  }
+  return { mode: "insert", index: insertIdx };
 }
 
 /** Nearest bead index by polar angle (legacy nearest-center). */

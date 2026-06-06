@@ -8,6 +8,7 @@ import { GeneralSettingsPage } from "./modules/settings/GeneralSettingsPage";
 import { SunglassesConfigPage } from "./modules/pricing/SunglassesConfigPage";
 import { BeadsAdminPage } from "./modules/products/BeadsAdminPage";
 import { BeadSizesAdminPage } from "./modules/products/BeadSizesAdminPage";
+import { WristSizesAdminPage } from "./modules/products/WristSizesAdminPage";
 import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
 import { FramesAdminPage } from "./modules/products/FramesAdminPage";
 import type { AdminSection } from "./types";
@@ -30,6 +31,8 @@ function AdminSectionView({
       return <BeadTypesAdminPage />;
     case "bead-sizes":
       return <BeadSizesAdminPage />;
+    case "wrist-sizes":
+      return <WristSizesAdminPage />;
     case "general-settings":
       return <GeneralSettingsPage />;
     case "sunglasses-config":

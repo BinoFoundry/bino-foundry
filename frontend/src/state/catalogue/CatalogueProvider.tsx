@@ -10,12 +10,14 @@ import {
 } from "react";
 
 import { beadSizesApi } from "@/services/api/bead-sizes";
+import { wristSizesApi } from "@/services/api/wrist-sizes";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { beadsApi } from "@/services/api/beads";
 import { catalogueApi } from "@/services/api";
 import { isApiError } from "@/services/api/errors";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
+import type { WristSizeEntry } from "@/types/wrist-sizes";
 import type { FrameEntry } from "@/types/catalogue";
 
 import {
@@ -46,6 +48,9 @@ export interface CatalogueActions {
   addBeadSize: (entry: Omit<BeadSizeEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateBeadSize: (entry: BeadSizeEntry) => Promise<void>;
   deleteBeadSize: (id: string) => Promise<void>;
+  addWristSize: (entry: Omit<WristSizeEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  updateWristSize: (entry: WristSizeEntry) => Promise<void>;
+  deleteWristSize: (id: string) => Promise<void>;
   addFrame: (entry: FrameEntry) => Promise<void>;
   updateFrame: (entry: FrameEntry) => Promise<void>;
   deleteFrame: (id: string) => Promise<void>;
@@ -77,14 +82,15 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, beadTypes, beadSizes, beadLibrarySizes, beadLibraries] = await Promise.all([
+      const [frames, beadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries] = await Promise.all([
         catalogueApi.listFrames(),
         beadsApi.listTypes(),
         beadSizesApi.list(true),
+        wristSizesApi.list(true),
         beadLibrarySizesApi.list(),
         beadsApi.listLibraries(),
       ]);
-      const next: CatalogueStore = { frames, beadTypes, beadSizes, beadLibrarySizes, beadLibraries };
+      const next: CatalogueStore = { frames, beadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries };
       saveToStorage(next);
       syncCatalogueSnapshot(next);
       setStore(next);
@@ -196,6 +202,30 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     [refreshFromApi],
   );
 
+  const addWristSize = useCallback(
+    async (entry: Omit<WristSizeEntry, "id" | "createdAt" | "updatedAt">) => {
+      await wristSizesApi.create(entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
+
+  const updateWristSize = useCallback(
+    async (entry: WristSizeEntry) => {
+      await wristSizesApi.update(entry.id, entry);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
+
+  const deleteWristSize = useCallback(
+    async (id: string) => {
+      await wristSizesApi.delete(id);
+      await refreshFromApi();
+    },
+    [refreshFromApi],
+  );
+
   const addFrame = useCallback(
     async (entry: FrameEntry) => {
       await catalogueApi.createFrame(entry);
@@ -241,6 +271,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addBeadSize,
       updateBeadSize,
       deleteBeadSize,
+      addWristSize,
+      updateWristSize,
+      deleteWristSize,
       addFrame,
       updateFrame,
       deleteFrame,
@@ -261,6 +294,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addBeadSize,
       updateBeadSize,
       deleteBeadSize,
+      addWristSize,
+      updateWristSize,
+      deleteWristSize,
       addFrame,
       updateFrame,
       deleteFrame,
