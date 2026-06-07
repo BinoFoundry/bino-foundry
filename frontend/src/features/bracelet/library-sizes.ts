@@ -45,15 +45,22 @@ export function minActiveOfferSizeMm(offers: BeadLibrarySizeOffer[]): number {
   return active.length ? Math.min(...active) : 1;
 }
 
+function coerceUnitPrice(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function formatSizeOfferPrice(offer: BeadLibrarySizeOffer, currency: string): string {
+  const price = coerceUnitPrice(offer.unitPrice);
+  if (price === null) return "—";
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
       minimumFractionDigits: 2,
-    }).format(offer.unitPrice);
+    }).format(price);
   } catch {
-    return `$${offer.unitPrice.toFixed(2)}`;
+    return `$${price.toFixed(2)}`;
   }
 }
 
@@ -66,9 +73,10 @@ export function formatLibraryPriceRange(
   offers: BeadLibrarySizeOffer[],
   libraryId: string,
 ): string {
-  const sizes = sizesForLibrary(offers, libraryId);
-  if (!sizes.length) return "No sizes priced";
-  const prices = sizes.map((s) => s.unitPrice);
+  const prices = sizesForLibrary(offers, libraryId)
+    .map((s) => coerceUnitPrice(s.unitPrice))
+    .filter((p): p is number => p !== null);
+  if (!prices.length) return "No sizes priced";
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   if (min === max) return `$${min.toFixed(2)}`;

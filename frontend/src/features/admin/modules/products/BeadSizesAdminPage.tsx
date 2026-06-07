@@ -189,7 +189,7 @@ export function BeadSizesAdminPage() {
                     ) : null}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {s.sizeMm} mm · ×{s.priceMultiplier.toFixed(2)}
+                    {s.sizeMm} mm · ×{Number(s.priceMultiplier ?? 1).toFixed(2)}
                     {s.isActive === false ? " · inactive" : ""}
                   </p>
                 </div>
