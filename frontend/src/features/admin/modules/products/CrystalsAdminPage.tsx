@@ -79,7 +79,7 @@ export function CrystalsAdminPage() {
         title={
           activeModal ? (
             <div>
-              <h3 className="font-display text-lg font-semibold">
+              <h3 className="type-h3">
                 {activeModal.type === "add"
                   ? `New ${tab.slice(0, -1)}`
                   : `Edit ${tab.slice(0, -1)}`}

@@ -56,8 +56,10 @@ export const TypeForm = ({ initial, onSave, onCancel }: TypeFormProps) => {
       </div>
 
       <div className="flex gap-2 justify-end pt-2 border-t border-border">
-        <Button variant="outline" type="button" onClick={onCancel} className="text-sm" disabled={saving}>Cancel</Button>
-        <Button type="submit" className="text-sm bg-primary/90 hover:bg-primary" disabled={saving}>
+        <Button variant="secondary" type="button" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Save Type"}
         </Button>
       </div>

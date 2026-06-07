@@ -30,7 +30,7 @@ export function WristSizeStep({
     return (
       <div
         className={cn(
-          "w-full max-w-lg rounded-2xl border border-border/50 bg-card/95 p-10 text-center shadow-xl",
+          "surface-card w-full max-w-lg p-10 text-center",
           className,
         )}
       >
@@ -42,18 +42,18 @@ export function WristSizeStep({
   return (
     <div
       className={cn(
-        "w-full max-w-3xl rounded-2xl border border-border/40 bg-card/95 p-6 shadow-xl shadow-black/[0.04] backdrop-blur-sm sm:p-8",
+        "surface-card w-full max-w-3xl p-6 sm:p-8",
         className,
       )}
     >
       <header className="mb-5 space-y-2 text-center sm:mb-6">
-        <p className="font-display text-[10px] font-medium uppercase tracking-[0.34em] text-primary/85">
+        <p className="label-eyebrow">
           {BRACELET_COPY.wristOnboardingTitle}
         </p>
-        <h1 className="font-display text-[1.6rem] font-semibold tracking-tight text-foreground sm:text-[1.8rem]">
+        <h1 className="type-feature text-foreground sm:text-h2">
           {BRACELET_COPY.wristStepTitle}
         </h1>
-        <p className="mx-auto max-w-sm text-[13px] leading-relaxed text-muted-foreground sm:text-sm">
+        <p className="type-body-lg mx-auto max-w-sm font-light text-muted-foreground">
           {BRACELET_COPY.wristStepSubtitle}
         </p>
       </header>
@@ -80,7 +80,7 @@ export function WristSizeStep({
         size="lg"
         disabled={!canConfirm}
         onClick={onConfirm}
-        className="group h-11 w-full font-display text-sm tracking-wide sm:h-12"
+        className="group h-11 w-full sm:h-12"
       >
         {BRACELET_COPY.wristStepContinue}
         <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />

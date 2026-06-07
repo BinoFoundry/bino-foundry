@@ -62,7 +62,7 @@ export function TypesAdminPage() {
         onBack={activeModal ? closeModal : undefined}
         title={
           activeModal ? (
-            <h3 className="font-display text-lg font-semibold">
+            <h3 className="type-h3">
               {activeModal.type === "add" ? "New type" : "Edit type"}
             </h3>
           ) : undefined

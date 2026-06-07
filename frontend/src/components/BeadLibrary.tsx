@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { Search, X, Info, Gem } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { BEAD_LIBRARY_DRAG_TYPE } from "@/features/bracelet/interaction";
 import {
@@ -114,24 +116,21 @@ const BeadLibrary = ({
 
   return (
     <>
-      {isMobile && <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />}
+      {isMobile && (
+        <div className="fixed inset-0 z-40 bg-[hsl(var(--overlay))]" onClick={onClose} aria-hidden />
+      )}
       <div
         className={
           isMobile
-            ? "fixed bottom-0 left-0 right-0 z-50 flex max-h-[min(70vh,100dvh)] flex-col rounded-t-2xl border-t border-border bg-card shadow-xl pb-[env(safe-area-inset-bottom)]"
-            : "absolute left-0 top-0 bottom-0 z-30 flex w-64 flex-col border-r border-border bg-card shadow-sm"
+            ? "surface-elevated fixed bottom-0 left-0 right-0 z-50 flex max-h-[min(70vh,100dvh)] flex-col rounded-t-2xl border-t border-subtle pb-[env(safe-area-inset-bottom)]"
+            : "surface-elevated absolute bottom-0 left-0 top-0 z-30 flex w-64 flex-col border-r border-subtle"
         }
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h3 className="font-display text-sm font-semibold tracking-wide">{BRACELET_COPY.libraryTitle}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground"
-            aria-label="Close collection"
-          >
+          <h3 className="type-h3 text-base">{BRACELET_COPY.libraryTitle}</h3>
+          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-2">

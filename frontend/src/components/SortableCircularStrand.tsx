@@ -823,7 +823,7 @@ const SortableCircularStrand = ({
         <div
           ref={canvasRef}
           className={cn(
-            "relative bg-white dark:bg-card",
+            "surface-canvas relative",
             activeId && !externalDrag && "cursor-grabbing",
           )}
           style={{ width: renderCanvasSize, height: renderCanvasSize }}
@@ -955,14 +955,14 @@ const SortableCircularStrand = ({
               <p className="font-medium uppercase tracking-widest text-muted-foreground/90">
                 {BRACELET_COPY.strandGuideTitle}
               </p>
-              <p className="mt-0.5 font-display text-xs font-semibold text-foreground sm:text-sm">
+              <p className="type-small mt-0.5 font-medium text-foreground sm:text-body">
                 {BRACELET_COPY.strandEmptyGuide}
               </p>
               <p className="mt-1 text-muted-foreground">{BRACELET_COPY.strandEmptyReorderNote}</p>
               <p className="mt-1">{BRACELET_COPY.strandHint}</p>
             </>
           ) : (
-            <p className="font-display text-xs font-semibold text-foreground sm:text-sm">
+            <p className="type-small font-medium text-foreground sm:text-body">
               {placedCount} {BRACELET_COPY.piecesOnStrand} · {BRACELET_COPY.strandLength(compositionMm)}
             </p>
           )}

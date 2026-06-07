@@ -37,10 +37,10 @@ export function AppShell({
   };
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
-      <header className="layout-header flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-8 sm:py-5">
-        <h1 className="whitespace-nowrap font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl">
-          Bino Foundry
+    <div className="surface-page flex h-[100dvh] flex-col overflow-hidden">
+      <header className="layout-header flex shrink-0 items-center justify-between gap-3 border-b border-subtle bg-card/50 px-4 py-3 sm:px-8 sm:py-5">
+        <h1 className="type-feature whitespace-nowrap text-foreground sm:text-h2">
+          <span className="text-primary">Bino</span> Foundry
         </h1>
 
         <div className="hidden items-center gap-6 md:flex">

@@ -27,8 +27,8 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Admin</p>
-          <h2 className="font-display text-lg font-semibold text-foreground">
+          <p className="type-label text-muted-foreground">Admin</p>
+          <h2 className="type-h3">
             {activeNav?.label ?? "Dashboard"}
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">{activeNav?.description}</p>
@@ -52,7 +52,7 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
       </header>
 
       {!hasAdminApiKey ? (
-        <p className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-800 dark:text-amber-200">
+        <p className="shrink-0 border-b border-status-warning bg-status-warning px-4 py-2 text-center text-xs">
           Set <code className="rounded bg-background/80 px-1">VITE_ADMIN_API_KEY</code> to match server{" "}
           <code className="rounded bg-background/80 px-1">ADMIN_API_KEY</code> before saving catalogue changes.
           Reads work without a key; writes are blocked on the API.
@@ -66,7 +66,7 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
         >
           {ADMIN_NAV_GROUPS.map((group) => (
             <div key={group.id}>
-              <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <p className="type-label mb-2 px-2 text-muted-foreground">
                 {group.label}
               </p>
               <ul className="flex flex-col gap-0.5">

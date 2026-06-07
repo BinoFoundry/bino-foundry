@@ -130,17 +130,17 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
       </div>
 
       <div className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border/80 pt-3">
-        <Button type="button" variant="luxe-outline" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
+        <Button type="button" variant="secondary" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
           <ChevronLeft className="mr-1 h-4 w-4" />
           Back
         </Button>
         {!flow.isLast ? (
-          <Button type="button" variant="luxe" size="sm" onClick={flow.goNext}>
+          <Button type="button" size="sm" onClick={flow.goNext}>
             Continue
             <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         ) : (
-          <Button type="button" variant="luxe" size="sm" onClick={() => void handleRequestQuote()}>
+          <Button type="button" size="sm" onClick={() => void handleRequestQuote()}>
             {requiresManualFollowUp ? "Request consultation" : "Request quote"}
           </Button>
         )}

@@ -313,7 +313,7 @@ export class PolygonEditor {
           }
         }
 
-        drawKnob(ap.x, ap.y, selected ? '#fff' : isActive ? '#0078ff' : '#6b8cce', selected ? hitR * 1.2 : hitR);
+        drawKnob(ap.x, ap.y, selected ? '#FBF8F3' : isActive ? '#646345' : '#D9BBB0', selected ? hitR * 1.2 : hitR);
         if (a.curved && isActive) {
           this.ctx.fillStyle = '#0078ff';
           this.ctx.beginPath();

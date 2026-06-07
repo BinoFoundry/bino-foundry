@@ -91,10 +91,8 @@ export function WristSizePickerCards({
               <div className="flex flex-col items-center leading-none">
                 <span
                   className={cn(
-                    "font-display tabular-nums tracking-tight",
-                    isInline
-                      ? "text-[15px] font-semibold"
-                      : "text-lg font-semibold sm:text-xl",
+                    "type-price",
+                    isInline ? "text-body" : "text-body-lg sm:text-feature",
                     selected ? "text-foreground" : "text-foreground/80 group-hover:text-foreground",
                   )}
                 >
@@ -102,8 +100,8 @@ export function WristSizePickerCards({
                 </span>
                 <span
                   className={cn(
-                    "mt-0.5 font-medium uppercase text-muted-foreground/80",
-                    isInline ? "text-[7px] tracking-[0.22em]" : "text-[8px] tracking-[0.26em]",
+                    "type-label mt-1 text-muted-foreground/80",
+                    isInline ? "text-[0.6rem]" : "",
                   )}
                 >
                   cm

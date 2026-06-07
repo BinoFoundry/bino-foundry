@@ -219,7 +219,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <section className="space-y-4">
-        <h3 className="font-display text-sm font-semibold text-foreground">Basic information</h3>
+        <h3 className="type-h3 text-base">Basic information</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Name *</label>
@@ -277,7 +277,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       </section>
 
       <section className="space-y-4">
-        <h3 className="font-display text-sm font-semibold text-foreground">Images</h3>
+        <h3 className="type-h3 text-base">Images</h3>
         <div className="flex items-center gap-4 rounded-md border border-border bg-muted/20 p-3">
           <label className="relative flex h-16 w-16 cursor-pointer items-center justify-center overflow-hidden rounded-md border-2 border-dashed border-border bg-muted/50 hover:bg-muted">
             {originalUrl ? (
@@ -288,8 +288,9 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
             <input type="file" accept="image/*" className="absolute inset-0 opacity-0" onChange={handleUpload} disabled={uploading} />
           </label>
           <p className="text-xs text-muted-foreground">
-            Upload source asset, then draw crop path below. Status:{" "}
-            <span className={cropReady ? "text-emerald-600" : "text-amber-600"}>
+            Upload a single bead on a plain white/light background (PNG with transparency works best).
+            The crop outline is auto-detected; refine it in the editor below. Status:{" "}
+            <span className={cropReady ? "text-status-success" : "text-status-warning"}>
               {cropReady ? "crop ready" : form.cropStatus ?? "draft"}
             </span>
           </p>
@@ -339,7 +340,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       </section>
 
       <section className="space-y-3">
-        <h3 className="font-display text-sm font-semibold text-foreground">Available sizes</h3>
+        <h3 className="type-h3 text-base">Available sizes</h3>
         <BeadLibrarySizesPanel rows={sizeRows} onRowsChange={setSizeRows} />
         {form.id && existingOffers.length > 0 ? (
           <button

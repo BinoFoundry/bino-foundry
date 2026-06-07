@@ -26,8 +26,8 @@ export function ErrorState({
     >
       <AlertCircle className="h-8 w-8 text-destructive" />
       <div>
-        <p className="font-medium text-foreground">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+        <p className="type-body font-medium text-foreground">{title}</p>
+        <p className="type-small mt-2 text-muted-foreground">{message}</p>
       </div>
       {onRetry && (
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>

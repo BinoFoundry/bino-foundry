@@ -21,7 +21,7 @@ function getBeadBackground(bead: PlacedBead | null | undefined): string {
   if (bead.type === "spacer" && bead.spacer?.image) {
     return `url("${bead.spacer.image}") center / cover no-repeat`;
   }
-  if (bead.type === "charm") return "hsl(43 60% 70%)";
+  if (bead.type === "charm") return "hsl(var(--gold-light))";
   if (bead.type === "spacer") return "hsl(0 0% 82%)";
   return "hsl(var(--muted))";
 }
@@ -117,7 +117,7 @@ const CircularStrand = ({ beadCount, placedBeads, onSlotClick, onBeadDrop, label
         })}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center">
-            <p className="text-2xl font-display font-semibold text-foreground">{placedBeads.length}</p>
+            <p className="type-price text-2xl text-foreground">{placedBeads.length}</p>
             <p className="text-[10px] text-muted-foreground font-body uppercase tracking-wider">of {beadCount}</p>
           </div>
         </div>

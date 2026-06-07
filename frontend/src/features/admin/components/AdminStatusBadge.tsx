@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
 const VARIANTS = {
-  success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  warning: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  success: "bg-status-success border border-status-success",
+  warning: "bg-status-warning border border-status-warning",
   muted: "bg-muted text-muted-foreground",
   danger: "bg-destructive/10 text-destructive",
 } as const;
@@ -17,7 +17,7 @@ export function AdminStatusBadge({
   return (
     <span
       className={cn(
-        "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+        "type-label shrink-0 rounded px-1.5 py-0.5",
         VARIANTS[variant],
       )}
     >

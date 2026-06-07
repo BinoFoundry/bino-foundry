@@ -102,7 +102,7 @@ export function LensStepPanel({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="font-display text-base font-bold text-foreground">Lens options</h3>
+        <h3 className="type-h3">Lens options</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Choose standard or polarised lenses, then pick a tint. Colour is applied to the lens only — the frame stays
           unchanged in real time.
@@ -110,14 +110,14 @@ export function LensStepPanel({
       </div>
 
       <div className="rounded-xl border border-border bg-muted/20 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lens type</p>
+        <p className="type-label text-muted-foreground">Lens type</p>
         <p className="mt-1 text-sm font-medium text-foreground">
           {polarized ? "Polarised lenses" : "Standard lenses (non-polarised)"}
         </p>
         {polarizedOption && (
           <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
             <div>
-              <Label htmlFor="polarized-toggle" className="font-semibold">
+              <Label htmlFor="polarized-toggle" className="font-medium text-foreground">
                 Upgrade to {polarizedOption.label}
               </Label>
               <p className="text-xs text-muted-foreground">

@@ -32,7 +32,7 @@ function CapacityMetric({
       <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
       <p
         className={cn(
-          "mt-1 font-display text-sm font-semibold tabular-nums tracking-tight sm:text-[15px]",
+          "type-price mt-1 text-small sm:text-body",
           warning ? "text-destructive" : emphasize ? "text-foreground" : "text-foreground/90",
         )}
       >
@@ -68,7 +68,7 @@ export function StrandCapacityCard({
     >
       <div className={cn("px-3.5 py-3.5", compact && "px-3 py-3")}>
         <div className="flex items-baseline justify-between gap-2">
-          <p className="font-display text-xs font-semibold tracking-wide text-foreground">
+          <p className="type-small font-medium text-foreground">
             {showStrandLabel ? strand.label : BRACELET_COPY.summaryCapacity}
           </p>
           {strand.placedCount > 0 ? (

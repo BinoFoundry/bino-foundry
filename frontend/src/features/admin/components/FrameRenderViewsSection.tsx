@@ -140,7 +140,7 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
   return (
     <div className="space-y-6 border-t border-border pt-4">
       <div>
-        <h3 className="text-sm font-semibold text-foreground">Render views</h3>
+        <h3 className="type-h3 text-base">Render views</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           Upload front and side (45°) photos, then draw lens SVG clip areas. Use{" "}
           <strong>Save clip</strong> when each view is complete — paths are stored for dynamic tint rendering.
@@ -161,7 +161,7 @@ export function FrameRenderViewsSection({ frameId, views, onChange }: FrameRende
                 {hasPlate ? (
                   <p className="text-xs text-muted-foreground">
                     {view.width}×{view.height} ·{" "}
-                    <span className={clipReady ? "text-emerald-600" : "text-amber-600"}>
+                    <span className={clipReady ? "text-status-success" : "text-status-warning"}>
                       {clipReady ? "SVG clip ready" : "Clip in progress"}
                     </span>
                   </p>

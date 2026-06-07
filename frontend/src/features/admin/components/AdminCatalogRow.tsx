@@ -22,7 +22,7 @@ export function AdminCatalogRow({
       <div>
         <p className="font-medium text-foreground">{title}</p>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
-        {!active && <p className="text-[10px] text-amber-600">Inactive</p>}
+        {!active && <p className="text-[10px] text-status-warning">Inactive</p>}
       </div>
       <div className="flex gap-1">
         <Button size="icon" variant="ghost" onClick={onEdit} aria-label="Edit">

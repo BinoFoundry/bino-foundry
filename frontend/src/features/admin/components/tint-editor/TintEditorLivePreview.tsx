@@ -82,8 +82,8 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
       },
       tint: {
         ...tintGradient,
-        top: "#e2e8f0",
-        bottom: "#e2e8f0",
+        top: "#E8D59E",
+        bottom: "#D9BBB0",
         category: "classic",
         opacity: 0.08,
       },
@@ -94,10 +94,10 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
   const usesRealCompositor = compositorConfig?.renderMode === "svg-clip";
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div className="surface-card space-y-3 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
+          <p className="type-body flex items-center gap-1.5 font-medium text-foreground">
             <Glasses className="h-4 w-4 text-primary" />
             Live product preview
           </p>
@@ -164,7 +164,7 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
               <p className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Bare lenses
               </p>
-              <div className="overflow-hidden rounded-lg border border-border bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-950">
+              <div className="compositor-surface overflow-hidden rounded-lg">
                 <SunglassesCompositor
                   config={clearLensConfig}
                   view={view}
@@ -187,7 +187,7 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
                 Customer view
               </p>
             )}
-            <div className="overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-b from-slate-100 to-slate-200 ring-1 ring-primary/10 dark:from-slate-800 dark:to-slate-950">
+            <div className="compositor-surface overflow-hidden rounded-lg ring-1 ring-primary/15">
               <SunglassesCompositor
                 config={compositorConfig}
                 view={view}
@@ -202,7 +202,7 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
       ) : (
         <div className="space-y-2">
           <TintRenderPreview entry={form} className="h-32 w-full rounded-lg border border-border" />
-          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
+          <p className="rounded-lg border border-status-warning bg-status-warning px-3 py-2 text-[11px]">
             Upload a frame plate and configure SVG lens clips (Frames admin) to preview on real product
             photography.
           </p>

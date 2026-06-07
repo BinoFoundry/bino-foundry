@@ -1,5 +1,11 @@
 export { loadImage } from "./image-loader";
 export {
+  detectBeadOutline,
+  detectBeadOutlineFromRgba,
+  type DetectBeadOutlineOptions,
+  type DetectBeadOutlineResult,
+} from "./auto-detect-bead";
+export {
   beadCropConfigToEditorLenses,
   beadCropEditorPlateKey,
   beadCropPathToPreviewCanvas,

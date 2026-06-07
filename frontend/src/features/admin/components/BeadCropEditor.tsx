@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Scan } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -7,14 +7,17 @@ import { PolygonEditorShell } from "@/render/editor/PolygonEditorShell";
 import {
   beadCropConfigToEditorLenses,
   beadCropEditorPlateKey,
+  detectBeadOutline,
   exportCroppedBeadBlob,
   isBeadCropEditorValid,
+  loadImage,
   upgradeBeadCropOnSave,
 } from "@/render/bead-crop";
 import { pathsToMaskCanvas } from "@/render/mask/bezier-path";
 import type { LensPolygon } from "@/render/mask/mask-types";
 import { uploadApi } from "@/services/api/upload";
 import {
+  createBeadCropConfigV2,
   isBeadCropConfigValid,
   type BeadCropConfig,
 } from "@bino-foundry/shared/types";
@@ -43,8 +46,11 @@ export function BeadCropEditor({
   className,
 }: BeadCropEditorProps) {
   const [busy, setBusy] = useState(false);
+  const [detecting, setDetecting] = useState(false);
   const [exportStatus, setExportStatus] = useState("");
   const [pathReady, setPathReady] = useState(false);
+  const [editorSession, setEditorSession] = useState(0);
+  const autoDetectAttemptedRef = useRef(false);
   const onDraftChangeRef = useRef(onDraftChange);
   onDraftChangeRef.current = onDraftChange;
   const onSaveCropRef = useRef(onSaveCrop);
@@ -52,6 +58,63 @@ export function BeadCropEditor({
   const initialCropRef = useRef(initialCrop);
   initialCropRef.current = initialCrop;
   const draftRef = useRef<BeadCropConfig | null>(initialCrop ?? null);
+
+  const applyDetectedOutline = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!originalUrl) return false;
+      setDetecting(true);
+      if (!options?.silent) setExportStatus("");
+      try {
+        const img = await loadImage(originalUrl);
+        const { points, confidence } = detectBeadOutline(img);
+        if (points.length < 3) {
+          if (!options?.silent) {
+            setExportStatus(
+              "Could not detect bead — use a single bead on a plain white/light background, then try again.",
+            );
+          }
+          return false;
+        }
+
+        const config = createBeadCropConfigV2(
+          img.naturalWidth,
+          img.naturalHeight,
+          originalUrl,
+          points,
+          { scale: initialCropRef.current?.scale ?? 1 },
+        );
+        draftRef.current = config;
+        setPathReady(isBeadCropConfigValid(config));
+        setEditorSession((s) => s + 1);
+        onDraftChangeRef.current?.(config, isBeadCropConfigValid(config));
+
+        const confidenceLabel =
+          confidence >= 0.75 ? "good" : confidence >= 0.5 ? "fair" : "low";
+        const message = `Auto-detected outline (${confidenceLabel} confidence) — refine the path if needed, then save.`;
+        if (!options?.silent || confidence >= 0.5) {
+          setExportStatus(message);
+        }
+        return true;
+      } catch (e) {
+        if (!options?.silent) {
+          setExportStatus(e instanceof Error ? e.message : "Auto-detect failed");
+        }
+        return false;
+      } finally {
+        setDetecting(false);
+      }
+    },
+    [originalUrl],
+  );
+
+  useEffect(() => {
+    if (!originalUrl || autoDetectAttemptedRef.current) return;
+    const existing = initialCropRef.current;
+    if (existing && isBeadCropConfigValid(existing)) return;
+
+    autoDetectAttemptedRef.current = true;
+    void applyDetectedOutline({ silent: true });
+  }, [originalUrl, applyDetectedOutline]);
 
   const handleLensesChange = useCallback(
     (lenses: LensPolygon[], meta: { imgW: number; imgH: number; valid: boolean }) => {
@@ -124,13 +187,23 @@ export function BeadCropEditor({
         <div>
           <p className="text-sm font-medium">Crop path</p>
           <p className="text-xs text-muted-foreground">
-            <span className={cropReady || pathReady ? "text-emerald-600" : "text-amber-600"}>
+            <span className={cropReady || pathReady ? "text-status-success" : "text-status-warning"}>
               {cropReady ? "Saved path ready" : pathReady ? "Path ready — save crop" : "Draw the bead outline"}
             </span>
             {initialCrop?.processedUrl ? " · Processed asset on file" : null}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={detecting || busy}
+            onClick={() => void applyDetectedOutline()}
+          >
+            <Scan className="mr-1.5 h-3.5 w-3.5" />
+            {detecting ? "Detecting…" : "Auto-detect outline"}
+          </Button>
           <Button type="button" size="sm" variant="secondary" disabled={!pathReady} onClick={commitCropPath}>
             <Check className="mr-1.5 h-3.5 w-3.5" />
             Save crop
@@ -138,7 +211,6 @@ export function BeadCropEditor({
           <Button
             type="button"
             size="sm"
-            variant="luxe"
             disabled={busy || !pathReady}
             onClick={() => void handleExport()}
           >
@@ -148,6 +220,7 @@ export function BeadCropEditor({
       </div>
 
       <PolygonEditorShell
+        key={`crop-editor-${editorSession}`}
         imageUrl={originalUrl}
         getInitialLenses={() => beadCropConfigToEditorLenses(draftRef.current ?? initialCropRef.current)}
         onLensesChange={handleLensesChange}

@@ -63,10 +63,10 @@ export function DisplayColumn({
 
           {showSummaryCard && (
             <div className="glass-panel flex flex-col justify-center rounded-[2rem] p-6">
-              <h4 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <h4 className="label-eyebrow mb-2 text-muted-foreground">
                 Current config
               </h4>
-              <p className="font-semibold italic text-foreground">{summaryText}</p>
+              <p className="type-body-lg font-light italic text-foreground">{summaryText}</p>
               {tintCode ? (
                 <p className="mt-1 font-mono text-[10px] text-muted-foreground">Tint code {tintCode}</p>
               ) : null}
@@ -74,8 +74,8 @@ export function DisplayColumn({
                 Lens type: {polarized ? "Polarised" : "Standard (non-polarised)"}
               </p>
               <div className="mt-4 flex items-baseline gap-2">
-                <span className="font-display text-3xl font-black text-primary">${totalPrice}</span>
-                <span className="text-xs font-bold uppercase text-muted-foreground">{currencyCode}</span>
+                <span className="type-price text-3xl text-primary">${totalPrice}</span>
+                <span className="type-label text-muted-foreground">{currencyCode}</span>
               </div>
               {lensDisclaimer && (
                 <p className="mt-4 text-[10px] leading-relaxed text-muted-foreground">* {lensDisclaimer}</p>

@@ -138,7 +138,7 @@ export function renderComposite(canvas, opts) {
     lensOpacity,
     effects,
     shadowStrength,
-    background = '#ffffff',
+    background = '#FFFFFF',
   } = opts;
 
   const width = frameLayer.naturalWidth || frameLayer.width;
@@ -217,7 +217,7 @@ export function renderAutoRecolor(canvas, opts) {
     lensOpacity,
     effects,
     shadowStrength,
-    background = '#ffffff',
+    background = '#FFFFFF',
     /** When true, tint only where mask is white (polygon editor masks). Skips auto frame detection. */
     maskOnly = false,
   } = opts;

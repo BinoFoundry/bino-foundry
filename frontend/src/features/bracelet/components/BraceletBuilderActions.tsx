@@ -25,7 +25,7 @@ export function BraceletBuilderActions({
     <div className="flex flex-col gap-2">
       <Button
         type="button"
-        variant={libraryOpen ? "secondary" : "luxe-outline"}
+        variant={libraryOpen ? "default" : "secondary"}
         size="sm"
         className="w-full justify-start text-xs"
         onClick={onToggleLibrary}
@@ -35,7 +35,7 @@ export function BraceletBuilderActions({
       </Button>
       <Button
         type="button"
-        variant="luxe-outline"
+        variant="secondary"
         size="sm"
         className="w-full justify-start text-xs"
         onClick={onToggleTwinning}
@@ -46,7 +46,7 @@ export function BraceletBuilderActions({
       {twinning && onDuplicateToB ? (
         <Button
           type="button"
-          variant="luxe-outline"
+          variant="secondary"
           size="sm"
           className="w-full justify-start text-xs"
           title={BRACELET_COPY.duplicateToPairHint}

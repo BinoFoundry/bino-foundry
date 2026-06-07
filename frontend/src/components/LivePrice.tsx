@@ -11,8 +11,8 @@ const LivePrice = ({ price }: LivePriceProps) => {
       aria-live="polite"
       aria-label={`Estimated total ${price.toFixed(2)}`}
     >
-      <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
-      <span className="font-display text-sm sm:text-lg font-semibold text-foreground tracking-tight">
+      <DollarSign className="h-3.5 w-3.5 text-highlight sm:h-4 sm:w-4" />
+      <span className="type-price text-body sm:text-body-lg">
         {price.toFixed(2)}
       </span>
     </div>

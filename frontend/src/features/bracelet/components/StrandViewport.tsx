@@ -39,7 +39,7 @@ export function StrandViewport({
     <div
       ref={viewportRef}
       data-strand-viewport
-      className={`relative isolate flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden bg-white dark:bg-card ${
+      className={`surface-canvas relative isolate flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden ${
         isPanning ? "cursor-grabbing" : panMode ? "cursor-grab" : "cursor-default"
       }`}
       onPointerDown={onPointerDown}

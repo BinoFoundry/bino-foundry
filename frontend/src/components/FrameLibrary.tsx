@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { Search, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import type { FrameOption } from "@/lib/luxe-data";
 import { useCatalogue } from "@/data/index";
 
@@ -26,10 +28,10 @@ const FrameLibrary = ({ onSelectFrame, open, onClose }: FrameLibraryProps) => {
   return (
     <div className="absolute left-0 top-0 bottom-0 w-80 glass-panel rounded-lg z-20 flex flex-col animate-slide-in">
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h3 className="font-display text-sm font-semibold">Select Frame</h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-          <X className="w-4 h-4" />
-        </button>
+        <h3 className="type-h3 text-base">Select Frame</h3>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="p-3">
@@ -62,7 +64,7 @@ const FrameLibrary = ({ onSelectFrame, open, onClose }: FrameLibraryProps) => {
               />
             </div>
             <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">{frame.name}</p>
+              <p className="type-body font-medium text-foreground">{frame.name}</p>
               <p className="text-xs text-muted-foreground">${frame.price}</p>
             </div>
           </button>

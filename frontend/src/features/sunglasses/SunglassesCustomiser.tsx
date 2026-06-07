@@ -72,7 +72,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
         </section>
 
         {/* Customisation panel — desktop */}
-        <aside className="hidden min-h-0 flex-1 flex-col overflow-hidden border-t border-border bg-card/50 lg:col-span-5 lg:flex lg:max-h-full lg:rounded-[2rem] lg:border lg:bg-card lg:shadow-sm">
+        <aside className="surface-card hidden min-h-0 flex-1 flex-col overflow-hidden border-t border-subtle lg:col-span-5 lg:flex lg:max-h-full lg:rounded-2xl lg:border-t-0">
           <div className="shrink-0 border-b border-border/60 px-5 pb-4 pt-5">
             <StepProgress current={flow.step} className="border-0 bg-muted/30 p-2.5" />
           </div>
@@ -82,7 +82,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
         </aside>
 
         {/* Mobile panel below display */}
-        <section className="flex min-h-0 max-h-[min(52vh,22rem)] flex-1 flex-col overflow-hidden border-t border-border bg-card/50 px-4 py-4 lg:hidden">
+        <section className="surface-card flex min-h-0 max-h-[min(52vh,22rem)] flex-1 flex-col overflow-hidden border-t border-subtle px-4 py-4 lg:hidden">
           <CustomiserPanel flow={flow} state={state} className="min-h-0" currencyCode={currencyCode} />
         </section>
       </div>

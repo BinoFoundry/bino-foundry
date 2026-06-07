@@ -21,7 +21,7 @@ const StockBadge = ({ stock, className = "" }: StockBadgeProps) => {
   if (stock <= 5) {
     return (
       <span
-        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 ${className}`}
+        className={`inline-flex items-center rounded border border-status-warning bg-status-warning px-1.5 py-0.5 text-[10px] font-medium ${className}`}
       >
         Low Stock ({stock})
       </span>

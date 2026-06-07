@@ -20,7 +20,7 @@ export function OptionsStepPanel({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="font-display text-base font-bold text-foreground">Additional options</h3>
+        <h3 className="type-h3">Additional options</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">Prescription orders are reviewed before confirmation.</p>
       </div>
 
@@ -31,7 +31,7 @@ export function OptionsStepPanel({
             className="flex items-center justify-between rounded-xl border border-border bg-card p-3"
           >
           <div className="space-y-1 pr-4">
-            <Label htmlFor={`option-${option.code}`} className="font-semibold">
+            <Label htmlFor={`option-${option.code}`} className="font-medium text-foreground">
               {option.label}
             </Label>
             <p className="text-xs text-muted-foreground">

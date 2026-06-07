@@ -14,7 +14,7 @@ export function StepProgress({ current, className }: StepProgressProps) {
   return (
     <nav
       aria-label="Customisation steps"
-      className={cn("flex items-center gap-2 rounded-2xl border border-border bg-card p-3", className)}
+      className={cn("surface-card flex items-center gap-2 rounded-2xl p-3", className)}
     >
       <ol className="flex w-full items-center gap-2">
         {CUSTOMISER_STEPS.map((step, index) => {
@@ -26,14 +26,14 @@ export function StepProgress({ current, className }: StepProgressProps) {
                 className={cn(
                   "h-2.5 w-2.5 shrink-0 rounded-full transition-all motion-safe-animate",
                   active && "scale-125 bg-primary",
-                  completed && "bg-emerald-600",
+                  completed && "bg-success",
                   !active && !completed && "bg-muted",
                 )}
                 aria-hidden
               />
               <span
                 className={cn(
-                  "truncate text-[10px] font-bold uppercase tracking-wider sm:inline",
+                  "type-label truncate sm:inline",
                   active ? "text-foreground" : "text-muted-foreground",
                 )}
                 aria-current={active ? "step" : undefined}

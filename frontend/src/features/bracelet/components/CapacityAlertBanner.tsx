@@ -14,9 +14,8 @@ interface CapacityAlertBannerProps {
 }
 
 const VARIANT_STYLES: Record<CapacityAlertVariant, string> = {
-  blocked:
-    "border-amber-500/35 bg-amber-500/12 text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-50",
-  full: "border-amber-500/35 bg-amber-500/12 text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-50",
+  blocked: "border-status-warning bg-status-warning text-warning-foreground",
+  full: "border-status-warning bg-status-warning text-warning-foreground",
   over: "border-destructive/40 bg-destructive/10 text-destructive",
 };
 
@@ -30,7 +29,7 @@ export function CapacityAlertBanner({
     <div
       role="alert"
       className={cn(
-        "flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 shadow-sm backdrop-blur-sm",
+        "flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5",
         VARIANT_STYLES[variant],
         className,
       )}

@@ -246,7 +246,7 @@ function CatalogSection({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-base font-semibold">{title}</h3>
+        <h3 className="type-h3">{title}</h3>
         <Button size="sm" onClick={onAdd}>
           <Plus className="mr-1 h-4 w-4" />
           Add
@@ -297,7 +297,7 @@ function CatalogRow({
         <div className="min-w-0">
           <p className="font-medium text-foreground">{title}</p>
           <p className="text-xs text-muted-foreground">{subtitle}</p>
-          {!active && <p className="text-[10px] text-amber-600">Inactive</p>}
+          {!active && <p className="text-[10px] text-status-warning">Inactive</p>}
         </div>
       </div>
       {confirmDelete && onConfirmDelete && onCancelDelete ? (
@@ -351,7 +351,7 @@ function EditorSection({ title, description, children }: { title: string; descri
   return (
     <section className="space-y-3">
       <div>
-        <h4 className="font-display text-sm font-semibold text-foreground">{title}</h4>
+        <h4 className="type-body font-medium text-foreground">{title}</h4>
         {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
       </div>
       {children}
@@ -541,7 +541,7 @@ function TintEditor({
               />
               <p className="mt-1 flex justify-between text-xs tabular-nums text-foreground">
                 <span>Subtle</span>
-                <span className="font-semibold">{form.opacity.toFixed(2)}</span>
+                <span className="type-body font-medium">{form.opacity.toFixed(2)}</span>
                 <span>Strong</span>
               </p>
             </AdminFormField>

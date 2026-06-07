@@ -68,7 +68,7 @@ export function GeneralSettingsAdmin() {
   return (
     <div className="mx-auto max-w-2xl space-y-8 pb-4">
       <div>
-        <h3 className="font-display text-base font-semibold">General settings</h3>
+        <h3 className="type-h3">General settings</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Site-wide defaults used across sunglasses and bracelet builders, saved configurations, and checkout
           display.
@@ -76,7 +76,7 @@ export function GeneralSettingsAdmin() {
       </div>
 
       <section className="space-y-3 rounded-xl border border-border bg-card p-4">
-        <h4 className="text-sm font-semibold text-foreground">Currency</h4>
+        <h4 className="type-body font-medium text-foreground">Currency</h4>
         <div className="flex flex-wrap gap-2">
           {SITE_CURRENCY_OPTIONS.map((code) => (
             <Button

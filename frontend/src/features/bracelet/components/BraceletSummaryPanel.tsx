@@ -54,7 +54,7 @@ function MaterialGroup({
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <Icon className="h-3.5 w-3.5 text-primary/70" />
-          <span className="font-display text-xs font-semibold tracking-wide text-foreground">{title}</span>
+          <span className="font-display text-small font-medium tracking-brand text-foreground">{title}</span>
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">${sub.toFixed(2)}</span>
       </div>
@@ -189,10 +189,10 @@ export function BraceletSummaryPanel({
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="surface-card p-4">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="font-display text-sm text-foreground">{BRACELET_COPY.estimatedTotal}</span>
-          <span className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+          <span className="type-body text-foreground">{BRACELET_COPY.estimatedTotal}</span>
+          <span className="type-price text-2xl text-foreground">
             ${pricing.total.toFixed(2)}
           </span>
         </div>
@@ -230,7 +230,7 @@ export function BraceletSummaryPanel({
         )}
       >
         <div className="border-b border-border/80 px-4 py-4">
-          <h2 className="font-display text-base font-semibold text-foreground">{BRACELET_COPY.summaryTitle}</h2>
+          <h2 className="type-h3">{BRACELET_COPY.summaryTitle}</h2>
         </div>
         <div
           className="flex-1 overflow-y-auto px-4 py-4"
@@ -251,8 +251,8 @@ export function BraceletSummaryPanel({
         onClick={() => setOpen((o) => !o)}
       >
         <div>
-          <span className="font-display text-sm font-semibold text-foreground">{BRACELET_COPY.summaryTitle}</span>
-          <span className="ml-2 font-display text-sm tabular-nums text-primary">${pricing.total.toFixed(2)}</span>
+          <span className="type-body font-medium text-foreground">{BRACELET_COPY.summaryTitle}</span>
+          <span className="type-price ml-2 text-body text-primary">${pricing.total.toFixed(2)}</span>
         </div>
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </button>

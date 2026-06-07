@@ -29,14 +29,14 @@ export function CompositorViewport({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-[2rem] border border-white bg-[radial-gradient(circle_at_center,#ffffff_0%,#f1f5f9_100%)] shadow-xl",
+        "compositor-surface relative w-full overflow-hidden rounded-[2rem]",
         aspectClass[aspectRatio],
         className,
       )}
     >
       {label && (
         <div className="absolute left-6 top-4 z-[60] sm:left-8 sm:top-6">
-          <span className="rounded-full border border-border bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground backdrop-blur">
+          <span className="type-label rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-muted-foreground backdrop-blur">
             {label}
           </span>
         </div>

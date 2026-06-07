@@ -1,5 +1,7 @@
 import { X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 interface SunglassesCustomizeLibraryProps {
   onSelectLensColor: (lensColor: { id: string; name: string; image: string }) => void;
   onSelectSecondaryColor: (lensColor: { id: string; name: string; image: string }) => void;
@@ -27,15 +29,15 @@ const SunglassesCustomizeLibrary = ({
   return (
     <div className="absolute left-0 top-0 bottom-0 w-80 glass-panel rounded-lg z-20 flex flex-col animate-slide-in">
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h3 className="font-display text-sm font-semibold">Lens Tint</h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-          <X className="w-4 h-4" />
-        </button>
+        <h3 className="type-h3 text-base">Lens Tint</h3>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         <div>
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          <h4 className="type-label mb-2 text-muted-foreground">
             {gradientMode ? 'Top Color' : 'Base Material'}
           </h4>
           <div className="space-y-1">
@@ -68,7 +70,7 @@ const SunglassesCustomizeLibrary = ({
 
         {gradientMode && (
           <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            <h4 className="type-label mb-2 text-muted-foreground">
               Bottom Color
             </h4>
             <div className="space-y-1">

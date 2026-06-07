@@ -42,7 +42,7 @@ export function PreviewStepPanel({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-display text-lg font-bold text-foreground">Final preview</h3>
+        <h3 className="type-h3">Final preview</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Review your design. When you are ready, use the button below to copy your configuration for our team.
         </p>
@@ -91,13 +91,13 @@ export function PreviewStepPanel({
         )}
         <Separator />
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Estimated total</span>
-          <span className="font-display text-3xl font-black text-primary">${totalPrice}</span>
+          <span className="type-label text-muted-foreground">Estimated total</span>
+          <span className="type-price text-3xl text-primary">${totalPrice}</span>
         </div>
       </div>
 
       <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next step</p>
+        <p className="type-label text-muted-foreground">Next step</p>
         {requiresManualFollowUp ? (
           <>
             <Alert>
@@ -108,7 +108,7 @@ export function PreviewStepPanel({
               </AlertDescription>
             </Alert>
             {onRequestQuote ? (
-              <Button type="button" variant="luxe" className="w-full" onClick={onRequestQuote}>
+              <Button type="button" className="w-full" onClick={onRequestQuote}>
                 Request consultation
               </Button>
             ) : null}
@@ -120,7 +120,7 @@ export function PreviewStepPanel({
               request a quote.
             </p>
             {onRequestQuote ? (
-              <Button type="button" variant="luxe" className="w-full" onClick={onRequestQuote}>
+              <Button type="button" className="w-full" onClick={onRequestQuote}>
                 Request quote
               </Button>
             ) : null}

@@ -4,79 +4,210 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Bino Foundry — Quiet Luxury with Olive
+ * Single source of truth for brand design tokens.
+ * Consume via Tailwind semantic classes or hsl(var(--token)).
+ */
+
 @layer base {
   :root {
-    --background: 50 20% 98.4%;
-    --foreground: 0 0% 11%;
+    /* ── Brand palette (raw) ── */
+    --brand-cream: 37 74% 88%;
+    --brand-soft-gold: 45 62% 76%;
+    --brand-blush: 16 35% 77%;
+    --brand-olive: 64 28% 20%;
+    --brand-olive-muted: 58 18% 33%;
+    --brand-off-white: 38 48% 98%;
+    --brand-elevated: 40 42% 99%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 11%;
+    /* ── Surfaces ── */
+    --surface-page: var(--brand-cream);
+    --surface-card: var(--brand-off-white);
+    --surface-elevated: var(--brand-elevated);
+    --surface-muted: 37 32% 94%;
+    --surface-canvas: 0 0% 100%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 11%;
+    /* ── Semantic colors ── */
+    --background: var(--surface-page);
+    --foreground: var(--brand-olive);
 
-    --primary: 43 85% 38%;
-    --primary-foreground: 50 20% 98.4%;
+    --card: var(--surface-card);
+    --card-foreground: var(--brand-olive);
 
-    --secondary: 0 0% 90%;
-    --secondary-foreground: 0 0% 11%;
+    --popover: var(--surface-elevated);
+    --popover-foreground: var(--brand-olive);
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 38%;
+    --primary: var(--brand-olive);
+    --primary-foreground: var(--brand-cream);
 
-    --accent: 43 85% 38%;
-    --accent-foreground: 50 20% 98.4%;
+    --secondary: 37 45% 94%;
+    --secondary-foreground: var(--brand-olive);
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --muted: var(--surface-muted);
+    --muted-foreground: var(--brand-olive-muted);
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 43 85% 38%;
+    --accent: var(--brand-soft-gold);
+    --accent-foreground: var(--brand-olive);
 
-    --radius: 0.5rem;
+    --highlight: var(--brand-soft-gold);
+    --decorative: var(--brand-blush);
+    --canvas: var(--surface-canvas);
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 43 85% 38%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 43 85% 38%;
+    --destructive: 8 38% 42%;
+    --destructive-foreground: var(--brand-cream);
 
-    --gold: 43 85% 38%;
-    --gold-light: 43 60% 70%;
-    --gold-glow: 43 85% 38% / 0.15;
+    --success: var(--brand-olive-muted);
+    --success-foreground: var(--brand-cream);
+    --success-muted: 58 18% 33% / 0.14;
 
-    /* Bracelet strand cord — follows theme, not a fixed tan */
-    --strand-cord: var(--muted-foreground);
-    --strand-cord-active: var(--foreground);
+    --warning: 30 42% 48%;
+    --warning-foreground: var(--brand-olive);
+    --warning-muted: 16 35% 77% / 0.38;
+
+    --border: 64 18% 20% / 0.09;
+    --input: 64 18% 20% / 0.12;
+    --ring: var(--brand-olive-muted);
+
+    /* ── Buttons (premium system) ── */
+    --btn-primary-bg: var(--brand-olive);
+    --btn-primary-fg: 0 0% 100%;
+    --btn-primary-hover: 64 22% 28%;
+    --btn-secondary-bg: 0 0% 100%;
+    --btn-secondary-border: var(--brand-olive-muted);
+    --btn-secondary-fg: var(--brand-olive-muted);
+    --btn-secondary-hover-bg: 38 45% 97%;
+    --btn-text-fg: var(--brand-olive-muted);
+    --btn-text-hover-fg: var(--brand-olive);
+    --btn-text-hover-bg: 64 18% 20% / 0.06;
+    --btn-destructive-hover: 8 38% 48%;
+    --btn-radius: var(--radius-md);
+
+    /* ── Legacy aliases (prefer semantic tokens) ── */
+    --gold: var(--brand-soft-gold);
+    --gold-light: 45 55% 82%;
+    --gold-glow: 45 62% 76% / 0.28;
+
+    /* ── Typography: Playfair Display + Inter ── */
+    --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+    --font-body: Inter, system-ui, -apple-system, sans-serif;
+
+    /* Scale */
+    --text-h1: 2.5rem;
+    --text-h1-lh: 1.12;
+    --text-h2: 1.875rem;
+    --text-h2-lh: 1.2;
+    --text-h3: 1.375rem;
+    --text-h3-lh: 1.3;
+    --text-feature: 1.75rem;
+    --text-feature-lh: 1.18;
+    --text-body-lg: 1.0625rem;
+    --text-body-lg-lh: 1.65;
+    --text-body: 0.9375rem;
+    --text-body-lh: 1.6;
+    --text-small: 0.8125rem;
+    --text-small-lh: 1.55;
+    --text-label: 0.6875rem;
+    --text-label-lh: 1.45;
+    --text-nav: 0.875rem;
+    --text-nav-lh: 1.5;
+
+    /* Tracking */
+    --tracking-label: 0.22em;
+    --tracking-wide: 0.06em;
+    --tracking-tight: -0.02em;
+    --tracking-display: -0.015em;
+
+    /* Weights */
+    --weight-display: 500;
+    --weight-body: 400;
+    --weight-body-medium: 500;
+    --weight-light: 300;
+
+    /* ── Spacing scale ── */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
+
+    /* ── Radius ── */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.625rem;
+    --radius-lg: 0.875rem;
+    --radius-xl: 1.25rem;
+    --radius-2xl: 1.75rem;
+    --radius-pill: 9999px;
+    --radius: var(--radius-md);
+
+    /* ── Borders (thin, editorial) ── */
+    --border-width: 1px;
+    --border-subtle: 64 18% 20% / 0.07;
+    --border-strong: 64 18% 20% / 0.16;
+
+    /* ── Overlays ── */
+    --overlay: 64 28% 20% / 0.52;
+
+    /* ── Shadows (minimal — depth via spacing) ── */
+    --shadow-none: none;
+    --shadow-card: 0 1px 2px 0 hsl(64 28% 20% / 0.03);
+    --shadow-sm: var(--shadow-card);
+    --shadow-md: 0 2px 6px -1px hsl(64 28% 20% / 0.04);
+    --shadow-lg: 0 4px 12px -3px hsl(64 28% 20% / 0.05);
+    --shadow-xl: 0 6px 16px -4px hsl(64 28% 20% / 0.06);
+    --shadow-soft: var(--shadow-card);
+    --shadow-gold: 0 2px 8px hsl(45 62% 76% / 0.12);
+    --shadow-float: 0 8px 24px -8px hsl(64 28% 20% / 0.08);
+
+    /* ── Sidebar (admin) ── */
+    --sidebar-background: var(--brand-off-white);
+    --sidebar-foreground: var(--brand-olive);
+    --sidebar-primary: var(--brand-olive);
+    --sidebar-primary-foreground: var(--brand-cream);
+    --sidebar-accent: 37 40% 94%;
+    --sidebar-accent-foreground: var(--brand-olive);
+    --sidebar-border: 64 18% 20% / 0.12;
+    --sidebar-ring: var(--brand-olive-muted);
+
+    /* Bracelet strand cord */
+    --strand-cord: var(--brand-olive-muted);
+    --strand-cord-active: var(--brand-olive);
   }
 
   .dark {
-    --background: 0 0% 7%;
-    --foreground: 50 20% 98.4%;
-    --card: 0 0% 10%;
-    --card-foreground: 50 20% 98.4%;
-    --popover: 0 0% 10%;
-    --popover-foreground: 50 20% 98.4%;
-    --primary: 43 85% 38%;
-    --primary-foreground: 50 20% 98.4%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 50 20% 98.4%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 43 85% 38%;
-    --accent-foreground: 50 20% 98.4%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 43 85% 38%;
-
-    --strand-cord: var(--muted-foreground);
-    --strand-cord-active: var(--foreground);
+    --background: 64 22% 9%;
+    --foreground: var(--brand-cream);
+    --card: 64 20% 12%;
+    --card-foreground: var(--brand-cream);
+    --popover: 64 20% 12%;
+    --popover-foreground: var(--brand-cream);
+    --primary: var(--brand-soft-gold);
+    --primary-foreground: var(--brand-olive);
+    --secondary: 64 16% 16%;
+    --secondary-foreground: var(--brand-cream);
+    --muted: 64 14% 16%;
+    --muted-foreground: 37 30% 72%;
+    --accent: 45 45% 55%;
+    --accent-foreground: var(--brand-cream);
+    --destructive: 8 42% 48%;
+    --destructive-foreground: var(--brand-cream);
+    --border: 37 20% 88% / 0.12;
+    --input: 37 20% 88% / 0.14;
+    --ring: var(--brand-soft-gold);
+    --canvas: 64 18% 11%;
+    --success-muted: 58 18% 55% / 0.18;
+    --warning-muted: 16 35% 77% / 0.2;
+    --sidebar-background: 64 22% 10%;
+    --sidebar-foreground: var(--brand-cream);
+    --sidebar-accent: 64 16% 15%;
+    --sidebar-accent-foreground: var(--brand-cream);
+    --sidebar-border: 37 20% 88% / 0.1;
+    --strand-cord: 37 20% 65%;
+    --strand-cord-active: var(--brand-cream);
   }
 }
 
@@ -84,20 +215,215 @@
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground font-body antialiased;
+    @apply bg-background font-body text-body text-foreground antialiased;
+    font-weight: var(--weight-body);
   }
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-display;
+
+  h1 {
+    @apply font-display text-h1 font-medium tracking-display text-foreground;
+  }
+
+  h2 {
+    @apply font-display text-h2 font-medium tracking-display text-foreground;
+  }
+
+  h3 {
+    @apply font-display text-h3 font-medium text-foreground;
+  }
+
+  h4,
+  h5,
+  h6 {
+    @apply font-display text-body-lg font-medium text-foreground;
+  }
+
+  p {
+    @apply text-body leading-relaxed;
+  }
+
+  nav,
+  button,
+  input,
+  select,
+  textarea {
+    @apply font-body;
+  }
+
+  label {
+    @apply font-body text-label font-normal tracking-wide text-muted-foreground;
   }
 }
 
 @layer utilities {
-  .glass-panel {
-    @apply bg-white/80 backdrop-blur-xl border border-white/30 shadow-lg;
+  /* ── Surface utilities ── */
+  .surface-page {
+    background-color: hsl(var(--surface-page));
   }
+
+  .surface-card {
+    background-color: hsl(var(--surface-card));
+    border: var(--border-width) solid hsl(var(--border-subtle));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .surface-elevated {
+    background-color: hsl(var(--surface-elevated));
+    border: var(--border-width) solid hsl(var(--border-subtle));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .surface-canvas {
+    background-color: hsl(var(--surface-canvas));
+  }
+
+  .surface-muted {
+    background-color: hsl(var(--surface-muted));
+  }
+
+  .border-subtle {
+    border-color: hsl(var(--border-subtle));
+  }
+
+  .glass-panel {
+    background-color: hsl(var(--surface-elevated) / 0.92);
+    border: var(--border-width) solid hsl(var(--border-subtle));
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-card);
+    @apply backdrop-blur-md;
+  }
+
   .gold-glow {
-    box-shadow: 0 0 20px hsl(var(--gold-glow)), 0 0 60px hsl(var(--gold-glow));
+    box-shadow: var(--shadow-gold);
+  }
+
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-brand-md {
+    box-shadow: var(--shadow-md);
+  }
+
+  .shadow-brand-lg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .text-status-success {
+    color: hsl(var(--success));
+  }
+
+  .text-status-warning {
+    color: hsl(var(--warning));
+  }
+
+  .bg-status-success {
+    background-color: hsl(var(--success-muted));
+    color: hsl(var(--success));
+  }
+
+  .bg-status-warning {
+    background-color: hsl(var(--warning-muted));
+    color: hsl(var(--warning-foreground));
+  }
+
+  .border-status-warning {
+    border-color: hsl(var(--brand-blush) / 0.55);
+  }
+
+  .border-status-success {
+    border-color: hsl(var(--success) / 0.35);
+  }
+
+  .compositor-surface {
+    background: hsl(var(--surface-canvas));
+    border: var(--border-width) solid hsl(var(--border-subtle));
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ── Typography utilities ── */
+  .type-h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-h1);
+    line-height: var(--text-h1-lh);
+    font-weight: var(--weight-display);
+    letter-spacing: var(--tracking-display);
+  }
+
+  .type-h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-h2);
+    line-height: var(--text-h2-lh);
+    font-weight: var(--weight-display);
+    letter-spacing: var(--tracking-display);
+  }
+
+  .type-h3 {
+    font-family: var(--font-display);
+    font-size: var(--text-h3);
+    line-height: var(--text-h3-lh);
+    font-weight: var(--weight-display);
+  }
+
+  .type-feature {
+    font-family: var(--font-display);
+    font-size: var(--text-feature);
+    line-height: var(--text-feature-lh);
+    font-weight: var(--weight-display);
+    letter-spacing: var(--tracking-display);
+  }
+
+  .type-body-lg {
+    font-family: var(--font-body);
+    font-size: var(--text-body-lg);
+    line-height: var(--text-body-lg-lh);
+    font-weight: var(--weight-body);
+  }
+
+  .type-body {
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: var(--text-body-lh);
+    font-weight: var(--weight-body);
+  }
+
+  .type-small {
+    font-family: var(--font-body);
+    font-size: var(--text-small);
+    line-height: var(--text-small-lh);
+    font-weight: var(--weight-body);
+  }
+
+  .type-label {
+    font-family: var(--font-body);
+    font-size: var(--text-label);
+    line-height: var(--text-label-lh);
+    font-weight: var(--weight-body-medium);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+
+  .type-nav {
+    font-family: var(--font-body);
+    font-size: var(--text-nav);
+    line-height: var(--text-nav-lh);
+    font-weight: var(--weight-body);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .type-price {
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    letter-spacing: var(--tracking-tight);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .label-eyebrow {
+    @apply type-label text-primary/80;
   }
 
   /* Layout tokens (see src/layouts) */
@@ -108,7 +434,6 @@
     @apply touch-pan-y;
   }
 
-  /* Builder panels: stack on small screens, side-by-side from md */
   .builder-split {
     @apply flex flex-col gap-4 md:flex-row md:gap-6 lg:gap-8;
   }
@@ -146,7 +471,7 @@
 
   .admin-scroll-pane::-webkit-scrollbar-thumb,
   .customiser-options-scroll::-webkit-scrollbar-thumb {
-    border-radius: 9999px;
+    border-radius: var(--radius-pill);
     background-color: hsl(var(--border));
   }
 

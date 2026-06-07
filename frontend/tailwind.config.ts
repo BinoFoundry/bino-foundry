@@ -2,10 +2,7 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: [
-    "./index.html",
-    "./src/**/*.{ts,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
     container: {
@@ -17,8 +14,40 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Playfair Display"', 'Georgia', 'serif'],
-        body: ['Inter', 'system-ui', 'sans-serif'],
+        display: ["var(--font-display)"],
+        body: ["var(--font-body)"],
+      },
+      fontSize: {
+        h1: ["var(--text-h1)", { lineHeight: "var(--text-h1-lh)" }],
+        h2: ["var(--text-h2)", { lineHeight: "var(--text-h2-lh)" }],
+        h3: ["var(--text-h3)", { lineHeight: "var(--text-h3-lh)" }],
+        feature: ["var(--text-feature)", { lineHeight: "var(--text-feature-lh)" }],
+        "body-lg": ["var(--text-body-lg)", { lineHeight: "var(--text-body-lg-lh)" }],
+        body: ["var(--text-body)", { lineHeight: "var(--text-body-lh)" }],
+        small: ["var(--text-small)", { lineHeight: "var(--text-small-lh)" }],
+        label: ["var(--text-label)", { lineHeight: "var(--text-label-lh)" }],
+        nav: ["var(--text-nav)", { lineHeight: "var(--text-nav-lh)" }],
+      },
+      letterSpacing: {
+        label: "var(--tracking-label)",
+        brand: "var(--tracking-wide)",
+        display: "var(--tracking-display)",
+        tight: "var(--tracking-tight)",
+      },
+      fontWeight: {
+        display: "var(--weight-display)",
+        body: "var(--weight-body)",
+      },
+      spacing: {
+        "token-1": "var(--space-1)",
+        "token-2": "var(--space-2)",
+        "token-3": "var(--space-3)",
+        "token-4": "var(--space-4)",
+        "token-5": "var(--space-5)",
+        "token-6": "var(--space-6)",
+        "token-8": "var(--space-8)",
+        "token-10": "var(--space-10)",
+        "token-12": "var(--space-12)",
       },
       colors: {
         border: "hsl(var(--border))",
@@ -26,6 +55,9 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        canvas: "hsl(var(--canvas))",
+        highlight: "hsl(var(--highlight))",
+        decorative: "hsl(var(--decorative))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -46,6 +78,16 @@ export default {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+          muted: "hsl(var(--success-muted))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+          muted: "hsl(var(--warning-muted))",
+        },
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -53,6 +95,14 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        brand: {
+          cream: "hsl(var(--brand-cream))",
+          gold: "hsl(var(--brand-soft-gold))",
+          blush: "hsl(var(--brand-blush))",
+          olive: "hsl(var(--brand-olive))",
+          "olive-muted": "hsl(var(--brand-olive-muted))",
+          "off-white": "hsl(var(--brand-off-white))",
         },
         gold: {
           DEFAULT: "hsl(var(--gold))",
@@ -70,9 +120,21 @@ export default {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        lg: "var(--radius-lg)",
+        md: "var(--radius-md)",
+        sm: "var(--radius-sm)",
+        xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
+        pill: "var(--radius-pill)",
+      },
+      boxShadow: {
+        card: "var(--shadow-card)",
+        soft: "var(--shadow-soft)",
+        brand: "var(--shadow-md)",
+        "brand-lg": "var(--shadow-lg)",
+        float: "var(--shadow-float)",
+        gold: "var(--shadow-gold)",
+        none: "var(--shadow-none)",
       },
       keyframes: {
         "accordion-down": {

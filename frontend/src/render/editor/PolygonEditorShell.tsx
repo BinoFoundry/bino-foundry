@@ -186,7 +186,7 @@ export function PolygonEditorShell({
   return (
     <div className={cn("space-y-3 rounded-xl border border-border bg-card/50 p-3", className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tool</span>
+        <span className="type-label text-muted-foreground">Tool</span>
         {(
           [
             [EditorTool.DRAW, "Draw (P)"],
@@ -208,7 +208,7 @@ export function PolygonEditorShell({
         {showLensTabs ? (
           <>
             <span className="mx-1 text-border">|</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Lens</span>
+            <span className="type-label text-muted-foreground">Lens</span>
             {FRAME_LENS_TABS.map((tab, i) => {
               const count = lensSummaries.find((s) => s.id === tab.id)?.count ?? 0;
               return (
@@ -347,9 +347,9 @@ export function PolygonEditorShell({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-        <p className={cn("text-xs", ready ? "text-emerald-600" : "text-amber-600")}>{status}</p>
+        <p className={cn("text-xs", ready ? "text-status-success" : "text-status-warning")}>{status}</p>
         {renderPreview ? (
-          <canvas ref={thumbRef} width={200} height={80} className="rounded border border-border bg-white" />
+          <canvas ref={thumbRef} width={200} height={80} className="surface-canvas rounded border border-subtle" />
         ) : null}
         {footerExtra}
       </div>

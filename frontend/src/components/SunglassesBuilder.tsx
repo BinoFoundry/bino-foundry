@@ -162,7 +162,7 @@ const SunglassesBuilder = ({ onPriceChange }: SunglassesBuilderProps) => {
         )}
         {/* View toggle */}
         <div className="absolute top-4 right-4">
-          <Button variant="luxe-outline" size="sm" onClick={() => setView(view === "front" ? "side" : "front")}>
+          <Button variant="secondary" size="sm" onClick={() => setView(view === "front" ? "side" : "front")}>
             <RotateCw className="w-3.5 h-3.5" />
             {view === "front" ? "Side" : "Front"}
           </Button>
@@ -188,7 +188,7 @@ const SunglassesBuilder = ({ onPriceChange }: SunglassesBuilderProps) => {
                 <div className="h-6 flex items-center justify-center">
                   <img src={f.frameImages?.[0] || ''} className="h-4 object-contain max-w-[40px] grayscale" />
                 </div>
-                <span className="text-[11px] font-semibold whitespace-nowrap">{f.name}</span>
+                <span className="type-small whitespace-nowrap font-medium">{f.name}</span>
               </button>
             ))}
           </div>

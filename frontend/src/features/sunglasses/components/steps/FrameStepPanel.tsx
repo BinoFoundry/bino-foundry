@@ -38,7 +38,7 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="font-display text-base font-bold text-foreground">Choose your frame</h3>
+          <h3 className="type-h3">Choose your frame</h3>
           <p className="mt-0.5 text-sm text-muted-foreground">Select a frame style from the catalogue.</p>
         </div>
         <EmptyState message="No frames are available yet. Please check back soon." title="No frames yet" />
@@ -49,7 +49,7 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="font-display text-base font-bold text-foreground">Choose your frame</h3>
+        <h3 className="type-h3">Choose your frame</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">Select a frame style from the catalogue.</p>
       </div>
 
@@ -77,13 +77,13 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
             >
               <FrameCardThumbnail frame={frame} />
               <div className="mt-2 min-w-0 space-y-0.5">
-                <p className="truncate text-xs font-semibold text-foreground sm:text-sm">{frame.name}</p>
+                <p className="type-small truncate font-medium text-foreground sm:text-body">{frame.name}</p>
                 {frame.description ? (
                   <p className="hidden line-clamp-2 text-[10px] text-muted-foreground sm:block">
                     {frame.description}
                   </p>
                 ) : null}
-                <p className="text-[11px] font-bold text-primary sm:text-xs">${frame.price}</p>
+                <p className="type-price text-label text-primary sm:text-small">${frame.price}</p>
               </div>
             </button>
           );

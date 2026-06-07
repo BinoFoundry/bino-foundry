@@ -46,7 +46,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         <StatCard label="Builder options" value={sunglasses.builderOptions.length} />
       </div>
 
-      <h3 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+      <h3 className="type-label mb-3 text-muted-foreground">
         Quick links
       </h3>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -57,7 +57,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
               key={link.section}
               type="button"
               onClick={() => onNavigate(link.section)}
-              className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
+              className="surface-card flex items-start gap-3 p-4 text-left transition-colors hover:border-primary/25"
             >
               <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <span>
@@ -74,9 +74,9 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-2xl font-semibold tabular-nums">{value}</p>
+    <div className="surface-card px-4 py-3">
+      <p className="type-label text-muted-foreground">{label}</p>
+      <p className="type-price mt-1 text-2xl">{value}</p>
     </div>
   );
 }

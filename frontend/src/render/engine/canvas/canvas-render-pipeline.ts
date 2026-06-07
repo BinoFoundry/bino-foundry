@@ -71,7 +71,7 @@ export async function renderMaskedViewToCanvas(
       lensOpacity: tint.lensOpacity,
       effects: tint.effects ?? DEFAULT_EFFECTS,
       shadowStrength: tint.shadowStrength ?? 0.12,
-      background: tint.background ?? "#ffffff",
+      background: tint.background ?? "#FFFFFF",
       maskOnly: true,
     });
     return;
@@ -121,6 +121,6 @@ export function tintParamsFromGradient(
     lensOpacity: opacity,
     effects: DEFAULT_EFFECTS,
     shadowStrength: 0.12,
-    background: "#ffffff",
+    background: "#FFFFFF",
   };
 }

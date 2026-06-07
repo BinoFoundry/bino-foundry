@@ -141,7 +141,7 @@ export function FramesAdminPage() {
                     <AdminListRow key={f.id} onClick={() => { setSelectedId(f.id); setIsEditing(false); }}>
                       <FrameThumb frame={f} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{f.name}</p>
+                        <p className="type-body truncate font-medium">{f.name}</p>
                         <p className="font-mono text-[10px] text-muted-foreground">{f.id}</p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
@@ -184,8 +184,8 @@ function FrameToolbarTitle({
   if (isNew) {
     return (
       <div>
-        <h3 className="font-display text-lg font-semibold">New frame</h3>
-        <p className="text-sm text-muted-foreground">Add a sunglasses style</p>
+        <h3 className="type-h3">New frame</h3>
+        <p className="type-small text-muted-foreground">Add a sunglasses style</p>
       </div>
     );
   }
@@ -194,7 +194,7 @@ function FrameToolbarTitle({
     <div className="flex items-center gap-3">
       <FrameThumb frame={frame} size="lg" />
       <div>
-        <h3 className="font-display text-lg font-semibold">{frame.name}</h3>
+        <h3 className="type-h3">{frame.name}</h3>
         <p className="text-sm text-muted-foreground">
           ${frame.price} · {frame.id}
           {frame.isActive === false ? " · unpublished" : ""}
@@ -242,7 +242,7 @@ function FrameDetailView({ frame }: { frame: FrameEntry }) {
         <span className="text-xs text-muted-foreground">Base price ${frame.price}</span>
       </div>
       <section>
-        <h3 className="mb-4 text-lg font-semibold">
+        <h3 className="type-h3 mb-4">
           Render views ({frame.renderViews?.filter((v) => v.plateUrl).length ?? 0})
         </h3>
         {(frame.renderViews?.filter((v) => v.plateUrl).length ?? 0) === 0 ? (
