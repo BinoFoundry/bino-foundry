@@ -119,7 +119,7 @@ const BeadLibrary = ({
         className={
           isMobile
             ? "fixed bottom-0 left-0 right-0 z-50 flex max-h-[min(70vh,100dvh)] flex-col rounded-t-2xl border-t border-border bg-card shadow-xl pb-[env(safe-area-inset-bottom)]"
-            : "absolute left-0 top-0 bottom-0 z-20 flex w-64 flex-col border-r border-border bg-card/95 backdrop-blur-sm"
+            : "absolute left-0 top-0 bottom-0 z-30 flex w-64 flex-col border-r border-border bg-card shadow-sm"
         }
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">

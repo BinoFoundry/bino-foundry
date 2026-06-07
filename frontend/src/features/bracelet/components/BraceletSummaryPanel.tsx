@@ -225,7 +225,7 @@ export function BraceletSummaryPanel({
     return (
       <aside
         className={cn(
-          "flex h-full w-full flex-col border-border bg-gradient-to-b from-card/80 to-background lg:w-80 lg:border-l",
+          "flex h-full w-full flex-col border-border bg-background lg:w-80 lg:border-l",
           className,
         )}
       >

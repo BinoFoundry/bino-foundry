@@ -38,7 +38,6 @@ import {
 } from "@/features/bracelet/strand-ring";
 import {
   computeElasticBeadLayout,
-  insertionIndexFromLayoutGaps,
   resolveDropTargetFromLayout,
   type LayoutAngleSector,
 } from "@/features/bracelet/strand-elastic-layout";
@@ -74,6 +73,10 @@ type EmptySlotGuideMode = "prominent" | "moderate" | "none";
 const REORDER_HINT_STORAGE_KEY = "bino-foundry-reorder-hint-dismissed";
 const REORDER_HINT_AUTO_DISMISS_MS = 12_000;
 
+function dropTargetKey(target: StrandDropTarget): string {
+  return `${target.mode}:${target.index}:${target.anchorAngleRad ?? ""}`;
+}
+
 export interface LibraryDropPayload {
   bead?: BeadLibraryEntry;
   /** @deprecated Legacy drag key — same as sizeOfferKey. */
@@ -83,78 +86,6 @@ export interface LibraryDropPayload {
 }
 
 export type StrandDropHover = StrandDropTarget | null;
-
-interface InsertionMarkerLayout {
-  cx: number;
-  cy: number;
-  /** Degrees — tangent to the ring at this slot. */
-  tickDeg: number;
-}
-
-function resolveInsertionMarkerLayout(
-  target: StrandDropTarget,
-  context: {
-    placedCount: number;
-    insertionAngles: number[];
-    pathStartAngle: number;
-    center: number;
-    radius: number;
-  },
-): InsertionMarkerLayout | null {
-  const { placedCount, insertionAngles, pathStartAngle, center, radius } = context;
-
-  const angle =
-    (placedCount === 0 && target.anchorAngleRad !== undefined
-      ? target.anchorAngleRad
-      : insertionAngles[target.index]) ??
-    insertionAngles[0] ??
-    pathStartAngle;
-
-  return {
-    cx: center + radius * Math.cos(angle),
-    cy: center + radius * Math.sin(angle),
-    tickDeg: (angle * 180) / Math.PI + 90,
-  };
-}
-
-function InsertionSlotMarker({
-  layout,
-  scaleFactor,
-}: {
-  layout: InsertionMarkerLayout;
-  scaleFactor: number;
-}) {
-  const tickLen = Math.max(32, scaleFactor * 8.5);
-  const tickWidth = Math.max(3, scaleFactor * 0.85);
-  const pearlSize = Math.max(12, scaleFactor * 3.2);
-
-  return (
-    <div
-      className="pointer-events-none absolute z-[55] transition-[left,top] duration-150 ease-out"
-      style={{ left: layout.cx, top: layout.cy, width: 0, height: 0 }}
-      aria-hidden
-    >
-      <div
-        className="absolute"
-        style={{ transform: `translate(-50%, -50%) rotate(${layout.tickDeg}deg)` }}
-      >
-        <div
-          className="relative flex items-center justify-center"
-          style={{ width: tickLen, height: tickLen }}
-        >
-          <div
-            className="absolute rounded-full bg-primary shadow-[0_0_14px_hsl(var(--primary)/0.45)]"
-            style={{ width: tickWidth, height: tickLen * 0.78, opacity: 0.92 }}
-          />
-          <div
-            className="relative z-[1] rounded-full border-[3px] border-primary bg-background shadow-[0_0_0_3px_hsl(var(--background)/0.95),0_2px_14px_hsl(var(--primary)/0.4)]"
-            style={{ width: pearlSize, height: pearlSize }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 interface SortableCircularStrandProps {
   placedBeads: PlacedBead[];
@@ -403,12 +334,39 @@ const SortableCircularStrand = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragClientPos, setDragClientPos] = useState<{ x: number; y: number } | null>(null);
   const [isLibraryDragOver, setIsLibraryDragOver] = useState(false);
-  const [libraryDragPointer, setLibraryDragPointer] = useState<{ x: number; y: number } | null>(
-    null,
-  );
   const [reorderHintVisible, setReorderHintVisible] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragClientStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragRafRef = useRef<number | null>(null);
+  const pendingDragPosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastHoverKeyRef = useRef<string | null>(null);
+
+  const publishHoverTarget = useCallback(
+    (target: StrandDropTarget | null) => {
+      const key = target ? dropTargetKey(target) : null;
+      if (key === lastHoverKeyRef.current) return;
+      lastHoverKeyRef.current = key;
+      onHoverDropTarget?.(target);
+    },
+    [onHoverDropTarget],
+  );
+
+  const scheduleDragClientPos = useCallback((pos: { x: number; y: number }) => {
+    pendingDragPosRef.current = pos;
+    if (dragRafRef.current !== null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const next = pendingDragPosRef.current;
+      if (next) setDragClientPos(next);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
+    },
+    [],
+  );
 
   const dismissReorderHint = useCallback(() => {
     setReorderHintVisible(false);
@@ -674,26 +632,6 @@ const SortableCircularStrand = ({
     [placedCount, pointerAngleFromClient, layoutSectors, insertionAngles, pathStartAngle],
   );
 
-  /** Visual-only: nearest insert gap for the insertion marker (library + reorder). */
-  const resolveInsertGapVisual = useCallback(
-    (clientX: number, clientY: number): StrandDropTarget => {
-      const angle = pointerAngleFromClient(clientX, clientY);
-      if (placedCount === 0) {
-        return {
-          mode: "insert",
-          index: 0,
-          anchorAngleRad: angle ?? pathStartAngle,
-        };
-      }
-      if (angle === null) return { mode: "insert", index: 0 };
-      return {
-        mode: "insert",
-        index: insertionIndexFromLayoutGaps(angle, insertionAngles),
-      };
-    },
-    [placedCount, pointerAngleFromClient, insertionAngles, pathStartAngle],
-  );
-
   const resolveReorderTargetFromClient = useCallback(
     (clientX: number, clientY: number): StrandDropTarget => {
       if (placedCount === 0) return { mode: "insert", index: 0 };
@@ -716,23 +654,18 @@ const SortableCircularStrand = ({
   }, []);
 
   useEffect(() => {
-    if (!libraryDragActive) {
-      setLibraryDragPointer(null);
-      return;
-    }
+    if (!libraryDragActive) return;
 
     const onDocumentDragOver = (e: DragEvent) => {
       if (!isLibraryDragEvent(e) && !e.dataTransfer?.types.includes("application/json")) return;
       if (!isClientOverCanvas(e.clientX, e.clientY)) {
-        setLibraryDragPointer(null);
-        onHoverDropTarget?.(null);
+        publishHoverTarget(null);
         return;
       }
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
       setIsLibraryDragOver(true);
-      setLibraryDragPointer({ x: e.clientX, y: e.clientY });
-      onHoverDropTarget?.(resolveLibraryDropFromClient(e.clientX, e.clientY));
+      publishHoverTarget(resolveLibraryDropFromClient(e.clientX, e.clientY));
     };
 
     document.addEventListener("dragover", onDocumentDragOver);
@@ -741,7 +674,7 @@ const SortableCircularStrand = ({
     libraryDragActive,
     isClientOverCanvas,
     resolveLibraryDropFromClient,
-    onHoverDropTarget,
+    publishHoverTarget,
   ]);
 
   const handleCanvasLibraryDragEnter = (e: React.DragEvent) => {
@@ -754,24 +687,21 @@ const SortableCircularStrand = ({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "copy";
-    setLibraryDragPointer({ x: e.clientX, y: e.clientY });
-    onHoverDropTarget?.(resolveLibraryDropFromClient(e.clientX, e.clientY));
+    publishHoverTarget(resolveLibraryDropFromClient(e.clientX, e.clientY));
   };
 
   const handleCanvasLibraryDragLeave = (e: React.DragEvent) => {
     const related = e.relatedTarget as Node | null;
     if (related && canvasRef.current?.contains(related)) return;
     setIsLibraryDragOver(false);
-    setLibraryDragPointer(null);
-    onHoverDropTarget?.(null);
+    publishHoverTarget(null);
   };
 
   const handleCanvasLibraryDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsLibraryDragOver(false);
-    setLibraryDragPointer(null);
-    onHoverDropTarget?.(null);
+    publishHoverTarget(null);
     if (!onBeadDrop) return;
     const raw =
       e.dataTransfer.getData(BEAD_LIBRARY_DRAG_TYPE) ||
@@ -810,9 +740,9 @@ const SortableCircularStrand = ({
     const start = dragClientStartRef.current;
     if (!start) return;
     const pos = { x: start.x + event.delta.x, y: start.y + event.delta.y };
-    setDragClientPos(pos);
+    scheduleDragClientPos(pos);
     const target = resolveReorderTargetFromClient(pos.x, pos.y);
-    onHoverDropTarget?.(
+    publishHoverTarget(
       target.mode === "insert" ? target : { mode: "replace", index: target.index },
     );
   };
@@ -837,7 +767,8 @@ const SortableCircularStrand = ({
     setActiveId(null);
     dragClientStartRef.current = null;
     setDragClientPos(null);
-    onHoverDropTarget?.(null);
+    lastHoverKeyRef.current = null;
+    publishHoverTarget(null);
   };
 
   const activeBead = activeId
@@ -857,41 +788,6 @@ const SortableCircularStrand = ({
   const libraryDropHover = externalDrag && hoverDropTarget ? hoverDropTarget : null;
   const reorderHover =
     !externalDrag && activeId !== null && hoverDropTarget ? hoverDropTarget : null;
-  const activeDropHover = libraryDropHover ?? reorderHover;
-
-  const visualInsertTarget = useMemo((): StrandDropTarget | null => {
-    if (activeId && dragClientPos) {
-      return resolveInsertGapVisual(dragClientPos.x, dragClientPos.y);
-    }
-    if (externalDrag && libraryDragPointer) {
-      return resolveInsertGapVisual(libraryDragPointer.x, libraryDragPointer.y);
-    }
-    return null;
-  }, [
-    activeId,
-    dragClientPos,
-    externalDrag,
-    libraryDragPointer,
-    resolveInsertGapVisual,
-  ]);
-
-  const insertionMarker = useMemo(() => {
-    if (!visualInsertTarget) return null;
-    return resolveInsertionMarkerLayout(visualInsertTarget, {
-      placedCount,
-      insertionAngles,
-      pathStartAngle,
-      center,
-      radius,
-    });
-  }, [
-    visualInsertTarget,
-    placedCount,
-    insertionAngles,
-    pathStartAngle,
-    center,
-    radius,
-  ]);
 
   const clientToCanvas = useCallback(
     (clientX: number, clientY: number) => {
@@ -917,7 +813,8 @@ const SortableCircularStrand = ({
         setActiveId(null);
         dragClientStartRef.current = null;
         setDragClientPos(null);
-        onHoverDropTarget?.(null);
+        lastHoverKeyRef.current = null;
+        publishHoverTarget(null);
       }}
     >
       <div className="flex flex-col items-center gap-1 sm:gap-1.5">
@@ -929,7 +826,10 @@ const SortableCircularStrand = ({
 
         <div
           ref={canvasRef}
-          className={cn("relative", activeId && !externalDrag && "cursor-grabbing")}
+          className={cn(
+            "relative bg-white dark:bg-card",
+            activeId && !externalDrag && "cursor-grabbing",
+          )}
           style={{ width: renderCanvasSize, height: renderCanvasSize }}
           key={layoutKey}
           data-strand-canvas
@@ -945,7 +845,7 @@ const SortableCircularStrand = ({
                   position: "absolute",
                   left: localX - activeSlotDim.width / 2,
                   top: localY - activeSlotDim.height / 2,
-                  zIndex: 60,
+                  zIndex: 30,
                   pointerEvents: "none",
                   // When we have a bead image, ensure the wrapper does not paint any background.
                   ...getPlacedBeadShellStyle(activeSlotDim, hasImage),
@@ -976,7 +876,7 @@ const SortableCircularStrand = ({
             className="pointer-events-none absolute inset-0 z-[5]"
             width={renderCanvasSize}
             height={renderCanvasSize}
-            style={{ transition: "opacity 0.25s ease-out" }}
+            style={{ transition: activeId || externalDrag ? undefined : "opacity 0.25s ease-out" }}
           >
             <circle
               cx={center}
@@ -988,13 +888,9 @@ const SortableCircularStrand = ({
               opacity={
                 externalDrag ? 1 : placedCount > 0 ? STRAND_CORD.opacityComplete : STRAND_CORD.opacity
               }
-              style={{ transition: "r 0.35s ease-out" }}
+              style={{ transition: activeId || externalDrag ? undefined : "r 0.35s ease-out" }}
             />
           </svg>
-
-          {insertionMarker ? (
-            <InsertionSlotMarker layout={insertionMarker} scaleFactor={scaleFactor} />
-          ) : null}
 
           <div
             data-strand-drop-zone

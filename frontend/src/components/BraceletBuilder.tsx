@@ -269,7 +269,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div
           ref={containerRef}
-          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible bg-background p-1 max-sm:pb-[env(safe-area-inset-bottom)] sm:p-1.5 ${
+          className={`relative isolate z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white p-1 max-sm:pb-[env(safe-area-inset-bottom)] sm:p-1.5 dark:bg-background ${
             libraryOpen && !isMobile ? "lg:pl-[256px]" : ""
           }`}
         >
@@ -353,7 +353,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
           <div
             ref={canvasZoomRef}
-            className="relative flex min-h-0 w-full flex-1 flex-col"
+            className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden"
             data-strand-zoom-surface
           >
             <StrandViewport
@@ -429,7 +429,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           </div>
         </div>
 
-        <div className="hidden shrink-0 lg:flex">
+        <div className="relative z-10 hidden shrink-0 lg:flex">
           <BraceletSummaryPanel
             summary={builder.summary}
             builderActions={builderActions}

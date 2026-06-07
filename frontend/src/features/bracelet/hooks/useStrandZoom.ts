@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -142,9 +143,20 @@ export function useStrandZoom(
   panRef.current = pan;
   const zoomSmoothRef = useRef(initial);
 
+  const applyContentTransform = useCallback(() => {
+    const el = contentRef?.current;
+    if (!el) return;
+    const viewScale = layoutRef.current.autoFitScale * zoomSmoothRef.current;
+    const { x, y } = panRef.current;
+    el.style.transform = `translate(${x}px, ${y}px) scale(${viewScale})`;
+  }, [contentRef]);
+
   const finishPanDrag = useCallback((pointerId?: number) => {
     const drag = panDragRef.current;
     if (drag && pointerId !== undefined && drag.pointerId !== pointerId) return;
+    if (drag?.armed) {
+      setPan(panRef.current);
+    }
     panDragRef.current = null;
     isPanningRef.current = false;
     setIsPanning(false);
@@ -152,9 +164,11 @@ export function useStrandZoom(
   }, []);
 
   const clearPan = useCallback(() => {
+    panRef.current = { x: 0, y: 0 };
     setPan({ x: 0, y: 0 });
+    applyContentTransform();
     finishPanDrag();
-  }, [finishPanDrag]);
+  }, [finishPanDrag, applyContentTransform]);
 
   const measurePanBounds = useCallback(() => {
     const container = viewportRef?.current ?? containerRef?.current;
@@ -182,12 +196,17 @@ export function useStrandZoom(
   }, [measurePanBounds]);
 
   const setPanClamped = useCallback(
-    (next: StrandPan) => {
+    (next: StrandPan, options?: { syncState?: boolean }) => {
       measurePanBounds();
       const { maxX, maxY } = panBoundsRef.current;
-      setPan(clampPan(next, maxX, maxY));
+      const clamped = clampPan(next, maxX, maxY);
+      panRef.current = clamped;
+      applyContentTransform();
+      if (options?.syncState !== false) {
+        setPan((prev) => (panNeedsUpdate(prev, clamped) ? clamped : prev));
+      }
     },
-    [measurePanBounds],
+    [measurePanBounds, applyContentTransform],
   );
 
   const applyZoomAtPoint = useCallback(
@@ -231,7 +250,8 @@ export function useStrandZoom(
     zoomSmoothRef.current = 1;
     setZoomSmooth(1);
     clearPan();
-  }, [clearPan]);
+    applyContentTransform();
+  }, [clearPan, applyContentTransform]);
 
   useEffect(() => {
     let frame = 0;
@@ -242,18 +262,23 @@ export function useStrandZoom(
       if (Math.abs(diff) < ZOOM_SNAP_EPSILON) {
         if (current !== target) {
           zoomSmoothRef.current = target;
+          applyContentTransform();
           setZoomSmooth(target);
         }
         return;
       }
       const next = current + diff * ZOOM_SMOOTH_FACTOR;
       zoomSmoothRef.current = next;
-      setZoomSmooth(next);
+      applyContentTransform();
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [zoomTarget]);
+  }, [zoomTarget, applyContentTransform]);
+
+  useLayoutEffect(() => {
+    applyContentTransform();
+  }, [pan, layout.autoFitScale, applyContentTransform]);
 
   const layoutSig = layoutSignature(layout);
 
@@ -307,10 +332,13 @@ export function useStrandZoom(
         return;
       }
 
-      setPanClamped({
-        x: drag.panX + dx,
-        y: drag.panY + dy,
-      });
+      setPanClamped(
+        {
+          x: drag.panX + dx,
+          y: drag.panY + dy,
+        },
+        { syncState: false },
+      );
     };
 
     const onDocumentPointerEnd = (e: PointerEvent) => {

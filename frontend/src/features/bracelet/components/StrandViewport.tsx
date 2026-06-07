@@ -25,9 +25,9 @@ interface StrandViewportProps {
 export function StrandViewport({
   viewportRef,
   contentRef,
-  pan,
+  pan: _pan,
   isPanning,
-  viewScale = 1,
+  viewScale: _viewScale = 1,
   panMode = false,
   onPointerDown,
   onPointerMove,
@@ -39,7 +39,7 @@ export function StrandViewport({
     <div
       ref={viewportRef}
       data-strand-viewport
-      className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-visible bg-transparent ${
+      className={`relative isolate flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden bg-white dark:bg-card ${
         isPanning ? "cursor-grabbing" : panMode ? "cursor-grab" : "cursor-default"
       }`}
       onPointerDown={onPointerDown}
@@ -49,11 +49,11 @@ export function StrandViewport({
     >
       <div
         ref={contentRef}
+        data-strand-viewport-content
         className="inline-flex w-max max-w-none flex-wrap items-center justify-center gap-2 sm:gap-3"
         style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${viewScale})`,
           transformOrigin: "center center",
-          transition: isPanning ? undefined : "transform 80ms ease-out",
+          willChange: isPanning ? "transform" : undefined,
         }}
       >
         {children}
