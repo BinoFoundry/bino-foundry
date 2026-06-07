@@ -1,4 +1,4 @@
-export { ApiError, isApiError } from "./errors";
+export { ApiError, formatApiErrorMessage, isApiError } from "./errors";
 export { apiRequest, catalogueFetch, cataloguePath, type ApiRequestOptions } from "./client";
 export { catalogueApi } from "./catalogue";
 export { beadsApi } from "./beads";

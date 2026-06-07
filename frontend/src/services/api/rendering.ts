@@ -49,7 +49,7 @@ export const renderingApi = {
       `/rendering/frames/${frameId}/views/${viewAxis}`,
       {
         method: "PUT",
-        body: JSON.stringify(payload),
+        body: payload,
       },
     );
     return mapView({

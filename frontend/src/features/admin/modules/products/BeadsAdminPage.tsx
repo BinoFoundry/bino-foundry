@@ -5,7 +5,7 @@ import { BeadForm } from "@/components/admin/BeadForm";
 import { Button } from "@/components/ui/button";
 import { formatLibraryPriceRange } from "@/features/bracelet/library-sizes";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
-import { isApiError } from "@/services/api";
+import { formatApiErrorMessage } from "@/services/api";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -87,7 +87,7 @@ export function BeadsAdminPage() {
                 }
                 setModal(null);
               } catch (err) {
-                alert(isApiError(err) ? err.message : "Save failed");
+                alert(formatApiErrorMessage(err));
                 throw err;
               }
             }}

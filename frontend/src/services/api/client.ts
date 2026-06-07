@@ -21,16 +21,16 @@ function buildHeaders(init?: ApiRequestOptions): Headers {
   }
 
   const body = init?.body;
-  const isJsonObject =
+  const isJsonPayload =
     body !== null &&
     body !== undefined &&
-    typeof body === "object" &&
+    !init?.rawBody &&
     !(body instanceof FormData) &&
     !(body instanceof Blob) &&
     !(body instanceof ArrayBuffer) &&
-    !init?.rawBody;
+    (typeof body === "object" || typeof body === "string");
 
-  if (isJsonObject && !headers.has("Content-Type")) {
+  if (isJsonPayload && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 

@@ -11,11 +11,18 @@ export const beadLibrarySizesApi = {
     libraryId: string,
     sizes: { sizeMm: number; unitPrice: number; isDefault?: boolean }[],
   ): Promise<BeadLibrarySizeOffer[]> {
+    const payload = {
+      sizes: sizes.map((s) => ({
+        sizeMm: Number(s.sizeMm),
+        unitPrice: Number(s.unitPrice),
+        isDefault: s.isDefault === true,
+      })),
+    };
     return apiRequest<BeadLibrarySizeOffer[]>(
       `/bead-library-sizes/library/${encodeURIComponent(libraryId)}`,
       {
         method: "PUT",
-        body: { sizes },
+        body: payload,
       },
     );
   },
