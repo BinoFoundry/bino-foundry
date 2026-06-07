@@ -27,7 +27,6 @@ function SizeForm({
 }) {
   const [sizeMm, setSizeMm] = useState(initial?.sizeMm ?? 8);
   const [label, setLabel] = useState(initial?.label ?? "8 mm");
-  const [mult, setMult] = useState(initial?.priceMultiplier ?? 1);
   const [order, setOrder] = useState(initial?.displayOrder ?? 0);
   const [active, setActive] = useState(initial?.isActive ?? true);
   const [isDefault, setIsDefault] = useState(initial?.isDefault ?? false);
@@ -45,7 +44,6 @@ function SizeForm({
         void onSave({
           sizeMm,
           label: label.trim(),
-          priceMultiplier: mult,
           displayOrder: order,
           isActive: active,
           isDefault,
@@ -71,18 +69,6 @@ function SizeForm({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Price multiplier</label>
-        <input
-          type="number"
-          min={0.1}
-          max={10}
-          step={0.05}
-          value={mult}
-          onChange={(e) => setMult(Number(e.target.value))}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        />
-      </div>
-      <div>
         <label className="mb-1 block text-xs text-muted-foreground">Display order</label>
         <input
           type="number"
@@ -100,6 +86,9 @@ function SizeForm({
         <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
         Default size for new sessions
       </label>
+      <p className="text-[10px] text-muted-foreground">
+        Pricing is set per bead under Bead library → Available sizes, not here.
+      </p>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
@@ -189,8 +178,7 @@ export function BeadSizesAdminPage() {
                     ) : null}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {s.sizeMm} mm · ×{Number(s.priceMultiplier ?? 1).toFixed(2)}
-                    {s.isActive === false ? " · inactive" : ""}
+                    {s.sizeMm} mm{s.isActive === false ? " · inactive" : ""}
                   </p>
                 </div>
               </AdminListRow>

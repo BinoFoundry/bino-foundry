@@ -1,8 +1,8 @@
+/** Global bracelet bead diameter option (admin-managed). */
 export interface BeadSizeEntry {
   id: string;
   sizeMm: number;
   label: string;
-  priceMultiplier: number;
   displayOrder?: number;
   isActive?: boolean;
   isDefault?: boolean;

@@ -1,28 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { mmToBasePx, STRAND_BEAD_VISUAL_SCALE } from "./strand-bead";
+import { mmToBasePx } from "./strand-bead";
 
-describe("mmToBasePx", () => {
+describe("mmToBasePx integration", () => {
   const sf = 1;
 
-  it("preserves mm diameter ordering at a fixed scale factor", () => {
-    const six = mmToBasePx(6, sf);
-    const eight = mmToBasePx(8, sf);
-    const ten = mmToBasePx(10, sf);
-    const twelve = mmToBasePx(12, sf);
-    expect(six).toBeLessThan(eight);
-    expect(eight).toBeLessThan(ten);
-    expect(ten).toBeLessThan(twelve);
-  });
-
-  it("scales linearly with mm (proportional to diameter)", () => {
-    const eight = mmToBasePx(8, sf);
-    const twelve = mmToBasePx(12, sf);
-    expect(twelve / eight).toBeCloseTo(12 / 8, 5);
-  });
-
-  it("uses a balanced display scale multiplier", () => {
-    expect(STRAND_BEAD_VISUAL_SCALE).toBeGreaterThan(0.85);
-    expect(STRAND_BEAD_VISUAL_SCALE).toBeLessThan(1.05);
+  it("preserves ordering for common builder sizes", () => {
+    const sizes = [0.5, 2.5, 4, 6, 8, 10, 12];
+    const px = sizes.map((mm) => mmToBasePx(mm, sf));
+    for (let i = 1; i < px.length; i++) {
+      expect(px[i]).toBeGreaterThan(px[i - 1]);
+    }
   });
 });

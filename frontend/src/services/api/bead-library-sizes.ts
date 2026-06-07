@@ -15,7 +15,7 @@ export const beadLibrarySizesApi = {
       `/bead-library-sizes/library/${encodeURIComponent(libraryId)}`,
       {
         method: "PUT",
-        body: JSON.stringify({ sizes }),
+        body: { sizes },
       },
     );
   },

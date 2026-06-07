@@ -10,7 +10,6 @@ export interface BeadTypeEntry {
   description: string;
   displayOrder?: number;
   isActive?: boolean;
-  usesSizePricing?: boolean;
   metadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;

@@ -8,7 +8,6 @@ function mapRow(row: Record<string, unknown>) {
     id: row.id,
     sizeMm: Number(row.size_mm),
     label: row.label,
-    priceMultiplier: Number(row.price_multiplier),
     displayOrder: row.display_order,
     isActive: row.is_active,
     isDefault: row.is_default,
@@ -52,7 +51,6 @@ export class BeadSizeService {
       .insert({
         size_mm: dto.sizeMm,
         label: dto.label.trim(),
-        price_multiplier: dto.priceMultiplier,
         display_order: dto.displayOrder ?? 0,
         is_active: dto.isActive ?? true,
         is_default: dto.isDefault ?? false,
@@ -72,7 +70,6 @@ export class BeadSizeService {
     const patch: Record<string, unknown> = {};
     if (dto.sizeMm !== undefined) patch.size_mm = dto.sizeMm;
     if (dto.label !== undefined) patch.label = dto.label.trim();
-    if (dto.priceMultiplier !== undefined) patch.price_multiplier = dto.priceMultiplier;
     if (dto.displayOrder !== undefined) patch.display_order = dto.displayOrder;
     if (dto.isActive !== undefined) patch.is_active = dto.isActive;
     if (dto.isDefault !== undefined) patch.is_default = dto.isDefault;

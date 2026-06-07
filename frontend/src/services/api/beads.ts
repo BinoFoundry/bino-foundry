@@ -16,7 +16,6 @@ export const beadsApi = {
     payload: Pick<BeadTypeEntry, "name" | "description"> & {
       displayOrder?: number;
       isActive?: boolean;
-      usesSizePricing?: boolean;
     },
   ): Promise<BeadTypeEntry> {
     return apiRequest<BeadTypeEntry>("/bead-types", { method: "POST", body: payload });

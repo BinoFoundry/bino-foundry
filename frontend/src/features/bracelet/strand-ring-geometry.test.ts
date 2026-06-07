@@ -20,7 +20,15 @@ function mockPlaced(mm: number, slug = "crystal"): PlacedBead {
   return {
     position: 0,
     bead: { id: "b", name: "Test", beadTypeSlug: slug, beadTypeId: "t", image: "" },
-    size: { offerKey: `k-${mm}`, beadLibraryId: "b", sizeMm: mm, label: `${mm}mm`, priceMultiplier: 1 },
+    size: {
+      id: `offer-${mm}`,
+      offerKey: `k-${mm}`,
+      beadLibraryId: "b",
+      beadSizeId: `size-${mm}`,
+      sizeMm: mm,
+      label: `${mm}mm`,
+      unitPrice: 10,
+    },
   };
 }
 
@@ -73,17 +81,17 @@ function assertCleanLayout(
 
 describe("computeResolvedRingRadiusPx", () => {
   it("expands beyond wrist baseline when large rendered beads need more arc", () => {
-    const beads = [10, 10, 12, 10, 10, 12, 10].map((mm) => mockPlaced(mm, "charm"));
-    const { resolved, layout } = layoutForWrist(16, beads, 1.2);
+    const beads = Array.from({ length: 12 }, () => mockPlaced(12, "charm"));
+    const { resolved, layout } = layoutForWrist(16, beads, 1.35);
     expect(resolved.radiusPx).toBeGreaterThanOrEqual(layout.wristRadiusPx);
     expect(resolved.expanded).toBe(true);
-    assertCleanLayout(16, beads, 1.2);
+    assertCleanLayout(16, beads, 1.35);
   });
 
   it("never clamps below overlap-free radius when layout exceeds canvas", () => {
-    const beads = Array.from({ length: 11 }, () => mockPlaced(12));
+    const beads = Array.from({ length: 15 }, () => mockPlaced(12));
     const scaleFactor = 1;
-    const center = 90;
+    const center = 80;
     const prelimDims = beads.map((b) =>
       getBeadSlotDimensions(b, placedBeadSizeMm(b), scaleFactor),
     );
@@ -113,6 +121,18 @@ describe("computeResolvedRingRadiusPx", () => {
 });
 
 describe("mixed bead sizes on 16cm wrist", () => {
+  it("lays out 0.5–10mm mix without overlap or extreme sizing", () => {
+    const beads = [0.5, 2.5, 4, 6, 8, 10].map((mm) => mockPlaced(mm));
+    assertCleanLayout(16, beads, 1);
+    const dims = beads.map((b) => getBeadSlotDimensions(b, placedBeadSizeMm(b), 1));
+    const widths = dims.map((d) => d.width);
+    for (let i = 1; i < widths.length; i++) {
+      expect(widths[i]).toBeGreaterThan(widths[i - 1]);
+    }
+    expect(widths[0]).toBeGreaterThanOrEqual(12);
+    expect(widths[widths.length - 1]).toBeLessThanOrEqual(32);
+  });
+
   it("does not overlap 6/8/10/12mm crystals", () => {
     const beads = [6, 8, 10, 12, 8, 6].map((mm) => mockPlaced(mm));
     assertCleanLayout(16, beads);

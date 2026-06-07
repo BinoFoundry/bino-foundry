@@ -27,14 +27,14 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   {
     id: "bead-types",
     label: "Bead types",
-    description: "Categories and size-based pricing flags",
+    description: "Crystal, charm, spacer categories",
     icon: Settings2,
     group: "products",
   },
   {
     id: "bead-sizes",
     label: "Bead sizes",
-    description: "Bracelet mm options and price multipliers",
+    description: "Bracelet mm diameter options",
     icon: Ruler,
     group: "products",
   },

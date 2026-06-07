@@ -2,7 +2,8 @@ import { calculateBeadCount, placedBeadSizeMm, type PlacedBead } from "@/lib/lux
 
 import { normalizeFromSlots } from "./composition";
 
-export const MIN_BEAD_SIZE_MM = 4;
+/** Fallback when catalogue sizes are unavailable; fit math always uses true mm from offers. */
+export const MIN_BEAD_SIZE_MM = 1;
 
 export function wristCircumferenceMm(wristSizeCm: number): number {
   return wristSizeCm * 10;

@@ -18,8 +18,8 @@ const quickLinks: {
 }[] = [
   { section: "frames", label: "Frames", description: "Sunglasses frame SKUs", icon: Glasses },
   { section: "beads", label: "Bead library", description: "Unified beads with crop workflow", icon: Gem },
-  { section: "bead-types", label: "Bead types", description: "Categories and size pricing", icon: Settings2 },
-  { section: "bead-sizes", label: "Bead sizes", description: "Mm options and price multipliers", icon: Ruler },
+  { section: "bead-types", label: "Bead types", description: "Crystal, charm, spacer categories", icon: Settings2 },
+  { section: "bead-sizes", label: "Bead sizes", description: "Mm diameter options for the builder", icon: Ruler },
   { section: "wrist-sizes", label: "Wrist sizes", description: "Bracelet capacity targets", icon: CircleDot },
   { section: "general-settings", label: "General settings", description: "Site-wide currency", icon: Settings },
   { section: "sunglasses-config", label: "Sunglasses config", description: "Lens tints and add-ons", icon: Sun },

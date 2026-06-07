@@ -11,7 +11,7 @@ export const syncLibrarySizesDto = z.object({
     .array(
       z.object({
         sizeMm: beadSizeMmSchema,
-        unitPrice: z.number().min(0),
+        unitPrice: z.coerce.number().min(0),
         isDefault: z.boolean().optional(),
       }),
     )

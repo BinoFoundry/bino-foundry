@@ -3,6 +3,7 @@ import type { BeadSize, PlacedBead } from "@/lib/luxe-data";
 import type { BeadLibraryEntry } from "@/types/beads";
 
 import { beadDisplayImageStyles, getBeadDisplayImageUrl } from "./apply-crop";
+import { calibratedVisualDiameterPx } from "./visual-bead-scale";
 
 /** Visual footprint multiplier per bead type (relative to mm-based base size). */
 const TYPE_FOOTPRINT: Record<string, { width: number; height: number }> = {
@@ -14,20 +15,13 @@ const TYPE_FOOTPRINT: Record<string, { width: number; height: number }> = {
   spacer: { width: 0.5, height: 0.5 },
 };
 
-/** Baseline mm→px curve (8 mm → 28 px at scale factor 1, before visual scale). */
-const MM_REFERENCE = 8;
-const PX_AT_REFERENCE = 28;
-
 /**
  * Display-only strand density. Does not affect wrist fit, slot counts, pricing, or DB mm values.
- * Applied uniformly so variant ratios (e.g. 6 mm < 8 mm < 12 mm) stay identical.
  */
-/** Display-only; wrist capacity uses database mm values, not this multiplier. */
 export const STRAND_BEAD_VISUAL_SCALE = 0.96;
 
 export function mmToBasePx(sizeMm: number, scaleFactor: number): number {
-  const mm = sizeMm > 0 ? sizeMm : 1;
-  return (mm / MM_REFERENCE) * PX_AT_REFERENCE * scaleFactor * STRAND_BEAD_VISUAL_SCALE;
+  return calibratedVisualDiameterPx(sizeMm) * scaleFactor * STRAND_BEAD_VISUAL_SCALE;
 }
 
 export interface BeadSlotDimensions {

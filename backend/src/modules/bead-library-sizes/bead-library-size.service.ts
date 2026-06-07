@@ -102,20 +102,29 @@ export class BeadLibrarySizeService {
       throw new ValidationError("Only one default size per bead is allowed");
     }
 
-    const { error: delErr } = await supabase
+    const { data: existingRows, error: existingErr } = await supabase
       .from("bead_library_sizes")
-      .delete()
+      .select("id, bead_size_id, bead_sizes(size_mm, label)")
       .eq("bead_library_id", libraryUuid);
-    assertNoDbError(delErr);
+    assertNoDbError(existingErr);
 
-    if (!dto.sizes.length) return [];
+    if (!dto.sizes.length) {
+      await this.deleteUnreferencedLibrarySizes(
+        supabase,
+        libraryUuid,
+        (existingRows ?? []) as { id: string; bead_size_id: string; bead_sizes: { size_mm?: number; label?: string } | null }[],
+      );
+      return [];
+    }
 
     let defaultSet = false;
-    const inserts = dto.sizes.map((s) => {
+    const desiredBeadSizeIds = new Set<string>();
+    const upsertRows = dto.sizes.map((s) => {
       const beadSizeId = sizeByMm.get(s.sizeMm);
       if (!beadSizeId) {
         throw new ValidationError(`Unknown or inactive bead size: ${s.sizeMm} mm`);
       }
+      desiredBeadSizeIds.add(beadSizeId);
       const isDefault = Boolean(s.isDefault && !defaultSet);
       if (isDefault) defaultSet = true;
       return {
@@ -126,18 +135,63 @@ export class BeadLibrarySizeService {
       };
     });
 
-    if (!defaultSet && inserts.length) inserts[0].is_default = true;
+    if (!defaultSet) upsertRows[0].is_default = true;
 
-    if (inserts.some((i) => i.is_default)) {
-      await clearOtherDefaults(libraryUuid);
-    }
+    const staleRows = ((existingRows ?? []) as {
+      id: string;
+      bead_size_id: string;
+      bead_sizes: { size_mm?: number; label?: string } | null;
+    }[]).filter((row) => !desiredBeadSizeIds.has(row.bead_size_id));
+
+    await this.deleteUnreferencedLibrarySizes(supabase, libraryUuid, staleRows);
+
+    await clearOtherDefaults(libraryUuid);
 
     const { data, error } = await supabase
       .from("bead_library_sizes")
-      .insert(inserts)
+      .upsert(upsertRows, { onConflict: "bead_library_id,bead_size_id" })
       .select(SELECT);
     assertNoDbError(error);
     return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+  }
+
+  private async deleteUnreferencedLibrarySizes(
+    supabase: ReturnType<typeof getSupabaseServiceRole>,
+    libraryUuid: string,
+    rows: { id: string; bead_size_id: string; bead_sizes: { size_mm?: number; label?: string } | null }[],
+  ) {
+    if (!rows.length) return;
+
+    const staleIds = rows.map((row) => row.id);
+    const { data: refs, error: refsErr } = await supabase
+      .from("bracelet_configuration_items")
+      .select("bead_library_size_id")
+      .in("bead_library_size_id", staleIds);
+    assertNoDbError(refsErr);
+
+    const referencedIds = new Set(
+      (refs ?? [])
+        .map((r) => (r as { bead_library_size_id?: string }).bead_library_size_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+
+    const blocked = rows.filter((row) => referencedIds.has(row.id));
+    if (blocked.length) {
+      const labels = blocked.map((row) => {
+        const mm = row.bead_sizes?.size_mm;
+        return row.bead_sizes?.label ?? (mm !== undefined ? `${mm} mm` : "a size");
+      });
+      throw new ValidationError(
+        `Cannot remove ${labels.join(", ")} — used in saved bracelet designs. Unchecking a size only works when no saved designs reference it.`,
+      );
+    }
+
+    const { error: delErr } = await supabase
+      .from("bead_library_sizes")
+      .delete()
+      .eq("bead_library_id", libraryUuid)
+      .in("id", staleIds);
+    assertNoDbError(delErr);
   }
 
   async resolveForConfiguration(

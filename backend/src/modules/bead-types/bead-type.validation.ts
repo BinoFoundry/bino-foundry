@@ -5,7 +5,6 @@ export const beadTypeCreateSchema = z.object({
   description: z.string().max(2000).optional(),
   displayOrder: z.coerce.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
-  usesSizePricing: z.boolean().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 

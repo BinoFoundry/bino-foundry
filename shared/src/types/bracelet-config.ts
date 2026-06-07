@@ -7,20 +7,6 @@ export type BraceletBeadSizeMm = number;
 
 export type BraceletConfigStatus = "draft" | "saved" | "ordered" | "archived";
 
-/** Size multipliers — loaded from config_kv, with these defaults. */
-export interface BraceletPricingRules {
-  sizeMultipliers: Record<string, number>;
-  /** Slugs that use size multipliers (others use flat unit_price). */
-  sizePricedTypeSlugs: string[];
-  currencyCode: string;
-}
-
-export const DEFAULT_BRACELET_PRICING_RULES: BraceletPricingRules = {
-  sizeMultipliers: { "6": 0.8, "8": 1, "10": 1.3 },
-  sizePricedTypeSlugs: ["crystal", "accent"],
-  currencyCode: "USD",
-};
-
 /** One placed item on a strand (IDs only — no asset blobs). */
 export interface BraceletConfigurationItemRef {
   strandIndex: 0 | 1;
