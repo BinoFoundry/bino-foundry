@@ -20,7 +20,6 @@ export interface BeadTypeEntry {
 export interface BeadLibraryEntry {
   id: string;
   name: string;
-  price: number;
   /** Display URL (processed when ready, else original). */
   image: string;
   originalImage?: string;

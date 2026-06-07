@@ -1,7 +1,6 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
-import { loadBraceletPricingContext, unitPriceWithContext } from "../bracelet/bracelet-pricing.js";
 import type { SyncLibrarySizesDTO } from "./bead-library-size.validation.js";
 
 function mapRow(row: Record<string, unknown>) {
@@ -28,7 +27,7 @@ function mapRow(row: Record<string, unknown>) {
 }
 
 const SELECT =
-  "*, bead_libraries(public_id, name, unit_price, bead_types(slug, uses_size_pricing)), bead_sizes(size_mm, label, display_order, price_multiplier, is_active)";
+  "*, bead_libraries(public_id, name, bead_types(slug)), bead_sizes(size_mm, label, display_order, is_active)";
 
 async function resolveLibraryUuid(publicOrUuid: string): Promise<string> {
   const supabase = getSupabaseServiceRole();
@@ -79,7 +78,7 @@ export class BeadLibrarySizeService {
 
     const { data: libRow, error: libErr } = await supabase
       .from("bead_libraries")
-      .select("id, public_id, unit_price, bead_types(slug, uses_size_pricing)")
+      .select("id")
       .eq("id", libraryUuid)
       .maybeSingle();
     assertNoDbError(libErr);
@@ -139,34 +138,6 @@ export class BeadLibrarySizeService {
       .select(SELECT);
     assertNoDbError(error);
     return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
-  }
-
-  /** Suggest unit prices from library base × global size multipliers when type uses size pricing. */
-  async suggestPrices(libraryId: string, sizeMmList: number[]): Promise<Record<number, number>> {
-    const supabase = getSupabaseServiceRole();
-    const libraryUuid = await resolveLibraryUuid(libraryId);
-    const { data: libRow, error } = await supabase
-      .from("bead_libraries")
-      .select("unit_price, bead_types(slug, uses_size_pricing)")
-      .eq("id", libraryUuid)
-      .maybeSingle();
-    assertNoDbError(error);
-    if (!libRow) throw new NotFoundError("Bead library not found");
-
-    const row = libRow as Record<string, unknown>;
-    const base = Number(row.unit_price);
-    const typeRaw = row.bead_types;
-    const type =
-      typeRaw && typeof typeRaw === "object" && !Array.isArray(typeRaw)
-        ? (typeRaw as { slug?: string; uses_size_pricing?: boolean })
-        : null;
-    const slug = type?.slug ?? "crystal";
-    const ctx = await loadBraceletPricingContext();
-    const out: Record<number, number> = {};
-    for (const mm of sizeMmList) {
-      out[mm] = unitPriceWithContext(base, slug, mm, ctx);
-    }
-    return out;
   }
 
   async resolveForConfiguration(

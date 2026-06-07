@@ -3,7 +3,10 @@ import { Gem, Trash2 } from "lucide-react";
 
 import { BeadForm } from "@/components/admin/BeadForm";
 import { Button } from "@/components/ui/button";
+import { formatLibraryPriceRange } from "@/features/bracelet/library-sizes";
+import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { isApiError } from "@/services/api";
+import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 
@@ -73,10 +76,15 @@ export function BeadsAdminPage() {
             initial={modal.type === "edit" ? modal.entry : undefined}
             defaultBeadTypeId={defaultTypeId}
             onCancel={() => setModal(null)}
-            onSave={async (entry) => {
+            onSave={async (entry, sizes: BeadLibrarySizeInput[]) => {
               try {
-                if (modal.type === "add") await cat.addBeadLibrary(entry);
-                else await cat.updateBeadLibrary(entry);
+                if (modal.type === "add") {
+                  await cat.addBeadLibrary(entry, sizes);
+                } else {
+                  await cat.updateBeadLibrary(entry);
+                  await beadLibrarySizesApi.sync(entry.id, sizes);
+                  await cat.refreshFromApi();
+                }
                 setModal(null);
               } catch (err) {
                 alert(isApiError(err) ? err.message : "Save failed");
@@ -126,7 +134,8 @@ export function BeadsAdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{b.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {typeName(b.beadTypeId)} · ${b.price.toFixed(2)} · crop {b.cropStatus ?? "draft"}
+                    {typeName(b.beadTypeId)} · {formatLibraryPriceRange(cat.beadLibrarySizes, b.id)} · crop{" "}
+                    {b.cropStatus ?? "draft"}
                   </p>
                 </div>
                 {b.isActive === false ? <AdminStatusBadge label="Inactive" variant="danger" /> : null}

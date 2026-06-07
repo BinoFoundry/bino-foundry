@@ -1,4 +1,5 @@
 import type { BeadCropConfig, BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 
 import { apiRequest } from "./client";
 
@@ -37,13 +38,13 @@ export const beadsApi = {
     return apiRequest<BeadLibraryEntry>(`/bead-libraries/${encodeURIComponent(publicId)}`);
   },
 
-  createLibrary(payload: BeadLibraryEntry): Promise<BeadLibraryEntry> {
+  createLibrary(payload: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]): Promise<BeadLibraryEntry> {
     return apiRequest<BeadLibraryEntry>("/bead-libraries", {
       method: "POST",
       body: {
         id: payload.id,
         name: payload.name,
-        price: payload.price,
+        sizes,
         beadTypeId: payload.beadTypeId,
         description: payload.description,
         originalImage: payload.originalImage ?? payload.image,
@@ -67,7 +68,6 @@ export const beadsApi = {
       method: "PUT",
       body: {
         name: payload.name,
-        price: payload.price,
         beadTypeId: payload.beadTypeId,
         description: payload.description,
         originalImage,

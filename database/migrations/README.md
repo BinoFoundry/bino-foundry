@@ -39,6 +39,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 13. `000017_bead_library_sizes.sql` — `bead_library_sizes` junction (library × global `bead_sizes` + per-size price); migrates variants; drops `bead_variants`.
 14. `000018_wrist_sizes.sql` — admin-managed wrist targets (`wrist_sizes`); relaxes saved-config wrist CHECK constraints.
 15. `000019_wrist_sizes_notes.sql` — optional `notes` on `wrist_sizes`.
+16. `000020_bead_size_only_pricing.sql` — drop `bead_libraries.unit_price`; pricing only in `bead_library_sizes`.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

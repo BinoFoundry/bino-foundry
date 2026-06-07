@@ -15,6 +15,7 @@ import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { beadsApi } from "@/services/api/beads";
 import { catalogueApi } from "@/services/api";
 import { isApiError } from "@/services/api/errors";
+import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
@@ -29,7 +30,7 @@ import {
 } from "./store";
 
 export interface CatalogueActions {
-  addBeadLibrary: (entry: BeadLibraryEntry) => Promise<void>;
+  addBeadLibrary: (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => Promise<void>;
   updateBeadLibrary: (entry: BeadLibraryEntry) => Promise<void>;
   updateBeadCrop: (
     publicId: string,
@@ -118,8 +119,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   }, [refreshFromApi]);
 
   const addBeadLibrary = useCallback(
-    async (entry: BeadLibraryEntry) => {
-      await beadsApi.createLibrary(entry);
+    async (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => {
+      await beadsApi.createLibrary(entry, sizes);
       await refreshFromApi();
     },
     [refreshFromApi],

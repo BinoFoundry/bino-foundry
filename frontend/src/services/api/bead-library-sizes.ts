@@ -19,11 +19,4 @@ export const beadLibrarySizesApi = {
       },
     );
   },
-
-  suggestPrices(libraryId: string, sizeMm: number[]): Promise<Record<string, number>> {
-    const q = sizeMm.map((m) => `sizeMm=${m}`).join("&");
-    return apiRequest<Record<string, number>>(
-      `/bead-library-sizes/suggest/${encodeURIComponent(libraryId)}?${q}`,
-    );
-  },
 };

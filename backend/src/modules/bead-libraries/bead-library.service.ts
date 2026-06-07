@@ -2,6 +2,7 @@ import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
 import { isBeadCropConfigValid } from "@bino-foundry/shared/types";
+import { beadLibrarySizeService } from "../bead-library-sizes/bead-library-size.service.js";
 import type {
   BeadLibraryCreateDTO,
   BeadLibraryCropDTO,
@@ -40,7 +41,6 @@ function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown
   return {
     id: row.public_id,
     name: row.name,
-    price: Number(row.unit_price),
     image: displayImage,
     originalImage: original,
     processedImage: processed,
@@ -102,7 +102,6 @@ export class BeadLibraryService {
     const insertRow = {
       public_id: payload.id.trim(),
       name: payload.name.trim(),
-      unit_price: payload.price,
       currency_code: "USD",
       description: payload.description?.trim() ?? "",
       bead_type_id: payload.beadTypeId,
@@ -122,6 +121,10 @@ export class BeadLibraryService {
       throw new ConflictError("Bead id already exists");
     }
     assertNoDbError(error);
+
+    await beadLibrarySizeService.syncLibrarySizes(payload.id.trim(), {
+      sizes: payload.sizes,
+    });
 
     return mapBeadLibraryRow(data as Record<string, unknown>);
   }
@@ -143,7 +146,6 @@ export class BeadLibraryService {
 
     const updates: Record<string, unknown> = {
       ...(payload.name !== undefined && { name: payload.name.trim() }),
-      ...(payload.price !== undefined && { unit_price: payload.price }),
       ...(payload.description !== undefined && { description: payload.description.trim() }),
       ...(payload.beadTypeId !== undefined && { bead_type_id: payload.beadTypeId }),
       ...(payload.metadata !== undefined && { metadata: payload.metadata }),

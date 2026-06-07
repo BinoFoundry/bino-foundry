@@ -47,10 +47,16 @@ const beadCropConfigV2Schema = z
 
 export const beadCropConfigSchema = z.union([beadCropConfigV1Schema, beadCropConfigV2Schema]);
 
+export const librarySizeInputSchema = z.object({
+  sizeMm: z.coerce.number().int().min(4).max(24),
+  unitPrice: z.coerce.number().min(0),
+  isDefault: z.boolean().optional(),
+});
+
 export const beadLibraryCreateSchema = z.object({
   id: z.string().min(1).max(120),
   name: z.string().min(1).max(200),
-  price: z.coerce.number().min(0),
+  sizes: z.array(librarySizeInputSchema).min(1, "At least one size with price is required"),
   beadTypeId: z.string().uuid(),
   isActive: z.boolean().optional(),
   displayOrder: z.coerce.number().int().min(0).optional(),

@@ -16,7 +16,6 @@ function bead(position: number, mm: number): PlacedBead {
   const lib: BeadLibraryEntry = {
     id: `b-${position}-${mm}`,
     name: "Test",
-    price: 1,
     image: "",
     beadTypeId: "t1",
     beadTypeSlug: "crystal",

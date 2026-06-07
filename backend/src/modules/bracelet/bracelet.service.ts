@@ -11,14 +11,14 @@ function newPublicId(): string {
   return `brc_${randomBytes(8).toString("hex")}`;
 }
 
-type BeadRow = { id: string; unitPrice: number; slug: string; name: string; isActive: boolean };
+type BeadRow = { id: string; slug: string; name: string; isActive: boolean };
 
 export class BraceletService {
   private async resolveBeads(publicIds: string[]): Promise<Map<string, BeadRow>> {
     const supabase = getSupabaseServiceRole();
     const { data: beads, error } = await supabase
       .from("bead_libraries")
-      .select("id, public_id, name, unit_price, is_active, bead_types(slug)")
+      .select("id, public_id, name, is_active, bead_types(slug)")
       .in("public_id", publicIds);
 
     assertNoDbError(error);
@@ -29,7 +29,6 @@ export class BraceletService {
       const type = r.bead_types as { slug?: string } | null;
       map.set(String(r.public_id), {
         id: String(r.id),
-        unitPrice: Number(r.unit_price),
         slug: type?.slug ?? "crystal",
         name: String(r.name),
         isActive: r.is_active !== false,

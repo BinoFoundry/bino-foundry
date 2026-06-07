@@ -9,7 +9,6 @@ import type { PlacedBead } from "@/lib/luxe-data";
 const b: BeadLibraryEntry = {
   id: "crystal-1",
   name: "Amethyst",
-  price: 10,
   image: "",
   beadTypeId: "t1",
   beadTypeSlug: "crystal",

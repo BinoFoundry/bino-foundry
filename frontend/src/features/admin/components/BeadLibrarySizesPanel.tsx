@@ -1,116 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { sizesForLibrary } from "@/features/bracelet/library-sizes";
-import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
-import { useCatalogue } from "@/state/catalogue";
-import type { BeadSizeEntry } from "@/types/bead-sizes";
+import type { BeadSizeDraftRow } from "@/types/bead-library-sizes";
 
 interface BeadLibrarySizesPanelProps {
-  beadLibraryId: string;
-  basePrice: number;
-  beadTypeSlug?: string;
+  rows: BeadSizeDraftRow[];
+  onRowsChange: (rows: BeadSizeDraftRow[]) => void;
 }
 
-type DraftRow = {
-  sizeMm: number;
-  label: string;
-  enabled: boolean;
-  unitPrice: number;
-};
-
-export function BeadLibrarySizesPanel({
-  beadLibraryId,
-  basePrice,
-}: BeadLibrarySizesPanelProps) {
-  const cat = useCatalogue();
-  const globalSizes = useMemo(
-    () =>
-      [...cat.beadSizes]
-        .filter((s) => s.isActive !== false)
-        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.sizeMm - b.sizeMm),
-    [cat.beadSizes],
-  );
-
-  const existing = useMemo(
-    () => sizesForLibrary(cat.beadLibrarySizes, beadLibraryId),
-    [cat.beadLibrarySizes, beadLibraryId],
-  );
-
-  const [rows, setRows] = useState<DraftRow[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  const buildRows = useCallback(
-    (sizes: BeadSizeEntry[]) => {
-      return sizes.map((gs) => {
-        const offer = existing.find((o) => o.sizeMm === gs.sizeMm);
-        return {
-          sizeMm: gs.sizeMm,
-          label: gs.label,
-          enabled: Boolean(offer),
-          unitPrice: offer?.unitPrice ?? basePrice * gs.priceMultiplier,
-        };
-      });
-    },
-    [basePrice, existing],
-  );
-
-  useEffect(() => {
-    setRows(buildRows(globalSizes));
-  }, [globalSizes, buildRows]);
-
+export function BeadLibrarySizesPanel({ rows, onRowsChange }: BeadLibrarySizesPanelProps) {
   const toggle = (sizeMm: number, enabled: boolean) => {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.sizeMm !== sizeMm) return r;
-        return { ...r, enabled };
-      }),
+    onRowsChange(
+      rows.map((r) => (r.sizeMm === sizeMm ? { ...r, enabled } : r)),
     );
   };
 
   const setPrice = (sizeMm: number, unitPrice: number) => {
-    setRows((prev) => prev.map((r) => (r.sizeMm === sizeMm ? { ...r, unitPrice } : r)));
+    onRowsChange(
+      rows.map((r) => (r.sizeMm === sizeMm ? { ...r, unitPrice } : r)),
+    );
   };
 
-  const applySuggested = async () => {
-    const enabledMm = rows.filter((r) => r.enabled).map((r) => r.sizeMm);
-    if (!enabledMm.length) return;
-    try {
-      const suggested = await beadLibrarySizesApi.suggestPrices(beadLibraryId, enabledMm);
-      setRows((prev) =>
-        prev.map((r) => ({
-          ...r,
-          unitPrice: suggested[String(r.sizeMm)] ?? suggested[r.sizeMm] ?? r.unitPrice,
-        })),
-      );
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const save = async () => {
-    const enabled = rows.filter((r) => r.enabled);
-    if (!enabled.length) {
-      alert("Select at least one available size.");
-      return;
-    }
-    setSaving(true);
-    try {
-      await beadLibrarySizesApi.sync(
-        beadLibraryId,
-        enabled.map((r, i) => ({
-          sizeMm: r.sizeMm,
-          unitPrice: r.unitPrice,
-          isDefault: i === 0,
-        })),
-      );
-      await cat.refreshFromApi();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!globalSizes.length) {
+  if (!rows.length) {
     return (
       <p className="text-xs text-muted-foreground">
         No global bead sizes defined. Add sizes under Products → Bead Sizes first.
@@ -123,7 +31,7 @@ export function BeadLibrarySizesPanel({
       <div>
         <p className="text-xs font-medium text-foreground">Available sizes</p>
         <p className="text-[10px] text-muted-foreground">
-          One cropped image — check sizes to offer for this bead and set price per size.
+          Select sizes to offer and set the price for each. Pricing is defined only at the size level.
         </p>
       </div>
 
@@ -138,27 +46,23 @@ export function BeadLibrarySizesPanel({
               />
               <span className="font-medium tabular-nums">{r.label}</span>
             </label>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              disabled={!r.enabled}
-              value={r.unitPrice}
-              className="w-24 rounded border border-border px-2 py-1 disabled:opacity-40"
-              onChange={(e) => setPrice(r.sizeMm, Number(e.target.value))}
-            />
+            <span className="text-muted-foreground">→</span>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">$</span>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                disabled={!r.enabled}
+                value={r.enabled ? r.unitPrice : ""}
+                placeholder="—"
+                className="w-24 rounded border border-border px-2 py-1 disabled:opacity-40"
+                onChange={(e) => setPrice(r.sizeMm, Number(e.target.value) || 0)}
+              />
+            </div>
           </li>
         ))}
       </ul>
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => void applySuggested()}>
-          Apply type pricing
-        </Button>
-        <Button type="button" size="sm" className="text-xs" disabled={saving} onClick={() => void save()}>
-          {saving ? "Saving…" : "Save sizes"}
-        </Button>
-      </div>
     </div>
   );
 }

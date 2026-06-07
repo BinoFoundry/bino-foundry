@@ -1,5 +1,5 @@
 import type { BeadLibraryEntry } from "@/types/beads";
-import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
+import type { BeadLibrarySizeInput, BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
 export function sizesForLibrary(
   offers: BeadLibrarySizeOffer[],
@@ -59,4 +59,29 @@ export function formatSizeOfferPrice(offer: BeadLibrarySizeOffer, currency: stri
 
 export function sizeOfferMatchesLibrary(offer: BeadLibrarySizeOffer, bead: BeadLibraryEntry): boolean {
   return offer.beadLibraryId === bead.id;
+}
+
+/** Human-readable price label for admin lists (from size offers only). */
+export function formatLibraryPriceRange(
+  offers: BeadLibrarySizeOffer[],
+  libraryId: string,
+): string {
+  const sizes = sizesForLibrary(offers, libraryId);
+  if (!sizes.length) return "No sizes priced";
+  const prices = sizes.map((s) => s.unitPrice);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (min === max) return `$${min.toFixed(2)}`;
+  return `$${min.toFixed(2)}–$${max.toFixed(2)}`;
+}
+
+export function draftRowsToSizeInputs(
+  rows: { sizeMm: number; enabled: boolean; unitPrice: number }[],
+): BeadLibrarySizeInput[] {
+  const enabled = rows.filter((r) => r.enabled);
+  return enabled.map((r, i) => ({
+    sizeMm: r.sizeMm,
+    unitPrice: r.unitPrice,
+    isDefault: i === 0,
+  }));
 }

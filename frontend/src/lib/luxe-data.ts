@@ -73,14 +73,6 @@ export function getPlacedBeadPrice(item: PlacedBead): number {
   return item.size.unitPrice;
 }
 
-export function calculateBeadPrice(
-  basePrice: number,
-  beadSize: BeadSize,
-  multiplier = 1,
-): number {
-  return basePrice * multiplier;
-}
-
 export function calculateBeadCount(wristSizeCm: number, beadSizeMm: number): number {
   const beadCount = Math.round((wristSizeCm * 10) / beadSizeMm);
   return Math.max(beadCount, 8);

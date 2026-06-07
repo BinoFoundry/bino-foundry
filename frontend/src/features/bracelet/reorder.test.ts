@@ -10,7 +10,6 @@ function item(pos: number): PlacedBead {
     bead: {
       id: `b${pos}`,
       name: `Bead ${pos}`,
-      price: 1,
       image: "",
       beadTypeId: "t",
       description: "",

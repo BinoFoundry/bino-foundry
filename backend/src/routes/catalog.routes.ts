@@ -25,7 +25,6 @@ export function createCatalogRoutes(): Router {
 
   router.use(asyncHandler(requireMutationAuth));
   router.put("/bead-library-sizes/library/:id", asyncHandler(beadLibrarySizeHandlers.sync));
-  router.get("/bead-library-sizes/suggest/:id", asyncHandler(beadLibrarySizeHandlers.suggest));
   router.use("/rendering", createRenderingRoutes());
   router.use("/frames", createFrameRoutes());
   router.use("/bead-types", createBeadTypeRoutes());
