@@ -94,6 +94,41 @@ export function computeStrandContentBounds(
   return { minX, maxX, minY, maxY };
 }
 
+/**
+ * Shift bead centers and ring center together so the bracelet path stays on canvas center.
+ * Uses the ring center (not the asymmetric bead bbox) so mixed sizes remain path-aligned.
+ */
+export function shiftStrandLayoutToCanvasCenter<T extends { x: number; y: number }>(params: {
+  ringCenter: number;
+  targetCenter: number;
+  slots: T[];
+}): { ringCenter: number; slots: T[] } {
+  const { ringCenter, targetCenter, slots } = params;
+  const shift = targetCenter - ringCenter;
+  return {
+    ringCenter: targetCenter,
+    slots: slots.map((slot) => ({
+      ...slot,
+      x: slot.x + shift,
+      y: slot.y + shift,
+    })),
+  };
+}
+
+/** True when every slot center lies on the ring (within tolerance). */
+export function slotCentersOnRing(
+  slots: { x: number; y: number }[],
+  ringCenterX: number,
+  ringCenterY: number,
+  radius: number,
+  tolerancePx = 0.5,
+): boolean {
+  return slots.every((slot) => {
+    const dist = Math.hypot(slot.x - ringCenterX, slot.y - ringCenterY);
+    return Math.abs(dist - radius) <= tolerancePx;
+  });
+}
+
 /** Square canvas side length that fully contains the strand bounds. */
 export function squareCanvasSizeForBounds(
   bounds: StrandContentBounds,

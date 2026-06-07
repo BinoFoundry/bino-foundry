@@ -58,6 +58,7 @@ import {
 } from "@/features/bracelet/strand-layout";
 import {
   computeStrandContentBounds,
+  shiftStrandLayoutToCanvasCenter,
   squareCanvasSizeForBounds,
   STRAND_CONTENT_PADDING_PX,
   STRAND_LAYOUT_BASELINE_PX,
@@ -560,21 +561,16 @@ const SortableCircularStrand = ({
     const requiredCanvas = squareCanvasSizeForBounds(bounds, edgePad);
     const effectiveCanvasSize = Math.max(canvasSize, requiredCanvas);
     const targetCenter = effectiveCanvasSize / 2;
-    const bboxCx = (bounds.minX + bounds.maxX) / 2;
-    const bboxCy = (bounds.minY + bounds.maxY) / 2;
-    const shiftX = targetCenter - bboxCx;
-    const shiftY = targetCenter - bboxCy;
-
-    const slotsWithPosition = laidOut.slotsWithPosition.map((slot) => ({
-      ...slot,
-      x: slot.x + shiftX,
-      y: slot.y + shiftY,
-    }));
+    const shifted = shiftStrandLayoutToCanvasCenter({
+      ringCenter: laidOut.center,
+      targetCenter,
+      slots: laidOut.slotsWithPosition,
+    });
 
     return {
-      slotsWithPosition,
+      slotsWithPosition: shifted.slots,
       scaleFactor: laidOut.scaleFactor,
-      center: targetCenter,
+      center: shifted.ringCenter,
       radius: laidOut.radius,
       layoutSectors: laidOut.layoutSectors,
       insertionAngles: laidOut.insertionAngles,
