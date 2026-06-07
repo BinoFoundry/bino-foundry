@@ -135,18 +135,26 @@ export function useStrandZoom(
     armed: boolean;
     pointerId: number;
   } | null>(null);
+  const [panPointerId, setPanPointerId] = useState<number | null>(null);
   const panBoundsRef = useRef({ maxX: 0, maxY: 0 });
   const isPanningRef = useRef(false);
   const panRef = useRef(pan);
   panRef.current = pan;
   const zoomSmoothRef = useRef(initial);
 
-  const clearPan = useCallback(() => {
-    setPan({ x: 0, y: 0 });
-    setIsPanning(false);
+  const finishPanDrag = useCallback((pointerId?: number) => {
+    const drag = panDragRef.current;
+    if (drag && pointerId !== undefined && drag.pointerId !== pointerId) return;
     panDragRef.current = null;
     isPanningRef.current = false;
+    setIsPanning(false);
+    setPanPointerId(null);
   }, []);
+
+  const clearPan = useCallback(() => {
+    setPan({ x: 0, y: 0 });
+    finishPanDrag();
+  }, [finishPanDrag]);
 
   const measurePanBounds = useCallback(() => {
     const container = viewportRef?.current ?? containerRef?.current;
@@ -251,10 +259,86 @@ export function useStrandZoom(
 
   useEffect(() => {
     if (panMode) return;
-    panDragRef.current = null;
-    isPanningRef.current = false;
-    setIsPanning(false);
-  }, [panMode]);
+    finishPanDrag();
+  }, [panMode, finishPanDrag]);
+
+  useEffect(() => {
+    if (!suspendPan) return;
+    finishPanDrag();
+  }, [suspendPan, finishPanDrag]);
+
+  const isPointerInsideViewport = useCallback(
+    (clientX: number, clientY: number) => {
+      const viewport = viewportRef?.current;
+      if (!viewport) return true;
+      const rect = viewport.getBoundingClientRect();
+      return (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      );
+    },
+    [viewportRef],
+  );
+
+  useEffect(() => {
+    if (panPointerId === null) return;
+
+    const activePointerId = panPointerId;
+
+    const onDocumentPointerMove = (e: PointerEvent) => {
+      if (e.pointerId !== activePointerId) return;
+      const drag = panDragRef.current;
+      if (!drag || drag.pointerId !== activePointerId) return;
+
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+
+      if (!drag.armed) {
+        if (Math.hypot(dx, dy) < PAN_DRAG_THRESHOLD_PX) return;
+        drag.armed = true;
+        isPanningRef.current = true;
+        setIsPanning(true);
+      }
+
+      if (!isPointerInsideViewport(e.clientX, e.clientY)) {
+        finishPanDrag(activePointerId);
+        return;
+      }
+
+      setPanClamped({
+        x: drag.panX + dx,
+        y: drag.panY + dy,
+      });
+    };
+
+    const onDocumentPointerEnd = (e: PointerEvent) => {
+      if (e.pointerId !== activePointerId) return;
+      finishPanDrag(activePointerId);
+    };
+
+    const onWindowBlur = () => {
+      finishPanDrag(activePointerId);
+    };
+
+    document.addEventListener("pointermove", onDocumentPointerMove);
+    document.addEventListener("pointerup", onDocumentPointerEnd);
+    document.addEventListener("pointercancel", onDocumentPointerEnd);
+    window.addEventListener("blur", onWindowBlur);
+
+    return () => {
+      document.removeEventListener("pointermove", onDocumentPointerMove);
+      document.removeEventListener("pointerup", onDocumentPointerEnd);
+      document.removeEventListener("pointercancel", onDocumentPointerEnd);
+      window.removeEventListener("blur", onWindowBlur);
+    };
+  }, [
+    panPointerId,
+    finishPanDrag,
+    isPointerInsideViewport,
+    setPanClamped,
+  ]);
 
   useEffect(() => {
     clampPanInBounds();
@@ -364,6 +448,7 @@ export function useStrandZoom(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (!panMode || suspendPan || e.button !== 0) return;
       if (!shouldStartCanvasPan(e.target)) return;
+      finishPanDrag();
       panDragRef.current = {
         startX: e.clientX,
         startY: e.clientY,
@@ -372,44 +457,21 @@ export function useStrandZoom(
         armed: false,
         pointerId: e.pointerId,
       };
+      setPanPointerId(e.pointerId);
     },
-    [panMode, suspendPan],
+    [panMode, suspendPan, finishPanDrag],
   );
 
-  const onPanPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const drag = panDragRef.current;
-      if (!drag || drag.pointerId !== e.pointerId) return;
-
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-
-      if (!drag.armed) {
-        if (Math.hypot(dx, dy) < PAN_DRAG_THRESHOLD_PX) return;
-        drag.armed = true;
-        isPanningRef.current = true;
-        setIsPanning(true);
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }
-
-      setPanClamped({
-        x: drag.panX + dx,
-        y: drag.panY + dy,
-      });
-    },
-    [setPanClamped],
-  );
-
-  const endPanDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = panDragRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    if (drag.armed && e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-    panDragRef.current = null;
-    isPanningRef.current = false;
-    setIsPanning(false);
+  const onPanPointerMove = useCallback((_e: ReactPointerEvent<HTMLDivElement>) => {
+    /* Document-level listener handles pan moves while a session is active. */
   }, []);
+
+  const endPanDrag = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      finishPanDrag(e.pointerId);
+    },
+    [finishPanDrag],
+  );
 
   const viewScale = layout.autoFitScale * zoomSmooth;
 

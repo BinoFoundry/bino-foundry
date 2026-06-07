@@ -38,6 +38,7 @@ import {
 } from "@/features/bracelet/strand-ring";
 import {
   computeElasticBeadLayout,
+  insertionIndexFromLayoutGaps,
   resolveDropTargetFromLayout,
   type LayoutAngleSector,
 } from "@/features/bracelet/strand-elastic-layout";
@@ -65,9 +66,13 @@ import {
   STRAND_RING_EDGE_PADDING_PX,
   STRAND_TARGET_BBOX_FILL,
 } from "@/features/bracelet/strand-viewport";
+import { cn } from "@/lib/utils";
 import type { BeadLibraryEntry } from "@/types/beads";
 
 type EmptySlotGuideMode = "prominent" | "moderate" | "none";
+
+const REORDER_HINT_STORAGE_KEY = "bino-foundry-reorder-hint-dismissed";
+const REORDER_HINT_AUTO_DISMISS_MS = 12_000;
 
 export interface LibraryDropPayload {
   bead?: BeadLibraryEntry;
@@ -78,6 +83,78 @@ export interface LibraryDropPayload {
 }
 
 export type StrandDropHover = StrandDropTarget | null;
+
+interface InsertionMarkerLayout {
+  cx: number;
+  cy: number;
+  /** Degrees — tangent to the ring at this slot. */
+  tickDeg: number;
+}
+
+function resolveInsertionMarkerLayout(
+  target: StrandDropTarget,
+  context: {
+    placedCount: number;
+    insertionAngles: number[];
+    pathStartAngle: number;
+    center: number;
+    radius: number;
+  },
+): InsertionMarkerLayout | null {
+  const { placedCount, insertionAngles, pathStartAngle, center, radius } = context;
+
+  const angle =
+    (placedCount === 0 && target.anchorAngleRad !== undefined
+      ? target.anchorAngleRad
+      : insertionAngles[target.index]) ??
+    insertionAngles[0] ??
+    pathStartAngle;
+
+  return {
+    cx: center + radius * Math.cos(angle),
+    cy: center + radius * Math.sin(angle),
+    tickDeg: (angle * 180) / Math.PI + 90,
+  };
+}
+
+function InsertionSlotMarker({
+  layout,
+  scaleFactor,
+}: {
+  layout: InsertionMarkerLayout;
+  scaleFactor: number;
+}) {
+  const tickLen = Math.max(32, scaleFactor * 8.5);
+  const tickWidth = Math.max(3, scaleFactor * 0.85);
+  const pearlSize = Math.max(12, scaleFactor * 3.2);
+
+  return (
+    <div
+      className="pointer-events-none absolute z-[55] transition-[left,top] duration-150 ease-out"
+      style={{ left: layout.cx, top: layout.cy, width: 0, height: 0 }}
+      aria-hidden
+    >
+      <div
+        className="absolute"
+        style={{ transform: `translate(-50%, -50%) rotate(${layout.tickDeg}deg)` }}
+      >
+        <div
+          className="relative flex items-center justify-center"
+          style={{ width: tickLen, height: tickLen }}
+        >
+          <div
+            className="absolute rounded-full bg-primary shadow-[0_0_14px_hsl(var(--primary)/0.45)]"
+            style={{ width: tickWidth, height: tickLen * 0.78, opacity: 0.92 }}
+          />
+          <div
+            className="relative z-[1] rounded-full border-[3px] border-primary bg-background shadow-[0_0_0_3px_hsl(var(--background)/0.95),0_2px_14px_hsl(var(--primary)/0.4)]"
+            style={{ width: pearlSize, height: pearlSize }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface SortableCircularStrandProps {
   placedBeads: PlacedBead[];
@@ -98,6 +175,29 @@ interface SortableCircularStrandProps {
   pathStartAngle?: number;
   size?: number;
   layoutKey?: string | number;
+}
+
+/** Outward radial offset from ring center, expressed in bead-local pixels (pre-rotation). */
+function computeBeadOutwardOffset(
+  beadCenterX: number,
+  beadCenterY: number,
+  ringCenterX: number,
+  ringCenterY: number,
+  rotationDeg: number,
+  slotExtent: number,
+): { x: number; y: number; offset: number } {
+  const dx = beadCenterX - ringCenterX;
+  const dy = beadCenterY - ringCenterY;
+  const len = Math.hypot(dx, dy) || 1;
+  const offset = Math.max(8, slotExtent * 0.32);
+  const wx = (dx / len) * offset;
+  const wy = (dy / len) * offset;
+  const rot = (-rotationDeg * Math.PI) / 180;
+  return {
+    x: wx * Math.cos(rot) - wy * Math.sin(rot),
+    y: wx * Math.sin(rot) + wy * Math.cos(rot),
+    offset,
+  };
 }
 
 function beadShellTransform(
@@ -124,6 +224,8 @@ interface SortableBeadProps {
   showRemoveAlways?: boolean;
   isSelected?: boolean;
   libraryDragActive?: boolean;
+  ringCenterX: number;
+  ringCenterY: number;
 }
 
 function SortableBead({
@@ -140,6 +242,8 @@ function SortableBead({
   showRemoveAlways = false,
   isSelected = false,
   libraryDragActive = false,
+  ringCenterX,
+  ringCenterY,
 }: SortableBeadProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({
     id: `bead-${position}`,
@@ -166,9 +270,15 @@ function SortableBead({
     zIndex: isEmptySlot && libraryDragActive ? 35 : 20,
     pointerEvents: bead && libraryDragActive ? "none" : "auto",
     transformOrigin: "center center",
-    transform: beadShellTransform(rotationDeg),
-    boxShadow: shell.boxShadow,
+    transform: beadShellTransform(rotationDeg, { dragOverlay: isDragging }),
+    boxShadow: isDragging
+      ? "0 6px 18px rgba(0,0,0,0.16)"
+      : shell.boxShadow,
   };
+
+  const slotExtent = Math.max(slotDim.width, slotDim.height);
+  const outward = computeBeadOutwardOffset(x, y, ringCenterX, ringCenterY, rotationDeg, slotExtent);
+  const removeBtnSize = Math.max(18, Math.min(22, slotExtent * 0.4));
 
   const label = bead?.bead.name ?? "";
   const title = bead
@@ -193,13 +303,18 @@ function SortableBead({
       tabIndex={isEmptySlot && !libraryDragActive ? 0 : undefined}
       onClick={() => !bead && !libraryDragActive && onSlotClick(position)}
       onKeyDown={handleEmptySlotKeyDown}
-      className={`absolute group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+      className={cn(
+        "absolute group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
         bead
-          ? `cursor-grab bg-transparent active:cursor-grabbing hover:scale-[1.04] active:scale-[0.98] ${
-              isSelected ? "ring-2 ring-primary/60 ring-offset-1 ring-offset-background" : ""
-            }`
-          : "cursor-pointer hover:border-primary/50 hover:bg-muted/20"
-      }`}
+          ? cn(
+              "cursor-grab bg-transparent active:cursor-grabbing",
+              "transition-[transform,box-shadow] duration-200 ease-out",
+              "hover:scale-[1.03] hover:shadow-[0_4px_14px_rgba(0,0,0,0.14)]",
+              isDragging && "cursor-grabbing",
+              isSelected && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
+            )
+          : "cursor-pointer hover:border-primary/50 hover:bg-muted/20",
+      )}
       title={title}
       aria-label={isEmptySlot ? BRACELET_COPY.emptySlotHint : title}
     >
@@ -210,7 +325,7 @@ function SortableBead({
           draggable={false}
           decoding="async"
           {...getStrandBeadRasterSize(slotDim)}
-          className="pointer-events-none h-full w-full select-none"
+          className="pointer-events-none h-full w-full select-none transition-[filter] duration-200 ease-out group-hover:brightness-[1.03]"
           style={{
             ...getStrandBeadImageStyle(bead.bead),
             filter: getPlacedBeadImageFilter(),
@@ -225,27 +340,41 @@ function SortableBead({
         </span>
       )}
       {bead && onBeadRemove && !libraryDragActive ? (
-        <div
-          className="pointer-events-none absolute inset-0 z-30"
-          style={{ transform: `rotate(${-rotationDeg}deg)` }}
+        <button
+          type="button"
+          title={BRACELET_COPY.removeBead}
+          aria-label={BRACELET_COPY.removeBead}
+          className={cn(
+            "pointer-events-auto absolute z-40 flex items-center justify-center rounded-full",
+            "border border-border bg-background text-muted-foreground shadow-sm",
+            "transition-opacity hover:bg-destructive hover:text-destructive-foreground",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isDragging
+              ? "opacity-0"
+              : showRemoveAlways
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100 focus:opacity-100",
+          )}
+          style={{
+            left: `calc(50% + ${outward.x}px)`,
+            top: `calc(50% + ${outward.y}px)`,
+            width: removeBtnSize,
+            height: removeBtnSize,
+            transform: "translate(-50%, -50%)",
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onBeadRemove(position);
+          }}
         >
-          <button
-            type="button"
-            title={BRACELET_COPY.removeBead}
-            aria-label={BRACELET_COPY.removeBead}
-            className={`pointer-events-auto absolute left-1/2 top-0 z-30 flex h-6 w-6 -translate-x-1/2 -translate-y-[110%] items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:bg-destructive hover:text-destructive-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              showRemoveAlways ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
-            }`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              onBeadRemove(position);
-            }}
-          >
-            <X className="h-3 w-3" strokeWidth={2.5} />
-          </button>
-        </div>
+          <X
+            className="shrink-0"
+            style={{ width: removeBtnSize * 0.42, height: removeBtnSize * 0.42 }}
+            strokeWidth={2.5}
+          />
+        </button>
       ) : null}
     </div>
   );
@@ -274,8 +403,21 @@ const SortableCircularStrand = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragClientPos, setDragClientPos] = useState<{ x: number; y: number } | null>(null);
   const [isLibraryDragOver, setIsLibraryDragOver] = useState(false);
+  const [libraryDragPointer, setLibraryDragPointer] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const [reorderHintVisible, setReorderHintVisible] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragClientStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const dismissReorderHint = useCallback(() => {
+    setReorderHintVisible(false);
+    try {
+      localStorage.setItem(REORDER_HINT_STORAGE_KEY, "1");
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
 
   const canvasSize = size;
 
@@ -289,6 +431,21 @@ const SortableCircularStrand = ({
   const compositionMm = strandCircumferenceMm(normalized, guideSizeMm);
   const placedCount = normalized.length;
   const isStrandEmpty = placedCount === 0;
+
+  useEffect(() => {
+    if (placedCount < 2) {
+      setReorderHintVisible(false);
+      return;
+    }
+    try {
+      if (localStorage.getItem(REORDER_HINT_STORAGE_KEY)) return;
+    } catch {
+      return;
+    }
+    setReorderHintVisible(true);
+    const timer = window.setTimeout(dismissReorderHint, REORDER_HINT_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [placedCount, dismissReorderHint]);
 
   const {
     slotsWithPosition,
@@ -517,6 +674,26 @@ const SortableCircularStrand = ({
     [placedCount, pointerAngleFromClient, layoutSectors, insertionAngles, pathStartAngle],
   );
 
+  /** Visual-only: nearest insert gap for the insertion marker (library + reorder). */
+  const resolveInsertGapVisual = useCallback(
+    (clientX: number, clientY: number): StrandDropTarget => {
+      const angle = pointerAngleFromClient(clientX, clientY);
+      if (placedCount === 0) {
+        return {
+          mode: "insert",
+          index: 0,
+          anchorAngleRad: angle ?? pathStartAngle,
+        };
+      }
+      if (angle === null) return { mode: "insert", index: 0 };
+      return {
+        mode: "insert",
+        index: insertionIndexFromLayoutGaps(angle, insertionAngles),
+      };
+    },
+    [placedCount, pointerAngleFromClient, insertionAngles, pathStartAngle],
+  );
+
   const resolveReorderTargetFromClient = useCallback(
     (clientX: number, clientY: number): StrandDropTarget => {
       if (placedCount === 0) return { mode: "insert", index: 0 };
@@ -539,17 +716,22 @@ const SortableCircularStrand = ({
   }, []);
 
   useEffect(() => {
-    if (!libraryDragActive) return;
+    if (!libraryDragActive) {
+      setLibraryDragPointer(null);
+      return;
+    }
 
     const onDocumentDragOver = (e: DragEvent) => {
       if (!isLibraryDragEvent(e) && !e.dataTransfer?.types.includes("application/json")) return;
       if (!isClientOverCanvas(e.clientX, e.clientY)) {
+        setLibraryDragPointer(null);
         onHoverDropTarget?.(null);
         return;
       }
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
       setIsLibraryDragOver(true);
+      setLibraryDragPointer({ x: e.clientX, y: e.clientY });
       onHoverDropTarget?.(resolveLibraryDropFromClient(e.clientX, e.clientY));
     };
 
@@ -572,13 +754,15 @@ const SortableCircularStrand = ({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "copy";
-    onHoverDropTarget?.(resolveLibraryInsertFromClient(e.clientX, e.clientY));
+    setLibraryDragPointer({ x: e.clientX, y: e.clientY });
+    onHoverDropTarget?.(resolveLibraryDropFromClient(e.clientX, e.clientY));
   };
 
   const handleCanvasLibraryDragLeave = (e: React.DragEvent) => {
     const related = e.relatedTarget as Node | null;
     if (related && canvasRef.current?.contains(related)) return;
     setIsLibraryDragOver(false);
+    setLibraryDragPointer(null);
     onHoverDropTarget?.(null);
   };
 
@@ -586,6 +770,7 @@ const SortableCircularStrand = ({
     e.preventDefault();
     e.stopPropagation();
     setIsLibraryDragOver(false);
+    setLibraryDragPointer(null);
     onHoverDropTarget?.(null);
     if (!onBeadDrop) return;
     const raw =
@@ -609,6 +794,7 @@ const SortableCircularStrand = ({
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    dismissReorderHint();
     setActiveId(event.active.id as string);
     const pointer = readClientPoint(event.activatorEvent);
     if (!pointer) {
@@ -672,7 +858,40 @@ const SortableCircularStrand = ({
   const reorderHover =
     !externalDrag && activeId !== null && hoverDropTarget ? hoverDropTarget : null;
   const activeDropHover = libraryDropHover ?? reorderHover;
-  const showDropIndicator = externalDrag && activeDropHover !== null;
+
+  const visualInsertTarget = useMemo((): StrandDropTarget | null => {
+    if (activeId && dragClientPos) {
+      return resolveInsertGapVisual(dragClientPos.x, dragClientPos.y);
+    }
+    if (externalDrag && libraryDragPointer) {
+      return resolveInsertGapVisual(libraryDragPointer.x, libraryDragPointer.y);
+    }
+    return null;
+  }, [
+    activeId,
+    dragClientPos,
+    externalDrag,
+    libraryDragPointer,
+    resolveInsertGapVisual,
+  ]);
+
+  const insertionMarker = useMemo(() => {
+    if (!visualInsertTarget) return null;
+    return resolveInsertionMarkerLayout(visualInsertTarget, {
+      placedCount,
+      insertionAngles,
+      pathStartAngle,
+      center,
+      radius,
+    });
+  }, [
+    visualInsertTarget,
+    placedCount,
+    insertionAngles,
+    pathStartAngle,
+    center,
+    radius,
+  ]);
 
   const clientToCanvas = useCallback(
     (clientX: number, clientY: number) => {
@@ -710,7 +929,7 @@ const SortableCircularStrand = ({
 
         <div
           ref={canvasRef}
-          className="relative"
+          className={cn("relative", activeId && !externalDrag && "cursor-grabbing")}
           style={{ width: renderCanvasSize, height: renderCanvasSize }}
           key={layoutKey}
           data-strand-canvas
@@ -771,44 +990,11 @@ const SortableCircularStrand = ({
               }
               style={{ transition: "r 0.35s ease-out" }}
             />
-            {showDropIndicator && activeDropHover
-              ? (() => {
-                  const isInsert = activeDropHover.mode === "insert";
-                  let cx: number;
-                  let cy: number;
-                  if (isInsert) {
-                    const angle =
-                      (placedCount === 0 && activeDropHover.anchorAngleRad !== undefined
-                        ? activeDropHover.anchorAngleRad
-                        : insertionAngles[activeDropHover.index]) ??
-                      insertionAngles[0] ??
-                      pathStartAngle;
-                    cx = center + radius * Math.cos(angle);
-                    cy = center + radius * Math.sin(angle);
-                  } else {
-                    const slot = renderSlots.find((s) => s.index === activeDropHover.index);
-                    cx = slot?.x ?? center;
-                    cy = slot?.y ?? center;
-                  }
-                  const dotR = Math.max(3, scaleFactor * 0.95);
-                  return (
-                    <circle
-                      key="drop-indicator"
-                      cx={cx}
-                      cy={cy}
-                      r={dotR}
-                      fill={
-                        isInsert
-                          ? "hsl(var(--muted-foreground) / 0.5)"
-                          : "hsl(var(--muted-foreground) / 0.65)"
-                      }
-                      stroke="hsl(var(--background) / 0.9)"
-                      strokeWidth={1.25}
-                    />
-                  );
-                })()
-              : null}
           </svg>
+
+          {insertionMarker ? (
+            <InsertionSlotMarker layout={insertionMarker} scaleFactor={scaleFactor} />
+          ) : null}
 
           <div
             data-strand-drop-zone
@@ -840,6 +1026,8 @@ const SortableCircularStrand = ({
                 showRemoveAlways={isMobile}
                 isSelected={selectedPosition === slot.index}
                 libraryDragActive={externalDrag}
+                ringCenterX={center}
+                ringCenterY={center}
               />
             ))}
           </SortableContext>
@@ -858,6 +1046,18 @@ const SortableCircularStrand = ({
                 ? BRACELET_COPY.dropReplaceHint
                 : BRACELET_COPY.dropInsertHint}
             </p>
+          ) : reorderHintVisible && placedCount >= 2 ? (
+            <div className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-full border border-border/50 bg-muted/20 px-3 py-1">
+              <p className="text-muted-foreground">{BRACELET_COPY.strandReorderHint}</p>
+              <button
+                type="button"
+                onClick={dismissReorderHint}
+                className="shrink-0 rounded-full p-0.5 text-muted-foreground/80 transition-colors hover:bg-muted/50 hover:text-foreground"
+                aria-label={BRACELET_COPY.dismissHint}
+              >
+                <X className="h-3 w-3" strokeWidth={2} />
+              </button>
+            </div>
           ) : isStrandEmpty ? (
             <>
               <p className="font-medium uppercase tracking-widest text-muted-foreground/90">
@@ -866,6 +1066,7 @@ const SortableCircularStrand = ({
               <p className="mt-0.5 font-display text-xs font-semibold text-foreground sm:text-sm">
                 {BRACELET_COPY.strandEmptyGuide}
               </p>
+              <p className="mt-1 text-muted-foreground">{BRACELET_COPY.strandEmptyReorderNote}</p>
               <p className="mt-1">{BRACELET_COPY.strandHint}</p>
             </>
           ) : (
