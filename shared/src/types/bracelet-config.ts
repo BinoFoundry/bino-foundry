@@ -2,7 +2,7 @@
 
 export const BRACELET_CONFIG_VERSION = 3 as const;
 
-/** Millimeters — options loaded from `bead_sizes` table. */
+/** Millimeters — any positive value from `bead_sizes` / `bead_library_sizes`. */
 export type BraceletBeadSizeMm = number;
 
 export type BraceletConfigStatus = "draft" | "saved" | "ordered" | "archived";

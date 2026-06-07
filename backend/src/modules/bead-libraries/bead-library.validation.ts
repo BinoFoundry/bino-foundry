@@ -1,4 +1,6 @@
 import { z } from "zod";
+
+import { beadSizeMmSchema } from "../../lib/bead-size-mm.js";
 const cropStatusSchema = z.enum(["draft", "ready"]);
 
 const normPointSchema = z.object({
@@ -48,7 +50,7 @@ const beadCropConfigV2Schema = z
 export const beadCropConfigSchema = z.union([beadCropConfigV1Schema, beadCropConfigV2Schema]);
 
 export const librarySizeInputSchema = z.object({
-  sizeMm: z.coerce.number().int().min(4).max(24),
+  sizeMm: beadSizeMmSchema,
   unitPrice: z.coerce.number().min(0),
   isDefault: z.boolean().optional(),
 });

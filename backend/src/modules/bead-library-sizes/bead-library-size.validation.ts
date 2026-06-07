@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { beadSizeMmSchema } from "../../lib/bead-size-mm.js";
+
 export const beadLibraryIdParam = z.object({
   id: z.string().min(1),
 });
@@ -8,7 +10,7 @@ export const syncLibrarySizesDto = z.object({
   sizes: z
     .array(
       z.object({
-        sizeMm: z.number().int().min(4).max(24),
+        sizeMm: beadSizeMmSchema,
         unitPrice: z.number().min(0),
         isDefault: z.boolean().optional(),
       }),

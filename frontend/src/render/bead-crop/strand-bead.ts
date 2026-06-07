@@ -26,7 +26,7 @@ const PX_AT_REFERENCE = 28;
 export const STRAND_BEAD_VISUAL_SCALE = 0.96;
 
 export function mmToBasePx(sizeMm: number, scaleFactor: number): number {
-  const mm = Math.max(4, Math.min(24, sizeMm));
+  const mm = sizeMm > 0 ? sizeMm : 1;
   return (mm / MM_REFERENCE) * PX_AT_REFERENCE * scaleFactor * STRAND_BEAD_VISUAL_SCALE;
 }
 

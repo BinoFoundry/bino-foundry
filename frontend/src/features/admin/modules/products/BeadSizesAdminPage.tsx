@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Ruler, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
@@ -36,6 +37,11 @@ function SizeForm({
       className="mx-auto max-w-md space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
+        const sizeError = validateBeadSizeMm(sizeMm);
+        if (sizeError) {
+          alert(sizeError);
+          return;
+        }
         void onSave({
           sizeMm,
           label: label.trim(),
@@ -50,8 +56,7 @@ function SizeForm({
         <label className="mb-1 block text-xs text-muted-foreground">Size (mm)</label>
         <input
           type="number"
-          min={4}
-          max={24}
+          step="any"
           value={sizeMm}
           onChange={(e) => setSizeMm(Number(e.target.value))}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"

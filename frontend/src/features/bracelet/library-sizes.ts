@@ -42,7 +42,7 @@ export function findSizeOfferByKey(
 
 export function minActiveOfferSizeMm(offers: BeadLibrarySizeOffer[]): number {
   const active = offers.map((o) => o.sizeMm);
-  return active.length ? Math.min(...active) : 4;
+  return active.length ? Math.min(...active) : 1;
 }
 
 export function formatSizeOfferPrice(offer: BeadLibrarySizeOffer, currency: string): string {

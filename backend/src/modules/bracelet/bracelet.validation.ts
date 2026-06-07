@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-const beadSizeMm = z.number().int().min(4).max(24);
+import { beadSizeMmSchema } from "../../lib/bead-size-mm.js";
+
+const beadSizeMm = beadSizeMmSchema;
 
 export const braceletConfigItemDto = z
   .object({

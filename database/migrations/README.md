@@ -40,6 +40,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 14. `000018_wrist_sizes.sql` — admin-managed wrist targets (`wrist_sizes`); relaxes saved-config wrist CHECK constraints.
 15. `000019_wrist_sizes_notes.sql` — optional `notes` on `wrist_sizes`.
 16. `000020_bead_size_only_pricing.sql` — drop `bead_libraries.unit_price`; pricing only in `bead_library_sizes`.
+17. `000021_bead_size_decimal_positive.sql` — `bead_sizes.size_mm` and saved config items use `NUMERIC(10,4)` with `> 0` only (no 4–24 mm cap).
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

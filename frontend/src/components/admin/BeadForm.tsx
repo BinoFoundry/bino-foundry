@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { BeadCropEditor, beadCropEditorPlateKey } from "@/features/admin/components/BeadCropEditor";
 import { BeadLibrarySizesPanel } from "@/features/admin/components/BeadLibrarySizesPanel";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
+import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import type { BeadSizeDraftRow } from "@/types/bead-library-sizes";
@@ -160,8 +161,13 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       alert("Select at least one available size and set its price.");
       return null;
     }
-    const invalid = enabled.find((r) => r.unitPrice < 0 || Number.isNaN(r.unitPrice));
-    if (invalid) {
+    const invalidSize = enabled.find((r) => validateBeadSizeMm(r.sizeMm));
+    if (invalidSize) {
+      alert(validateBeadSizeMm(invalidSize.sizeMm));
+      return null;
+    }
+    const invalidPrice = enabled.find((r) => r.unitPrice < 0 || Number.isNaN(r.unitPrice));
+    if (invalidPrice) {
       alert("Each enabled size needs a valid price.");
       return null;
     }

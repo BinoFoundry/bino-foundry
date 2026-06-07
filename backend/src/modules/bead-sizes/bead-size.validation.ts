@@ -1,9 +1,11 @@
 import { z } from "zod";
 
+import { beadSizeMmSchema } from "../../lib/bead-size-mm.js";
+
 export const beadSizeIdParam = z.object({ id: z.string().uuid() });
 
 export const createBeadSizeDto = z.object({
-  sizeMm: z.number().int().min(4).max(24),
+  sizeMm: beadSizeMmSchema,
   label: z.string().min(1).max(32),
   priceMultiplier: z.number().positive().max(10),
   displayOrder: z.number().int().min(0).optional(),
