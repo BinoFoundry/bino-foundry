@@ -9,6 +9,7 @@ interface StrandCapacityCardProps {
   strand: BraceletStrandSummary;
   showStrandLabel: boolean;
   compact?: boolean;
+  hideHeader?: boolean;
   className?: string;
   /** Ring expanded beyond wrist baseline to prevent bead overlap (display only). */
   visuallyExpanded?: boolean;
@@ -46,6 +47,7 @@ export function StrandCapacityCard({
   strand,
   showStrandLabel,
   compact = false,
+  hideHeader = false,
   className,
   visuallyExpanded = false,
   visualOverCanvas = false,
@@ -66,19 +68,21 @@ export function StrandCapacityCard({
         className,
       )}
     >
-      <div className={cn("px-3.5 py-3.5", compact && "px-3 py-3")}>
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="type-small font-medium text-foreground">
-            {showStrandLabel ? strand.label : BRACELET_COPY.summaryCapacity}
-          </p>
-          {strand.placedCount > 0 ? (
-            <p className="text-[10px] tabular-nums text-muted-foreground">
-              {strand.placedCount} {BRACELET_COPY.piecesOnStrand}
+      <div className={cn("px-3.5 py-3.5", compact && "px-2 py-2")}>
+        {!hideHeader ? (
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="type-small font-medium text-foreground">
+              {showStrandLabel ? strand.label : BRACELET_COPY.summaryCapacity}
             </p>
-          ) : null}
-        </div>
+            {strand.placedCount > 0 ? (
+              <p className="text-[10px] tabular-nums text-muted-foreground">
+                {strand.placedCount} {BRACELET_COPY.piecesOnStrand}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
+        <div className={cn("grid grid-cols-3 gap-2", !hideHeader && "mt-3", compact && "gap-1.5")}>
           <CapacityMetric label={BRACELET_COPY.summaryTarget} value={targetCm} />
           <CapacityMetric label={BRACELET_COPY.summaryUsed} value={usedCm} emphasize />
           <CapacityMetric

@@ -21,22 +21,11 @@ const Index = () => {
   const { module } = useParams<{ module: string }>();
   const activeModule = parseModule(module);
   const catalogue = useCatalogue();
-  const [prices, setPrices] = useState({ bracelet: 0, sunglasses: 0 });
-
-  const onBraceletPriceChange = useCallback((p: number) => {
-    setPrices((prev) => (prev.bracelet === p ? prev : { ...prev, bracelet: p }));
-  }, []);
-
-  const onSunglassesPriceChange = useCallback((p: number) => {
-    setPrices((prev) => (prev.sunglasses === p ? prev : { ...prev, sunglasses: p }));
-  }, []);
+  const onBraceletPriceChange = useCallback((_p: number) => {}, []);
+  const onSunglassesPriceChange = useCallback((_p: number) => {}, []);
 
   return (
-    <AppShell
-      activeModule={activeModule}
-      braceletPrice={prices.bracelet}
-      sunglassesPrice={prices.sunglasses}
-    >
+    <AppShell activeModule={activeModule}>
       {catalogue.isHydrating && catalogue.beadLibraries.length === 0 && catalogue.frames.length === 0 ? (
         <LoadingState label="Loading catalogue…" className="h-full" />
       ) : catalogue.hydrateError ? (

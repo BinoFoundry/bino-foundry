@@ -38,8 +38,7 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="type-h3">Choose your frame</h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">Select a frame style from the catalogue.</p>
+          <h3 className="type-h3">Select Frame Style</h3>
         </div>
         <EmptyState message="No frames are available yet. Please check back soon." title="No frames yet" />
       </div>
@@ -48,15 +47,12 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="type-h3">Choose your frame</h3>
-        <p className="mt-0.5 text-sm text-muted-foreground">Select a frame style from the catalogue.</p>
-      </div>
+      <h3 className="type-h3">Select Frame Style</h3>
 
       <div
         role="radiogroup"
         aria-label="Frame styles"
-        className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-2"
+        className="grid grid-cols-2 gap-3"
       >
         {frames.map((frame) => {
           const active = frame.id === selectedFrameId;
@@ -69,9 +65,9 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
               aria-label={`${frame.name}, ${frame.price} dollars`}
               onClick={() => onSelectFrame(frame.id)}
               className={cn(
-                "flex min-w-0 flex-col rounded-xl border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex min-w-0 flex-col rounded-xl border-2 p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                  ? "border-primary bg-primary/5"
                   : "border-border bg-card hover:border-primary/40",
               )}
             >

@@ -4,6 +4,7 @@ import { Search, X, Info, Gem } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { BRACELET_COPY } from "@/features/bracelet/copy";
+import { cn } from "@/lib/utils";
 import { BEAD_LIBRARY_DRAG_TYPE } from "@/features/bracelet/interaction";
 import {
   defaultSizeForLibrary,
@@ -28,6 +29,10 @@ interface BeadLibraryProps {
   onLibraryDragChange?: (active: boolean, payload?: LibraryDragPayload) => void;
   open: boolean;
   onClose: () => void;
+  /** Embedded in left config panel (desktop) or overlay sheet (mobile). */
+  variant?: "embedded" | "overlay";
+  /** Tighter layout for the bracelet left sidebar. */
+  compact?: boolean;
 }
 
 function dragPayload(bead: BeadLibraryEntry, size: BeadLibrarySizeOffer) {
@@ -54,6 +59,8 @@ const BeadLibrary = ({
   onLibraryDragChange,
   open,
   onClose,
+  variant = "overlay",
+  compact = false,
 }: BeadLibraryProps) => {
   const cat = useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
@@ -105,7 +112,8 @@ const BeadLibrary = ({
     });
   }, [cat.beadLibraries, currentBeadTypeId, search]);
 
-  if (!open) return null;
+  const isEmbedded = variant === "embedded";
+  if (!open && !isEmbedded) return null;
 
   const emptyMessage =
     search.trim().length > 0
@@ -114,26 +122,36 @@ const BeadLibrary = ({
         ? BRACELET_COPY.libraryEmpty(currentType.name)
         : BRACELET_COPY.libraryEmpty("beads");
 
+  const panelClass = isEmbedded
+    ? "flex min-h-0 flex-1 flex-col"
+    : isMobile
+      ? "surface-elevated fixed bottom-0 left-0 right-0 z-50 flex max-h-[min(70vh,100dvh)] flex-col rounded-t-2xl border-t border-subtle pb-[env(safe-area-inset-bottom)]"
+      : "surface-elevated absolute bottom-0 left-0 top-0 z-30 flex w-64 flex-col border-r border-subtle";
+
   return (
     <>
-      {isMobile && (
+      {!isEmbedded && isMobile && open && (
         <div className="fixed inset-0 z-40 bg-[hsl(var(--overlay))]" onClick={onClose} aria-hidden />
       )}
-      <div
-        className={
-          isMobile
-            ? "surface-elevated fixed bottom-0 left-0 right-0 z-50 flex max-h-[min(70vh,100dvh)] flex-col rounded-t-2xl border-t border-subtle pb-[env(safe-area-inset-bottom)]"
-            : "surface-elevated absolute bottom-0 left-0 top-0 z-30 flex w-64 flex-col border-r border-subtle"
-        }
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h3 className="type-h3 text-base">{BRACELET_COPY.libraryTitle}</h3>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
-            <X className="h-4 w-4" />
-          </Button>
+      <div className={panelClass}>
+        <div
+          className={
+            compact
+              ? "flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-2"
+              : "flex shrink-0 items-center justify-between border-b border-border px-4 py-3"
+          }
+        >
+          <h3 className={compact ? "label-eyebrow text-muted-foreground" : "type-h3 text-base"}>
+            {BRACELET_COPY.crystalLibrary}
+          </h3>
+          {!isEmbedded ? (
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
 
-        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
+        <div className={cn("flex gap-1 overflow-x-auto border-b border-border/60", compact ? "px-2 py-1.5" : "px-2 py-2")}>
           {activeTypes.map((t) => (
             <button
               key={t.id}
@@ -150,7 +168,7 @@ const BeadLibrary = ({
           ))}
         </div>
 
-        <div className="border-b border-border p-3">
+        <div className={cn("border-b border-border/60", compact ? "p-2" : "p-3")}>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <input

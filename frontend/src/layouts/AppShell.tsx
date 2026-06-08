@@ -1,35 +1,23 @@
-import { Gem, Glasses, Menu, Settings, X } from "lucide-react";
+import { Menu, Settings, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
-import LivePrice from "@/components/LivePrice";
+import { Button } from "@/components/ui/button";
 
-import { ModuleNavBar } from "./ModuleNavBar";
-import type { AppModule, ModuleNavItem } from "./types";
-
-const NAV_ITEMS: ModuleNavItem[] = [
-  { id: "bracelet", label: "Crystal Bracelet", shortLabel: "Bracelet", icon: Gem },
-  { id: "sunglasses", label: "Sunglasses", shortLabel: "Shades", icon: Glasses },
-  { id: "admin", label: "Admin", shortLabel: "Admin", icon: Settings },
-];
+import { BuilderHeaderActions } from "./BuilderHeaderActions";
+import { BuilderSwitcher } from "./BuilderSwitcher";
+import { BUILDER_COPY } from "./builder-copy";
+import type { AppModule } from "./types";
 
 export interface AppShellProps {
   activeModule: AppModule;
-  braceletPrice: number;
-  sunglassesPrice: number;
   children: ReactNode;
 }
 
-export function AppShell({
-  activeModule,
-  braceletPrice,
-  sunglassesPrice,
-  children,
-}: AppShellProps) {
+export function AppShell({ activeModule, children }: AppShellProps) {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  const livePrice = activeModule === "sunglasses" ? sunglassesPrice : braceletPrice;
+  const isBuilder = activeModule === "bracelet" || activeModule === "sunglasses";
 
   const goTo = (id: AppModule) => {
     navigate(`/${id}`);
@@ -38,34 +26,73 @@ export function AppShell({
 
   return (
     <div className="surface-page flex h-[100dvh] flex-col overflow-hidden">
-      <header className="layout-header flex shrink-0 items-center justify-between gap-3 border-b border-subtle bg-card/50 px-4 py-3 sm:px-8 sm:py-5">
-        <h1 className="type-feature whitespace-nowrap text-foreground sm:text-h2">
-          <span className="text-primary">Bino</span> Foundry
-        </h1>
-
-        <div className="hidden items-center gap-6 md:flex">
-          <ModuleNavBar items={NAV_ITEMS} active={activeModule} onSelect={goTo} />
-          <LivePrice price={livePrice} />
+      <header className="layout-header grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-subtle bg-card/50 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center justify-start">
+          <Link
+            to="/bracelet"
+            className="type-feature whitespace-nowrap text-foreground transition-colors hover:text-primary sm:text-h2"
+          >
+            <span className="text-primary">Bino</span> Foundry
+          </Link>
         </div>
 
-        <div className="flex items-center gap-3 md:hidden">
-          <LivePrice price={livePrice} />
+        {isBuilder ? (
+          <div className="flex justify-center">
+            <BuilderSwitcher active={activeModule} onSelect={goTo} />
+          </div>
+        ) : (
+          <div className="hidden justify-center md:flex">
+            <span className="type-label text-muted-foreground">Admin</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2">
+          {isBuilder ? (
+            <BuilderHeaderActions />
+          ) : (
+            <Button type="button" variant="secondary" size="sm" asChild>
+              <Link to="/bracelet">{BUILDER_COPY.adminBack}</Link>
+            </Button>
+          )}
+
           <button
             type="button"
             aria-expanded={mobileNavOpen}
             aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
             onClick={() => setMobileNavOpen((o) => !o)}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
           >
             {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </header>
 
-      {mobileNavOpen && (
+      {mobileNavOpen && isBuilder && (
         <div className="motion-safe-animate border-b border-border bg-background/95 backdrop-blur-sm md:hidden">
           <nav className="flex flex-col gap-1 p-2">
-            <ModuleNavBar items={NAV_ITEMS} active={activeModule} onSelect={goTo} variant="stack" />
+            <BuilderSwitcher active={activeModule} onSelect={goTo} variant="stack" />
+          </nav>
+        </div>
+      )}
+
+      {mobileNavOpen && !isBuilder && (
+        <div className="motion-safe-animate border-b border-border bg-background/95 backdrop-blur-sm md:hidden">
+          <nav className="flex flex-col gap-1 p-2">
+            <button
+              type="button"
+              onClick={() => goTo("admin")}
+              className="type-nav flex items-center gap-3 rounded-md px-4 py-3 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Settings className="h-4 w-4" />
+              Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => goTo("bracelet")}
+              className="type-nav flex items-center gap-3 rounded-md px-4 py-3 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              Bracelet Builder
+            </button>
           </nav>
         </div>
       )}

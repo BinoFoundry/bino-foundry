@@ -1,16 +1,17 @@
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
+
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorState, LoadingState } from "@/components/common";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
 
-import { CustomiserPanel } from "./components/CustomiserPanel";
-import { DisplayColumn } from "./components/DisplayColumn";
-import { StepProgress } from "./components/StepProgress";
-import type { CustomiserStep } from "./constants";
-import { CUSTOMISER_STEPS } from "./constants";
+import { SunglassesConfigColumn } from "./components/SunglassesConfigColumn";
+import { SunglassesHorizontalSteps } from "./components/SunglassesHorizontalSteps";
+import { SunglassesPreviewPanel } from "./components/SunglassesPreviewPanel";
 import { useCustomiserFlow } from "./hooks/useCustomiserFlow";
 import { useSunglassesCustomiserState } from "./hooks/useSunglassesCustomiserState";
+import { SunglassesBuilderLayout } from "./layout/SunglassesBuilderLayout";
 
 interface SunglassesCustomiserProps {
   onPriceChange: (price: number) => void;
@@ -22,6 +23,34 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
   const { data: siteSettings } = useSiteGeneralSettings();
   const currencyCode = siteSettings.currencyCode;
   const { sunglassesCatalog } = state;
+  const [saving, setSaving] = useState(false);
+
+  const buildConfigurationSummary = useCallback(() => {
+    const polarized = state.isOptionEnabled("polarized");
+    const polarizedOption = sunglassesCatalog.getOptionByCode("polarized");
+    return [
+      `Frame: ${state.frameSku.name} ($${state.frameSku.price})`,
+      `Lens: ${polarized ? polarizedOption?.label ?? "Polarised" : "Standard (non-polarised)"}`,
+      `Tint: ${state.config.tint.name}${state.selectedTintEntry ? ` (${state.selectedTintEntry.code})` : ""}`,
+      ...sunglassesCatalog.builderOptions
+        .filter((o) => o.code !== "polarized" && state.isOptionEnabled(o.code))
+        .map((o) => `${o.label}: yes (+$${o.priceSurcharge})`),
+      `Total: $${state.totalPrice} ${currencyCode}`,
+    ].join("\n");
+  }, [state, sunglassesCatalog, currencyCode]);
+
+  const handleSaveDesign = useCallback(async () => {
+    setSaving(true);
+    const summary = buildConfigurationSummary();
+    try {
+      await navigator.clipboard.writeText(summary);
+      toast.success(CUSTOMER_COPY.saveDesignSuccess("sunglasses"));
+    } catch {
+      toast.message(CUSTOMER_COPY.quoteCopyFallbackTitle, { description: summary });
+    } finally {
+      setSaving(false);
+    }
+  }, [buildConfigurationSummary]);
 
   if (sunglassesCatalog.isHydrating && sunglassesCatalog.lensTints.length === 0) {
     return <LoadingState label="Loading sunglasses options…" className="h-full" />;
@@ -39,53 +68,19 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden lg:grid lg:grid-cols-12 lg:gap-8 lg:p-6">
-        {/* Mobile: step tabs + stacked layout */}
-        <div className="flex flex-col gap-4 border-b border-border p-4 lg:hidden">
-          <StepProgress current={flow.step} />
-          <Tabs
-            value={flow.step}
-            onValueChange={(value) => flow.goTo(value as CustomiserStep)}
-          >
-            <TabsList className="grid w-full grid-cols-4" aria-label="Customisation steps">
-              {CUSTOMISER_STEPS.map((s) => (
-                <TabsTrigger key={s.id} value={s.id} className="min-h-11 px-1 text-[10px]">
-                  {s.shortLabel}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </div>
-
-        {/* Product display */}
-        <section className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 lg:col-span-7 lg:px-0 lg:pb-0">
-          <DisplayColumn
-            config={state.compositorConfig}
-            summaryText={state.summaryText}
-            totalPrice={state.totalPrice}
-            lensDisclaimer={sunglassesCatalog.lensDisclaimer}
-            showSummaryCard={flow.step !== "preview"}
-            polarized={state.isOptionEnabled("polarized")}
-            tintCode={state.selectedTintEntry?.code}
+      <SunglassesBuilderLayout
+        mobileSteps={<SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />}
+        preview={<SunglassesPreviewPanel config={state.compositorConfig} />}
+        configuration={
+          <SunglassesConfigColumn
+            flow={flow}
+            state={state}
             currencyCode={currencyCode}
+            onSaveDesign={() => void handleSaveDesign()}
+            saving={saving}
           />
-        </section>
-
-        {/* Customisation panel — desktop */}
-        <aside className="surface-card hidden min-h-0 flex-1 flex-col overflow-hidden border-t border-subtle lg:col-span-5 lg:flex lg:max-h-full lg:rounded-2xl lg:border-t-0">
-          <div className="shrink-0 border-b border-border/60 px-5 pb-4 pt-5">
-            <StepProgress current={flow.step} className="border-0 bg-muted/30 p-2.5" />
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4">
-            <CustomiserPanel flow={flow} state={state} className="min-h-0" currencyCode={currencyCode} />
-          </div>
-        </aside>
-
-        {/* Mobile panel below display */}
-        <section className="surface-card flex min-h-0 max-h-[min(52vh,22rem)] flex-1 flex-col overflow-hidden border-t border-subtle px-4 py-4 lg:hidden">
-          <CustomiserPanel flow={flow} state={state} className="min-h-0" currencyCode={currencyCode} />
-        </section>
-      </div>
+        }
+      />
     </TooltipProvider>
   );
 }

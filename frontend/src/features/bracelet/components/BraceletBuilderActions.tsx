@@ -1,12 +1,10 @@
-import { ClipboardCopy, Copy, Library } from "lucide-react";
+import { ClipboardCopy, Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
 import { BRACELET_COPY } from "../copy";
 
 export interface BraceletBuilderActionsProps {
-  libraryOpen: boolean;
-  onToggleLibrary: () => void;
   twinning: boolean;
   onToggleTwinning: () => void;
   onDuplicateToB?: () => void;
@@ -14,30 +12,18 @@ export interface BraceletBuilderActionsProps {
 }
 
 export function BraceletBuilderActions({
-  libraryOpen,
-  onToggleLibrary,
   twinning,
   onToggleTwinning,
   onDuplicateToB,
   duplicateDisabled = false,
 }: BraceletBuilderActionsProps) {
   return (
-    <div className="flex flex-col gap-2">
-      <Button
-        type="button"
-        variant={libraryOpen ? "default" : "secondary"}
-        size="sm"
-        className="w-full justify-start text-xs"
-        onClick={onToggleLibrary}
-      >
-        <Library className="mr-2 h-3.5 w-3.5" />
-        {BRACELET_COPY.library}
-      </Button>
+    <div className="flex flex-col gap-1.5">
       <Button
         type="button"
         variant="secondary"
         size="sm"
-        className="w-full justify-start text-xs"
+        className="h-8 w-full justify-start text-[11px]"
         onClick={onToggleTwinning}
       >
         <Copy className="mr-2 h-3.5 w-3.5" />
@@ -48,7 +34,7 @@ export function BraceletBuilderActions({
           type="button"
           variant="secondary"
           size="sm"
-          className="w-full justify-start text-xs"
+          className="h-8 w-full justify-start text-[11px]"
           title={BRACELET_COPY.duplicateToPairHint}
           disabled={duplicateDisabled}
           onClick={onDuplicateToB}

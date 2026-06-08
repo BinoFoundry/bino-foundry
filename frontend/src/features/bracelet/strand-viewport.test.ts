@@ -30,7 +30,7 @@ describe("measureStrandCanvasSize", () => {
       libraryOpen: true,
     });
     expect(size).toBeGreaterThan(440);
-    expect(size).toBeLessThanOrEqual(760);
+    expect(size).toBeLessThanOrEqual(920);
   });
 });
 

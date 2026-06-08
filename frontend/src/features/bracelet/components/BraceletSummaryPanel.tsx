@@ -1,17 +1,21 @@
-import { ChevronDown, ChevronUp, Gem, Save, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Save, ShoppingBag } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import type { BraceletBuilderSummary } from "@bino-foundry/shared/types";
 
 import { Button } from "@/components/ui/button";
+import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
 
 import { BRACELET_COPY } from "../copy";
-import { activeWristSizes } from "../wrist-sizes";
-import { WristSizePickerCards } from "./WristSizePickerCards";
+import { formatCapacityCm } from "../wrist-fit";
 import { BraceletBuilderActions, type BraceletBuilderActionsProps } from "./BraceletBuilderActions";
+import { SelectedBeadsList, type SelectedBeadRow } from "./SelectedBeadsList";
 import { StrandCapacityCard } from "./StrandCapacityCard";
+import { SummaryInfoCard } from "./SummaryInfoCard";
+import { WristSizePickerCards } from "./WristSizePickerCards";
 
 export interface StrandVisualLayoutHint {
   visuallyExpanded?: boolean;
@@ -20,225 +24,258 @@ export interface StrandVisualLayoutHint {
 
 interface BraceletSummaryPanelProps {
   summary: BraceletBuilderSummary;
-  className?: string;
-  collapsible?: boolean;
-  defaultOpen?: boolean;
-  builderActions?: BraceletBuilderActionsProps;
+  mainBeadRows?: SelectedBeadRow[];
+  matchingPairBeadRows?: SelectedBeadRow[];
+  wristSizeCm: number;
+  wristSizeCmB?: number;
   wristSizes?: WristSizeEntry[];
   wristSizeIdA?: string | null;
   wristSizeIdB?: string | null;
   onSelectWristA?: (entry: WristSizeEntry) => void;
   onSelectWristB?: (entry: WristSizeEntry) => void;
-  wristSizeConfirmed?: boolean;
+  className?: string;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  builderActions?: Omit<BraceletBuilderActionsProps, "libraryOpen" | "onToggleLibrary">;
   visualLayoutA?: StrandVisualLayoutHint;
   visualLayoutB?: StrandVisualLayoutHint;
   onSave?: () => void;
+  onAddToCart?: () => void;
   saving?: boolean;
   saveStatus?: string;
   saveDisabled?: boolean;
 }
 
-function MaterialGroup({
-  title,
-  icon: Icon,
-  rows,
-}: {
-  title: string;
-  icon: typeof Gem;
-  rows: { name: string; quantity: number; subtotal: number }[];
-}) {
-  if (!rows.length) return null;
-  const sub = rows.reduce((s, r) => s + r.subtotal, 0);
-  return (
-    <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5 text-primary/70" />
-          <span className="font-display text-small font-medium tracking-brand text-foreground">{title}</span>
-        </div>
-        <span className="text-xs tabular-nums text-muted-foreground">${sub.toFixed(2)}</span>
-      </div>
-      <ul className="space-y-1.5">
-        {rows.map((row) => (
-          <li key={`${title}-${row.name}`} className="flex justify-between gap-2 text-xs">
-            <span className="truncate text-foreground/90">
-              {row.name}
-              {row.quantity > 1 ? <span className="text-muted-foreground"> × {row.quantity}</span> : null}
-            </span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">${row.subtotal.toFixed(2)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function WristTargetPicker({
+function CostLine({
   label,
-  sizes,
-  selectedId,
-  onSelect,
+  amount,
 }: {
   label: string;
-  sizes: WristSizeEntry[];
-  selectedId: string | null | undefined;
-  onSelect?: (entry: WristSizeEntry) => void;
+  amount: number;
 }) {
-  if (!sizes.length || !onSelect) return null;
   return (
-    <WristSizePickerCards
-      label={label}
-      sizes={sizes}
-      selectedId={selectedId ?? null}
-      onSelect={onSelect}
-      variant="inline"
-      scrollable={sizes.length > 16}
-    />
+    <div className="flex justify-between gap-2 text-[11px]">
+      <span className="truncate text-foreground/90">{label}</span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">${amount.toFixed(2)}</span>
+    </div>
   );
 }
 
 export function BraceletSummaryPanel({
   summary,
-  className,
-  collapsible = false,
-  defaultOpen = true,
-  builderActions,
+  mainBeadRows = [],
+  matchingPairBeadRows = [],
+  wristSizeCm,
+  wristSizeCmB,
   wristSizes = [],
   wristSizeIdA,
   wristSizeIdB,
   onSelectWristA,
   onSelectWristB,
-  wristSizeConfirmed = false,
+  className,
+  collapsible = false,
+  defaultOpen = true,
+  builderActions,
   visualLayoutA,
   visualLayoutB,
   onSave,
+  onAddToCart,
   saving = false,
   saveStatus = "",
   saveDisabled = false,
 }: BraceletSummaryPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const [changingWrist, setChangingWrist] = useState(false);
   const { pricing } = summary;
-  const wristOptions = activeWristSizes(wristSizes);
+  const strandA = summary.strands[0];
+  const strandB = summary.strands[1];
+  const mainBeadCount = strandA?.placedCount ?? 0;
+  const pairBeadCount = strandB?.placedCount ?? 0;
+
+  const handleAddToCart = () => {
+    if (onAddToCart) {
+      onAddToCart();
+      return;
+    }
+    toast.message(BUILDER_COPY.addToCartComingSoon);
+  };
 
   const body = (
-    <div className="space-y-4">
-      {builderActions ? <BraceletBuilderActions {...builderActions} /> : null}
+    <div className="space-y-3">
+      <SummaryInfoCard title={BRACELET_COPY.braceletPreview}>
+        <p className="type-body text-sm text-foreground">
+          {mainBeadCount === 0
+            ? BRACELET_COPY.summaryEmpty
+            : `${BRACELET_COPY.beadCountSummary(mainBeadCount)} · ${formatCapacityCm(strandA?.usedMm ?? 0)} placed`}
+        </p>
+        {summary.twinning && pairBeadCount > 0 ? (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {BRACELET_COPY.matchingPairTitle}: {BRACELET_COPY.beadCountSummary(pairBeadCount)}
+          </p>
+        ) : null}
+      </SummaryInfoCard>
 
-      {wristSizeConfirmed && wristOptions.length > 0 && onSelectWristA ? (
-        <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
-          <p className="text-[10px] leading-snug text-muted-foreground">{BRACELET_COPY.wristChangeHint}</p>
-          <WristTargetPicker
-            label={summary.twinning ? BRACELET_COPY.wristTwinA : BRACELET_COPY.wristLabel}
-            sizes={wristOptions}
-            selectedId={wristSizeIdA}
-            onSelect={onSelectWristA}
-          />
-          {summary.twinning && onSelectWristB ? (
-            <WristTargetPicker
-              label={BRACELET_COPY.wristTwinB}
-              sizes={wristOptions}
-              selectedId={wristSizeIdB}
-              onSelect={onSelectWristB}
-            />
+      <SummaryInfoCard title={BRACELET_COPY.currentWristSize}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="type-price text-lg text-foreground">
+            {summary.twinning && wristSizeCmB != null
+              ? `${wristSizeCm} cm · ${wristSizeCmB} cm`
+              : `${wristSizeCm} cm`}
+          </span>
+          {onSelectWristA ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-[11px]"
+              onClick={() => setChangingWrist((v) => !v)}
+            >
+              {BRACELET_COPY.changeSize}
+            </Button>
           ) : null}
         </div>
+        {changingWrist && onSelectWristA ? (
+          <div className="mt-2 space-y-2 border-t border-border/50 pt-2">
+            <WristSizePickerCards
+              label={summary.twinning ? BRACELET_COPY.wristTwinA : BRACELET_COPY.wristLabel}
+              sizes={wristSizes}
+              selectedId={wristSizeIdA ?? null}
+              onSelect={onSelectWristA}
+              variant="inline"
+              scrollable={wristSizes.length > 8}
+            />
+            {summary.twinning && onSelectWristB ? (
+              <WristSizePickerCards
+                label={BRACELET_COPY.wristTwinB}
+                sizes={wristSizes}
+                selectedId={wristSizeIdB ?? null}
+                onSelect={onSelectWristB}
+                variant="inline"
+                scrollable={wristSizes.length > 8}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </SummaryInfoCard>
+
+      <SummaryInfoCard title={BRACELET_COPY.matchingPairTitle}>
+        <p className="text-sm font-medium text-foreground">
+          {summary.twinning ? BRACELET_COPY.matchingPairEnabled : BRACELET_COPY.matchingPairNotEnabled}
+        </p>
+        {builderActions ? (
+          <div className="mt-2 border-t border-border/50 pt-2">
+            <BraceletBuilderActions {...builderActions} />
+          </div>
+        ) : null}
+      </SummaryInfoCard>
+
+      {strandA ? (
+        <SummaryInfoCard title={BRACELET_COPY.summaryCapacity}>
+          <StrandCapacityCard
+            strand={strandA}
+            showStrandLabel={false}
+            compact
+            hideHeader
+            visuallyExpanded={visualLayoutA?.visuallyExpanded}
+            visualOverCanvas={visualLayoutA?.visualOverCanvas}
+            className="border-0 bg-transparent shadow-none"
+          />
+        </SummaryInfoCard>
       ) : null}
 
-      <div className={summary.twinning ? "grid gap-3" : undefined}>
-        {summary.strands.map((strand) => {
-          const visual =
-            strand.index === 0
-              ? visualLayoutA
-              : strand.index === 1
-                ? visualLayoutB
-                : undefined;
-          return (
-            <StrandCapacityCard
-              key={strand.index}
-              strand={strand}
-              showStrandLabel={summary.twinning}
-              visuallyExpanded={visual?.visuallyExpanded}
-              visualOverCanvas={visual?.visualOverCanvas}
-            />
-          );
-        })}
-      </div>
+      {summary.twinning && strandB ? (
+        <SummaryInfoCard title={`${BRACELET_COPY.matchingPairTitle} · ${BRACELET_COPY.summaryCapacity}`}>
+          <StrandCapacityCard
+            strand={strandB}
+            showStrandLabel={false}
+            compact
+            hideHeader
+            visuallyExpanded={visualLayoutB?.visuallyExpanded}
+            visualOverCanvas={visualLayoutB?.visualOverCanvas}
+            className="border-0 bg-transparent shadow-none"
+          />
+        </SummaryInfoCard>
+      ) : null}
 
-      {pricing.placedCount === 0 ? (
-        <p className="rounded-lg border border-dashed border-border/80 bg-muted/15 px-3 py-3 text-xs leading-relaxed text-muted-foreground">
-          {BRACELET_COPY.summaryEmpty}
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {summary.materialSections?.length
-            ? summary.materialSections.map((section) => (
-                <MaterialGroup
-                  key={section.slug}
-                  title={section.title}
-                  icon={section.slug === "charm" ? Sparkles : Gem}
-                  rows={section.rows}
-                />
-              ))
-            : (
-              <>
-                <MaterialGroup title="Crystals" icon={Gem} rows={summary.crystals} />
-                <MaterialGroup title="Charms" icon={Sparkles} rows={summary.charms} />
-                <MaterialGroup title="Spacers" icon={Gem} rows={summary.spacers} />
-              </>
-            )}
-        </div>
-      )}
+      <SummaryInfoCard title={BRACELET_COPY.mainBraceletTitle}>
+        <SelectedBeadsList rows={mainBeadRows} compact />
+      </SummaryInfoCard>
 
-      <div className="surface-card p-4">
+      {summary.twinning ? (
+        <SummaryInfoCard title={BRACELET_COPY.matchingPairTitle}>
+          <SelectedBeadsList rows={matchingPairBeadRows} compact />
+        </SummaryInfoCard>
+      ) : null}
+
+      <SummaryInfoCard title={BRACELET_COPY.costBreakdown}>
+        {pricing.placedCount === 0 ? (
+          <p className="text-[11px] text-muted-foreground">—</p>
+        ) : (
+          <div className="space-y-1.5">
+            {pricing.lineItems.map((item) => (
+              <CostLine
+                key={item.offerKey}
+                label={
+                  item.quantity > 1
+                    ? `${item.sizeLabel || item.beadName} × ${item.quantity}`
+                    : item.sizeLabel || item.beadName
+                }
+                amount={item.lineTotal}
+              />
+            ))}
+            <div className="border-t border-border/50 pt-1.5">
+              <CostLine label={BRACELET_COPY.subtotal} amount={pricing.subtotal} />
+            </div>
+          </div>
+        )}
+      </SummaryInfoCard>
+
+      <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2.5">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="type-body text-foreground">{BRACELET_COPY.estimatedTotal}</span>
-          <span className="type-price text-2xl text-foreground">
-            ${pricing.total.toFixed(2)}
-          </span>
+          <span className="type-body text-sm text-foreground">{BRACELET_COPY.estimatedTotal}</span>
+          <span className="type-price text-xl text-foreground">${pricing.total.toFixed(2)}</span>
         </div>
-        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
           {BRACELET_COPY.priceNote(pricing.currencyCode)}
         </p>
       </div>
 
-      {onSave ? (
-        <div className="space-y-2">
-          {saveStatus ? (
-            <p className="text-center text-[11px] leading-snug text-foreground/80">{saveStatus}</p>
-          ) : null}
+      <div className="space-y-1.5 pt-0.5">
+        {saveStatus ? (
+          <p className="text-center text-[10px] leading-snug text-foreground/80">{saveStatus}</p>
+        ) : null}
+        {onSave ? (
           <Button
             type="button"
+            variant="secondary"
             className="w-full"
-            size="lg"
+            size="default"
             disabled={saveDisabled}
             onClick={onSave}
           >
-            <Save className="mr-2 h-4 w-4" />
+            <Save className="mr-2 h-3.5 w-3.5" />
             {saving ? BRACELET_COPY.saving : BRACELET_COPY.saveConfig}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+        <Button type="button" className="w-full" size="default" disabled={saveDisabled} onClick={handleAddToCart}>
+          <ShoppingBag className="mr-2 h-3.5 w-3.5" />
+          {BRACELET_COPY.addToCart}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const panelHeader = (
+    <div className="shrink-0 border-b border-border/80 px-3 py-2.5">
+      <h2 className="type-h3 text-base">{BRACELET_COPY.summaryTitle}</h2>
     </div>
   );
 
   if (!collapsible) {
     return (
-      <aside
-        className={cn(
-          "flex h-full w-full flex-col border-border bg-background lg:w-80 lg:border-l",
-          className,
-        )}
-      >
-        <div className="border-b border-border/80 px-4 py-4">
-          <h2 className="type-h3">{BRACELET_COPY.summaryTitle}</h2>
-        </div>
-        <div
-          className="flex-1 overflow-y-auto px-4 py-4"
-          data-scroll-isolate="true"
-          onWheel={(e) => e.stopPropagation()}
-        >
-          {body}
-        </div>
+      <aside className={cn("flex h-full w-full flex-col bg-background", className)}>
+        {panelHeader}
+        <div className="flex-1 overflow-y-auto px-3 py-3">{body}</div>
       </aside>
     );
   }
@@ -258,7 +295,7 @@ export function BraceletSummaryPanel({
       </button>
       {open ? (
         <div
-          className="max-h-[45vh] overflow-y-auto px-4 pb-4"
+          className="max-h-[45vh] overflow-y-auto px-3 pb-3"
           data-scroll-isolate="true"
           onWheel={(e) => e.stopPropagation()}
         >

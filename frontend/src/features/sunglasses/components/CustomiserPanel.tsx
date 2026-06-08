@@ -9,10 +9,12 @@ import { cn } from "@/lib/utils";
 import type { CustomiserStep } from "../constants";
 import { useCustomiserFlow } from "../hooks/useCustomiserFlow";
 import type { useSunglassesCustomiserState } from "../hooks/useSunglassesCustomiserState";
+import { ExtrasStepPanel } from "./steps/ExtrasStepPanel";
 import { FrameStepPanel } from "./steps/FrameStepPanel";
 import { LensStepPanel } from "./steps/LensStepPanel";
-import { OptionsStepPanel } from "./steps/OptionsStepPanel";
 import { PreviewStepPanel } from "./steps/PreviewStepPanel";
+import { RxStepPanel } from "./steps/RxStepPanel";
+import { extrasBuilderOptions, rxBuilderOptions } from "../utils/builder-option-groups";
 
 type CustomiserState = ReturnType<typeof useSunglassesCustomiserState>;
 
@@ -21,11 +23,21 @@ interface CustomiserPanelProps {
   state: CustomiserState;
   className?: string;
   currencyCode?: string;
+  /** Hide back/continue footer when navigation lives in the summary panel. */
+  showFooter?: boolean;
+  onRequestQuote?: () => void;
 }
 
 const POLARIZED_CODE = "polarized";
 
-export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }: CustomiserPanelProps) {
+export function CustomiserPanel({
+  flow,
+  state,
+  className,
+  currencyCode = "USD",
+  showFooter = true,
+  onRequestQuote: onRequestQuoteExternal,
+}: CustomiserPanelProps) {
   const {
     frames,
     frameSku,
@@ -42,16 +54,16 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
   } = state;
 
   const polarizedOption = sunglassesCatalog.getOptionByCode(POLARIZED_CODE);
-  const optionsStepChoices = sunglassesCatalog.builderOptions.filter(
-    (o) => o.code !== POLARIZED_CODE,
-  );
+  const rxOptions = rxBuilderOptions(sunglassesCatalog.builderOptions);
+  const extrasOptions = extrasBuilderOptions(sunglassesCatalog.builderOptions);
+  const nonLensOptions = [...rxOptions, ...extrasOptions];
 
   const buildQuoteSummary = () => {
     const lines = [
       `Frame: ${frameSku.name} ($${frameSku.price})`,
       `Lens: ${isOptionEnabled(POLARIZED_CODE) ? polarizedOption?.label ?? "Polarised" : "Standard (non-polarised)"}`,
       `Tint: ${config.tint.name}${selectedTintEntry ? ` (${selectedTintEntry.code})` : ""}`,
-      ...optionsStepChoices
+      ...nonLensOptions
         .filter((o) => isOptionEnabled(o.code))
         .map((o) => `${o.label}: yes (+$${o.priceSurcharge})`),
       `Total: $${totalPrice} ${currencyCode}`,
@@ -60,6 +72,10 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
   };
 
   const handleRequestQuote = async () => {
+    if (onRequestQuoteExternal) {
+      onRequestQuoteExternal();
+      return;
+    }
     const summary = buildQuoteSummary();
     try {
       await navigator.clipboard.writeText(summary);
@@ -93,11 +109,18 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
         onSelectTint={selectTintById}
       />
     ),
-    options: (
-      <OptionsStepPanel
-        builderOptions={optionsStepChoices}
+    rx: (
+      <RxStepPanel
+        rxOptions={rxOptions}
         selectedOptions={config.options}
         requiresManualFollowUp={requiresManualFollowUp}
+        onOptionChange={setOption}
+      />
+    ),
+    extras: (
+      <ExtrasStepPanel
+        extrasOptions={extrasOptions}
+        selectedOptions={config.options}
         onOptionChange={setOption}
       />
     ),
@@ -129,22 +152,24 @@ export function CustomiserPanel({ flow, state, className, currencyCode = "USD" }
         <div className="pb-2">{stepContent[flow.step]}</div>
       </div>
 
-      <div className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border/80 pt-3">
-        <Button type="button" variant="secondary" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Back
-        </Button>
-        {!flow.isLast ? (
-          <Button type="button" size="sm" onClick={flow.goNext}>
-            Continue
-            <ChevronRight className="ml-1 h-4 w-4" />
+      {showFooter ? (
+        <div className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border/80 pt-3">
+          <Button type="button" variant="secondary" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Back
           </Button>
-        ) : (
-          <Button type="button" size="sm" onClick={() => void handleRequestQuote()}>
-            {requiresManualFollowUp ? "Request consultation" : "Request quote"}
-          </Button>
-        )}
-      </div>
+          {!flow.isLast ? (
+            <Button type="button" size="sm" onClick={flow.goNext}>
+              Continue
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          ) : (
+            <Button type="button" size="sm" onClick={() => void handleRequestQuote()}>
+              {requiresManualFollowUp ? "Request consultation" : "Request quote"}
+            </Button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

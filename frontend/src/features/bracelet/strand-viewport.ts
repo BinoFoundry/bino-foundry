@@ -38,8 +38,6 @@ export interface StrandViewportMeasureInput {
  */
 export function measureStrandCanvasSize(input: StrandViewportMeasureInput): number {
   const { containerWidth: w, containerHeight: h, isMobile, twinning, libraryOpen } = input;
-  const summaryOffset = !isMobile ? 300 : 0;
-
   if (isMobile) {
     if (twinning) {
       const side = Math.min((w - 4) / 2, h - 24);
@@ -54,14 +52,14 @@ export function measureStrandCanvasSize(input: StrandViewportMeasureInput): numb
   }
 
   const sidebarOffset = libraryOpen ? 256 : 0;
-  const availableW = w - sidebarOffset - summaryOffset - 4;
+  const availableW = w - sidebarOffset - 2;
   const strandCount = twinning ? 2 : 1;
-  const gap = twinning ? 12 : 0;
+  const gap = twinning ? 8 : 0;
   const maxByWidth = (availableW - gap) / strandCount;
-  const maxByHeight = h;
+  const maxByHeight = h - 2;
   const side = Math.min(maxByWidth, maxByHeight) * STRAND_VIEWPORT_FILL;
 
-  return Math.round(Math.max(320, Math.min(760, side)));
+  return Math.round(Math.max(360, Math.min(920, side)));
 }
 
 export interface StrandContentBounds {
