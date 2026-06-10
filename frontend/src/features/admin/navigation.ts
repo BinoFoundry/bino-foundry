@@ -1,4 +1,15 @@
-import { CircleDot, Gem, Glasses, Image, LayoutDashboard, Ruler, Settings, Settings2, Sun } from "lucide-react";
+import {
+  CircleDot,
+  Gem,
+  Glasses,
+  Image,
+  LayoutDashboard,
+  Ruler,
+  Settings,
+  Settings2,
+  Sun,
+  Users,
+} from "lucide-react";
 
 import type { AdminNavItem, AdminSection } from "./types";
 
@@ -9,6 +20,14 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Overview and quick links",
     icon: LayoutDashboard,
     group: "overview",
+  },
+  {
+    id: "users",
+    label: "Users",
+    description: "Platform accounts, roles, and access",
+    icon: Users,
+    group: "platform",
+    permission: "customers.manage",
   },
   {
     id: "frames",
@@ -70,6 +89,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
 
 export const ADMIN_NAV_GROUPS: { id: AdminNavItem["group"]; label: string }[] = [
   { id: "overview", label: "Overview" },
+  { id: "platform", label: "Platform" },
   { id: "products", label: "Products" },
   { id: "settings", label: "Settings" },
   { id: "sunglasses", label: "Sunglasses" },

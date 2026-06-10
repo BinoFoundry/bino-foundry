@@ -4,6 +4,8 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getAdminApiKey } from "@/config/env";
+import { checkPermission } from "@/lib/permissions";
+import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 
@@ -19,7 +21,14 @@ interface AdminLayoutProps {
 export function AdminLayout({ section, onSectionChange, children }: AdminLayoutProps) {
   const catalogue = useCatalogue();
   const sunglasses = useSunglassesCatalog();
-  const activeNav = ADMIN_NAV_ITEMS.find((n) => n.id === section);
+  const { permissions } = useAuth();
+  const visibleNavItems = ADMIN_NAV_ITEMS.filter(
+    (item) => !item.permission || checkPermission(permissions, item.permission),
+  );
+  const visibleGroups = ADMIN_NAV_GROUPS.filter((group) =>
+    visibleNavItems.some((item) => item.group === group.id),
+  );
+  const activeNav = visibleNavItems.find((n) => n.id === section);
   const [refreshing, setRefreshing] = useState(false);
   const hasAdminApiKey = Boolean(getAdminApiKey());
 
@@ -64,13 +73,13 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
           className="hidden w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-card/30 p-3 md:flex"
           aria-label="Admin sections"
         >
-          {ADMIN_NAV_GROUPS.map((group) => (
+          {visibleGroups.map((group) => (
             <div key={group.id}>
               <p className="type-label mb-2 px-2 text-muted-foreground">
                 {group.label}
               </p>
               <ul className="flex flex-col gap-0.5">
-                {ADMIN_NAV_ITEMS.filter((item) => item.group === group.id).map((item) => {
+                {visibleNavItems.filter((item) => item.group === group.id).map((item) => {
                   const Icon = item.icon;
                   const active = section === item.id;
                   return (

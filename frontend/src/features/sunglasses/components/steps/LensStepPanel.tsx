@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
@@ -98,6 +98,7 @@ export function LensStepPanel({
     () => (gradientTints.length && !classicTints.length ? "gradient" : "classic"),
     [classicTints.length, gradientTints.length],
   );
+  const [activeTab, setActiveTab] = useState(defaultTab);
 
   return (
     <div className="space-y-4">
@@ -131,8 +132,8 @@ export function LensStepPanel({
         )}
       </div>
 
-      <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="relative z-10 grid w-full grid-cols-2">
           <TabsTrigger value="classic">Classic</TabsTrigger>
           <TabsTrigger value="gradient">Gradient</TabsTrigger>
         </TabsList>

@@ -1,5 +1,7 @@
-import { CircleDot, Gem, Glasses, Image, Ruler, Settings, Settings2, Sun } from "lucide-react";
+import { CircleDot, Gem, Glasses, Image, Ruler, Settings, Settings2, Sun, Users } from "lucide-react";
 
+import { checkPermission } from "@/lib/permissions";
+import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 
@@ -29,6 +31,14 @@ const quickLinks: {
 export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
   const catalogue = useCatalogue();
   const sunglasses = useSunglassesCatalog();
+  const { permissions } = useAuth();
+
+  const quickLinksFiltered = [
+    ...(checkPermission(permissions, "customers.manage")
+      ? [{ section: "users" as const, label: "Users", description: "Accounts, roles, and access", icon: Users }]
+      : []),
+    ...quickLinks,
+  ];
 
   return (
     <AdminPage>
@@ -50,7 +60,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
         Quick links
       </h3>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {quickLinks.map((link) => {
+        {quickLinksFiltered.map((link) => {
           const Icon = link.icon;
           return (
             <button

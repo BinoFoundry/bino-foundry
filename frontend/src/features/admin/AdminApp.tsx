@@ -11,6 +11,7 @@ import { BeadSizesAdminPage } from "./modules/products/BeadSizesAdminPage";
 import { WristSizesAdminPage } from "./modules/products/WristSizesAdminPage";
 import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
 import { FramesAdminPage } from "./modules/products/FramesAdminPage";
+import { UsersAdminPage } from "./modules/users/UsersAdminPage";
 import type { AdminSection } from "./types";
 
 function AdminSectionView({
@@ -23,6 +24,8 @@ function AdminSectionView({
   switch (section) {
     case "dashboard":
       return <AdminDashboardPage onNavigate={onNavigate} />;
+    case "users":
+      return <UsersAdminPage />;
     case "frames":
       return <FramesAdminPage />;
     case "beads":

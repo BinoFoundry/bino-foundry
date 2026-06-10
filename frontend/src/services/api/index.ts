@@ -3,6 +3,7 @@ export { apiRequest, apiRequestData, catalogueFetch, cataloguePath, type ApiRequ
 export { authApi } from "./auth";
 export { designsApi, type SavedDesignDetail } from "./designs";
 export { ordersApi, type OrderDetail } from "./orders";
+export { usersApi } from "./users";
 export { catalogueApi } from "./catalogue";
 export { beadsApi } from "./beads";
 export { sunglassesApi } from "./sunglasses";

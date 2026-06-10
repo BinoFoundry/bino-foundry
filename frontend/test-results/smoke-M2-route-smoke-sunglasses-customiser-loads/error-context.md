@@ -1,0 +1,72 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - link "Bino Foundry" [ref=e6] [cursor=pointer]:
+        - /url: /bracelet
+      - navigation [ref=e9]:
+        - button "Bracelet Builder" [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+          - text: Bracelet Builder
+        - button "Sunglasses Builder" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+          - text: Sunglasses Builder
+      - generic [ref=e22]:
+        - button "Account" [ref=e23] [cursor=pointer]:
+          - img
+          - generic [ref=e24]: Account
+        - button "Cart" [ref=e25] [cursor=pointer]:
+          - img
+          - generic [ref=e26]: Cart
+    - main [ref=e27]:
+      - region "Sunglasses customiser" [ref=e29]:
+        - generic [ref=e31]:
+          - generic [ref=e35]:
+            - generic [ref=e36]: Front view
+            - img "Front view" [ref=e39]
+          - complementary [ref=e54]:
+            - generic [ref=e55]:
+              - navigation "Configuration steps" [ref=e57]:
+                - list [ref=e58]:
+                  - listitem [ref=e59]:
+                    - button "Frame" [ref=e60] [cursor=pointer]:
+                      - generic [ref=e61]: "1"
+                      - generic [ref=e62]: Frame
+                  - listitem
+                  - listitem [ref=e63]:
+                    - button "Lens" [ref=e64] [cursor=pointer]:
+                      - generic [ref=e65]: "2"
+                      - generic [ref=e66]: Lens
+                  - listitem
+                  - listitem [ref=e67]:
+                    - button "RX" [ref=e68] [cursor=pointer]:
+                      - generic [ref=e69]: "3"
+                      - generic [ref=e70]: RX
+                  - listitem
+                  - listitem [ref=e71]:
+                    - button "Extras" [ref=e72] [cursor=pointer]:
+                      - generic [ref=e73]: "4"
+                      - generic [ref=e74]: Extras
+                  - listitem
+                  - listitem [ref=e75]:
+                    - button "Review" [ref=e76] [cursor=pointer]:
+                      - generic [ref=e77]: "5"
+                      - generic [ref=e78]: Review
+              - generic [ref=e79]:
+                - generic "Customiser options" [ref=e81]:
+                  - generic [ref=e83]:
+                    - heading "Select Frame Style" [level=3] [ref=e84]
+                    - radiogroup "Frame styles" [ref=e85]:
+                      - radio "First Sunglasses, 120 dollars" [checked] [ref=e86] [cursor=pointer]:
+                        - generic [ref=e88]:
+                          - paragraph [ref=e89]: First Sunglasses
+                          - paragraph [ref=e90]: $120
+                - button "Continue" [ref=e91] [cursor=pointer]:
+                  - text: Continue
+                  - img
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+```

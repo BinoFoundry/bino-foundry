@@ -1,0 +1,62 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - link "Bino Foundry" [ref=e6] [cursor=pointer]:
+        - /url: /bracelet
+      - navigation [ref=e9]:
+        - button "Bracelet Builder" [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+          - text: Bracelet Builder
+        - button "Sunglasses Builder" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+          - text: Sunglasses Builder
+      - generic [ref=e22]:
+        - button "Account" [ref=e23] [cursor=pointer]:
+          - img
+          - generic [ref=e24]: Account
+        - button "Cart" [ref=e25] [cursor=pointer]:
+          - img
+          - generic [ref=e26]: Cart
+    - main [ref=e27]:
+      - region "Crystal bracelet builder" [ref=e29]:
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - paragraph [ref=e34]: Create Your Bracelet
+            - heading "Choose Your Wrist Size" [level=1] [ref=e35]
+            - paragraph [ref=e36]: Select your wrist measurement. Your bracelet is crafted to fit — the studio adapts to your size.
+          - radiogroup "Wrist size" [ref=e38]:
+            - radio "14 centimetres" [ref=e39] [cursor=pointer]:
+              - generic [ref=e40]:
+                - generic [ref=e41]: "14"
+                - generic [ref=e42]: cm
+            - radio "15 centimetres" [ref=e43] [cursor=pointer]:
+              - generic [ref=e44]:
+                - generic [ref=e45]: "15"
+                - generic [ref=e46]: cm
+            - radio "16 centimetres" [ref=e47] [cursor=pointer]:
+              - generic [ref=e48]:
+                - generic [ref=e49]: "16"
+                - generic [ref=e50]: cm
+            - radio "17 centimetres" [ref=e51] [cursor=pointer]:
+              - generic [ref=e52]:
+                - generic [ref=e53]: "17"
+                - generic [ref=e54]: cm
+            - radio "18 centimetres" [ref=e55] [cursor=pointer]:
+              - generic [ref=e56]:
+                - generic [ref=e57]: "18"
+                - generic [ref=e58]: cm
+            - radio "19 centimetres" [ref=e59] [cursor=pointer]:
+              - generic [ref=e60]:
+                - generic [ref=e61]: "19"
+                - generic [ref=e62]: cm
+          - paragraph [ref=e63]: Please select your bracelet size to begin.
+          - button "Start Designing" [disabled]:
+            - text: Start Designing
+            - img
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+```

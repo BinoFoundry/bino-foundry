@@ -1,8 +1,10 @@
+import type { Permission } from "@bino-foundry/shared/types";
 import type { LucideIcon } from "lucide-react";
 
 /** Top-level admin areas (sidebar). */
 export type AdminSection =
   | "dashboard"
+  | "users"
   | "frames"
   | "beads"
   | "bead-types"
@@ -17,7 +19,9 @@ export interface AdminNavItem {
   label: string;
   description: string;
   icon: LucideIcon;
-  group: "overview" | "products" | "settings" | "sunglasses" | "assets";
+  group: "overview" | "platform" | "products" | "settings" | "sunglasses" | "assets";
+  /** When set, item is shown only when the current user has this permission. */
+  permission?: Permission;
 }
 
 export interface AdminListController<T> {

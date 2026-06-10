@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { Permission } from "@bino-foundry/shared/types";
 
 import { getEnv, isProductionLike } from "../config/env.js";
+import { assertActiveSession, getProfileAccess } from "../lib/account-status.js";
 import { ForbiddenError, UnauthorizedError } from "../lib/errors.js";
 import { hasPermission, buildAuthUser, isAdminRole } from "../lib/rbac.js";
 import { verifySupabaseAccessToken, type AuthPrincipal } from "./auth-jwt.js";
@@ -91,24 +92,35 @@ export async function requireBraceletWriteAuth(req: Request, _res: Response, nex
   next(new UnauthorizedError("Sign in or provide a valid API key to save designs"));
 }
 
-/** Requires any authenticated user JWT. */
+/** Requires any authenticated user JWT with an active account. */
 export async function requireUserAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  if (req.auth?.scheme === "jwt" && req.auth.userId) {
-    next();
-    return;
-  }
+  let userId: string | undefined;
 
-  const bearer = normalizeBearer(req);
-  if (bearer) {
-    const principal = await jwtPrincipalFromBearer(bearer);
-    if (principal) {
-      req.auth = principal;
-      next();
-      return;
+  if (req.auth?.scheme === "jwt" && req.auth.userId) {
+    userId = req.auth.userId;
+  } else {
+    const bearer = normalizeBearer(req);
+    if (bearer) {
+      const principal = await jwtPrincipalFromBearer(bearer);
+      if (principal) {
+        req.auth = principal;
+        userId = principal.userId;
+      }
     }
   }
 
-  next(new UnauthorizedError("Sign in required"));
+  if (!userId) {
+    next(new UnauthorizedError("Sign in required"));
+    return;
+  }
+
+  try {
+    const access = await getProfileAccess(userId);
+    assertActiveSession(access);
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 /** Requires a specific permission on the JWT principal. */

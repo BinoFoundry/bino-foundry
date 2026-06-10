@@ -4,6 +4,12 @@ import type { User } from "@supabase/supabase-js";
 import { getEnv, resolvePublicAppUrl } from "../../config/env.js";
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { ValidationError } from "../../lib/errors.js";
+import {
+  assertActiveSession,
+  assertCanAuthenticate,
+  getProfileAccess,
+  touchLastLogin,
+} from "../../lib/account-status.js";
 import { buildAuthUser, resolveUserRole } from "../../lib/rbac.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import type {
@@ -126,6 +132,9 @@ export class AuthService {
       throw new ValidationError(error?.message ?? "Invalid email or password");
     }
 
+    const access = await getProfileAccess(data.user.id);
+    assertCanAuthenticate(access);
+
     const profile = await this.getProfile(data.user.id);
     const displayName =
       profile?.displayName ??
@@ -140,6 +149,8 @@ export class AuthService {
       resolveUserRole(data.user, profile?.role ?? null),
     );
 
+    await touchLastLogin(data.user.id);
+
     return {
       user: mapAuthResponse(data.user, profile?.role ?? null),
       session: mapSession(data.session),
@@ -152,6 +163,10 @@ export class AuthService {
     if (error || !data.user || !data.session) {
       throw new ValidationError(error?.message ?? "Session refresh failed");
     }
+
+    const access = await getProfileAccess(data.user.id);
+    assertActiveSession(access);
+
     const profile = await this.getProfile(data.user.id);
     return {
       user: mapAuthResponse(data.user, profile?.role ?? null),

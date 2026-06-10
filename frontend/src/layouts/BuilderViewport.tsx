@@ -30,9 +30,11 @@ export function BuilderViewport({ activeModule, bracelet, sunglasses, admin }: B
       <ModulePane visible={activeModule === "sunglasses"} label="Sunglasses customiser">
         {sunglasses}
       </ModulePane>
-      <ModulePane visible={activeModule === "admin"} label="Admin dashboard">
-        {admin}
-      </ModulePane>
+      {activeModule === "admin" ? (
+        <ModulePane visible label="Admin dashboard">
+          {admin}
+        </ModulePane>
+      ) : null}
     </div>
   );
 }
@@ -50,7 +52,9 @@ function ModulePane({
     <div
       className={cn(
         "absolute inset-0 flex flex-col",
-        visible ? "pointer-events-auto z-10 opacity-100" : "pointer-events-none z-0 opacity-0",
+        visible
+          ? "pointer-events-auto z-10 opacity-100"
+          : "pointer-events-none invisible z-0 opacity-0",
       )}
       aria-hidden={!visible}
       role="region"

@@ -9,7 +9,11 @@ interface AdminRouteGuardProps {
   children: ReactNode;
 }
 
-/** Secondary guard — primary redirect happens in `Index` before admin chrome renders. */
+/**
+ * Secondary guard — primary redirect happens in `Index` before admin chrome renders.
+ * Only mount this when the admin module is active (see `BuilderViewport`); otherwise
+ * its redirect will fire for every builder route.
+ */
 export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
   const { user, isLoading, hasPermission } = useAuth();
 

@@ -8,6 +8,7 @@ import { logger } from "./lib/logger.js";
 import { mutationRateLimit } from "./middleware/rate-limit.js";
 import { requestContextMiddleware } from "./middleware/request-context.js";
 import { createAuthRoutes } from "./modules/auth/auth.routes.js";
+import { createUsersRoutes } from "./modules/users/users.routes.js";
 import { createCatalogRoutes } from "./routes/catalog.routes.js";
 import { openApiDocument } from "./openapi/document.js";
 import { createDocsRoutes } from "./routes/docs.routes.js";
@@ -64,6 +65,7 @@ export function createApplication(): Application {
       res.json(openApiDocument);
     });
     app.use(`${base}/auth`, createAuthRoutes());
+    app.use(`${base}/users`, createUsersRoutes());
     app.use(base, monitoring);
     app.use(`${base}/docs`, docs);
     app.use(base, catalogue);
