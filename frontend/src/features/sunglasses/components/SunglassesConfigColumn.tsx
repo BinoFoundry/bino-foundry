@@ -20,6 +20,7 @@ interface SunglassesConfigColumnProps {
   state: CustomiserState;
   currencyCode: string;
   onSaveDesign?: () => void;
+  onAddToCart?: () => void;
   saving?: boolean;
   className?: string;
 }
@@ -31,6 +32,7 @@ export function SunglassesConfigColumn({
   state,
   currencyCode,
   onSaveDesign,
+  onAddToCart,
   saving = false,
   className,
 }: SunglassesConfigColumnProps) {
@@ -94,6 +96,7 @@ export function SunglassesConfigColumn({
               totalPrice={totalPrice}
               currencyCode={currencyCode}
               onSaveDesign={onSaveDesign}
+              onAddToCart={onAddToCart}
               saving={saving}
             />
           </div>

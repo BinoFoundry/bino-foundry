@@ -1,11 +1,14 @@
-import { lazy, Suspense, useCallback, useState } from "react";
+import { lazy, Suspense, useCallback } from "react";
 import { useParams } from "react-router-dom";
 
 import AdvancedSunglassesBuilder from "@/components/AdvancedSunglassesBuilder";
 import BraceletBuilder from "@/components/BraceletBuilder";
 import { ErrorState, LoadingState } from "@/components/common";
+import { AdminRouteGuard } from "@/features/auth/AdminRouteGuard";
+import { UnavailableRedirect } from "@/features/auth/UnavailableRedirect";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { AppShell, BuilderViewport, type AppModule } from "@/layouts";
+import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
 
 const AdminApp = lazy(() =>
@@ -21,8 +24,18 @@ const Index = () => {
   const { module } = useParams<{ module: string }>();
   const activeModule = parseModule(module);
   const catalogue = useCatalogue();
+  const { user, isLoading: authLoading, hasPermission } = useAuth();
   const onBraceletPriceChange = useCallback((_p: number) => {}, []);
   const onSunglassesPriceChange = useCallback((_p: number) => {}, []);
+
+  if (activeModule === "admin") {
+    if (authLoading) {
+      return <LoadingState label="Loading…" className="h-full min-h-[100dvh]" />;
+    }
+    if (!user || !hasPermission("admin.access")) {
+      return <UnavailableRedirect to={user ? "/account" : "/bracelet"} />;
+    }
+  }
 
   return (
     <AppShell activeModule={activeModule}>
@@ -40,9 +53,11 @@ const Index = () => {
           bracelet={<BraceletBuilder onPriceChange={onBraceletPriceChange} />}
           sunglasses={<AdvancedSunglassesBuilder onPriceChange={onSunglassesPriceChange} />}
           admin={
-            <Suspense fallback={<LoadingState label="Loading admin…" className="h-full" />}>
-              <AdminApp />
-            </Suspense>
+            <AdminRouteGuard>
+              <Suspense fallback={<LoadingState label="Loading…" className="h-full" />}>
+                <AdminApp />
+              </Suspense>
+            </AdminRouteGuard>
           }
         />
       )}

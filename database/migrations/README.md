@@ -42,6 +42,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 16. `000020_bead_size_only_pricing.sql` — drop `bead_libraries.unit_price`; pricing only in `bead_library_sizes`.
 17. `000021_bead_size_decimal_positive.sql` — `bead_sizes.size_mm` and saved config items use `NUMERIC(10,4)` with `> 0` only (no 4–24 mm cap).
 18. `000022_remove_size_multipliers.sql` — drop `bead_sizes.price_multiplier`, `bead_types.uses_size_pricing`, and legacy `bracelet.pricing_v1` config.
+19. `000023_unified_customer_designs.sql` — `customer_profiles`, unified `saved_designs` index, `sunglasses_configurations`, and `customer_orders` for account-based save/resume across builders.
+20. `000024_order_customer_details.sql` — `customer_details` JSONB snapshot on `customer_orders` for checkout.
+21. `000025_customer_profile_rbac.sql` — customer profile role cache, phone, and billing details for the client portal.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

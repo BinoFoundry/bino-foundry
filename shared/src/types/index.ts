@@ -16,4 +16,6 @@ export * from "./bead-variant.js";
 export * from "./bracelet-config.js";
 export * from "./lens-clip.js";
 export * from "./lens-tint-render.js";
+export * from "./saved-design.js";
+export * from "./rbac.js";
 export * from "./site-settings.js";

@@ -1,8 +1,9 @@
-import { Menu, Settings, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/state/auth/AuthProvider";
 
 import { BuilderHeaderActions } from "./BuilderHeaderActions";
 import { BuilderSwitcher } from "./BuilderSwitcher";
@@ -16,8 +17,10 @@ export interface AppShellProps {
 
 export function AppShell({ activeModule, children }: AppShellProps) {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isBuilder = activeModule === "bracelet" || activeModule === "sunglasses";
+  const isManagement = activeModule === "admin" && hasPermission("admin.access");
 
   const goTo = (id: AppModule) => {
     navigate(`/${id}`);
@@ -40,20 +43,20 @@ export function AppShell({ activeModule, children }: AppShellProps) {
           <div className="flex justify-center">
             <BuilderSwitcher active={activeModule} onSelect={goTo} />
           </div>
-        ) : (
+        ) : isManagement ? (
           <div className="hidden justify-center md:flex">
-            <span className="type-label text-muted-foreground">Admin</span>
+            <span className="type-label text-muted-foreground">Management</span>
           </div>
-        )}
+        ) : null}
 
         <div className="flex items-center justify-end gap-2">
           {isBuilder ? (
             <BuilderHeaderActions />
-          ) : (
+          ) : isManagement ? (
             <Button type="button" variant="secondary" size="sm" asChild>
               <Link to="/bracelet">{BUILDER_COPY.adminBack}</Link>
             </Button>
-          )}
+          ) : null}
 
           <button
             type="button"
@@ -75,17 +78,9 @@ export function AppShell({ activeModule, children }: AppShellProps) {
         </div>
       )}
 
-      {mobileNavOpen && !isBuilder && (
+      {mobileNavOpen && isManagement && (
         <div className="motion-safe-animate border-b border-border bg-background/95 backdrop-blur-sm md:hidden">
           <nav className="flex flex-col gap-1 p-2">
-            <button
-              type="button"
-              onClick={() => goTo("admin")}
-              className="type-nav flex items-center gap-3 rounded-md px-4 py-3 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <Settings className="h-4 w-4" />
-              Admin
-            </button>
             <button
               type="button"
               onClick={() => goTo("bracelet")}

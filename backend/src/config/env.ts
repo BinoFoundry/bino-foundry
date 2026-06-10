@@ -25,6 +25,8 @@ const envSchema = z
     SUPABASE_URL: z.preprocess(emptyAsUndefined, z.string().url().optional()),
     SUPABASE_ANON_KEY: z.preprocess(emptyAsUndefined, z.string().optional()),
     SUPABASE_SERVICE_ROLE_KEY: z.preprocess(emptyAsUndefined, z.string().optional()),
+    /** Public SPA origin for auth email links (password reset, email verification). */
+    PUBLIC_APP_URL: z.preprocess(emptyAsUndefined, z.string().url().optional()),
     /** Max mutation requests per IP per minute (0 = disabled) */
     RATE_LIMIT_MUTATIONS_PER_MIN: z.coerce.number().int().min(0).default(120),
     /** Set to `1` or `true` when API sits behind nginx/Caddy TLS termination */
@@ -97,6 +99,14 @@ export const LOCAL_DEV_CORS_ORIGINS = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ] as const;
+
+export function resolvePublicAppUrl(): string {
+  const configured = getEnv().PUBLIC_APP_URL?.trim();
+  if (configured) return configured.replace(/\/$/, "");
+  const origins = corsOriginAllowlist();
+  if (origins?.length) return origins[0].replace(/\/$/, "");
+  return "http://localhost:8080";
+}
 
 export function corsOriginAllowlist(): string[] | undefined {
   const raw = getEnv().CORS_ORIGINS?.trim();

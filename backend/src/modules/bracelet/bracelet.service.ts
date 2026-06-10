@@ -133,6 +133,93 @@ export class BraceletService {
     return this.mapConfigSummary(config);
   }
 
+  async updateConfiguration(publicId: string, dto: CreateBraceletConfigDTO) {
+    if (!dto.items.length) {
+      throw new ValidationError("At least one bead must be placed to save a configuration");
+    }
+
+    const supabase = getSupabaseServiceRole();
+    const { data: existing, error: loadErr } = await supabase
+      .from("bracelet_configurations")
+      .select("id")
+      .eq("public_id", publicId)
+      .maybeSingle();
+
+    assertNoDbError(loadErr);
+    if (!existing) throw new NotFoundError("Bracelet configuration not found");
+
+    const configId = (existing as { id: string }).id;
+    const siteSettings = await settingsService.getGeneralSettings();
+    const resolveKeys = dto.items.map((i) => ({
+      beadLibraryId: i.beadLibraryId,
+      beadSizeMm: i.beadSizeMm!,
+    }));
+    const sizeByKey = await beadLibrarySizeService.resolveForConfiguration(resolveKeys);
+    const publicIds = [...new Set(dto.items.map((i) => i.beadLibraryId))];
+    const beadByPublicId = await this.resolveBeads(publicIds);
+    this.validateItemsAgainstCatalog(publicIds, beadByPublicId);
+
+    const missingSizes: string[] = [];
+    let subtotal = 0;
+    const itemRows = dto.items.map((item) => {
+      const bead = beadByPublicId.get(item.beadLibraryId)!;
+      const key = `${item.beadLibraryId}:${item.beadSizeMm}`;
+      const offer = sizeByKey.get(key);
+      if (!offer) {
+        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
+        return null;
+      }
+      if (offer.libraryUuid !== bead.id) {
+        throw new ValidationError(`Size ${item.beadSizeMm}mm is not enabled for bead ${item.beadLibraryId}`);
+      }
+      const unit = offer.unitPrice;
+      subtotal += unit;
+      return {
+        strand_index: item.strandIndex,
+        slot_position: item.slotPosition,
+        bead_library_id: bead.id,
+        bead_library_size_id: offer.id,
+        bead_size_mm: offer.sizeMm,
+        unit_price_snapshot: unit,
+      };
+    });
+
+    if (missingSizes.length) {
+      throw new ValidationError(`Size not enabled for bead: ${[...new Set(missingSizes)].join(", ")}`);
+    }
+    const rows = itemRows.filter((r): r is NonNullable<typeof itemRows[number]> => r !== null);
+
+    const { error: deleteErr } = await supabase
+      .from("bracelet_configuration_items")
+      .delete()
+      .eq("configuration_id", configId);
+    assertNoDbError(deleteErr);
+
+    const { error: itemsErr } = await supabase.from("bracelet_configuration_items").insert(
+      rows.map((row) => ({ configuration_id: configId, ...row })),
+    );
+    assertNoDbError(itemsErr);
+
+    const { data: config, error: configErr } = await supabase
+      .from("bracelet_configurations")
+      .update({
+        status: dto.status,
+        twinning: dto.twinning,
+        wrist_size_cm_a: dto.wristSizeCmA,
+        wrist_size_cm_b: dto.wristSizeCmB,
+        default_bead_size_mm: dto.defaultBeadSizeMm ?? null,
+        subtotal,
+        item_count: dto.items.length,
+      })
+      .eq("public_id", publicId)
+      .select("id, public_id, status, subtotal, currency_code, item_count, created_at, updated_at")
+      .single();
+
+    assertNoDbError(configErr);
+    if (!config) throw new ValidationError("Failed to update configuration");
+    return this.mapConfigSummary(config);
+  }
+
   async getConfiguration(publicId: string, options?: { validateCatalog?: boolean }) {
     const supabase = getSupabaseServiceRole();
     const { data: config, error } = await supabase

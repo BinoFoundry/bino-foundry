@@ -1,4 +1,5 @@
 import { getAdminApiKey, resolveApiUrl } from "@/config/env";
+import { getAccessToken } from "@/services/auth/session";
 
 import { ApiError } from "./errors";
 
@@ -18,6 +19,11 @@ function buildHeaders(init?: ApiRequestOptions): Headers {
   const adminKey = getAdminApiKey();
   if (adminKey && !headers.has("x-api-key")) {
     headers.set("x-api-key", adminKey);
+  }
+
+  const accessToken = getAccessToken();
+  if (accessToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
   const body = init?.body;
@@ -92,6 +98,12 @@ export async function apiRequest<T>(path: string, init?: ApiRequestOptions): Pro
   }
 
   return res.json() as Promise<T>;
+}
+
+/** Unwrap `{ data, meta }` envelope from auth/design endpoints. */
+export async function apiRequestData<T>(path: string, init?: ApiRequestOptions): Promise<T> {
+  const payload = await apiRequest<{ data: T; meta?: unknown }>(path, init);
+  return payload.data;
 }
 
 /** @deprecated Prefer `apiRequest` — kept for gradual migration. */

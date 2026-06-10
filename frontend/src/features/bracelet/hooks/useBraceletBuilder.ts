@@ -36,6 +36,7 @@ import { movePlacedBead } from "../sequence-reorder";
 import { STRAND_PATH_START_ANGLE } from "../strand-path";
 import { serializeBraceletConfiguration } from "../serialize";
 import { buildBraceletBuilderSummary } from "../summary";
+import { buildPlacedFromSavedBracelet, type SavedBraceletLoadInput } from "../load-saved-bracelet";
 import {
   activeWristSizes,
   catalogueWristSizeBounds,
@@ -63,7 +64,7 @@ export interface UseBraceletBuilderOptions {
 export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const { onPriceChange } = options;
   const isMobile = useIsMobile();
-  const { beadTypes, beadLibrarySizes, wristSizes } = useCatalogue();
+  const { beadTypes, beadLibrarySizes, beadLibraries, wristSizes } = useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currencyCode = siteSettings.currencyCode;
 
@@ -602,6 +603,30 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, pricing],
   );
 
+  const loadFromSaved = useCallback(
+    (input: SavedBraceletLoadInput) => {
+      const loaded = buildPlacedFromSavedBracelet(
+        input,
+        beadLibraries,
+        beadLibrarySizes,
+        wristSizes,
+      );
+      setTwinning(loaded.twinning);
+      setWristSizeIdA(loaded.wristSizeIdA);
+      setWristSizeIdB(loaded.wristSizeIdB);
+      setDraftWristIdA(loaded.wristSizeIdA);
+      setDraftWristIdB(loaded.wristSizeIdB);
+      setWristSizeConfirmed(true);
+      setPlacedBeadsA(loaded.placedBeadsA);
+      setPlacedBeadsB(loaded.placedBeadsB);
+      setStrandAnchorAngleA(STRAND_PATH_START_ANGLE);
+      setStrandAnchorAngleB(STRAND_PATH_START_ANGLE);
+      setCapacityNotice(null);
+      bumpLayout();
+    },
+    [beadLibraries, beadLibrarySizes, wristSizes, bumpLayout],
+  );
+
   return {
     wristSizes: activeWristOptions,
     wristSizeBounds,
@@ -653,6 +678,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     handleReset,
     handleToggleTwinning,
     toSavedPayload,
+    loadFromSaved,
     currencyCode,
   };
 }

@@ -19,6 +19,7 @@ interface SunglassesConfigurationSummaryProps {
   totalPrice: number;
   currencyCode: string;
   onSaveDesign?: () => void;
+  onAddToCart?: () => void;
   saving?: boolean;
   className?: string;
 }
@@ -53,10 +54,15 @@ export function SunglassesConfigurationSummary({
   totalPrice,
   currencyCode,
   onSaveDesign,
+  onAddToCart,
   saving = false,
   className,
 }: SunglassesConfigurationSummaryProps) {
   const handleAddToCart = () => {
+    if (onAddToCart) {
+      onAddToCart();
+      return;
+    }
     toast.message(BUILDER_COPY.addToCartComingSoon);
   };
 

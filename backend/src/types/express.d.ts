@@ -1,3 +1,5 @@
+import type { Permission, UserRole } from "@bino-foundry/shared/types";
+
 declare global {
   namespace Express {
     interface Request {
@@ -6,7 +8,14 @@ declare global {
       /** Set by auth middleware on protected routes */
       auth?:
         | { scheme: "api-key" }
-        | { scheme: "jwt"; userId: string; email?: string; isAdmin: boolean };
+        | {
+            scheme: "jwt";
+            userId: string;
+            email?: string;
+            role: UserRole;
+            permissions: Permission[];
+            isAdmin: boolean;
+          };
     }
   }
 }

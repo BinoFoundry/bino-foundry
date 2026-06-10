@@ -1,5 +1,8 @@
 export { ApiError, formatApiErrorMessage, isApiError } from "./errors";
-export { apiRequest, catalogueFetch, cataloguePath, type ApiRequestOptions } from "./client";
+export { apiRequest, apiRequestData, catalogueFetch, cataloguePath, type ApiRequestOptions } from "./client";
+export { authApi } from "./auth";
+export { designsApi, type SavedDesignDetail } from "./designs";
+export { ordersApi, type OrderDetail } from "./orders";
 export { catalogueApi } from "./catalogue";
 export { beadsApi } from "./beads";
 export { sunglassesApi } from "./sunglasses";

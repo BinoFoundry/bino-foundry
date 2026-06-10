@@ -1,14 +1,30 @@
 import type { NextFunction, Request, Response } from "express";
+import type { Permission } from "@bino-foundry/shared/types";
 
 import { getEnv, isProductionLike } from "../config/env.js";
-import { UnauthorizedError } from "../lib/errors.js";
-import { verifySupabaseAccessToken, isAdminUser, type AuthPrincipal } from "./auth-jwt.js";
+import { ForbiddenError, UnauthorizedError } from "../lib/errors.js";
+import { hasPermission, buildAuthUser, isAdminRole } from "../lib/rbac.js";
+import { verifySupabaseAccessToken, type AuthPrincipal } from "./auth-jwt.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+async function jwtPrincipalFromBearer(bearer: string): Promise<Extract<AuthPrincipal, { scheme: "jwt" }> | null> {
+  const user = await verifySupabaseAccessToken(bearer);
+  if (!user) return null;
+  const authUser = buildAuthUser(user);
+  return {
+    scheme: "jwt",
+    userId: authUser.id,
+    email: authUser.email ?? undefined,
+    role: authUser.role,
+    permissions: authUser.permissions,
+    isAdmin: isAdminRole(authUser.role),
+  };
+}
+
 /**
  * Catalogue mutation guard (admin):
- * - Production/staging: `ADMIN_API_KEY` or Bearer JWT with `role: admin` in user/app metadata.
+ * - Production/staging: `ADMIN_API_KEY` or Bearer JWT with `catalogue.write`.
  * - Development without key: mutations allowed (local only).
  */
 export async function requireMutationAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
@@ -28,14 +44,9 @@ export async function requireMutationAuth(req: Request, _res: Response, next: Ne
 
   const bearer = normalizeBearer(req);
   if (bearer) {
-    const user = await verifySupabaseAccessToken(bearer);
-    if (user && isAdminUser(user)) {
-      req.auth = {
-        scheme: "jwt",
-        userId: user.id,
-        email: user.email,
-        isAdmin: true,
-      };
+    const principal = await jwtPrincipalFromBearer(bearer);
+    if (principal && hasPermission(principal.permissions, "catalogue.write")) {
+      req.auth = principal;
       next();
       return;
     }
@@ -46,7 +57,7 @@ export async function requireMutationAuth(req: Request, _res: Response, next: Ne
     return;
   }
 
-  next(new UnauthorizedError("Admin API key or admin JWT required for this action"));
+  next(new UnauthorizedError("Authentication required"));
 }
 
 /**
@@ -64,14 +75,9 @@ export async function requireBraceletWriteAuth(req: Request, _res: Response, nex
 
   const bearer = normalizeBearer(req);
   if (bearer) {
-    const user = await verifySupabaseAccessToken(bearer);
-    if (user) {
-      req.auth = {
-        scheme: "jwt",
-        userId: user.id,
-        email: user.email,
-        isAdmin: isAdminUser(user),
-      };
+    const principal = await jwtPrincipalFromBearer(bearer);
+    if (principal) {
+      req.auth = principal;
       next();
       return;
     }
@@ -85,7 +91,7 @@ export async function requireBraceletWriteAuth(req: Request, _res: Response, nex
   next(new UnauthorizedError("Sign in or provide a valid API key to save designs"));
 }
 
-/** List own bracelet configs — requires user JWT (not API key alone). */
+/** Requires any authenticated user JWT. */
 export async function requireUserAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   if (req.auth?.scheme === "jwt" && req.auth.userId) {
     next();
@@ -94,20 +100,30 @@ export async function requireUserAuth(req: Request, _res: Response, next: NextFu
 
   const bearer = normalizeBearer(req);
   if (bearer) {
-    const user = await verifySupabaseAccessToken(bearer);
-    if (user) {
-      req.auth = {
-        scheme: "jwt",
-        userId: user.id,
-        email: user.email,
-        isAdmin: isAdminUser(user),
-      };
+    const principal = await jwtPrincipalFromBearer(bearer);
+    if (principal) {
+      req.auth = principal;
       next();
       return;
     }
   }
 
   next(new UnauthorizedError("Sign in required"));
+}
+
+/** Requires a specific permission on the JWT principal. */
+export function requirePermission(permission: Permission) {
+  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    if (req.auth?.scheme === "api-key") {
+      next();
+      return;
+    }
+    if (req.auth?.scheme === "jwt" && hasPermission(req.auth.permissions, permission)) {
+      next();
+      return;
+    }
+    next(new ForbiddenError("You do not have permission to perform this action"));
+  };
 }
 
 export function getAuthUserId(req: Request): string | undefined {

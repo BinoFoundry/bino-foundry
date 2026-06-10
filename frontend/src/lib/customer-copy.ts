@@ -1,6 +1,7 @@
 /** Customer-facing strings for toasts and alerts (non-technical). */
 
 export const CUSTOMER_COPY = {
+  pageUnavailable: "Sorry, the page you are looking for is unavailable.",
   catalogueLoadFailed: "We couldn't load the catalogue. Please try again.",
   sunglassesLoadFailed: "We couldn't load sunglasses options. Please try again.",
   adminSettingsLoadFailed: "We couldn't load settings. Please try again.",

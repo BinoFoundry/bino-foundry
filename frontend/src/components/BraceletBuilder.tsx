@@ -1,5 +1,7 @@
 import { useRef, useState, useEffect, useMemo, useCallback, type RefObject } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import SortableCircularStrand, { type StrandDropHover } from "@/components/SortableCircularStrand";
@@ -27,8 +29,13 @@ import { BraceletBuilderLayout } from "@/layouts/BraceletBuilderLayout";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { braceletApi } from "@/services/api/bracelet";
+import { setPendingDesignListener } from "@/features/designs/pending-design";
+import { captureBraceletThumbnail } from "@/features/designs/capture-thumbnail";
+import { CheckoutDialog } from "@/features/account/components/CheckoutDialog";
+import { designsApi } from "@/services/api/designs";
 import { isApiError } from "@/services/api/errors";
+import { useAuth } from "@/state/auth/AuthProvider";
+import { useCatalogue } from "@/state/catalogue";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
 
 interface BraceletBuilderProps {
@@ -87,9 +94,16 @@ function buildStrandBeadRows(
 
 const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const isMobile = useIsMobile();
+  const [searchParams] = useSearchParams();
+  const designIdFromUrl = searchParams.get("design");
+  const { user, saveDesign, openAuth } = useAuth();
+  const catalogue = useCatalogue();
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [savedDesignId, setSavedDesignId] = useState<string | null>(designIdFromUrl);
+  const hydratedDesignRef = useRef<string | null>(null);
   const [hoverA, setHoverA] = useState<StrandDropHover>(null);
   const [hoverB, setHoverB] = useState<StrandDropHover>(null);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
@@ -97,6 +111,58 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [panMode, setPanMode] = useState(false);
 
   const builder = useBraceletBuilder({ onPriceChange });
+
+  useEffect(() => {
+    setPendingDesignListener((result) => {
+      if (result?.productType === "bracelet") {
+        setSavedDesignId(result.id);
+        setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(result.id));
+      }
+    });
+    return () => setPendingDesignListener(null);
+  }, []);
+
+  useEffect(() => {
+    if (designIdFromUrl) setSavedDesignId(designIdFromUrl);
+  }, [designIdFromUrl]);
+
+  useEffect(() => {
+    if (!designIdFromUrl || !user) return;
+    if (hydratedDesignRef.current === designIdFromUrl) return;
+    if (catalogue.isHydrating && catalogue.beadLibraries.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await designsApi.get(designIdFromUrl);
+        if (cancelled || detail.productType !== "bracelet" || !detail.bracelet) return;
+        builder.loadFromSaved({
+          twinning: detail.bracelet.twinning,
+          wristSizeCmA: detail.bracelet.wristSizeCmA,
+          wristSizeCmB: detail.bracelet.wristSizeCmB,
+          items: detail.bracelet.items,
+        });
+        setSavedDesignId(detail.id);
+        hydratedDesignRef.current = designIdFromUrl;
+        setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(detail.id));
+      } catch (err) {
+        if (!cancelled) {
+          setSaveStatus(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    designIdFromUrl,
+    user,
+    catalogue.isHydrating,
+    catalogue.beadLibraries.length,
+    builder.loadFromSaved,
+  ]);
+
   const wristConfirmed = builder.wristSizeConfirmed;
   const { containerRef, strandSize } = useCanvasSize(isMobile, builder.twinning);
   const canvasZoomRef = useRef<HTMLDivElement>(null);
@@ -281,20 +347,65 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     setSaveStatus("");
     try {
       const payload = builder.toSavedPayload("saved");
-      const saved = await braceletApi.saveConfiguration({
-        twinning: payload.twinning,
-        wristSizeCmA: payload.wristSizeCmA,
-        wristSizeCmB: payload.wristSizeCmB,
-        status: "saved",
-        items: payload.items,
-      });
-      setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+      const previewThumbnailDataUrl =
+        (await captureBraceletThumbnail(builder.placedBeadsA, builder.wristSizeA)) ?? undefined;
+      const saved = await saveDesign(
+        {
+          productType: "bracelet",
+          title: "Bracelet design",
+          status: "saved",
+          previewThumbnailDataUrl,
+          bracelet: {
+            twinning: payload.twinning,
+            wristSizeCmA: payload.wristSizeCmA,
+            wristSizeCmB: payload.wristSizeCmB,
+            items: payload.items,
+          },
+        },
+        { designId: savedDesignId ?? undefined },
+      );
+      if (saved) {
+        setSavedDesignId(saved.id);
+        setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+      }
+      return saved;
     } catch (err) {
       setSaveStatus(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
+      return null;
     } finally {
       setSaving(false);
     }
   };
+
+  const handleAddToCart = useCallback(async () => {
+    if (!user) {
+      openAuth({ mode: "sign-in" });
+      return;
+    }
+    if (builder.pricing.placedCount === 0) {
+      toast.error(CUSTOMER_COPY.saveDesignNeedBeads);
+      return;
+    }
+    if (builder.isOverCapacity) {
+      toast.error(BRACELET_COPY.saveBlockedOverCapacity);
+      return;
+    }
+
+    let designId = savedDesignId;
+    if (!designId) {
+      const saved = await handleSaveConfiguration();
+      designId = saved?.id ?? null;
+    }
+    if (!designId) return;
+    setCheckoutOpen(true);
+  }, [
+    user,
+    openAuth,
+    builder.pricing.placedCount,
+    builder.isOverCapacity,
+    savedDesignId,
+    handleSaveConfiguration,
+  ]);
 
   const saveDisabled = saving || builder.pricing.placedCount === 0 || builder.isOverCapacity;
 
@@ -313,6 +424,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     visualLayoutA,
     visualLayoutB,
     onSave: () => void handleSaveConfiguration(),
+    onAddToCart: () => void handleAddToCart(),
     saving,
     saveStatus,
     saveDisabled,
@@ -522,6 +634,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   );
 
   return (
+    <>
     <BraceletBuilderLayout
       className="animate-fade-in"
       leftPanel={
@@ -549,6 +662,17 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       rightPanel={<BraceletSummaryPanel {...summaryPanelProps} />}
       mobileFooter={<BraceletSummaryPanel {...summaryPanelProps} collapsible />}
     />
+    <CheckoutDialog
+      open={checkoutOpen}
+      onOpenChange={setCheckoutOpen}
+      designId={savedDesignId}
+      productLabel="Custom bracelet"
+      totalAmount={builder.pricing.total}
+      currencyCode={builder.currencyCode}
+      defaultEmail={user?.email}
+      defaultName={user?.displayName}
+    />
+    </>
   );
 };
 

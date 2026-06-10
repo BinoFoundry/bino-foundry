@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthModal } from "@/features/account/components/AuthModal";
+import { AuthProvider } from "@/state/auth/AuthProvider";
 import { RenderProvider } from "@/render/RenderProvider";
 import { CatalogueProvider } from "@/state/catalogue";
 import { SunglassesCatalogProvider } from "@/state/sunglasses-catalog";
@@ -15,17 +17,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CatalogueProvider>
-        <SunglassesCatalogProvider>
-        <RenderProvider>
-          <TooltipProvider>
-            {children}
-            <Toaster />
-            <Sonner />
-          </TooltipProvider>
-        </RenderProvider>
-        </SunglassesCatalogProvider>
-      </CatalogueProvider>
+      <AuthProvider>
+        <CatalogueProvider>
+          <SunglassesCatalogProvider>
+            <RenderProvider>
+              <TooltipProvider>
+                {children}
+                <AuthModal />
+                <Toaster />
+                <Sonner />
+              </TooltipProvider>
+            </RenderProvider>
+          </SunglassesCatalogProvider>
+        </CatalogueProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
