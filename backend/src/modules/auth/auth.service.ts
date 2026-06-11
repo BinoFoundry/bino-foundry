@@ -1,17 +1,30 @@
-import { createClient } from "@supabase/supabase-js";
-import type { User } from "@supabase/supabase-js";
+import type { Request } from "express";
 
-import { getEnv, resolvePublicAppUrl } from "../../config/env.js";
-import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
-import { ValidationError } from "../../lib/errors.js";
+import { getEnv, isProductionLike, resolvePublicAppUrl } from "../../config/env.js";
 import {
-  assertActiveSession,
-  assertCanAuthenticate,
-  getProfileAccess,
+  createEmailVerificationToken,
+  createPasswordResetToken,
+  consumeEmailVerificationToken,
+  consumePasswordResetToken,
+} from "../../infra/auth/token-repository.js";
+import {
+  createUserSession,
+  findActiveSessionByRefreshToken,
+  revokeSessionByRefreshToken,
+  rotateUserSession,
+} from "../../infra/auth/session-repository.js";
+import {
+  createUser,
+  findUserByEmail,
+  findUserById,
   touchLastLogin,
-} from "../../lib/account-status.js";
-import { buildAuthUser, resolveUserRole } from "../../lib/rbac.js";
-import { assertNoDbError } from "../../lib/supabase-db.js";
+  updateUser,
+} from "../../infra/auth/user-repository.js";
+import { ConflictError, ValidationError } from "../../lib/errors.js";
+import { signAccessToken } from "../../lib/jwt.js";
+import { hashPassword, verifyPassword } from "../../lib/password.js";
+import { buildAuthUserFromDb, mapProfileFromDb } from "../../lib/rbac.js";
+import { assertCanAuthenticate, assertActiveSession, getUserAccess } from "../../lib/account-status.js";
 import type {
   ChangePasswordDTO,
   ConfirmEmailDTO,
@@ -23,299 +36,206 @@ import type {
   UpdateProfileDTO,
 } from "./auth.validation.js";
 
-function authClient() {
-  const { SUPABASE_URL, SUPABASE_ANON_KEY } = getEnv();
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new ValidationError("Authentication is not configured on this server");
-  }
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
+function mapSession(accessToken: string, refreshToken: string, expiresAt: number) {
+  return { accessToken, refreshToken, expiresAt };
+}
+
+function authLink(path: string, token: string): string {
+  const base = resolvePublicAppUrl();
+  return `${base}${path}?token=${encodeURIComponent(token)}`;
+}
+
+function logAuthLink(label: string, url: string): void {
+  if (isProductionLike()) return;
+  console.info(`[auth] ${label}: ${url}`);
+}
+
+async function issueSession(userId: string, req?: Request) {
+  const user = await findUserById(userId);
+  if (!user) throw new ValidationError("User not found");
+
+  const session = await createUserSession(userId, {
+    userAgent: req?.headers["user-agent"],
+    ipAddress: req?.ip,
   });
-}
+  const access = signAccessToken(user.id, user.roleCode);
 
-function mapSession(session: {
-  access_token: string;
-  refresh_token: string;
-  expires_at?: number;
-}) {
   return {
-    accessToken: session.access_token,
-    refreshToken: session.refresh_token,
-    expiresAt: session.expires_at ?? null,
+    user: buildAuthUserFromDb(user),
+    session: mapSession(access.token, session.refreshToken, access.expiresAt),
   };
-}
-
-function mapProfileRow(row: Record<string, unknown>) {
-  return {
-    id: String(row.user_id),
-    email: (row.email as string | null) ?? null,
-    displayName: (row.display_name as string | null) ?? null,
-    phone: (row.phone as string | null) ?? null,
-    role: String(row.role ?? "customer"),
-    billingDetails: (row.billing_details as Record<string, unknown> | null) ?? {},
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-async function upsertProfile(
-  userId: string,
-  email: string | null,
-  displayName: string | null,
-  role = "customer",
-) {
-  const supabase = getSupabaseServiceRole();
-  const { error } = await supabase.from("customer_profiles").upsert(
-    {
-      user_id: userId,
-      email,
-      display_name: displayName,
-      role,
-    },
-    { onConflict: "user_id" },
-  );
-  assertNoDbError(error);
-}
-
-function mapAuthResponse(user: User, profileRole?: string | null) {
-  return buildAuthUser(user, profileRole);
 }
 
 export class AuthService {
-  async register(dto: RegisterDTO) {
-    const client = authClient();
-    const { data, error } = await client.auth.signUp({
+  async register(dto: RegisterDTO, req?: Request) {
+    const existing = await findUserByEmail(dto.email);
+    if (existing) {
+      throw new ConflictError("A user with this email already exists");
+    }
+
+    const passwordHash = await hashPassword(dto.password);
+    const autoVerify = getEnv().APP_ENV === "development";
+
+    const user = await createUser({
       email: dto.email,
-      password: dto.password,
-      options: {
-        data: {
-          ...(dto.displayName ? { display_name: dto.displayName } : {}),
-          role: "customer",
-        },
-      },
+      passwordHash,
+      fullName: dto.displayName ?? null,
+      emailVerifiedAt: autoVerify ? new Date().toISOString() : null,
     });
 
-    if (error) {
-      throw new ValidationError(error.message);
-    }
-    if (!data.user) {
-      throw new ValidationError("Registration failed");
-    }
-
-    await upsertProfile(data.user.id, data.user.email ?? dto.email, dto.displayName ?? null, "customer");
-
-    const user = mapAuthResponse(data.user, "customer");
-
-    if (!data.session) {
+    if (!autoVerify) {
+      const token = await createEmailVerificationToken(user.id);
+      logAuthLink("Email verification link", authLink("/auth/callback", token) + "&type=verify-email");
       return {
-        user,
+        user: buildAuthUserFromDb(user),
         session: null,
         emailConfirmationRequired: true,
       };
     }
 
+    const issued = await issueSession(user.id, req);
     return {
-      user,
-      session: mapSession(data.session),
+      ...issued,
       emailConfirmationRequired: false,
     };
   }
 
-  async login(dto: LoginDTO) {
-    const client = authClient();
-    const { data, error } = await client.auth.signInWithPassword({
-      email: dto.email,
-      password: dto.password,
-    });
-
-    if (error || !data.user || !data.session) {
-      throw new ValidationError(error?.message ?? "Invalid email or password");
+  async login(dto: LoginDTO, req?: Request) {
+    const user = await findUserByEmail(dto.email);
+    if (!user) {
+      throw new ValidationError("Invalid email or password");
     }
 
-    const access = await getProfileAccess(data.user.id);
+    const access = await getUserAccess(user.id);
     assertCanAuthenticate(access);
 
-    const profile = await this.getProfile(data.user.id);
-    const displayName =
-      profile?.displayName ??
-      (typeof data.user.user_metadata?.display_name === "string"
-        ? data.user.user_metadata.display_name
-        : null);
+    const passwordOk = await verifyPassword(dto.password, user.passwordHash);
+    if (!passwordOk) {
+      throw new ValidationError("Invalid email or password");
+    }
 
-    await upsertProfile(
-      data.user.id,
-      data.user.email ?? dto.email,
-      displayName,
-      resolveUserRole(data.user, profile?.role ?? null),
-    );
+    if (!user.emailVerifiedAt && getEnv().APP_ENV !== "development") {
+      throw new ValidationError("Please verify your email before signing in.");
+    }
 
-    await touchLastLogin(data.user.id);
+    await touchLastLogin(user.id);
+    return issueSession(user.id, req);
+  }
+
+  async refresh(refreshToken: string, req?: Request) {
+    const active = await findActiveSessionByRefreshToken(refreshToken);
+    if (!active) {
+      throw new ValidationError("Session refresh failed");
+    }
+
+    const access = await getUserAccess(active.userId);
+    assertActiveSession(access);
+
+    const user = await findUserById(active.userId);
+    if (!user) {
+      throw new ValidationError("Session refresh failed");
+    }
+
+    const rotated = await rotateUserSession(active.sessionId, active.userId, {
+      userAgent: req?.headers["user-agent"],
+      ipAddress: req?.ip,
+    });
+    const token = signAccessToken(user.id, user.roleCode);
 
     return {
-      user: mapAuthResponse(data.user, profile?.role ?? null),
-      session: mapSession(data.session),
+      user: buildAuthUserFromDb(user),
+      session: mapSession(token.token, rotated.refreshToken, token.expiresAt),
     };
   }
 
-  async refresh(refreshToken: string) {
-    const client = authClient();
-    const { data, error } = await client.auth.refreshSession({ refresh_token: refreshToken });
-    if (error || !data.user || !data.session) {
-      throw new ValidationError(error?.message ?? "Session refresh failed");
+  async logout(refreshToken?: string) {
+    if (refreshToken) {
+      await revokeSessionByRefreshToken(refreshToken);
     }
+    return { ok: true };
+  }
 
-    const access = await getProfileAccess(data.user.id);
-    assertActiveSession(access);
-
-    const profile = await this.getProfile(data.user.id);
+  async getCurrentUser(userId: string) {
+    const user = await findUserById(userId);
+    if (!user) return null;
     return {
-      user: mapAuthResponse(data.user, profile?.role ?? null),
-      session: mapSession(data.session),
+      user: buildAuthUserFromDb(user),
+      profile: mapProfileFromDb(user),
     };
   }
 
   async getProfile(userId: string) {
-    const supabase = getSupabaseServiceRole();
-    const { data, error } = await supabase
-      .from("customer_profiles")
-      .select("user_id, email, display_name, phone, role, billing_details, created_at, updated_at")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    assertNoDbError(error);
-    if (!data) return null;
-    return mapProfileRow(data as Record<string, unknown>);
-  }
-
-  async buildCurrentUser(supabaseUser: User) {
-    const profile = await this.getProfile(supabaseUser.id);
-    const user = mapAuthResponse(supabaseUser, profile?.role ?? null);
-    if (profile?.displayName && !user.displayName) {
-      user.displayName = profile.displayName;
-    }
-    return { user, profile };
+    const user = await findUserById(userId);
+    if (!user) return null;
+    return mapProfileFromDb(user);
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDTO) {
-    const supabase = getSupabaseServiceRole();
     const patch: Record<string, unknown> = {};
-    if (dto.displayName !== undefined) patch.display_name = dto.displayName;
-    if (dto.phone !== undefined) patch.phone = dto.phone;
+    if (dto.displayName !== undefined) patch.full_name = dto.displayName;
+    if (dto.phone !== undefined) patch.phone_number = dto.phone;
     if (dto.billingDetails !== undefined) patch.billing_details = dto.billingDetails;
 
-    const { data, error } = await supabase
-      .from("customer_profiles")
-      .update(patch)
-      .eq("user_id", userId)
-      .select("user_id, email, display_name, phone, role, billing_details, created_at, updated_at")
-      .single();
-
-    assertNoDbError(error);
-    if (!data) throw new ValidationError("Profile not found");
-    return mapProfileRow(data as Record<string, unknown>);
+    const user = await updateUser(userId, patch);
+    return mapProfileFromDb(user);
   }
 
-  async changePassword(userId: string, email: string, dto: ChangePasswordDTO) {
-    const client = authClient();
-    const { error: signInError } = await client.auth.signInWithPassword({
-      email,
-      password: dto.currentPassword,
-    });
-    if (signInError) {
+  async changePassword(userId: string, dto: ChangePasswordDTO) {
+    const user = await findUserById(userId);
+    if (!user) throw new ValidationError("User not found");
+
+    const passwordOk = await verifyPassword(dto.currentPassword, user.passwordHash);
+    if (!passwordOk) {
       throw new ValidationError("Current password is incorrect");
     }
 
-    const service = getSupabaseServiceRole();
-    const { error } = await service.auth.admin.updateUserById(userId, {
-      password: dto.newPassword,
-    });
-    if (error) {
-      throw new ValidationError(error.message);
-    }
+    await updateUser(userId, { password_hash: await hashPassword(dto.newPassword) });
     return { ok: true, message: "Password updated." };
   }
 
   async forgotPassword(dto: ForgotPasswordDTO) {
-    const client = authClient();
-    const redirectTo = dto.redirectTo ?? `${resolvePublicAppUrl()}/auth/callback`;
-    const { error } = await client.auth.resetPasswordForEmail(dto.email, { redirectTo });
-    if (error) {
-      throw new ValidationError(error.message);
+    const user = await findUserByEmail(dto.email);
+    if (user && !user.deletedAt) {
+      const token = await createPasswordResetToken(user.id);
+      const link = authLink("/auth/callback", token) + "&type=reset-password";
+      logAuthLink("Password reset link", link);
     }
     return { ok: true, message: "If an account exists for this email, a reset link has been sent." };
   }
 
-  async resetPassword(dto: ResetPasswordDTO) {
-    const client = authClient();
-    const { data: sessionData, error: sessionError } = await client.auth.setSession({
-      access_token: dto.accessToken,
-      refresh_token: dto.refreshToken ?? "",
-    });
-    if (sessionError || !sessionData.user) {
-      throw new ValidationError(sessionError?.message ?? "Invalid or expired reset link");
+  async resetPassword(dto: ResetPasswordDTO, req?: Request) {
+    const userId = await consumePasswordResetToken(dto.token);
+    if (!userId) {
+      throw new ValidationError("Invalid or expired reset link");
     }
 
-    const { data, error } = await client.auth.updateUser({ password: dto.password });
-    if (error || !data.user) {
-      throw new ValidationError(error?.message ?? "Could not update password");
-    }
-
-    const profile = await this.getProfile(data.user.id);
-    const { data: sessionState } = await client.auth.getSession();
-    const user = mapAuthResponse(data.user, profile?.role ?? null);
-
-    if (!sessionState.session) {
-      return {
-        user,
-        session: null,
-        message: "Password updated. Sign in with your new password.",
-      };
-    }
-
+    await updateUser(userId, { password_hash: await hashPassword(dto.password) });
+    const issued = await issueSession(userId, req);
     return {
-      user,
-      session: mapSession(sessionState.session),
+      ...issued,
       message: "Password updated.",
     };
   }
 
   async resendVerification(dto: ResendVerificationDTO) {
-    const client = authClient();
-    const redirectTo = `${resolvePublicAppUrl()}/auth/callback`;
-    const { error } = await client.auth.resend({
-      type: "signup",
-      email: dto.email,
-      options: { emailRedirectTo: redirectTo },
-    });
-    if (error) {
-      throw new ValidationError(error.message);
+    const user = await findUserByEmail(dto.email);
+    if (user && !user.emailVerifiedAt && !user.deletedAt) {
+      const token = await createEmailVerificationToken(user.id);
+      logAuthLink("Email verification link", authLink("/auth/callback", token) + "&type=verify-email");
     }
     return { ok: true, message: "Verification email sent if the account is unverified." };
   }
 
-  async confirmEmail(dto: ConfirmEmailDTO) {
-    const client = authClient();
-    const { data, error } = await client.auth.setSession({
-      access_token: dto.accessToken,
-      refresh_token: dto.refreshToken ?? "",
-    });
-    if (error || !data.user || !data.session) {
-      throw new ValidationError(error?.message ?? "Invalid or expired verification link");
+  async confirmEmail(dto: ConfirmEmailDTO, req?: Request) {
+    const userId = await consumeEmailVerificationToken(dto.token);
+    if (!userId) {
+      throw new ValidationError("Invalid or expired verification link");
     }
 
-    await upsertProfile(
-      data.user.id,
-      data.user.email ?? null,
-      typeof data.user.user_metadata?.display_name === "string"
-        ? data.user.user_metadata.display_name
-        : null,
-      resolveUserRole(data.user),
-    );
-
-    const profile = await this.getProfile(data.user.id);
+    await updateUser(userId, { email_verified_at: new Date().toISOString() });
+    const issued = await issueSession(userId, req);
     return {
-      user: mapAuthResponse(data.user, profile?.role ?? null),
-      session: mapSession(data.session),
+      ...issued,
       message: "Email verified.",
     };
   }

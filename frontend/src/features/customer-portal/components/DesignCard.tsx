@@ -26,7 +26,7 @@ export function DesignCard({ design, onDuplicate, onDelete, onCheckout, duplicat
   const editable = design.status !== "ordered";
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-border/60 bg-card/80 shadow-sm transition-shadow hover:shadow-md">
+    <article className="portal-card overflow-hidden">
       <div className="flex gap-4 p-4 sm:p-5">
         {design.previewThumbnailUrl ? (
           <img

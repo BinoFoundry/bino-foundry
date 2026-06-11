@@ -43,7 +43,7 @@ export function OrderDetailPage() {
         </Link>
       </Button>
 
-      <div className="rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm">
+      <div className="portal-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="type-label text-muted-foreground">Order number</p>

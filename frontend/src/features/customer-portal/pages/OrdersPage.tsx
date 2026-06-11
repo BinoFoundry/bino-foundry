@@ -18,7 +18,7 @@ function formatDate(value: string) {
 
 function OrderCard({ order }: { order: CustomerOrderSummary }) {
   return (
-    <article className="rounded-2xl border border-border/60 bg-card/80 p-5 shadow-sm">
+    <article className="portal-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex gap-4">
           {order.previewThumbnailUrl ? (

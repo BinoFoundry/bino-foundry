@@ -31,8 +31,8 @@ export function GradientDirectionPicker({ value, onChange }: GradientDirectionPi
           className={cn(
             "flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors",
             value === id
-              ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/25"
-              : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+              ? "state-selected-subtle text-foreground ring-1 ring-selection/20"
+              : "border-border bg-card text-muted-foreground state-hoverable hover:text-foreground",
           )}
         >
           <Icon className="h-3.5 w-3.5 shrink-0" />

@@ -33,7 +33,7 @@ export function RxStepPanel({
           {rxOptions.map((option) => (
             <div
               key={option.id}
-              className="flex items-center justify-between rounded-xl border border-border bg-card p-3"
+              className="flex items-center justify-between rounded-xl border border-border/50 bg-card/50 p-3"
             >
               <div className="space-y-1 pr-4">
                 <Label htmlFor={`rx-option-${option.code}`} className="font-medium text-foreground">

@@ -15,14 +15,17 @@ export const refreshDto = z.object({
   refreshToken: z.string().min(1),
 });
 
+export const logoutDto = z.object({
+  refreshToken: z.string().min(1).optional(),
+});
+
 export const forgotPasswordDto = z.object({
   email: z.string().trim().email().max(320),
   redirectTo: z.string().url().max(2048).optional(),
 });
 
 export const resetPasswordDto = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1).optional(),
+  token: z.string().min(1),
   password: z.string().min(8).max(128),
 });
 
@@ -31,8 +34,7 @@ export const resendVerificationDto = z.object({
 });
 
 export const confirmEmailDto = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1).optional(),
+  token: z.string().min(1),
 });
 
 export const billingDetailsDto = z.object({

@@ -14,7 +14,7 @@ interface AdminListRowProps {
 export function AdminListRow({ children, actions, onClick, selected, className }: AdminListRowProps) {
   const rowClass = cn(
     "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors",
-    selected && "bg-primary/15 ring-2 ring-primary",
+    selected && "state-selected-subtle ring-1 ring-selection/30",
     className,
   );
 

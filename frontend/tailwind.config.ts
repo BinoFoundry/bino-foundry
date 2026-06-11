@@ -58,6 +58,11 @@ export default {
         canvas: "hsl(var(--canvas))",
         highlight: "hsl(var(--highlight))",
         decorative: "hsl(var(--decorative))",
+        selection: {
+          DEFAULT: "hsl(var(--selection))",
+          muted: "hsl(var(--selection-muted))",
+          border: "hsl(var(--selection-border))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -97,6 +102,9 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
         brand: {
+          "warm-white": "hsl(var(--brand-warm-white))",
+          "canvas-warm": "hsl(var(--brand-canvas-warm))",
+          "border-soft": "hsl(var(--brand-border-soft))",
           cream: "hsl(var(--brand-cream))",
           gold: "hsl(var(--brand-soft-gold))",
           blush: "hsl(var(--brand-blush))",

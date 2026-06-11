@@ -243,9 +243,9 @@ function SortableBead({
               "transition-[transform,box-shadow] duration-200 ease-out",
               "hover:scale-[1.03] hover:shadow-[0_4px_14px_rgba(0,0,0,0.14)]",
               isDragging && "cursor-grabbing",
-              isSelected && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
+              isSelected && "ring-2 ring-selection/55 ring-offset-1 ring-offset-canvas",
             )
-          : "cursor-pointer hover:border-primary/50 hover:bg-muted/20",
+          : "cursor-pointer state-hoverable",
       )}
       title={title}
       aria-label={isEmptySlot ? BRACELET_COPY.emptySlotHint : title}

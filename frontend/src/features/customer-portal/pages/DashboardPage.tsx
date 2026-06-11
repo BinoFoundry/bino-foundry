@@ -32,7 +32,7 @@ export function DashboardPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm">
+        <div className="portal-card p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="type-h3">Recent activity</h3>
             <Button type="button" variant="ghost" size="sm" asChild>
@@ -72,12 +72,12 @@ export function DashboardPage() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm">
+        <div className="portal-card p-5">
           <h3 className="type-h3 mb-4">Quick start</h3>
           <div className="grid gap-3">
             <Link
               to="/bracelet"
-              className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-4 transition-colors hover:border-primary/30 hover:bg-primary/5"
+              className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-4 transition-colors state-hoverable"
             >
               <Gem className="h-5 w-5 text-primary" />
               <div>
@@ -87,7 +87,7 @@ export function DashboardPage() {
             </Link>
             <Link
               to="/sunglasses"
-              className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-4 transition-colors hover:border-primary/30 hover:bg-primary/5"
+              className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-4 transition-colors state-hoverable"
             >
               <Glasses className="h-5 w-5 text-primary" />
               <div>

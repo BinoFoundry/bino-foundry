@@ -55,7 +55,7 @@ export function SunglassesConfigColumn({
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 flex-col border-border bg-background md:border-t lg:border-l lg:border-t-0",
+        "flex h-full min-h-0 flex-col border-border/50 bg-background/60 md:border-t lg:border-l lg:border-t-0",
         className,
       )}
     >

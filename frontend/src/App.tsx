@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { lazy, Suspense } from "react";
 
 import { LoadingState } from "@/components/common";
@@ -11,22 +11,20 @@ const CustomerPortalApp = lazy(() => import("@/features/customer-portal/Customer
 
 const App = () => (
   <AppProviders>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/bracelet" replace />} />
-        <Route
-          path="/account/*"
-          element={
-            <Suspense fallback={<LoadingState label="Loading your portal…" className="min-h-screen" />}>
-              <CustomerPortalApp />
-            </Suspense>
-          }
-        />
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
-        <Route path="/:module" element={<Index />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/" element={<Navigate to="/bracelet" replace />} />
+      <Route
+        path="/account/*"
+        element={
+          <Suspense fallback={<LoadingState label="Loading your portal…" className="min-h-screen" />}>
+            <CustomerPortalApp />
+          </Suspense>
+        }
+      />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/:module" element={<Index />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   </AppProviders>
 );
 

@@ -7,9 +7,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import type { Permission, UserRole } from "@bino-foundry/shared/types";
+import { postAuthLandingPath } from "@/lib/auth-landing";
 import { checkPermission } from "@/lib/permissions";
 import { authApi } from "@/services/api/auth";
 import { designsApi } from "@/services/api/designs";
@@ -64,6 +66,7 @@ function sessionFromLoginResponse(
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [session, setSession] = useState<AuthSession | null>(() => loadAuthSession());
   const [isLoading, setIsLoading] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -99,6 +102,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     const stored = loadAuthSession();
     if (!stored) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const expiresSoon =
+      stored.expiresAt != null && stored.expiresAt - now < 60;
+
+    if (expiresSoon && stored.refreshToken) {
+      try {
+        const refreshed = await authApi.refresh(stored.refreshToken);
+        if (refreshed.session) {
+          const next = sessionFromLoginResponse(refreshed.user, refreshed.session);
+          saveAuthSession(next);
+          setSession(next);
+          return;
+        }
+      } catch {
+        /* fall through to /me */
+      }
+    }
+
     const me = await authApi.me();
     if (!me.authenticated || !me.user) {
       clearAuthSession();
@@ -166,8 +188,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthModalOpen(false);
       toast.success("Welcome back.");
       await flushPendingSave(next);
+      navigate(postAuthLandingPath(response.user));
     },
-    [flushPendingSave],
+    [flushPendingSave, navigate],
   );
 
   const signIn = useCallback(
@@ -192,8 +215,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    const stored = loadAuthSession();
     try {
-      await authApi.logout();
+      await authApi.logout(stored?.refreshToken);
     } catch {
       /* ignore */
     }

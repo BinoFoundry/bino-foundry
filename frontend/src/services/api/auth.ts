@@ -53,8 +53,11 @@ export const authApi = {
     });
   },
 
-  logout() {
-    return apiRequestData<{ ok: boolean }>("/auth/logout", { method: "POST", body: {} });
+  logout(refreshToken?: string) {
+    return apiRequestData<{ ok: boolean }>("/auth/logout", {
+      method: "POST",
+      body: refreshToken ? { refreshToken } : {},
+    });
   },
 
   forgotPassword(body: { email: string; redirectTo?: string }) {
@@ -64,7 +67,7 @@ export const authApi = {
     });
   },
 
-  resetPassword(body: { accessToken: string; refreshToken?: string; password: string }) {
+  resetPassword(body: { token: string; password: string }) {
     return apiRequestData<LoginRegisterResponse & { message?: string }>("/auth/reset-password", {
       method: "POST",
       body,
@@ -78,7 +81,7 @@ export const authApi = {
     });
   },
 
-  confirmEmail(body: { accessToken: string; refreshToken?: string }) {
+  confirmEmail(body: { token: string }) {
     return apiRequestData<LoginRegisterResponse & { message?: string }>("/auth/confirm-email", {
       method: "POST",
       body,

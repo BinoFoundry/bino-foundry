@@ -1,5 +1,5 @@
-/** Platform roles — extend here when adding Staff, Designer, etc. */
-export type UserRole = "customer" | "staff" | "admin" | "super_admin";
+/** Supported platform roles exposed to clients and business logic. */
+export type UserRole = "customer" | "admin";
 
 /** Permission identifiers returned by the Current User API. */
 export type Permission =

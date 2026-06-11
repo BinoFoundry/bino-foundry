@@ -100,8 +100,8 @@ export function StrandCapacityCard({
                 strand.isOverCapacity
                   ? "bg-destructive/65"
                   : fillPercent >= 100
-                    ? "bg-primary/50"
-                    : "bg-primary/35",
+                    ? "bg-brand-gold/55"
+                    : "bg-brand-gold/38",
               )}
               style={{ width: `${fillPercent}%` }}
             />

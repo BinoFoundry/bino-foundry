@@ -20,7 +20,7 @@ export const listUsersQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().max(200).optional(),
-  role: assignableRoleSchema.or(z.enum(["staff", "super_admin"])).optional(),
+  role: assignableRoleSchema.optional(),
   accountStatus: accountStatusSchema.optional(),
   sort: z.enum(["createdAt", "lastLoginAt", "displayName", "email"]).default("createdAt"),
   sortDir: z.enum(["asc", "desc"]).default("desc"),

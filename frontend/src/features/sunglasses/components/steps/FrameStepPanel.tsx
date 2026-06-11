@@ -65,10 +65,10 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
               aria-label={`${frame.name}, ${frame.price} dollars`}
               onClick={() => onSelectFrame(frame.id)}
               className={cn(
-                "flex min-w-0 flex-col rounded-xl border-2 p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex min-w-0 flex-col rounded-xl border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-card hover:border-primary/40",
+                  ? "state-selected-subtle"
+                  : "border-border bg-card state-hoverable",
               )}
             >
               <FrameCardThumbnail frame={frame} />

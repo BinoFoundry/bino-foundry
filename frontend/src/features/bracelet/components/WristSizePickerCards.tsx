@@ -77,13 +77,9 @@ export function WristSizePickerCards({
                   ? "h-10 w-[3.75rem] rounded-lg px-1 py-1.5"
                   : "min-h-[3.5rem] w-[4.5rem] rounded-xl px-2 py-2 sm:min-h-[3.75rem] sm:w-[4.75rem] sm:py-2.5",
                 selected
-                  ? cn(
-                      "border-2 border-primary/70 bg-primary/[0.08]",
-                      "shadow-[0_2px_14px_hsl(var(--primary)/0.14),inset_0_1px_0_hsl(var(--primary)/0.12)]",
-                    )
+                  ? "state-selected-subtle border"
                   : cn(
-                      "border border-border/50 bg-background/50",
-                      "hover:border-primary/35 hover:bg-muted/20 hover:shadow-sm",
+                      "border border-border/50 bg-background/50 state-hoverable",
                       "active:scale-[0.98]",
                     ),
               )}

@@ -38,7 +38,9 @@ const TintSwatch = memo(function TintSwatch({
       onClick={() => onSelect(tint.id)}
       className={cn(
         "flex flex-col items-center gap-2 rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active ? "border-primary bg-primary/5 ring-2 ring-primary/30" : "border-border hover:border-primary/40",
+        active
+          ? "state-selected-subtle ring-1 ring-selection/25"
+          : "border-border state-hoverable",
       )}
     >
       <span

@@ -20,7 +20,7 @@ import { AdminPage } from "../../components/AdminPage";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { UserForm, type UserFormValues } from "./UserForm";
-import { ASSIGNABLE_ROLE_OPTIONS, ROLE_LABELS, STATUS_LABELS, formatAdminDate } from "./user-labels";
+import { ASSIGNABLE_ROLE_OPTIONS, STATUS_LABELS, displayRoleLabel, formatAdminDate } from "./user-labels";
 
 type ViewState =
   | { mode: "list" }
@@ -210,7 +210,7 @@ export function UsersAdminPage() {
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <DetailField label="Email" value={user.email ?? "—"} />
               <DetailField label="Phone" value={user.phone ?? "—"} />
-              <DetailField label="Role" value={ROLE_LABELS[user.role]} />
+              <DetailField label="Role" value={displayRoleLabel(user.role)} />
               <DetailField label="Status" value={STATUS_LABELS[user.accountStatus]} />
               <DetailField label="Designs" value={String(user.savedDesignsCount)} />
               <DetailField label="Orders" value={String(user.ordersCount)} />
@@ -346,7 +346,7 @@ export function UsersAdminPage() {
                     <tr key={user.id} className="border-b border-border/60 hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{user.displayName ?? "—"}</td>
                       <td className="px-4 py-3 text-muted-foreground">{user.email ?? "—"}</td>
-                      <td className="px-4 py-3">{ROLE_LABELS[user.role]}</td>
+                      <td className="px-4 py-3">{displayRoleLabel(user.role)}</td>
                       <td className="px-4 py-3">
                         <AdminStatusBadge
                           label={STATUS_LABELS[user.accountStatus]}

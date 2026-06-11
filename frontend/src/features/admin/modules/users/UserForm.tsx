@@ -5,7 +5,7 @@ import type { AccountStatus, AdminUserDetail, AssignableUserRole } from "@bino-f
 import { ACCOUNT_STATUSES } from "@bino-foundry/shared/types";
 
 import { adminFieldClass } from "../../components/admin-styles";
-import { ASSIGNABLE_ROLE_OPTIONS, ROLE_LABELS, STATUS_LABELS } from "./user-labels";
+import { ASSIGNABLE_ROLE_OPTIONS, STATUS_LABELS } from "./user-labels";
 
 export type UserFormMode = "create" | "edit";
 
@@ -120,11 +120,6 @@ export function UserForm({ mode, initial, onCancel, onSave }: UserFormProps) {
               </option>
             ))}
           </select>
-          {initial && !ASSIGNABLE_ROLE_OPTIONS.some((o) => o.value === initial.role) ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Current role: {ROLE_LABELS[initial.role]}
-            </p>
-          ) : null}
         </div>
 
         <div>

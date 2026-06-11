@@ -29,7 +29,7 @@ export function StrandZoomControls({
       role="toolbar"
       aria-label={BRACELET_COPY.zoomWheel}
       className={cn(
-        "flex items-center gap-1 rounded-lg border border-border/80 bg-background/90 p-1 shadow-sm backdrop-blur-sm",
+        "flex items-center gap-1 rounded-lg border border-border/50 bg-background/85 p-1 backdrop-blur-sm",
         className,
       )}
     >

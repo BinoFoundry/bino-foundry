@@ -68,7 +68,7 @@ export function SettingsPage() {
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
-      <form className="space-y-4 rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm" onSubmit={(e) => void handleSaveProfile(e)}>
+      <form className="portal-card space-y-4 p-6" onSubmit={(e) => void handleSaveProfile(e)}>
         <div>
           <h3 className="type-h3">Account details</h3>
           <p className="mt-1 text-sm text-muted-foreground">Manage your profile and billing information.</p>
@@ -151,7 +151,7 @@ export function SettingsPage() {
         </Button>
       </form>
 
-      <form className="space-y-4 rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm" onSubmit={(e) => void handleChangePassword(e)}>
+      <form className="portal-card space-y-4 p-6" onSubmit={(e) => void handleChangePassword(e)}>
         <div>
           <h3 className="type-h3">Password</h3>
           <p className="mt-1 text-sm text-muted-foreground">Update your sign-in password.</p>

@@ -1,9 +1,20 @@
 import type { AccountStatus, UserRole } from "@bino-foundry/shared/types";
 import { ASSIGNABLE_USER_ROLES } from "@bino-foundry/shared/types";
 
+import {
+  createUser,
+  findUserByEmail,
+  findUserById,
+  getRoleIdByCode,
+  listUsersQuery,
+  updateUser,
+  type DbUser,
+} from "../../infra/auth/user-repository.js";
+import { revokeAllUserSessions } from "../../infra/auth/session-repository.js";
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
-import { resolveUserRole } from "../../lib/rbac.js";
+import { hashPassword } from "../../lib/password.js";
+import { normalizeRoleCode } from "../../lib/rbac.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import type {
   CreateUserDTO,
@@ -12,15 +23,12 @@ import type {
   UpdateUserDTO,
 } from "./users.validation.js";
 
-const PROFILE_SELECT =
-  "user_id, email, display_name, phone, role, account_status, billing_details, deleted_at, created_at, updated_at, last_login_at";
-
 function mapSortColumn(sort: "createdAt" | "lastLoginAt" | "displayName" | "email"): string {
   switch (sort) {
     case "lastLoginAt":
       return "last_login_at";
     case "displayName":
-      return "display_name";
+      return "full_name";
     case "email":
       return "email";
     default:
@@ -28,30 +36,23 @@ function mapSortColumn(sort: "createdAt" | "lastLoginAt" | "displayName" | "emai
   }
 }
 
-function mapProfileRow(row: Record<string, unknown>, counts?: { designs: number; orders: number }, authMeta?: { emailVerified: boolean }) {
+function mapUserSummary(row: DbUser, counts?: { designs: number; orders: number }) {
   return {
-    id: String(row.user_id),
-    email: (row.email as string | null) ?? null,
-    displayName: (row.display_name as string | null) ?? null,
-    phone: (row.phone as string | null) ?? null,
-    role: String(row.role ?? "customer") as UserRole,
-    accountStatus: String(row.account_status ?? "active") as AccountStatus,
-    emailVerified: authMeta?.emailVerified ?? false,
+    id: row.id,
+    email: row.email,
+    displayName: row.fullName,
+    phone: row.phoneNumber,
+    role: normalizeRoleCode(row.roleCode),
+    accountStatus: row.status,
+    emailVerified: Boolean(row.emailVerifiedAt),
     savedDesignsCount: counts?.designs ?? 0,
     ordersCount: counts?.orders ?? 0,
-    createdAt: String(row.created_at),
-    lastLoginAt: (row.last_login_at as string | null) ?? null,
-    updatedAt: String(row.updated_at),
-    billingDetails: (row.billing_details as Record<string, unknown> | null) ?? {},
-    deletedAt: (row.deleted_at as string | null) ?? null,
+    createdAt: row.createdAt,
+    lastLoginAt: row.lastLoginAt,
+    updatedAt: row.updatedAt,
+    billingDetails: row.billingDetails,
+    deletedAt: row.deletedAt,
   };
-}
-
-async function fetchAuthUser(userId: string) {
-  const supabase = getSupabaseServiceRole();
-  const { data, error } = await supabase.auth.admin.getUserById(userId);
-  if (error || !data.user) return null;
-  return data.user;
 }
 
 async function fetchCountsForUsers(userIds: string[]): Promise<Map<string, { designs: number; orders: number }>> {
@@ -88,91 +89,47 @@ async function fetchCountsForUsers(userIds: string[]): Promise<Map<string, { des
   return result;
 }
 
-async function syncRoleToAuth(userId: string, role: UserRole, displayName?: string | null) {
-  const supabase = getSupabaseServiceRole();
-  const patch: Record<string, unknown> = {
-    app_metadata: { role },
-    user_metadata: {
-      role,
-      ...(displayName ? { display_name: displayName } : {}),
-    },
-  };
-  const { error } = await supabase.auth.admin.updateUserById(userId, patch);
-  if (error) throw new ValidationError(error.message);
+async function requireActiveUser(userId: string): Promise<DbUser> {
+  const user = await findUserById(userId);
+  if (!user || user.deletedAt) throw new NotFoundError("User not found");
+  return user;
 }
 
 export class UsersService {
   async list(query: ListUsersQueryDTO) {
-    const supabase = getSupabaseServiceRole();
     const page = query.page;
     const pageSize = query.pageSize;
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
-    const ascending = query.sortDir === "asc";
 
-    let dbQuery = supabase
-      .from("customer_profiles")
-      .select(PROFILE_SELECT, { count: "exact" })
-      .is("deleted_at", null);
+    const { rows, count } = await listUsersQuery({
+      from,
+      to,
+      ascending: query.sortDir === "asc",
+      sortColumn: mapSortColumn(query.sort),
+      roleCode: query.role,
+      status: query.accountStatus,
+      search: query.search,
+    });
 
-    if (query.role) {
-      dbQuery = dbQuery.eq("role", query.role);
-    }
-    if (query.accountStatus) {
-      dbQuery = dbQuery.eq("account_status", query.accountStatus);
-    }
-    if (query.search) {
-      const safe = query.search.replace(/[%_,.*()"'\\]/g, "").trim();
-      if (safe) {
-        const term = `%${safe}%`;
-        dbQuery = dbQuery.or(`email.ilike.${term},display_name.ilike.${term}`);
-      }
-    }
-
-    const { data, error, count } = await dbQuery
-      .order(mapSortColumn(query.sort), { ascending, nullsFirst: false })
-      .range(from, to);
-
-    assertNoDbError(error);
-
-    const rows = (data ?? []) as Record<string, unknown>[];
-    const userIds = rows.map((r) => String(r.user_id));
+    const userIds = rows.map((r) => r.id);
     const counts = await fetchCountsForUsers(userIds);
+    const items = rows.map((row) => {
+      const summary = mapUserSummary(row, counts.get(row.id));
+      const { billingDetails: _billing, deletedAt: _deleted, ...rest } = summary;
+      return rest;
+    });
 
-    const items = await Promise.all(
-      rows.map(async (row) => {
-        const id = String(row.user_id);
-        const authUser = await fetchAuthUser(id);
-        return mapProfileRow(row, counts.get(id), {
-          emailVerified: Boolean(authUser?.email_confirmed_at),
-        });
-      }),
-    );
-
-    const total = count ?? items.length;
+    const total = count;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     return { items, total, page, pageSize, totalPages };
   }
 
   async getById(userId: string) {
-    const supabase = getSupabaseServiceRole();
-    const { data, error } = await supabase
-      .from("customer_profiles")
-      .select(PROFILE_SELECT)
-      .eq("user_id", userId)
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    assertNoDbError(error);
-    if (!data) throw new NotFoundError("User not found");
-
-    const row = data as Record<string, unknown>;
+    const user = await requireActiveUser(userId);
     const counts = await fetchCountsForUsers([userId]);
-    const authUser = await fetchAuthUser(userId);
-    const summary = mapProfileRow(row, counts.get(userId), {
-      emailVerified: Boolean(authUser?.email_confirmed_at),
-    });
+    const summary = mapUserSummary(user, counts.get(userId));
 
     const [recentDesigns, recentOrders] = await Promise.all([
       this.listDesignsForUser(userId, 10),
@@ -180,7 +137,19 @@ export class UsersService {
     ]);
 
     return {
-      ...summary,
+      id: summary.id,
+      email: summary.email,
+      displayName: summary.displayName,
+      phone: summary.phone,
+      role: summary.role,
+      accountStatus: summary.accountStatus,
+      emailVerified: summary.emailVerified,
+      savedDesignsCount: summary.savedDesignsCount,
+      ordersCount: summary.ordersCount,
+      createdAt: summary.createdAt,
+      lastLoginAt: summary.lastLoginAt,
+      updatedAt: summary.updatedAt,
+      billingDetails: summary.billingDetails,
       recentDesigns,
       recentOrders,
     };
@@ -191,108 +160,65 @@ export class UsersService {
       throw new ValidationError("Invalid role");
     }
 
-    const supabase = getSupabaseServiceRole();
-    const { data, error } = await supabase.auth.admin.createUser({
+    const passwordHash = await hashPassword(dto.password);
+    const existing = await findUserByEmail(dto.email);
+    if (existing) {
+      throw new ConflictError("A user with this email already exists");
+    }
+
+    const created = await createUser({
       email: dto.email,
-      password: dto.password,
-      email_confirm: true,
-      user_metadata: {
-        display_name: dto.displayName ?? null,
-        role: dto.role,
-      },
-      app_metadata: { role: dto.role },
+      passwordHash,
+      fullName: dto.displayName ?? null,
+      phoneNumber: dto.phone ?? null,
+      roleCode: dto.role,
+      status: dto.accountStatus,
+      emailVerifiedAt: new Date().toISOString(),
     });
 
-    if (error) {
-      if (error.message.toLowerCase().includes("already")) {
-        throw new ConflictError("A user with this email already exists");
-      }
-      throw new ValidationError(error.message);
-    }
-    if (!data.user) throw new ValidationError("Could not create user");
-
-    const { error: profileError } = await supabase.from("customer_profiles").upsert(
-      {
-        user_id: data.user.id,
-        email: dto.email,
-        display_name: dto.displayName ?? null,
-        phone: dto.phone ?? null,
-        role: dto.role,
-        account_status: dto.accountStatus,
-      },
-      { onConflict: "user_id" },
-    );
-
-    assertNoDbError(profileError);
-
-    return this.getById(data.user.id);
+    return this.getById(created.id);
   }
 
   async update(userId: string, dto: UpdateUserDTO) {
-    const existing = await this.getById(userId);
-    const supabase = getSupabaseServiceRole();
-    const profilePatch: Record<string, unknown> = {};
+    const existing = await requireActiveUser(userId);
+    const patch: Record<string, unknown> = {};
 
-    if (dto.displayName !== undefined) profilePatch.display_name = dto.displayName;
-    if (dto.phone !== undefined) profilePatch.phone = dto.phone;
-    if (dto.role !== undefined) profilePatch.role = dto.role;
-    if (dto.accountStatus !== undefined) profilePatch.account_status = dto.accountStatus;
-    if (dto.billingDetails !== undefined) profilePatch.billing_details = dto.billingDetails;
-
-    if (dto.email !== undefined && dto.email !== existing.email) {
-      const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
-        email: dto.email,
-      });
-      if (authError) throw new ValidationError(authError.message);
-      profilePatch.email = dto.email;
+    if (dto.displayName !== undefined) patch.full_name = dto.displayName;
+    if (dto.phone !== undefined) patch.phone_number = dto.phone;
+    if (dto.accountStatus !== undefined) patch.status = dto.accountStatus;
+    if (dto.billingDetails !== undefined) patch.billing_details = dto.billingDetails;
+    if (dto.email !== undefined) patch.email = dto.email.trim().toLowerCase();
+    if (dto.role !== undefined) {
+      const roleId = await getRoleIdByCode(dto.role);
+      if (!roleId) throw new ValidationError("Invalid role");
+      patch.role_id = roleId;
     }
 
-    if (dto.role !== undefined || dto.displayName !== undefined) {
-      await syncRoleToAuth(
-        userId,
-        (dto.role ?? existing.role) as UserRole,
-        dto.displayName ?? existing.displayName,
-      );
+    if (Object.keys(patch).length > 0) {
+      await updateUser(userId, patch);
     }
 
-    if (Object.keys(profilePatch).length > 0) {
-      const { error } = await supabase.from("customer_profiles").update(profilePatch).eq("user_id", userId);
-      assertNoDbError(error);
-    }
-
+    void existing;
     return this.getById(userId);
   }
 
   async softDelete(userId: string) {
-    await this.getById(userId);
-    const supabase = getSupabaseServiceRole();
+    await requireActiveUser(userId);
     const now = new Date().toISOString();
 
-    const { error: profileError } = await supabase
-      .from("customer_profiles")
-      .update({
-        deleted_at: now,
-        account_status: "inactive",
-      })
-      .eq("user_id", userId);
-
-    assertNoDbError(profileError);
-
-    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-    if (authError) {
-      throw new ValidationError(authError.message);
-    }
+    await updateUser(userId, {
+      deleted_at: now,
+      status: "inactive",
+    });
+    await revokeAllUserSessions(userId);
 
     return { ok: true, deletedAt: now };
   }
 
   async resetPassword(userId: string, dto: ResetPasswordDTO) {
-    await this.getById(userId);
-    const supabase = getSupabaseServiceRole();
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
-      password: dto.newPassword,
-    });
-    if (error) throw new ValidationError(error.message);
+    await requireActiveUser(userId);
+    await updateUser(userId, { password_hash: await hashPassword(dto.newPassword) });
+    await revokeAllUserSessions(userId);
     return { ok: true, message: "Password updated." };
   }
 
@@ -351,29 +277,6 @@ export class UsersService {
         createdAt: String(r.created_at),
       };
     });
-  }
-
-  /** Ensure auth-only users appear in profiles (e.g. legacy accounts). */
-  async ensureProfileFromAuth(userId: string) {
-    const authUser = await fetchAuthUser(userId);
-    if (!authUser) return null;
-
-    const role = resolveUserRole(authUser);
-    const supabase = getSupabaseServiceRole();
-    const { error } = await supabase.from("customer_profiles").upsert(
-      {
-        user_id: userId,
-        email: authUser.email ?? null,
-        display_name:
-          typeof authUser.user_metadata?.display_name === "string"
-            ? authUser.user_metadata.display_name
-            : null,
-        role,
-      },
-      { onConflict: "user_id" },
-    );
-    assertNoDbError(error);
-    return role;
   }
 }
 

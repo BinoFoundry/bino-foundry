@@ -4,13 +4,13 @@ import { asyncHandler } from "../../lib/async-handler.js";
 import { sendData, sendDataCreated, sendJson } from "../../lib/http-response.js";
 import { getAuthUserId } from "../../middleware/auth-mutations.js";
 import { validateBody } from "../../lib/validation.js";
-import { verifySupabaseAccessToken } from "../../middleware/auth-jwt.js";
 import { authService } from "./auth.service.js";
 import {
   changePasswordDto,
   confirmEmailDto,
   forgotPasswordDto,
   loginDto,
+  logoutDto,
   refreshDto,
   registerDto,
   resendVerificationDto,
@@ -20,28 +20,26 @@ import {
 
 async function register(req: Request, res: Response): Promise<void> {
   const body = validateBody(registerDto, req.body);
-  sendDataCreated(req, res, await authService.register(body));
+  sendDataCreated(req, res, await authService.register(body, req));
 }
 
 async function login(req: Request, res: Response): Promise<void> {
   const body = validateBody(loginDto, req.body);
-  sendData(req, res, await authService.login(body));
+  sendData(req, res, await authService.login(body, req));
 }
 
 async function refresh(req: Request, res: Response): Promise<void> {
   const body = validateBody(refreshDto, req.body);
-  sendData(req, res, await authService.refresh(body.refreshToken));
+  sendData(req, res, await authService.refresh(body.refreshToken, req));
 }
 
 async function me(req: Request, res: Response): Promise<void> {
-  const bearer = req.headers.authorization?.slice("Bearer ".length).trim();
-  const supabaseUser = bearer ? await verifySupabaseAccessToken(bearer) : null;
-  if (!supabaseUser) {
+  const userId = getAuthUserId(req)!;
+  const current = await authService.getCurrentUser(userId);
+  if (!current) {
     sendData(req, res, { authenticated: false, user: null, profile: null });
     return;
   }
-
-  const current = await authService.buildCurrentUser(supabaseUser);
   sendData(req, res, {
     authenticated: true,
     user: current.user,
@@ -57,13 +55,8 @@ async function updateProfile(req: Request, res: Response): Promise<void> {
 
 async function changePassword(req: Request, res: Response): Promise<void> {
   const userId = getAuthUserId(req)!;
-  const email = req.auth?.scheme === "jwt" ? req.auth.email : undefined;
-  if (!email) {
-    sendData(req, res, { ok: false, message: "Email required to change password" });
-    return;
-  }
   const body = validateBody(changePasswordDto, req.body);
-  sendData(req, res, await authService.changePassword(userId, email, body));
+  sendData(req, res, await authService.changePassword(userId, body));
 }
 
 async function forgotPassword(req: Request, res: Response): Promise<void> {
@@ -73,7 +66,7 @@ async function forgotPassword(req: Request, res: Response): Promise<void> {
 
 async function resetPassword(req: Request, res: Response): Promise<void> {
   const body = validateBody(resetPasswordDto, req.body);
-  sendData(req, res, await authService.resetPassword(body));
+  sendData(req, res, await authService.resetPassword(body, req));
 }
 
 async function resendVerification(req: Request, res: Response): Promise<void> {
@@ -83,11 +76,12 @@ async function resendVerification(req: Request, res: Response): Promise<void> {
 
 async function confirmEmail(req: Request, res: Response): Promise<void> {
   const body = validateBody(confirmEmailDto, req.body);
-  sendData(req, res, await authService.confirmEmail(body));
+  sendData(req, res, await authService.confirmEmail(body, req));
 }
 
-async function logout(_req: Request, res: Response): Promise<void> {
-  sendJson(res, { ok: true });
+async function logout(req: Request, res: Response): Promise<void> {
+  const body = validateBody(logoutDto, req.body);
+  sendData(req, res, await authService.logout(body.refreshToken));
 }
 
 export const authHandlers = {

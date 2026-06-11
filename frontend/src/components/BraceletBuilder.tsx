@@ -491,7 +491,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       ) : null}
 
       {builder.selectedBead && isMobile ? (
-        <div className="absolute left-3 right-3 top-12 z-30 flex items-center gap-2 rounded-lg border border-primary/25 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-sm">
+        <div className="absolute left-3 right-3 top-12 z-30 flex items-center gap-2 rounded-lg border border-border/50 bg-background/90 px-3 py-2 backdrop-blur-sm">
           {getBeadDisplayImageUrl(builder.selectedBead) ? (
             <img
               src={getBeadDisplayImageUrl(builder.selectedBead)!}
@@ -544,7 +544,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         type="button"
         variant="ghost"
         size="icon"
-        className="absolute bottom-3 right-3 z-30 h-10 w-10 border border-border/80 bg-background/90 shadow-sm backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive sm:bottom-4 sm:right-4 sm:h-9 sm:w-9"
+        className="absolute bottom-3 right-3 z-30 h-10 w-10 border border-border/50 bg-background/85 backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive sm:bottom-4 sm:right-4 sm:h-9 sm:w-9"
         title={BRACELET_COPY.clearStrand}
         aria-label={BRACELET_COPY.clearStrand}
         disabled={builder.pricing.placedCount === 0}

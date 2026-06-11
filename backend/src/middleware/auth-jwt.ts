@@ -1,11 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
-import type { User } from "@supabase/supabase-js";
 import type { NextFunction, Request, Response } from "express";
 import type { Permission, UserRole } from "@bino-foundry/shared/types";
 
-import { getEnv } from "../config/env.js";
+import { findUserById } from "../infra/auth/user-repository.js";
 import { UnauthorizedError } from "../lib/errors.js";
-import { buildAuthUser, hasPermission, isAdminRole } from "../lib/rbac.js";
+import { verifyAccessToken } from "../lib/jwt.js";
+import { buildAuthUserFromDb, hasPermission, isAdminRole } from "../lib/rbac.js";
 
 export type AuthPrincipal =
   | { scheme: "api-key" }
@@ -25,14 +24,14 @@ function bearerToken(req: Request): string | undefined {
   return token || undefined;
 }
 
-/** @deprecated Prefer role + permissions from buildAuthUser */
-export function isAdminUser(user: User): boolean {
-  const authUser = buildAuthUser(user);
-  return isAdminRole(authUser.role);
-}
+async function jwtPrincipalFromToken(token: string): Promise<Extract<AuthPrincipal, { scheme: "jwt" }> | null> {
+  const payload = verifyAccessToken(token);
+  if (!payload) return null;
 
-function jwtPrincipal(user: User, profileRole?: string | null): Extract<AuthPrincipal, { scheme: "jwt" }> {
-  const authUser = buildAuthUser(user, profileRole);
+  const user = await findUserById(payload.sub);
+  if (!user || user.deletedAt) return null;
+
+  const authUser = buildAuthUserFromDb(user);
   return {
     scheme: "jwt",
     userId: authUser.id,
@@ -43,18 +42,9 @@ function jwtPrincipal(user: User, profileRole?: string | null): Extract<AuthPrin
   };
 }
 
-/** Verify Supabase access token via Auth API (anon key). Returns null if auth is not configured. */
-export async function verifySupabaseAccessToken(token: string): Promise<User | null> {
-  const { SUPABASE_URL, SUPABASE_ANON_KEY } = getEnv();
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-
-  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const { data, error } = await client.auth.getUser(token);
-  if (error || !data.user) return null;
-  return data.user;
+/** Verify application access token and return JWT payload. */
+export async function verifyApplicationAccessToken(token: string) {
+  return verifyAccessToken(token);
 }
 
 /** Attach `req.auth` when a valid Bearer JWT is present (optional). */
@@ -65,9 +55,9 @@ export async function attachJwtAuth(req: Request, _res: Response, next: NextFunc
       next();
       return;
     }
-    const user = await verifySupabaseAccessToken(token);
-    if (user) {
-      req.auth = jwtPrincipal(user);
+    const principal = await jwtPrincipalFromToken(token);
+    if (principal) {
+      req.auth = principal;
     }
     next();
   } catch (err) {
@@ -87,3 +77,6 @@ export async function requireAdminAuth(req: Request, _res: Response, next: NextF
   }
   next(new UnauthorizedError("Authentication required"));
 }
+
+/** @deprecated Use verifyApplicationAccessToken */
+export const verifySupabaseAccessToken = verifyApplicationAccessToken;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { AdminLayout } from "./components/AdminLayout";
 import { AdminMobileNav } from "./components/AdminMobileNav";
@@ -13,6 +13,26 @@ import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
 import { FramesAdminPage } from "./modules/products/FramesAdminPage";
 import { UsersAdminPage } from "./modules/users/UsersAdminPage";
 import type { AdminSection } from "./types";
+
+const ADMIN_SECTIONS = new Set<AdminSection>([
+  "dashboard",
+  "users",
+  "frames",
+  "beads",
+  "bead-types",
+  "bead-sizes",
+  "wrist-sizes",
+  "general-settings",
+  "sunglasses-config",
+  "media",
+]);
+
+function parseAdminSection(raw: string | null): AdminSection {
+  if (raw && ADMIN_SECTIONS.has(raw as AdminSection)) {
+    return raw as AdminSection;
+  }
+  return "dashboard";
+}
 
 function AdminSectionView({
   section,
@@ -48,12 +68,17 @@ function AdminSectionView({
 }
 
 export function AdminApp() {
-  const [section, setSection] = useState<AdminSection>("dashboard");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = parseAdminSection(searchParams.get("section"));
+
+  const handleSectionChange = (next: AdminSection) => {
+    setSearchParams(next === "dashboard" ? {} : { section: next }, { replace: true });
+  };
 
   return (
-    <AdminLayout section={section} onSectionChange={setSection}>
-      <AdminMobileNav section={section} onSectionChange={setSection} />
-      <AdminSectionView section={section} onNavigate={setSection} />
+    <AdminLayout section={section} onSectionChange={handleSectionChange}>
+      <AdminMobileNav section={section} onSectionChange={handleSectionChange} />
+      <AdminSectionView section={section} onNavigate={handleSectionChange} />
     </AdminLayout>
   );
 }

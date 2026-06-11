@@ -46,6 +46,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 20. `000024_order_customer_details.sql` — `customer_details` JSONB snapshot on `customer_orders` for checkout.
 21. `000025_customer_profile_rbac.sql` — customer profile role cache, phone, and billing details for the client portal.
 22. `000026_user_management.sql` — `account_status`, soft `deleted_at`, and `last_login_at` on `customer_profiles` for admin user management.
+23. `000027_application_auth.sql` — application-owned `roles`, `users`, `user_sessions`, and verification/reset tokens (replaces Supabase Auth as identity source).
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

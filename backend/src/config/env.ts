@@ -27,6 +27,12 @@ const envSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.preprocess(emptyAsUndefined, z.string().optional()),
     /** Public SPA origin for auth email links (password reset, email verification). */
     PUBLIC_APP_URL: z.preprocess(emptyAsUndefined, z.string().url().optional()),
+    /** Secret for signing application JWT access tokens */
+    JWT_SECRET: z.preprocess(emptyAsUndefined, z.string().min(32).optional()),
+    /** Access token lifetime in seconds (default 15 minutes) */
+    JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+    /** Refresh token lifetime in days (default 30) */
+    JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
     /** Max mutation requests per IP per minute (0 = disabled) */
     RATE_LIMIT_MUTATIONS_PER_MIN: z.coerce.number().int().min(0).default(120),
     /** Set to `1` or `true` when API sits behind nginx/Caddy TLS termination */
@@ -64,6 +70,13 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "ADMIN_API_KEY is required when APP_ENV is staging or production",
         path: ["ADMIN_API_KEY"],
+      });
+    }
+    if (!data.JWT_SECRET?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "JWT_SECRET is required when APP_ENV is staging or production",
+        path: ["JWT_SECRET"],
       });
     }
   });

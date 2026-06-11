@@ -72,8 +72,8 @@ export function BuilderHeader({
             className={cn(
               "type-label rounded-full border px-3 py-1.5 transition-colors",
               twinning
-                ? "border-primary/35 bg-primary/10 text-foreground"
-                : "border-[hsl(var(--control-border))] text-muted-foreground hover:text-foreground",
+                ? "state-selected-subtle text-foreground"
+                : "border-[hsl(var(--control-border))] text-muted-foreground hover:text-foreground state-hoverable",
             )}
           >
             {twinning ? BRACELET_COPY.twinOn : BRACELET_COPY.twinOff}

@@ -230,7 +230,7 @@ export function BraceletSummaryPanel({
         )}
       </SummaryInfoCard>
 
-      <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2.5">
+      <div className="rounded-xl border border-border/45 bg-card/50 px-3 py-2.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="type-body text-sm text-foreground">{BRACELET_COPY.estimatedTotal}</span>
           <span className="type-price text-xl text-foreground">${pricing.total.toFixed(2)}</span>
@@ -281,7 +281,7 @@ export function BraceletSummaryPanel({
   }
 
   return (
-    <div className={cn("border-t border-border bg-card/60", className)}>
+    <div className={cn("border-t border-border/50 bg-background/40", className)}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3 text-left"

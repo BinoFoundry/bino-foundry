@@ -48,7 +48,7 @@ const SunglassesAccessoriesLibrary = ({
               <button
                 key={lensColor.id}
                 onClick={() => onSelectLensColor(lensColor)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group ${currentLensColorId === lensColor.id ? 'bg-primary/10 border border-primary/20' : 'hover:bg-muted/60'}`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group ${currentLensColorId === lensColor.id ? 'state-selected-subtle border' : 'border border-transparent hover:bg-selection-muted'}`}
               >
                 <div
                   className={`w-8 h-8 rounded-full border flex-shrink-0 flex items-center justify-center overflow-hidden ${currentLensColorId === lensColor.id ? 'border-primary' : 'border-border/50'} ${!lensColor.image ? 'bg-gradient-to-br from-white to-gray-200' : ''}`}
@@ -81,7 +81,7 @@ const SunglassesAccessoriesLibrary = ({
                 <button
                   key={`secondary-${lensColor.id}`}
                   onClick={() => onSelectSecondaryColor(lensColor)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group ${currentSecondaryColorId === lensColor.id ? 'bg-primary/10 border border-primary/20' : 'hover:bg-muted/60'}`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group ${currentSecondaryColorId === lensColor.id ? 'state-selected-subtle border' : 'border border-transparent hover:bg-selection-muted'}`}
                 >
                   <div
                     className={`w-8 h-8 rounded-full border flex-shrink-0 flex items-center justify-center overflow-hidden ${currentSecondaryColorId === lensColor.id ? 'border-primary' : 'border-border/50'} ${!lensColor.image ? 'bg-gradient-to-br from-white to-gray-200' : ''}`}

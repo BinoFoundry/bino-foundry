@@ -14,7 +14,7 @@ export function StatCard({ label, value, hint, icon: Icon, className }: StatCard
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/60 bg-card/80 p-5 shadow-sm transition-shadow hover:shadow-md",
+        "portal-card p-5",
         className,
       )}
     >

@@ -2,17 +2,23 @@ import type { NextFunction, Request, Response } from "express";
 import type { Permission } from "@bino-foundry/shared/types";
 
 import { getEnv, isProductionLike } from "../config/env.js";
-import { assertActiveSession, getProfileAccess } from "../lib/account-status.js";
+import { assertActiveSession, getUserAccess } from "../lib/account-status.js";
 import { ForbiddenError, UnauthorizedError } from "../lib/errors.js";
-import { hasPermission, buildAuthUser, isAdminRole } from "../lib/rbac.js";
-import { verifySupabaseAccessToken, type AuthPrincipal } from "./auth-jwt.js";
+import { findUserById } from "../infra/auth/user-repository.js";
+import { verifyAccessToken } from "../lib/jwt.js";
+import { hasPermission, isAdminRole, buildAuthUserFromDb } from "../lib/rbac.js";
+import type { AuthPrincipal } from "./auth-jwt.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 async function jwtPrincipalFromBearer(bearer: string): Promise<Extract<AuthPrincipal, { scheme: "jwt" }> | null> {
-  const user = await verifySupabaseAccessToken(bearer);
-  if (!user) return null;
-  const authUser = buildAuthUser(user);
+  const payload = verifyAccessToken(bearer);
+  if (!payload) return null;
+
+  const user = await findUserById(payload.sub);
+  if (!user || user.deletedAt) return null;
+
+  const authUser = buildAuthUserFromDb(user);
   return {
     scheme: "jwt",
     userId: authUser.id,
@@ -115,7 +121,7 @@ export async function requireUserAuth(req: Request, _res: Response, next: NextFu
   }
 
   try {
-    const access = await getProfileAccess(userId);
+    const access = await getUserAccess(userId);
     assertActiveSession(access);
     next();
   } catch (err) {

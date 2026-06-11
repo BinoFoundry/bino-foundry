@@ -257,7 +257,7 @@ const BeadLibrary = ({
                               e.stopPropagation();
                               handleLibraryClick(bead, s);
                             }}
-                            className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/5"
+                            className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground state-hoverable"
                             title={`Drag ${s.label} onto your bracelet`}
                           >
                             {s.sizeMm} mm · {formatSizeOfferPrice(s, currency)}

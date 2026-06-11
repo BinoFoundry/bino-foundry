@@ -19,7 +19,7 @@ export function PortalEmptyState({
   children,
 }: PortalEmptyStateProps) {
   return (
-    <div className="rounded-2xl border border-dashed border-border/70 bg-card/40 px-6 py-12 text-center">
+    <div className="rounded-2xl border border-dashed border-border/50 bg-card/30 px-6 py-12 text-center">
       <h3 className="type-h3 text-foreground">{title}</h3>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
       {children}

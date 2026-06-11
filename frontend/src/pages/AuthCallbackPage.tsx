@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -7,42 +7,38 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AppShell } from "@/layouts";
+import { postAuthLandingPath } from "@/lib/auth-landing";
 import { authApi } from "@/services/api/auth";
 import { isApiError } from "@/services/api/errors";
 import { saveAuthSession } from "@/services/auth/session";
 
-function parseHashTokens(): {
-  accessToken: string | null;
-  refreshToken: string | null;
+function parseCallbackParams(searchParams: URLSearchParams): {
+  token: string | null;
   type: string | null;
 } {
-  const hash = window.location.hash.startsWith("#")
-    ? window.location.hash.slice(1)
-    : window.location.hash;
-  const params = new URLSearchParams(hash);
   return {
-    accessToken: params.get("access_token"),
-    refreshToken: params.get("refresh_token"),
-    type: params.get("type"),
+    token: searchParams.get("token"),
+    type: searchParams.get("type"),
   };
 }
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
-  const tokens = useMemo(() => parseHashTokens(), []);
+  const [searchParams] = useSearchParams();
+  const tokens = useMemo(() => parseCallbackParams(searchParams), [searchParams]);
   const [mode, setMode] = useState<"loading" | "reset" | "verified" | "error">("loading");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!tokens.accessToken) {
+    if (!tokens.token) {
       setMode("error");
       setError("This link is invalid or has expired.");
       return;
     }
 
-    if (tokens.type === "recovery") {
+    if (tokens.type === "reset-password") {
       setMode("reset");
       return;
     }
@@ -50,10 +46,7 @@ export default function AuthCallbackPage() {
     let cancelled = false;
     (async () => {
       try {
-        const response = await authApi.confirmEmail({
-          accessToken: tokens.accessToken!,
-          refreshToken: tokens.refreshToken ?? undefined,
-        });
+        const response = await authApi.confirmEmail({ token: tokens.token! });
         if (cancelled) return;
         if (response.session) {
           saveAuthSession({
@@ -65,6 +58,9 @@ export default function AuthCallbackPage() {
         }
         setMode("verified");
         toast.success(response.message ?? "Email verified.");
+        if (response.user) {
+          navigate(postAuthLandingPath(response.user));
+        }
       } catch (err) {
         if (!cancelled) {
           setMode("error");
@@ -76,17 +72,16 @@ export default function AuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [tokens.accessToken, tokens.refreshToken, tokens.type]);
+  }, [tokens.token, tokens.type]);
 
   const handleResetPassword = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!tokens.accessToken) return;
+    if (!tokens.token) return;
     setSubmitting(true);
     setError("");
     try {
       const response = await authApi.resetPassword({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken ?? undefined,
+        token: tokens.token,
         password,
       });
       if (response.session) {
@@ -98,7 +93,7 @@ export default function AuthCallbackPage() {
         });
       }
       toast.success(response.message ?? "Password updated.");
-      navigate("/account");
+      navigate(response.user ? postAuthLandingPath(response.user) : "/account");
     } catch (err) {
       setError(isApiError(err) ? err.message : "Could not reset password.");
     } finally {

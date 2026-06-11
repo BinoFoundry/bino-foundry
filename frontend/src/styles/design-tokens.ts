@@ -3,14 +3,17 @@
  * Canonical values live in `src/index.css` — keep in sync when rebranding.
  */
 export const brandColors = {
+  warmWhite: "#F5EFE7",
+  canvasWarm: "#F2ECE8",
+  borderSoft: "#E6DCCF",
   cream: "#F7E6CA",
   softGold: "#E8D59E",
   blush: "#D9BBB0",
   olive: "#404225",
   oliveMuted: "#646345",
-  offWhite: "#FBF8F3",
-  canvas: "#FFFFFF",
-  elevated: "#FDFCF9",
+  offWhite: "#F5EFE7",
+  canvas: "#F2ECE8",
+  elevated: "#F0EBE4",
 } as const;
 
 /** Surface roles — canonical CSS vars in `src/index.css`. */
@@ -31,10 +34,14 @@ export const cssVars = {
   canvas: "--canvas",
   highlight: "--highlight",
   decorative: "--decorative",
+  selection: "--selection",
   border: "--border",
   success: "--success",
   warning: "--warning",
   overlay: "--overlay",
+  brandWarmWhite: "--brand-warm-white",
+  brandCanvasWarm: "--brand-canvas-warm",
+  brandBorderSoft: "--brand-border-soft",
   brandCream: "--brand-cream",
   brandOlive: "--brand-olive",
   brandSoftGold: "--brand-soft-gold",
@@ -52,8 +59,8 @@ export const buttonTokens = {
   primaryBg: "#404225",
   primaryFg: "#FFFFFF",
   primaryHover: "hsl(64 22% 28%)",
-  secondaryBg: "#FFFFFF",
-  secondaryBorder: "#646345",
+  secondaryBg: "#F5EFE7",
+  secondaryBorder: "#E6DCCF",
   secondaryFg: "#646345",
 } as const;
 

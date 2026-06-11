@@ -181,8 +181,8 @@ const SunglassesBuilder = ({ onPriceChange }: SunglassesBuilderProps) => {
                 onClick={() => handleFrameChange(f.id)}
                 className={`flex shrink-0 flex-col items-center gap-1 px-4 py-2.5 rounded-lg border transition-all text-sm font-body ${
                   frame === f.id
-                    ? "border-primary bg-primary/5 text-foreground"
-                    : "border-border text-muted-foreground hover:border-primary/30"
+                    ? "state-selected-subtle text-foreground"
+                    : "border-border text-muted-foreground state-hoverable"
                 }`}
               >
                 <div className="h-6 flex items-center justify-center">
@@ -224,7 +224,7 @@ const SunglassesBuilder = ({ onPriceChange }: SunglassesBuilderProps) => {
                       setLensColorId(l.colorName);
                     }}
                     className={`relative w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden transition-all ${
-                      lensColorId === l.colorName ? "ring-2 ring-primary scale-110" : "ring-1 ring-border hover:scale-105"
+                      lensColorId === l.colorName ? "ring-2 ring-selection/60 scale-110" : "ring-1 ring-border hover:scale-105"
                     }`}
                     title={l.colorName}
                   >
