@@ -14,6 +14,7 @@ import { createSunglassesRoutes } from "../modules/sunglasses/sunglasses.routes.
 import { createRenderingRoutes } from "../modules/rendering/rendering.routes.js";
 import { createSettingsRoutes } from "../modules/settings/settings.routes.js";
 import { createUploadRoutes } from "../modules/upload/upload.routes.js";
+import { createAdminSettingsRoutes } from "./admin-settings.routes.js";
 import { createDesignsRoutes } from "../modules/designs/designs.routes.js";
 import { createOrdersRoutes } from "../modules/orders/orders.routes.js";
 
@@ -26,6 +27,8 @@ export function createCatalogRoutes(): Router {
   router.use("/designs", createDesignsRoutes());
   router.use("/orders", createOrdersRoutes());
   router.get("/bead-library-sizes", asyncHandler(beadLibrarySizeHandlers.list));
+
+  router.use("/admin/settings", createAdminSettingsRoutes());
 
   router.use(asyncHandler(requireMutationAuth));
   router.put("/bead-library-sizes/library/:id", asyncHandler(beadLibrarySizeHandlers.sync));

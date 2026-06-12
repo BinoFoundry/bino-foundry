@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError } from "../../lib/errors.js";
+import { settingsService } from "../settings/settings.service.js";
 import { slugifyKebab } from "../../lib/slug.js";
 import type { FrameCreateDTO, FrameUpdateDTO } from "./frame.validation.js";
 
@@ -210,6 +211,7 @@ export class FrameService {
 
   async create(payload: FrameCreateDTO): Promise<unknown> {
     const supabase = getSupabaseServiceRole();
+    const { currencyCode } = await settingsService.getGeneralSettings();
     const slug = await allocateFrameSlug(payload.name);
     const marketing_copy = normalizeMarketing({});
     marketing_copy.legacy_frame_images = payload.frameImages ?? [];
@@ -220,7 +222,7 @@ export class FrameService {
       slug,
       name: payload.name.trim(),
       base_price: payload.price,
-      currency_code: "USD",
+      currency_code: currencyCode,
       description: payload.description?.trim() ?? "",
       marketing_copy,
       display_order: payload.displayOrder ?? 0,

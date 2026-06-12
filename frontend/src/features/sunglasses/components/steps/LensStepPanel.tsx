@@ -7,6 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { tintPreviewStyle } from "@/features/admin/lib/adminHex";
 import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
 
+import { formatCurrency, formatCurrencySurcharge } from "@bino-foundry/shared/currency";
+
+import { formatBuilderOptionDescription, SUNGLASSES_COPY } from "../../copy";
+
 interface LensStepPanelProps {
   classicTints: LensTintEntry[];
   gradientTints: LensTintEntry[];
@@ -14,6 +18,7 @@ interface LensStepPanelProps {
   polarized: boolean;
   activeTintId: string | null;
   lensDisclaimer: string;
+  currencyCode: string;
   onPolarizedChange: (value: boolean) => void;
   onSelectTint: (tintId: string) => void;
 }
@@ -22,12 +27,16 @@ const TintSwatch = memo(function TintSwatch({
   tint,
   active,
   onSelect,
+  currencyCode,
 }: {
   tint: LensTintEntry;
   active: boolean;
   onSelect: (id: string) => void;
+  currencyCode: string;
 }) {
-  const label = `${tint.name}, ${tint.code}${tint.priceSurcharge > 0 ? `, plus ${tint.priceSurcharge} dollars` : ""}`;
+  const label = `${tint.name}, ${tint.code}${
+    tint.priceSurcharge > 0 ? `, plus ${formatCurrency(tint.priceSurcharge, currencyCode)}` : ""
+  }`;
 
   return (
     <button
@@ -51,7 +60,9 @@ const TintSwatch = memo(function TintSwatch({
       <span className="text-center text-xs font-medium text-foreground">{tint.name}</span>
       <span className="font-mono text-[10px] text-muted-foreground">{tint.code}</span>
       {tint.priceSurcharge > 0 && (
-        <span className="text-[10px] text-muted-foreground">+${tint.priceSurcharge}</span>
+        <span className="text-[10px] text-muted-foreground">
+          {formatCurrencySurcharge(tint.priceSurcharge, currencyCode)}
+        </span>
       )}
     </button>
   );
@@ -62,11 +73,13 @@ function TintGrid({
   activeTintId,
   onSelectTint,
   groupLabel,
+  currencyCode,
 }: {
   tints: LensTintEntry[];
   activeTintId: string | null;
   onSelectTint: (id: string) => void;
   groupLabel: string;
+  currencyCode: string;
 }) {
   if (!tints.length) {
     return <p className="text-sm text-muted-foreground">No tints in this category yet.</p>;
@@ -79,7 +92,13 @@ function TintGrid({
       className="grid grid-cols-2 gap-3 sm:grid-cols-3"
     >
       {tints.map((tint) => (
-        <TintSwatch key={tint.id} tint={tint} active={activeTintId === tint.id} onSelect={onSelectTint} />
+        <TintSwatch
+          key={tint.id}
+          tint={tint}
+          active={activeTintId === tint.id}
+          onSelect={onSelectTint}
+          currencyCode={currencyCode}
+        />
       ))}
     </div>
   );
@@ -92,6 +111,7 @@ export function LensStepPanel({
   polarized,
   activeTintId,
   lensDisclaimer,
+  currencyCode,
   onPolarizedChange,
   onSelectTint,
 }: LensStepPanelProps) {
@@ -105,11 +125,8 @@ export function LensStepPanel({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="type-h3">Lens options</h3>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Choose standard or polarised lenses, then pick a tint. Colour is applied to the lens only — the frame stays
-          unchanged in real time.
-        </p>
+        <h3 className="type-h3">{SUNGLASSES_COPY.lensStepTitle}</h3>
+        <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{SUNGLASSES_COPY.lensStepIntro}</p>
       </div>
 
       <div className="rounded-xl border border-border bg-muted/20 p-3">
@@ -123,11 +140,15 @@ export function LensStepPanel({
               <Label htmlFor="polarized-toggle" className="font-medium text-foreground">
                 Upgrade to {polarizedOption.label}
               </Label>
-              <p className="text-xs text-muted-foreground">
-                {polarized ? "Enabled" : "Off — standard lenses"}
-                {polarizedSurcharge > 0 ? ` · +$${polarizedSurcharge}` : ""}
-                {polarizedOption.description ? ` · ${polarizedOption.description}` : ""}
-              </p>
+              {(polarizedSurcharge > 0 || polarizedOption.description) && (
+                <p className="text-xs text-muted-foreground">
+                  {polarizedSurcharge > 0 ? formatCurrencySurcharge(polarizedSurcharge, currencyCode) : null}
+                  {polarizedSurcharge > 0 && polarizedOption.description ? " · " : null}
+                  {polarizedOption.description
+                    ? formatBuilderOptionDescription(polarizedOption.description)
+                    : null}
+                </p>
+              )}
             </div>
             <Switch id="polarized-toggle" checked={polarized} onCheckedChange={onPolarizedChange} />
           </div>
@@ -145,6 +166,7 @@ export function LensStepPanel({
             activeTintId={activeTintId}
             onSelectTint={onSelectTint}
             groupLabel="Classic lens tints"
+            currencyCode={currencyCode}
           />
         </TabsContent>
         <TabsContent value="gradient" className="mt-4">
@@ -153,6 +175,7 @@ export function LensStepPanel({
             activeTintId={activeTintId}
             onSelectTint={onSelectTint}
             groupLabel="Gradient lens tints"
+            currencyCode={currencyCode}
           />
         </TabsContent>
       </Tabs>

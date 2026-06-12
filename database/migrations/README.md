@@ -47,6 +47,8 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 21. `000025_customer_profile_rbac.sql` — customer profile role cache, phone, and billing details for the client portal.
 22. `000026_user_management.sql` — `account_status`, soft `deleted_at`, and `last_login_at` on `customer_profiles` for admin user management.
 23. `000027_application_auth.sql` — application-owned `roles`, `users`, `user_sessions`, and verification/reset tokens (replaces Supabase Auth as identity source).
+24. `000028_default_currency_sgd.sql` — default platform currency `SGD` in `site.settings_v1` (migrates legacy `USD` default).
+25. `000029_smtp_settings.sql` — singleton `smtp_settings` table for admin-configured outbound mail (credentials encrypted by API).
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

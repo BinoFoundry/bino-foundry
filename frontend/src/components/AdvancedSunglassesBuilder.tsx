@@ -4,7 +4,7 @@ interface AdvancedSunglassesBuilderProps {
   onPriceChange: (price: number) => void;
 }
 
-/** Sunglasses customiser — Frame → Lens → RX → Extras → Review. */
+/** Sunglasses customiser — Frame → Lens → RX → Add-Ons → Review. */
 const AdvancedSunglassesBuilder = ({ onPriceChange }: AdvancedSunglassesBuilderProps) => {
   return <SunglassesCustomiser onPriceChange={onPriceChange} />;
 };

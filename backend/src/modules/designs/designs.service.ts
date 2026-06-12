@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 
+import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
+
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError } from "../../lib/errors.js";
@@ -233,7 +235,7 @@ export class DesignsService {
       status: String(r.status),
       title: (r.title as string | null) ?? null,
       subtotal: Number(r.subtotal ?? 0),
-      currencyCode: String(r.currency_code ?? "USD"),
+      currencyCode: String(r.currency_code ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode),
       productConfigId: String(r.product_config_id),
       orderReference: (r.order_reference as string | null) ?? null,
       previewThumbnailUrl: (r.preview_thumbnail_url as string | null) ?? null,

@@ -1,6 +1,7 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError } from "../../lib/errors.js";
+import { settingsService } from "../settings/settings.service.js";
 import type { CreateCrystalDTO, UpdateCrystalDTO } from "./crystal.validation.js";
 
 type Specs = Record<string, unknown>;
@@ -53,6 +54,7 @@ export class CrystalService {
 
   async create(payload: CreateCrystalDTO): Promise<unknown> {
     const supabase = getSupabaseServiceRole();
+    const { currencyCode } = await settingsService.getGeneralSettings();
     const specs: Specs = payload.image?.trim()
       ? { legacy_image_url: payload.image.trim() }
       : {};
@@ -61,7 +63,7 @@ export class CrystalService {
       public_id: payload.id.trim(),
       name: payload.name.trim(),
       unit_price: payload.price,
-      currency_code: "USD",
+      currency_code: currencyCode,
       description: payload.description?.trim() ?? "",
       crystal_type_id: payload.type ?? null,
       specs,

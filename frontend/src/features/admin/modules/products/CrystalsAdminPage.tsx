@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Gem, Heart, Trash2, Circle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { CrystalEntry } from "@/data/crystals";
 import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
@@ -32,6 +33,7 @@ type SpacerModalState =
 type ProductTab = "crystals" | "charms" | "spacers";
 
 export function CrystalsAdminPage() {
+  const { format } = useFormatCurrency();
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<ProductTab>("crystals");
@@ -269,7 +271,7 @@ export function CrystalsAdminPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{c.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      ${c.price.toFixed(2)} / bead
+                      {format(c.price)} / bead
                       {c.type
                         ? ` · ${
                             tab === "crystals"

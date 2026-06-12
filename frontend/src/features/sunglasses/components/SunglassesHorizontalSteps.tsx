@@ -49,7 +49,7 @@ export function SunglassesHorizontalSteps({
                   </span>
                   <span
                     className={cn(
-                      "type-label w-full truncate px-0.5 text-center text-[10px] sm:text-xs",
+                      "type-label w-full px-0.5 text-center text-[9px] leading-tight sm:text-[10px]",
                       active ? "font-medium text-foreground" : "text-muted-foreground",
                     )}
                   >

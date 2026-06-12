@@ -4,7 +4,7 @@ export const CUSTOMISER_STEPS: { id: CustomiserStep; label: string; shortLabel: 
   { id: "frame", label: "Frame", shortLabel: "Frame" },
   { id: "lens", label: "Lens", shortLabel: "Lens" },
   { id: "rx", label: "RX", shortLabel: "RX" },
-  { id: "extras", label: "Extras", shortLabel: "Extras" },
+  { id: "extras", label: "Add-Ons", shortLabel: "Add-Ons" },
   { id: "preview", label: "Review", shortLabel: "Review" },
 ];
 

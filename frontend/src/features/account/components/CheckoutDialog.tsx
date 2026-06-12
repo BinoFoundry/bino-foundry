@@ -12,6 +12,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { formatCurrency } from "@bino-foundry/shared/currency";
+
 import { ordersApi } from "@/services/api/orders";
 import { isApiError } from "@/services/api/errors";
 import type { CustomerCheckoutDetails } from "@bino-foundry/shared/types";
@@ -96,7 +98,7 @@ export function CheckoutDialog({
         <DialogHeader>
           <DialogTitle>Complete your order</DialogTitle>
           <DialogDescription>
-            {productLabel} · ${totalAmount.toFixed(2)} {currencyCode}
+            {productLabel} · {formatCurrency(totalAmount, currencyCode)}
           </DialogDescription>
         </DialogHeader>
 

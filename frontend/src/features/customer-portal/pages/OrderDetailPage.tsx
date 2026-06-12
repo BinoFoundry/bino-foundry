@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
+import { formatCurrency } from "@bino-foundry/shared/currency";
+
 import { Button } from "@/components/ui/button";
 import { ordersApi } from "@/services/api/orders";
 
@@ -52,7 +54,7 @@ export function OrderDetailPage() {
             <p className="text-sm text-muted-foreground">Placed {formatDate(order.createdAt)}</p>
           </div>
           <p className="type-price text-2xl">
-            ${order.totalAmount.toFixed(2)} {order.currencyCode}
+            {formatCurrency(order.totalAmount, order.currencyCode)}
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError } from "../../lib/errors.js";
+import { settingsService } from "../settings/settings.service.js";
 import type { CreateSpacerDTO, UpdateSpacerDTO } from "./spacer.validation.js";
 
 type Specs = Record<string, unknown>;
@@ -51,6 +52,7 @@ export class SpacerService {
 
   async create(payload: CreateSpacerDTO): Promise<unknown> {
     const supabase = getSupabaseServiceRole();
+    const { currencyCode } = await settingsService.getGeneralSettings();
     const specs: Specs = payload.image?.trim() ? { legacy_image_url: payload.image.trim() } : {};
 
     const { data, error } = await supabase
@@ -59,7 +61,7 @@ export class SpacerService {
         public_id: payload.id.trim(),
         name: payload.name.trim(),
         unit_price: payload.price,
-        currency_code: "USD",
+        currency_code: currencyCode,
         description: payload.description?.trim() ?? "",
         spacer_type_id: payload.type ?? null,
         specs,

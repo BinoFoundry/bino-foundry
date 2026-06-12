@@ -1,3 +1,6 @@
+import { formatCurrency } from "@bino-foundry/shared/currency";
+import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
+
 import { SunglassesCompositor } from "@/render";
 import type { SunglassesCompositorConfig } from "@/render/types";
 import type { CompositorView } from "@/render/types";
@@ -25,7 +28,7 @@ export function DisplayColumn({
   showSummaryCard = true,
   polarized,
   tintCode,
-  currencyCode = "USD",
+  currencyCode = DEFAULT_SITE_GENERAL_SETTINGS.currencyCode,
 }: DisplayColumnProps) {
   const previewProps = {
     config,
@@ -74,8 +77,9 @@ export function DisplayColumn({
                 Lens type: {polarized ? "Polarised" : "Standard (non-polarised)"}
               </p>
               <div className="mt-4 flex items-baseline gap-2">
-                <span className="type-price text-3xl text-primary">${totalPrice}</span>
-                <span className="type-label text-muted-foreground">{currencyCode}</span>
+                <span className="type-price text-3xl text-primary">
+                  {formatCurrency(totalPrice, currencyCode)}
+                </span>
               </div>
               {lensDisclaimer && (
                 <p className="mt-4 text-[10px] leading-relaxed text-muted-foreground">* {lensDisclaimer}</p>

@@ -50,7 +50,7 @@ export function StrandViewport({
       <div
         ref={contentRef}
         data-strand-viewport-content
-        className="inline-flex w-max max-w-none flex-wrap items-center justify-center gap-2 sm:gap-3"
+        className="inline-flex w-max max-w-none flex-wrap items-center justify-center gap-1 sm:gap-1.5"
         style={{
           transformOrigin: "center center",
           willChange: isPanning ? "transform" : undefined,

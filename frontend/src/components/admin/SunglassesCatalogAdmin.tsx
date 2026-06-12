@@ -10,7 +10,10 @@ import {
   tintPreviewStyle,
   validateHexFields,
 } from "@/features/admin/lib/adminHex";
+import { formatCurrencySurcharge } from "@bino-foundry/shared/currency";
+
 import { Button } from "@/components/ui/button";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { ErrorState } from "@/components/common";
 import { LoadingState } from "@/components/common";
 import { GradientDirectionPicker } from "@/features/admin/components/tint-editor/GradientDirectionPicker";
@@ -42,6 +45,7 @@ function blankLensTint(): LensTintEntry {
 }
 
 export function SunglassesCatalogAdmin() {
+  const { currencyCode } = useFormatCurrency();
   const catalog = useSunglassesCatalog();
   const [section, setSection] = useState<Section>("tints");
   const [editingTint, setEditingTint] = useState<LensTintEntry | null>(null);
@@ -121,7 +125,7 @@ export function SunglassesCatalogAdmin() {
               <div key={tint.id} className="space-y-2">
                 <CatalogRow
                   title={tint.name}
-                  subtitle={`${tint.category} · ${tint.code} · +$${tint.priceSurcharge}`}
+                  subtitle={`${tint.category} · ${tint.code} · ${formatCurrencySurcharge(tint.priceSurcharge, currencyCode)}`}
                   active={tint.isActive}
                   selected={editingTint?.id === tint.id}
                   swatchStyle={tintPreviewStyle(tint)}
@@ -196,7 +200,7 @@ export function SunglassesCatalogAdmin() {
               <div key={option.id} className="space-y-2">
                 <CatalogRow
                   title={option.label}
-                  subtitle={`${option.code} · +$${option.priceSurcharge}`}
+                  subtitle={`${option.code} · ${formatCurrencySurcharge(option.priceSurcharge, currencyCode)}`}
                   active={option.isActive}
                   selected={editingOption?.id === option.id}
                   onEdit={() => setEditingOption(option)}

@@ -3,6 +3,9 @@ import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
 
+import type { BraceletBuilderActionsProps } from "./BraceletBuilderActions";
+import { BuilderSidebarContext } from "./BuilderSidebarContext";
+
 export interface BraceletConfigPanelProps {
   wristSizeCm: number;
   wristSizeCmB?: number;
@@ -18,19 +21,45 @@ export interface BraceletConfigPanelProps {
   libraryOpen?: boolean;
   onCloseLibrary?: () => void;
   embedded?: boolean;
+  builderActions?: BraceletBuilderActionsProps;
 }
 
-/** Left sidebar — bead library only on desktop; wrist size lives in the summary panel. */
+/** Left sidebar — bracelet context, search, categories, and bead library. */
 export function BraceletConfigPanel({
+  wristSizeCm,
+  wristSizeCmB,
+  twinning,
+  wristSizes,
+  wristSizeIdA,
+  wristSizeIdB,
+  onSelectWristA,
+  onSelectWristB,
   onSelectBead,
   onLibraryDragActiveChange,
   onLibraryDragChange,
   libraryOpen = true,
   onCloseLibrary,
   embedded = true,
+  builderActions,
 }: BraceletConfigPanelProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {embedded ? (
+        <div className="shrink-0 border-b border-border/60 p-1.5 lg:p-2">
+          <BuilderSidebarContext
+            wristSizeCm={wristSizeCm}
+            wristSizeCmB={wristSizeCmB}
+            twinning={twinning}
+            wristSizes={wristSizes}
+            wristSizeIdA={wristSizeIdA}
+            wristSizeIdB={wristSizeIdB}
+            onSelectWristA={onSelectWristA}
+            onSelectWristB={onSelectWristB}
+            builderActions={builderActions}
+          />
+        </div>
+      ) : null}
+
       <BeadLibrary
         variant={embedded ? "embedded" : "overlay"}
         open={libraryOpen}

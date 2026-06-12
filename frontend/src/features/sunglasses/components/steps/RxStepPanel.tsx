@@ -4,10 +4,15 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { BuilderOptionEntry } from "@/types/sunglasses-catalog";
 
+import { formatCurrencySurcharge } from "@bino-foundry/shared/currency";
+
+import { SUNGLASSES_COPY } from "../../copy";
+
 interface RxStepPanelProps {
   rxOptions: BuilderOptionEntry[];
   selectedOptions: Record<string, boolean>;
   requiresManualFollowUp: boolean;
+  currencyCode: string;
   onOptionChange: (code: string, enabled: boolean) => void;
 }
 
@@ -15,15 +20,14 @@ export function RxStepPanel({
   rxOptions,
   selectedOptions,
   requiresManualFollowUp,
+  currencyCode,
   onOptionChange,
 }: RxStepPanelProps) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="type-h3">Prescription lenses</h3>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Select prescription lenses if needed. Our team will confirm your prescription details before production.
-        </p>
+        <h3 className="type-h3">{SUNGLASSES_COPY.rxStepTitle}</h3>
+        <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{SUNGLASSES_COPY.rxStepIntro}</p>
       </div>
 
       {rxOptions.length === 0 ? (
@@ -40,7 +44,7 @@ export function RxStepPanel({
                   {option.label}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  +${option.priceSurcharge}
+                  {formatCurrencySurcharge(option.priceSurcharge, currencyCode)}
                   {option.description ? ` · ${option.description}` : ""}
                 </p>
                 {option.tooltipText ? (
@@ -50,7 +54,7 @@ export function RxStepPanel({
                         type="button"
                         className="text-xs font-medium text-primary underline underline-offset-2"
                       >
-                        degree limitations
+                        {SUNGLASSES_COPY.degreeLimitations}
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs text-center">

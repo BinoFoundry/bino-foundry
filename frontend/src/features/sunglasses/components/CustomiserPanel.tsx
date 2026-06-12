@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { cn } from "@/lib/utils";
 
+import { formatCurrency, formatCurrencySurcharge } from "@bino-foundry/shared/currency";
+import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
+
 import type { CustomiserStep } from "../constants";
 import { useCustomiserFlow } from "../hooks/useCustomiserFlow";
 import type { useSunglassesCustomiserState } from "../hooks/useSunglassesCustomiserState";
@@ -14,6 +17,7 @@ import { FrameStepPanel } from "./steps/FrameStepPanel";
 import { LensStepPanel } from "./steps/LensStepPanel";
 import { PreviewStepPanel } from "./steps/PreviewStepPanel";
 import { RxStepPanel } from "./steps/RxStepPanel";
+import { buildAddOnsLabel } from "./SunglassesConfigurationSummary";
 import { extrasBuilderOptions, rxBuilderOptions } from "../utils/builder-option-groups";
 
 type CustomiserState = ReturnType<typeof useSunglassesCustomiserState>;
@@ -34,7 +38,7 @@ export function CustomiserPanel({
   flow,
   state,
   className,
-  currencyCode = "USD",
+  currencyCode = DEFAULT_SITE_GENERAL_SETTINGS.currencyCode,
   showFooter = true,
   onRequestQuote: onRequestQuoteExternal,
 }: CustomiserPanelProps) {
@@ -57,16 +61,18 @@ export function CustomiserPanel({
   const rxOptions = rxBuilderOptions(sunglassesCatalog.builderOptions);
   const extrasOptions = extrasBuilderOptions(sunglassesCatalog.builderOptions);
   const nonLensOptions = [...rxOptions, ...extrasOptions];
+  const prescriptionLabel = requiresManualFollowUp ? "Required" : "None";
+  const addOnsLabel = buildAddOnsLabel(extrasOptions, config.options);
 
   const buildQuoteSummary = () => {
     const lines = [
-      `Frame: ${frameSku.name} ($${frameSku.price})`,
+      `Frame: ${frameSku.name} (${formatCurrency(frameSku.price, currencyCode)})`,
       `Lens: ${isOptionEnabled(POLARIZED_CODE) ? polarizedOption?.label ?? "Polarised" : "Standard (non-polarised)"}`,
       `Tint: ${config.tint.name}${selectedTintEntry ? ` (${selectedTintEntry.code})` : ""}`,
       ...nonLensOptions
         .filter((o) => isOptionEnabled(o.code))
-        .map((o) => `${o.label}: yes (+$${o.priceSurcharge})`),
-      `Total: $${totalPrice} ${currencyCode}`,
+        .map((o) => `${o.label}: yes (${formatCurrencySurcharge(o.priceSurcharge, currencyCode)})`),
+      `Total: ${formatCurrency(totalPrice, currencyCode)}`,
     ];
     return lines.join("\n");
   };
@@ -94,6 +100,7 @@ export function CustomiserPanel({
       <FrameStepPanel
         frames={frames}
         selectedFrameId={frameSku.id}
+        currencyCode={currencyCode}
         onSelectFrame={selectFrameSku}
       />
     ),
@@ -105,6 +112,7 @@ export function CustomiserPanel({
         polarized={isOptionEnabled(POLARIZED_CODE)}
         activeTintId={activeTintId}
         lensDisclaimer={sunglassesCatalog.lensDisclaimer}
+        currencyCode={currencyCode}
         onPolarizedChange={(value) => setOption(POLARIZED_CODE, value)}
         onSelectTint={selectTintById}
       />
@@ -114,6 +122,7 @@ export function CustomiserPanel({
         rxOptions={rxOptions}
         selectedOptions={config.options}
         requiresManualFollowUp={requiresManualFollowUp}
+        currencyCode={currencyCode}
         onOptionChange={setOption}
       />
     ),
@@ -121,24 +130,20 @@ export function CustomiserPanel({
       <ExtrasStepPanel
         extrasOptions={extrasOptions}
         selectedOptions={config.options}
+        currencyCode={currencyCode}
         onOptionChange={setOption}
       />
     ),
     preview: (
       <PreviewStepPanel
-        frameSku={frameSku}
-        tintName={config.tint.name}
-        selectedTintEntry={selectedTintEntry}
+        frameName={frameSku.name}
+        lensTint={config.tint.name || "—"}
         polarized={isOptionEnabled(POLARIZED_CODE)}
         polarizedLabel={polarizedOption?.label}
-        polarizedSurcharge={polarizedOption?.priceSurcharge}
-        builderOptions={sunglassesCatalog.builderOptions}
-        selectedOptions={config.options}
+        prescription={prescriptionLabel}
+        addOnsLabel={addOnsLabel}
         requiresManualFollowUp={requiresManualFollowUp}
-        basePrice={frameSku.price}
-        totalPrice={totalPrice}
         lensDisclaimer={sunglassesCatalog.lensDisclaimer}
-        onRequestQuote={() => void handleRequestQuote()}
       />
     ),
   };

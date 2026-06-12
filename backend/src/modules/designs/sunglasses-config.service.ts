@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 
+import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
+
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
@@ -131,7 +133,7 @@ export class SunglassesConfigService {
       selectedOptions: (r.selected_options as Record<string, boolean>) ?? {},
       builderStep: String(r.builder_step ?? "frame") as SunglassesConfigDTO["builderStep"],
       subtotal: Number(r.subtotal ?? 0),
-      currencyCode: String(r.currency_code ?? "USD"),
+      currencyCode: String(r.currency_code ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };

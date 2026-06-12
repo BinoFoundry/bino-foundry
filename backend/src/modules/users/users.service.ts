@@ -1,5 +1,5 @@
 import type { AccountStatus, UserRole } from "@bino-foundry/shared/types";
-import { ASSIGNABLE_USER_ROLES } from "@bino-foundry/shared/types";
+import { ASSIGNABLE_USER_ROLES, DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
 
 import {
   createUser,
@@ -243,7 +243,7 @@ export class UsersService {
         productType: r.product_type as "bracelet" | "sunglasses",
         status: String(r.status),
         subtotal: Number(r.subtotal ?? 0),
-        currencyCode: String(r.currency_code ?? "USD"),
+        currencyCode: String(r.currency_code ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode),
         previewThumbnailUrl: (r.preview_thumbnail_url as string | null) ?? null,
         updatedAt: String(r.updated_at),
       };
@@ -270,7 +270,7 @@ export class UsersService {
         id: String(r.public_id),
         status: String(r.status),
         totalAmount: Number(r.total_amount ?? 0),
-        currencyCode: String(r.currency_code ?? "USD"),
+        currencyCode: String(r.currency_code ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode),
         designId: (joined?.public_id as string | null) ?? null,
         designTitle: (joined?.title as string | null) ?? null,
         productType: (joined?.product_type as "bracelet" | "sunglasses" | null) ?? null,

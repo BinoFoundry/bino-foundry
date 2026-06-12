@@ -7,7 +7,7 @@ import { CheckoutDialog } from "@/features/account/components/CheckoutDialog";
 import { designsApi } from "@/services/api/designs";
 import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
-import type { SavedDesignSummary } from "@bino-foundry/shared/types";
+import { DEFAULT_SITE_GENERAL_SETTINGS, type SavedDesignSummary } from "@bino-foundry/shared/types";
 
 import { DesignCard } from "../components/DesignCard";
 import { PortalEmptyState } from "../components/PortalEmptyState";
@@ -99,7 +99,7 @@ export function DesignsPage() {
         designId={checkoutDesign?.id ?? null}
         productLabel={checkoutDesign?.title ?? "Custom design"}
         totalAmount={checkoutDesign?.subtotal ?? 0}
-        currencyCode={checkoutDesign?.currencyCode ?? "USD"}
+        currencyCode={checkoutDesign?.currencyCode ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode}
         defaultEmail={user?.email}
         defaultName={user?.displayName}
         onOrdered={() => void designsQuery.refetch()}

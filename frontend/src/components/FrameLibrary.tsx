@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { FrameOption } from "@/lib/luxe-data";
 import { useCatalogue } from "@/data/index";
 
@@ -12,6 +13,7 @@ interface FrameLibraryProps {
 }
 
 const FrameLibrary = ({ onSelectFrame, open, onClose }: FrameLibraryProps) => {
+  const { format } = useFormatCurrency();
   const { frames } = useCatalogue();
   const [search, setSearch] = useState("");
 
@@ -65,7 +67,7 @@ const FrameLibrary = ({ onSelectFrame, open, onClose }: FrameLibraryProps) => {
             </div>
             <div className="text-center">
               <p className="type-body font-medium text-foreground">{frame.name}</p>
-              <p className="text-xs text-muted-foreground">${frame.price}</p>
+              <p className="text-xs text-muted-foreground">{format(frame.price)}</p>
             </div>
           </button>
         ))}

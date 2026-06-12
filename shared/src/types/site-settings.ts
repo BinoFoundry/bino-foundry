@@ -5,5 +5,5 @@ export interface SiteGeneralSettings {
 }
 
 export const DEFAULT_SITE_GENERAL_SETTINGS: SiteGeneralSettings = {
-  currencyCode: "USD",
+  currencyCode: "SGD",
 };

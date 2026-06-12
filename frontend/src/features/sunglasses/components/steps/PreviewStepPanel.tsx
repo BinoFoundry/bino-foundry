@@ -1,35 +1,41 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
-import type { FrameOption } from "@/lib/luxe-data";
 
-interface PreviewStepPanelProps {
-  frameSku: FrameOption;
-  tintName: string;
-  selectedTintEntry: LensTintEntry | null;
-  polarized: boolean;
-  polarizedLabel?: string;
-  polarizedSurcharge?: number;
-  builderOptions: BuilderOptionEntry[];
-  selectedOptions: Record<string, boolean>;
+import { SUNGLASSES_COPY } from "../../copy";
+import {
+  ConfigurationSummaryCard,
+  hasSelectedAddOns,
+  type ConfigurationSummaryProps,
+} from "../SunglassesConfigurationSummary";
+
+interface PreviewStepPanelProps extends ConfigurationSummaryProps {
   requiresManualFollowUp: boolean;
-  basePrice: number;
-  totalPrice: number;
   lensDisclaimer: string;
-  onRequestQuote?: () => void;
 }
 
 export function PreviewStepPanel({
   requiresManualFollowUp,
   lensDisclaimer,
+  ...summaryProps
 }: PreviewStepPanelProps) {
+  const showAddOns = hasSelectedAddOns(summaryProps.addOnsLabel);
+
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="type-h3">Review</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Confirm your selections below. Your live preview updates as you configure each step.
-        </p>
+        <h3 className="type-h3">{SUNGLASSES_COPY.reviewStepTitle}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{SUNGLASSES_COPY.reviewStepIntro}</p>
       </div>
+
+      <ConfigurationSummaryCard {...summaryProps} showAddOns={false} />
+
+      {showAddOns ? (
+        <section className="space-y-2">
+          <h4 className="type-h3 text-base">{SUNGLASSES_COPY.addOnsSectionTitle}</h4>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+            <p className="text-sm font-medium text-foreground">{summaryProps.addOnsLabel}</p>
+          </div>
+        </section>
+      ) : null}
 
       {requiresManualFollowUp ? (
         <Alert>
@@ -39,11 +45,7 @@ export function PreviewStepPanel({
             before any order is placed.
           </AlertDescription>
         </Alert>
-      ) : (
-        <p className="text-sm text-foreground">
-          Your configuration is complete. Use Add to Cart or Save Design when you are ready.
-        </p>
-      )}
+      ) : null}
 
       {lensDisclaimer ? (
         <p className="text-[10px] leading-relaxed text-muted-foreground">* {lensDisclaimer}</p>

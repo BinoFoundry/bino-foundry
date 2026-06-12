@@ -1,6 +1,8 @@
 import { Copy, Gem, Glasses, ShoppingBag, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { formatCurrency } from "@bino-foundry/shared/currency";
+
 import { Button } from "@/components/ui/button";
 import type { SavedDesignSummary } from "@bino-foundry/shared/types";
 
@@ -55,8 +57,7 @@ export function DesignCard({ design, onDuplicate, onDelete, onCheckout, duplicat
           </div>
 
           <p className="type-price mt-3 text-lg text-foreground">
-            ${design.subtotal.toFixed(2)}
-            <span className="type-label ml-1 text-xs text-muted-foreground">{design.currencyCode}</span>
+            {formatCurrency(design.subtotal, design.currencyCode)}
           </p>
         </div>
       </div>

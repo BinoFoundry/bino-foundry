@@ -1,29 +1,45 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
 
 import { Button } from "@/components/ui/button";
-import { ErrorState } from "@/components/common";
-import { LoadingState } from "@/components/common";
-import { SITE_CURRENCY_OPTIONS } from "@/features/admin/constants/currency";
+import { ErrorState, LoadingState } from "@/components/common";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  SUPPORTED_CURRENCIES,
+  getCurrencyLabel,
+} from "@/features/admin/constants/currency";
+import { siteSettingsKeys } from "@/hooks/use-site-settings";
 import { isApiError } from "@/services/api";
 import { settingsApi } from "@/services/api/settings";
-import { siteSettingsKeys } from "@/hooks/use-site-settings";
-import { useQueryClient } from "@tanstack/react-query";
 
-export function GeneralSettingsAdmin() {
+interface GeneralSettingsAdminProps {
+  /** When true, omit outer page chrome (used inside GeneralSettingsPage wrapper). */
+  embedded?: boolean;
+}
+
+export function GeneralSettingsAdmin({ embedded = false }: GeneralSettingsAdminProps) {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [currencyCode, setCurrencyCode] = useState("USD");
+  const [currencyCode, setCurrencyCode] = useState(DEFAULT_SITE_GENERAL_SETTINGS.currencyCode);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await settingsApi.getGeneralSettings();
-      setCurrencyCode(data.currencyCode || "USD");
+      setCurrencyCode(data.currencyCode || DEFAULT_SITE_GENERAL_SETTINGS.currencyCode);
       setValidationError(null);
     } catch (err) {
       setError(isApiError(err) ? err.message : "Failed to load general settings");
@@ -66,33 +82,43 @@ export function GeneralSettingsAdmin() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 pb-4">
-      <div>
-        <h3 className="type-h3">General settings</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Site-wide defaults used across sunglasses and bracelet builders, saved configurations, and checkout
-          display.
-        </p>
-      </div>
+    <div className={embedded ? "space-y-6" : "mx-auto max-w-2xl space-y-8 pb-4"}>
+      {!embedded ? (
+        <div>
+          <h3 className="type-h3">General settings</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Site-wide defaults used across sunglasses and bracelet builders, saved configurations, and checkout
+            display.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <h4 className="type-h3 text-base">General settings</h4>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Site-wide defaults for currency and checkout display.
+          </p>
+        </div>
+      )}
 
       <section className="space-y-3 rounded-xl border border-border bg-card p-4">
-        <h4 className="type-body font-medium text-foreground">Currency</h4>
-        <div className="flex flex-wrap gap-2">
-          {SITE_CURRENCY_OPTIONS.map((code) => (
-            <Button
-              key={code}
-              type="button"
-              size="sm"
-              variant={currencyCode === code ? "default" : "outline"}
-              onClick={() => setCurrencyCode(code)}
-            >
-              {code}
-            </Button>
-          ))}
+        <div className="space-y-2">
+          <Label htmlFor="site-currency">Default currency</Label>
+          <Select value={currencyCode} onValueChange={setCurrencyCode}>
+            <SelectTrigger id="site-currency" className="w-full">
+              <SelectValue placeholder="Select currency">{getCurrencyLabel(currencyCode)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_CURRENCIES.map((currency) => (
+                <SelectItem key={currency.code} value={currency.code}>
+                  {getCurrencyLabel(currency.code)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Select the primary currency used for displaying prices throughout the website.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          All price labels and totals on the public site use this currency code.
-        </p>
       </section>
 
       {validationError ? (

@@ -6,11 +6,7 @@ import { cn } from "@/lib/utils";
 import { useCustomiserFlow } from "../hooks/useCustomiserFlow";
 import type { useSunglassesCustomiserState } from "../hooks/useSunglassesCustomiserState";
 import { CustomiserPanel } from "./CustomiserPanel";
-import { extrasBuilderOptions } from "../utils/builder-option-groups";
-import {
-  buildAddOnsLabel,
-  SunglassesConfigurationSummary,
-} from "./SunglassesConfigurationSummary";
+import { SunglassesConfigurationSummary } from "./SunglassesConfigurationSummary";
 import { SunglassesHorizontalSteps } from "./SunglassesHorizontalSteps";
 
 type CustomiserState = ReturnType<typeof useSunglassesCustomiserState>;
@@ -25,8 +21,6 @@ interface SunglassesConfigColumnProps {
   className?: string;
 }
 
-const POLARIZED_CODE = "polarized";
-
 export function SunglassesConfigColumn({
   flow,
   state,
@@ -36,21 +30,7 @@ export function SunglassesConfigColumn({
   saving = false,
   className,
 }: SunglassesConfigColumnProps) {
-  const {
-    frameSku,
-    config,
-    isOptionEnabled,
-    selectedTintEntry,
-    sunglassesCatalog,
-    requiresManualFollowUp,
-    totalPrice,
-  } = state;
-
-  const polarizedOption = sunglassesCatalog.getOptionByCode(POLARIZED_CODE);
-  const extrasOptions = extrasBuilderOptions(sunglassesCatalog.builderOptions);
-
-  const prescriptionLabel = requiresManualFollowUp ? "Required" : "None";
-  const addOnsLabel = buildAddOnsLabel(extrasOptions, config.options);
+  const { totalPrice } = state;
 
   return (
     <aside
@@ -87,12 +67,6 @@ export function SunglassesConfigColumn({
         {flow.isLast ? (
           <div className="mt-auto border-t border-border/60 px-4 py-5 sm:px-5">
             <SunglassesConfigurationSummary
-              frameName={frameSku.name}
-              lensTint={config.tint.name || "—"}
-              polarized={isOptionEnabled(POLARIZED_CODE)}
-              polarizedLabel={polarizedOption?.label}
-              prescription={prescriptionLabel}
-              addOnsLabel={addOnsLabel}
               totalPrice={totalPrice}
               currencyCode={currencyCode}
               onSaveDesign={onSaveDesign}

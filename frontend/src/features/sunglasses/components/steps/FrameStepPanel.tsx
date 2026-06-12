@@ -2,11 +2,15 @@ import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/common";
 import type { FrameOption } from "@/lib/luxe-data";
 
+import { formatCurrency } from "@bino-foundry/shared/currency";
+
+import { SUNGLASSES_COPY } from "../../copy";
 import { getFrontPlateUrl } from "../../utils/frame-plates";
 
 interface FrameStepPanelProps {
   frames: FrameOption[];
   selectedFrameId: string;
+  currencyCode: string;
   onSelectFrame: (id: string) => void;
 }
 
@@ -33,12 +37,17 @@ function FrameCardThumbnail({ frame }: { frame: FrameOption }) {
   );
 }
 
-export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: FrameStepPanelProps) {
+export function FrameStepPanel({
+  frames,
+  selectedFrameId,
+  currencyCode,
+  onSelectFrame,
+}: FrameStepPanelProps) {
   if (frames.length === 0) {
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="type-h3">Select Frame Style</h3>
+          <h3 className="type-h3">{SUNGLASSES_COPY.frameStepTitle}</h3>
         </div>
         <EmptyState message="No frames are available yet. Please check back soon." title="No frames yet" />
       </div>
@@ -47,7 +56,7 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
 
   return (
     <div className="space-y-4">
-      <h3 className="type-h3">Select Frame Style</h3>
+      <h3 className="type-h3">{SUNGLASSES_COPY.frameStepTitle}</h3>
 
       <div
         role="radiogroup"
@@ -62,7 +71,7 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
               type="button"
               role="radio"
               aria-checked={active}
-              aria-label={`${frame.name}, ${frame.price} dollars`}
+              aria-label={`${frame.name}, ${formatCurrency(frame.price, currencyCode)}`}
               onClick={() => onSelectFrame(frame.id)}
               className={cn(
                 "flex min-w-0 flex-col rounded-xl border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -79,7 +88,9 @@ export function FrameStepPanel({ frames, selectedFrameId, onSelectFrame }: Frame
                     {frame.description}
                   </p>
                 ) : null}
-                <p className="type-price text-label text-primary sm:text-small">${frame.price}</p>
+                <p className="type-price text-label text-primary sm:text-small">
+                  {formatCurrency(frame.price, currencyCode)}
+                </p>
               </div>
             </button>
           );

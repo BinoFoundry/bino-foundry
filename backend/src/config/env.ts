@@ -29,6 +29,8 @@ const envSchema = z
     PUBLIC_APP_URL: z.preprocess(emptyAsUndefined, z.string().url().optional()),
     /** Secret for signing application JWT access tokens */
     JWT_SECRET: z.preprocess(emptyAsUndefined, z.string().min(32).optional()),
+    /** Base64-encoded 32-byte key for encrypting SMTP credentials at rest */
+    SETTINGS_ENCRYPTION_KEY: z.preprocess(emptyAsUndefined, z.string().optional()),
     /** Access token lifetime in seconds (default 15 minutes) */
     JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     /** Refresh token lifetime in days (default 30) */
@@ -77,6 +79,13 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: "JWT_SECRET is required when APP_ENV is staging or production",
         path: ["JWT_SECRET"],
+      });
+    }
+    if (!data.SETTINGS_ENCRYPTION_KEY?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "SETTINGS_ENCRYPTION_KEY is required when APP_ENV is staging or production",
+        path: ["SETTINGS_ENCRYPTION_KEY"],
       });
     }
   });

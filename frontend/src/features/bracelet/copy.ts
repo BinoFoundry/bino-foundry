@@ -22,6 +22,7 @@ export const BRACELET_COPY = {
   matchingPairTitle: "Matching pair",
   matchingPairEnabled: "Enabled",
   matchingPairNotEnabled: "Not enabled",
+  matchingPairEdit: "Edit",
   braceletPreview: "Bracelet preview",
   currentWristSize: "Current wrist size",
   beadCountSummary: (n: number) => `${n} ${n === 1 ? "bead" : "beads"}`,

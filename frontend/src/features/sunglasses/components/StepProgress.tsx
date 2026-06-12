@@ -33,7 +33,7 @@ export function StepProgress({ current, className }: StepProgressProps) {
               />
               <span
                 className={cn(
-                  "type-label truncate sm:inline",
+                  "type-label text-[9px] leading-tight sm:text-[10px]",
                   active ? "text-foreground" : "text-muted-foreground",
                 )}
                 aria-current={active ? "step" : undefined}

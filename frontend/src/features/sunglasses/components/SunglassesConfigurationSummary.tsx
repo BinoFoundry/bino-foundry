@@ -7,15 +7,23 @@ import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
 import type { BuilderOptionEntry } from "@/types/sunglasses-catalog";
 
+import { formatCurrency } from "@bino-foundry/shared/currency";
+import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
+
+import { SUNGLASSES_COPY } from "../copy";
+
 const EMPTY = "—";
 
-interface SunglassesConfigurationSummaryProps {
+export interface ConfigurationSummaryProps {
   frameName: string;
   lensTint: string;
   polarized: boolean;
   polarizedLabel?: string;
   prescription: string;
   addOnsLabel: string;
+}
+
+interface SunglassesConfigurationSummaryProps {
   totalPrice: number;
   currencyCode: string;
   onSaveDesign?: () => void;
@@ -24,12 +32,45 @@ interface SunglassesConfigurationSummaryProps {
   className?: string;
 }
 
+export function hasSelectedAddOns(addOnsLabel: string): boolean {
+  return Boolean(addOnsLabel && addOnsLabel !== EMPTY);
+}
+
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 text-sm">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium text-foreground">{value || EMPTY}</span>
     </div>
+  );
+}
+
+export function ConfigurationSummaryCard({
+  frameName,
+  lensTint,
+  polarized,
+  polarizedLabel,
+  prescription,
+  addOnsLabel,
+  showAddOns = true,
+  className,
+}: ConfigurationSummaryProps & { showAddOns?: boolean; className?: string }) {
+  return (
+    <section className={cn("space-y-2", className)}>
+      <h4 className="type-h3 text-base">{SUNGLASSES_COPY.yourConfiguration}</h4>
+      <div className="space-y-2.5 rounded-xl border border-border/60 bg-background/60 p-4">
+        <SummaryRow label="Frame" value={frameName} />
+        <SummaryRow label={SUNGLASSES_COPY.summaryTint} value={lensTint} />
+        <SummaryRow
+          label={SUNGLASSES_COPY.summaryPolarized}
+          value={polarized ? polarizedLabel ?? "Yes" : "No"}
+        />
+        <SummaryRow label="Prescription" value={prescription} />
+        {showAddOns && hasSelectedAddOns(addOnsLabel) ? (
+          <SummaryRow label={SUNGLASSES_COPY.addOnsSectionTitle} value={addOnsLabel} />
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -45,14 +86,8 @@ export function buildAddOnsLabel(
 }
 
 export function SunglassesConfigurationSummary({
-  frameName,
-  lensTint,
-  polarized,
-  polarizedLabel,
-  prescription,
-  addOnsLabel,
   totalPrice,
-  currencyCode,
+  currencyCode = DEFAULT_SITE_GENERAL_SETTINGS.currencyCode,
   onSaveDesign,
   onAddToCart,
   saving = false,
@@ -76,24 +111,10 @@ export function SunglassesConfigurationSummary({
 
   return (
     <section className={cn("space-y-4", className)}>
-      <h3 className="type-h3">Your Configuration</h3>
-
-      <div className="space-y-2.5 rounded-xl border border-border/60 bg-background/60 p-4">
-        <SummaryRow label="Frame" value={frameName} />
-        <SummaryRow label="Lens Tint" value={lensTint} />
-        <SummaryRow
-          label="Polarized"
-          value={polarized ? polarizedLabel ?? "Yes" : "No"}
-        />
-        <SummaryRow label="Prescription" value={prescription} />
-        <SummaryRow label="Add-ons" value={addOnsLabel} />
-      </div>
-
       <div className="flex items-baseline justify-between gap-2 px-1">
         <span className="type-body text-foreground">Estimated Total</span>
         <span className="type-price text-2xl text-foreground">
-          ${totalPrice.toFixed(2)}
-          <span className="type-label ml-1 text-sm text-muted-foreground">{currencyCode}</span>
+          {formatCurrency(totalPrice, currencyCode)}
         </span>
       </div>
 

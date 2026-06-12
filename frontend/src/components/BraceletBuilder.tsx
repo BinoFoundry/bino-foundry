@@ -413,14 +413,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     summary: builder.summary,
     mainBeadRows,
     matchingPairBeadRows,
-    wristSizeCm: builder.wristSizeA,
-    wristSizeCmB: builder.twinning ? builder.wristSizeB : undefined,
-    wristSizes: builder.wristSizes,
-    wristSizeIdA: builder.wristSizeIdA,
-    wristSizeIdB: builder.wristSizeIdB,
-    onSelectWristA: builder.setWristA,
-    onSelectWristB: builder.setWristB,
-    builderActions,
     visualLayoutA,
     visualLayoutB,
     onSave: () => void handleSaveConfiguration(),
@@ -464,7 +456,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         />
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-1 sm:p-2">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-0.5 sm:p-1">
       {isMobile && libraryOpen ? (
         <BraceletConfigPanel
           embedded={false}
@@ -483,11 +475,12 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             setLibraryOpen(false);
           }}
           onLibraryDragActiveChange={setLibraryDragActive}
-          onLibraryDragChange={(active, payload) => {
-            setLibraryDragActive(active);
-            setLibraryDragPreview(active ? (payload ?? null) : null);
-          }}
-        />
+            onLibraryDragChange={(active, payload) => {
+              setLibraryDragActive(active);
+              setLibraryDragPreview(active ? (payload ?? null) : null);
+            }}
+            builderActions={builderActions}
+          />
       ) : null}
 
       {builder.selectedBead && isMobile ? (
@@ -655,11 +648,12 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               setLibraryDragActive(active);
               setLibraryDragPreview(active ? (payload ?? null) : null);
             }}
+            builderActions={builderActions}
           />
         ) : undefined
       }
       centerPanel={canvasPanel}
-      rightPanel={<BraceletSummaryPanel {...summaryPanelProps} />}
+      rightPanel={<BraceletSummaryPanel {...summaryPanelProps} embedded />}
       mobileFooter={<BraceletSummaryPanel {...summaryPanelProps} collapsible />}
     />
     <CheckoutDialog

@@ -2,6 +2,13 @@ import { useMemo, useRef, useState } from "react";
 import { Search, X, Info, Gem } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { cn } from "@/lib/utils";
@@ -67,7 +74,7 @@ const BeadLibrary = ({
   const currency = siteSettings.currencyCode;
   const [search, setSearch] = useState("");
   const [activeBeadTypeId, setActiveBeadTypeId] = useState<string>("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sizeByBeadId, setSizeByBeadId] = useState<Record<string, string>>({});
   const suppressClickAfterDragRef = useRef(false);
   const isMobile = useIsMobile();
 
@@ -80,16 +87,19 @@ const BeadLibrary = ({
     }, 0);
   };
 
-  const handleLibraryClick = (
-    bead: BeadLibraryEntry,
-    size: BeadLibrarySizeOffer | undefined,
-    options?: { toggleExpand?: boolean; expanded?: boolean },
-  ) => {
+  const resolveSizeOffer = (
+    beadId: string,
+    sizes: BeadLibrarySizeOffer[],
+    def: BeadLibrarySizeOffer | undefined,
+  ): BeadLibrarySizeOffer | undefined => {
+    const key = sizeByBeadId[beadId];
+    if (key) return sizes.find((s) => s.offerKey === key) ?? def;
+    return def;
+  };
+
+  const handleLibraryClick = (bead: BeadLibraryEntry, size: BeadLibrarySizeOffer | undefined) => {
     if (suppressClickAfterDragRef.current) return;
     if (!size) return;
-    if (options?.toggleExpand) {
-      setExpandedId(options.expanded ? null : bead.id);
-    }
     onSelectBead(bead, size);
   };
 
@@ -134,24 +144,30 @@ const BeadLibrary = ({
         <div className="fixed inset-0 z-40 bg-[hsl(var(--overlay))]" onClick={onClose} aria-hidden />
       )}
       <div className={panelClass}>
-        <div
-          className={
-            compact
-              ? "flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-2"
-              : "flex shrink-0 items-center justify-between border-b border-border px-4 py-3"
-          }
-        >
-          <h3 className={compact ? "label-eyebrow text-muted-foreground" : "type-h3 text-base"}>
-            {BRACELET_COPY.crystalLibrary}
-          </h3>
-          {!isEmbedded ? (
-            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
+        {!compact ? (
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+            <h3 className="type-h3 text-base">{BRACELET_COPY.crystalLibrary}</h3>
+            {!isEmbedded ? (
+              <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className={cn("shrink-0 border-b border-border/60", compact ? "p-2" : "p-3")}>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search collection…"
+              className="w-full rounded-md border border-border bg-muted/40 py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
 
-        <div className={cn("flex gap-1 overflow-x-auto border-b border-border/60", compact ? "px-2 py-1.5" : "px-2 py-2")}>
+        <div className={cn("flex shrink-0 gap-1 overflow-x-auto border-b border-border/60", compact ? "px-2 py-1.5" : "px-2 py-2")}>
           {activeTypes.map((t) => (
             <button
               key={t.id}
@@ -168,56 +184,54 @@ const BeadLibrary = ({
           ))}
         </div>
 
-        <div className={cn("border-b border-border/60", compact ? "p-2" : "p-3")}>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search collection…"
-              className="w-full rounded-md border border-border bg-muted/40 py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+        {compact ? (
+          <div className="shrink-0 border-b border-border/60 px-2 py-1.5">
+            <p className="label-eyebrow text-muted-foreground">{BRACELET_COPY.crystalLibrary}</p>
           </div>
-        </div>
+        ) : null}
 
         <div
-          className="flex-1 overflow-y-auto p-2"
+          className="min-h-0 flex-1 overflow-y-auto p-2"
           data-scroll-isolate="true"
           onWheel={(e) => e.stopPropagation()}
         >
           {filtered.length === 0 ? (
             <p className="px-2 py-8 text-center text-xs leading-relaxed text-muted-foreground">{emptyMessage}</p>
           ) : (
-            <div className="space-y-2">
+            <div
+              className={cn(
+                "grid gap-2",
+                compact ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2",
+              )}
+            >
               {filtered.map((bead) => {
                 const img = getBeadDisplayImageUrl(bead);
                 const sizes = sizesForLibrary(cat.beadLibrarySizes, bead.id);
                 const def = defaultSizeForLibrary(cat.beadLibrarySizes, bead.id);
-                const expanded = expandedId === bead.id;
-                const fromPrice = def ? formatSizeOfferPrice(def, currency) : "";
+                const activeSize = resolveSizeOffer(bead.id, sizes, def);
+                const selectValue = activeSize?.offerKey ?? def?.offerKey ?? "";
 
                 return (
                   <div
                     key={bead.id}
-                    className="rounded-lg border border-border/60 bg-muted/20 overflow-hidden"
+                    className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/20"
                   >
                     <button
                       type="button"
                       data-bead-library-item
-                      draggable={!isMobile && !!def}
+                      draggable={!isMobile && !!activeSize}
                       onDragStart={(e) =>
-                        def && startLibraryDrag(e, bead, def, onLibraryDragActiveChange, onLibraryDragChange)
+                        activeSize &&
+                        startLibraryDrag(e, bead, activeSize, onLibraryDragActiveChange, onLibraryDragChange)
                       }
                       onDragEnd={endLibraryDrag}
-                      onClick={() =>
-                        handleLibraryClick(bead, def, {
-                          toggleExpand: sizes.length > 1,
-                          expanded,
-                        })
-                      }
-                      className="flex w-full items-center gap-2 p-2 text-left transition hover:bg-muted/50"
+                      onClick={() => handleLibraryClick(bead, activeSize)}
+                      className={cn(
+                        "flex w-full flex-col items-center text-center transition hover:bg-muted/50",
+                        compact ? "gap-1 p-1.5" : "gap-1.5 p-2",
+                      )}
                     >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center">
+                      <div className={cn("flex shrink-0 items-center justify-center", compact ? "h-11 w-11" : "h-12 w-12")}>
                         {img ? (
                           <img
                             src={img}
@@ -229,40 +243,44 @@ const BeadLibrary = ({
                           <Gem className="h-5 w-5 text-muted-foreground" />
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-foreground">{bead.name}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {sizes.length > 1
-                            ? `${sizes.length} sizes · ${fromPrice ? BRACELET_COPY.fromPrice(fromPrice) : ""}`
-                            : def
-                              ? `${def.sizeMm} mm · ${formatSizeOfferPrice(def, currency)}`
-                              : ""}
+                      <div className="min-w-0 w-full">
+                        <p className={cn("font-medium text-foreground", compact ? "line-clamp-2 text-[10px] leading-tight" : "truncate text-xs")}>
+                          {bead.name}
                         </p>
+                        {sizes.length <= 1 && activeSize ? (
+                          <p className="text-[9px] text-muted-foreground">
+                            {activeSize.sizeMm} mm · {formatSizeOfferPrice(activeSize, currency)}
+                          </p>
+                        ) : null}
                       </div>
                     </button>
-                    {(expanded || sizes.length <= 4) && sizes.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 border-t border-border/50 px-2 py-2">
-                        {sizes.map((s) => (
-                          <button
-                            key={s.offerKey}
-                            type="button"
-                            data-bead-library-item
-                            draggable={!isMobile}
-                            onDragStart={(e) => {
-                              e.stopPropagation();
-                              startLibraryDrag(e, bead, s, onLibraryDragActiveChange, onLibraryDragChange);
-                            }}
-                            onDragEnd={endLibraryDrag}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleLibraryClick(bead, s);
-                            }}
-                            className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground state-hoverable"
-                            title={`Drag ${s.label} onto your bracelet`}
+                    {sizes.length > 1 ? (
+                      <div className="border-t border-border/50 px-1.5 py-1.5">
+                        <Select
+                          value={selectValue}
+                          onValueChange={(offerKey) => {
+                            setSizeByBeadId((prev) => ({ ...prev, [bead.id]: offerKey }));
+                            const next = sizes.find((s) => s.offerKey === offerKey);
+                            if (next) onSelectBead(bead, next);
+                          }}
+                        >
+                          <SelectTrigger
+                            className={cn(
+                              "h-7 w-full bg-background text-[10px] focus:ring-selection/40",
+                              compact ? "px-2" : "px-2.5",
+                            )}
+                            onPointerDown={(e) => e.stopPropagation()}
                           >
-                            {s.sizeMm} mm · {formatSizeOfferPrice(s, currency)}
-                          </button>
-                        ))}
+                            <SelectValue placeholder="Select size" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sizes.map((s) => (
+                              <SelectItem key={s.offerKey} value={s.offerKey} className="text-xs">
+                                {s.sizeMm} mm · {formatSizeOfferPrice(s, currency)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     ) : null}
                   </div>
@@ -272,7 +290,7 @@ const BeadLibrary = ({
           )}
         </div>
 
-        <div className="flex items-start gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+        <div className="flex shrink-0 items-start gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           <span>{isMobile ? BRACELET_COPY.selectedBeadHint : BRACELET_COPY.libraryDragHint}</span>
         </div>

@@ -1,3 +1,5 @@
+import { formatCurrency, formatCurrencyRange } from "@bino-foundry/shared/currency";
+
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeInput, BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
@@ -53,15 +55,7 @@ function coerceUnitPrice(value: unknown): number | null {
 export function formatSizeOfferPrice(offer: BeadLibrarySizeOffer, currency: string): string {
   const price = coerceUnitPrice(offer.unitPrice);
   if (price === null) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(price);
-  } catch {
-    return `$${price.toFixed(2)}`;
-  }
+  return formatCurrency(price, currency);
 }
 
 export function sizeOfferMatchesLibrary(offer: BeadLibrarySizeOffer, bead: BeadLibraryEntry): boolean {
@@ -72,6 +66,7 @@ export function sizeOfferMatchesLibrary(offer: BeadLibrarySizeOffer, bead: BeadL
 export function formatLibraryPriceRange(
   offers: BeadLibrarySizeOffer[],
   libraryId: string,
+  currency: string,
 ): string {
   const prices = sizesForLibrary(offers, libraryId)
     .map((s) => coerceUnitPrice(s.unitPrice))
@@ -79,8 +74,7 @@ export function formatLibraryPriceRange(
   if (!prices.length) return "No sizes priced";
   const min = Math.min(...prices);
   const max = Math.max(...prices);
-  if (min === max) return `$${min.toFixed(2)}`;
-  return `$${min.toFixed(2)}–$${max.toFixed(2)}`;
+  return formatCurrencyRange(min, max, currency);
 }
 
 export function draftRowsToSizeInputs(

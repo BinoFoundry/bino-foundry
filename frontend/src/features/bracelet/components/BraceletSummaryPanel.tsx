@@ -3,19 +3,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import type { BraceletBuilderSummary } from "@bino-foundry/shared/types";
+import { formatCurrency } from "@bino-foundry/shared/currency";
 
 import { Button } from "@/components/ui/button";
 import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
-import type { WristSizeEntry } from "@/types/wrist-sizes";
 
 import { BRACELET_COPY } from "../copy";
-import { formatCapacityCm } from "../wrist-fit";
-import { BraceletBuilderActions, type BraceletBuilderActionsProps } from "./BraceletBuilderActions";
 import { SelectedBeadsList, type SelectedBeadRow } from "./SelectedBeadsList";
 import { StrandCapacityCard } from "./StrandCapacityCard";
 import { SummaryInfoCard } from "./SummaryInfoCard";
-import { WristSizePickerCards } from "./WristSizePickerCards";
 
 export interface StrandVisualLayoutHint {
   visuallyExpanded?: boolean;
@@ -26,17 +23,9 @@ interface BraceletSummaryPanelProps {
   summary: BraceletBuilderSummary;
   mainBeadRows?: SelectedBeadRow[];
   matchingPairBeadRows?: SelectedBeadRow[];
-  wristSizeCm: number;
-  wristSizeCmB?: number;
-  wristSizes?: WristSizeEntry[];
-  wristSizeIdA?: string | null;
-  wristSizeIdB?: string | null;
-  onSelectWristA?: (entry: WristSizeEntry) => void;
-  onSelectWristB?: (entry: WristSizeEntry) => void;
   className?: string;
   collapsible?: boolean;
   defaultOpen?: boolean;
-  builderActions?: Omit<BraceletBuilderActionsProps, "libraryOpen" | "onToggleLibrary">;
   visualLayoutA?: StrandVisualLayoutHint;
   visualLayoutB?: StrandVisualLayoutHint;
   onSave?: () => void;
@@ -44,19 +33,25 @@ interface BraceletSummaryPanelProps {
   saving?: boolean;
   saveStatus?: string;
   saveDisabled?: boolean;
+  /** When true, outer title bar is omitted (parent layout supplies sidebar chrome). */
+  embedded?: boolean;
 }
 
 function CostLine({
   label,
   amount,
+  currencyCode,
 }: {
   label: string;
   amount: number;
+  currencyCode: string;
 }) {
   return (
     <div className="flex justify-between gap-2 text-[11px]">
       <span className="truncate text-foreground/90">{label}</span>
-      <span className="shrink-0 tabular-nums text-muted-foreground">${amount.toFixed(2)}</span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">
+        {formatCurrency(amount, currencyCode)}
+      </span>
     </div>
   );
 }
@@ -65,17 +60,9 @@ export function BraceletSummaryPanel({
   summary,
   mainBeadRows = [],
   matchingPairBeadRows = [],
-  wristSizeCm,
-  wristSizeCmB,
-  wristSizes = [],
-  wristSizeIdA,
-  wristSizeIdB,
-  onSelectWristA,
-  onSelectWristB,
   className,
   collapsible = false,
   defaultOpen = true,
-  builderActions,
   visualLayoutA,
   visualLayoutB,
   onSave,
@@ -83,14 +70,12 @@ export function BraceletSummaryPanel({
   saving = false,
   saveStatus = "",
   saveDisabled = false,
+  embedded = false,
 }: BraceletSummaryPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
-  const [changingWrist, setChangingWrist] = useState(false);
   const { pricing } = summary;
   const strandA = summary.strands[0];
   const strandB = summary.strands[1];
-  const mainBeadCount = strandA?.placedCount ?? 0;
-  const pairBeadCount = strandB?.placedCount ?? 0;
 
   const handleAddToCart = () => {
     if (onAddToCart) {
@@ -102,75 +87,18 @@ export function BraceletSummaryPanel({
 
   const body = (
     <div className="space-y-3">
-      <SummaryInfoCard title={BRACELET_COPY.braceletPreview}>
-        <p className="type-body text-sm text-foreground">
-          {mainBeadCount === 0
-            ? BRACELET_COPY.summaryEmpty
-            : `${BRACELET_COPY.beadCountSummary(mainBeadCount)} · ${formatCapacityCm(strandA?.usedMm ?? 0)} placed`}
-        </p>
-        {summary.twinning && pairBeadCount > 0 ? (
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {BRACELET_COPY.matchingPairTitle}: {BRACELET_COPY.beadCountSummary(pairBeadCount)}
-          </p>
-        ) : null}
+      <SummaryInfoCard title={BRACELET_COPY.mainBraceletTitle}>
+        <SelectedBeadsList rows={mainBeadRows} compact />
       </SummaryInfoCard>
 
-      <SummaryInfoCard title={BRACELET_COPY.currentWristSize}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="type-price text-lg text-foreground">
-            {summary.twinning && wristSizeCmB != null
-              ? `${wristSizeCm} cm · ${wristSizeCmB} cm`
-              : `${wristSizeCm} cm`}
-          </span>
-          {onSelectWristA ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 shrink-0 px-2 text-[11px]"
-              onClick={() => setChangingWrist((v) => !v)}
-            >
-              {BRACELET_COPY.changeSize}
-            </Button>
-          ) : null}
-        </div>
-        {changingWrist && onSelectWristA ? (
-          <div className="mt-2 space-y-2 border-t border-border/50 pt-2">
-            <WristSizePickerCards
-              label={summary.twinning ? BRACELET_COPY.wristTwinA : BRACELET_COPY.wristLabel}
-              sizes={wristSizes}
-              selectedId={wristSizeIdA ?? null}
-              onSelect={onSelectWristA}
-              variant="inline"
-              scrollable={wristSizes.length > 8}
-            />
-            {summary.twinning && onSelectWristB ? (
-              <WristSizePickerCards
-                label={BRACELET_COPY.wristTwinB}
-                sizes={wristSizes}
-                selectedId={wristSizeIdB ?? null}
-                onSelect={onSelectWristB}
-                variant="inline"
-                scrollable={wristSizes.length > 8}
-              />
-            ) : null}
-          </div>
-        ) : null}
-      </SummaryInfoCard>
-
-      <SummaryInfoCard title={BRACELET_COPY.matchingPairTitle}>
-        <p className="text-sm font-medium text-foreground">
-          {summary.twinning ? BRACELET_COPY.matchingPairEnabled : BRACELET_COPY.matchingPairNotEnabled}
-        </p>
-        {builderActions ? (
-          <div className="mt-2 border-t border-border/50 pt-2">
-            <BraceletBuilderActions {...builderActions} />
-          </div>
-        ) : null}
-      </SummaryInfoCard>
+      {summary.twinning ? (
+        <SummaryInfoCard title={BRACELET_COPY.matchingPairTitle}>
+          <SelectedBeadsList rows={matchingPairBeadRows} compact />
+        </SummaryInfoCard>
+      ) : null}
 
       {strandA ? (
-        <SummaryInfoCard title={BRACELET_COPY.summaryCapacity}>
+        <SummaryInfoCard title={BRACELET_COPY.configurationSummary}>
           <StrandCapacityCard
             strand={strandA}
             showStrandLabel={false}
@@ -197,16 +125,6 @@ export function BraceletSummaryPanel({
         </SummaryInfoCard>
       ) : null}
 
-      <SummaryInfoCard title={BRACELET_COPY.mainBraceletTitle}>
-        <SelectedBeadsList rows={mainBeadRows} compact />
-      </SummaryInfoCard>
-
-      {summary.twinning ? (
-        <SummaryInfoCard title={BRACELET_COPY.matchingPairTitle}>
-          <SelectedBeadsList rows={matchingPairBeadRows} compact />
-        </SummaryInfoCard>
-      ) : null}
-
       <SummaryInfoCard title={BRACELET_COPY.costBreakdown}>
         {pricing.placedCount === 0 ? (
           <p className="text-[11px] text-muted-foreground">—</p>
@@ -221,10 +139,15 @@ export function BraceletSummaryPanel({
                     : item.sizeLabel || item.beadName
                 }
                 amount={item.lineTotal}
+                currencyCode={pricing.currencyCode}
               />
             ))}
             <div className="border-t border-border/50 pt-1.5">
-              <CostLine label={BRACELET_COPY.subtotal} amount={pricing.subtotal} />
+              <CostLine
+                label={BRACELET_COPY.subtotal}
+                amount={pricing.subtotal}
+                currencyCode={pricing.currencyCode}
+              />
             </div>
           </div>
         )}
@@ -233,7 +156,9 @@ export function BraceletSummaryPanel({
       <div className="rounded-xl border border-border/45 bg-card/50 px-3 py-2.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="type-body text-sm text-foreground">{BRACELET_COPY.estimatedTotal}</span>
-          <span className="type-price text-xl text-foreground">${pricing.total.toFixed(2)}</span>
+          <span className="type-price text-xl text-foreground">
+            {formatCurrency(pricing.total, pricing.currencyCode)}
+          </span>
         </div>
         <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
           {BRACELET_COPY.priceNote(pricing.currencyCode)}
@@ -266,7 +191,7 @@ export function BraceletSummaryPanel({
   );
 
   const panelHeader = (
-    <div className="shrink-0 border-b border-border/80 px-3 py-2.5">
+    <div className="shrink-0 border-b border-border/80 px-2.5 py-2 lg:px-3 lg:py-2.5">
       <h2 className="type-h3 text-base">{BRACELET_COPY.summaryTitle}</h2>
     </div>
   );
@@ -274,8 +199,8 @@ export function BraceletSummaryPanel({
   if (!collapsible) {
     return (
       <aside className={cn("flex h-full w-full flex-col bg-background", className)}>
-        {panelHeader}
-        <div className="flex-1 overflow-y-auto px-3 py-3">{body}</div>
+        {!embedded ? panelHeader : null}
+        <div className="flex-1 overflow-y-auto px-2 py-2 lg:px-2.5 lg:py-2.5">{body}</div>
       </aside>
     );
   }
@@ -289,7 +214,9 @@ export function BraceletSummaryPanel({
       >
         <div>
           <span className="type-body font-medium text-foreground">{BRACELET_COPY.summaryTitle}</span>
-          <span className="type-price ml-2 text-body text-primary">${pricing.total.toFixed(2)}</span>
+          <span className="type-price ml-2 text-body text-primary">
+            {formatCurrency(pricing.total, pricing.currencyCode)}
+          </span>
         </div>
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </button>

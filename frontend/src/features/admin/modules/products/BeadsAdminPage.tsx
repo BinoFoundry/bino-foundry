@@ -4,6 +4,7 @@ import { Gem, Trash2 } from "lucide-react";
 import { BeadForm } from "@/components/admin/BeadForm";
 import { Button } from "@/components/ui/button";
 import { formatLibraryPriceRange } from "@/features/bracelet/library-sizes";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { formatApiErrorMessage } from "@/services/api";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
@@ -22,6 +23,7 @@ import { useAdminList } from "../../hooks/useAdminList";
 type ModalState = { type: "add" } | { type: "edit"; entry: BeadLibraryEntry } | null;
 
 export function BeadsAdminPage() {
+  const { currencyCode } = useFormatCurrency();
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -134,7 +136,8 @@ export function BeadsAdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{b.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {typeName(b.beadTypeId)} · {formatLibraryPriceRange(cat.beadLibrarySizes, b.id)} · crop{" "}
+                    {typeName(b.beadTypeId)} ·{" "}
+                    {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)} · crop{" "}
                     {b.cropStatus ?? "draft"}
                   </p>
                 </div>

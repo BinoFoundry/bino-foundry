@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Package } from "lucide-react";
 
+import { formatCurrency } from "@bino-foundry/shared/currency";
+
 import { Button } from "@/components/ui/button";
 import { ordersApi } from "@/services/api/orders";
 import type { CustomerOrderSummary } from "@bino-foundry/shared/types";
@@ -42,7 +44,7 @@ function OrderCard({ order }: { order: CustomerOrderSummary }) {
         </div>
         <div className="text-right">
           <p className="type-price text-lg">
-            ${order.totalAmount.toFixed(2)} {order.currencyCode}
+            {formatCurrency(order.totalAmount, order.currencyCode)}
           </p>
           <Button type="button" size="sm" variant="secondary" className="mt-3" asChild>
             <Link to={`/account/orders/${encodeURIComponent(order.id)}`}>View details</Link>

@@ -3,22 +3,32 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { BuilderOptionEntry } from "@/types/sunglasses-catalog";
 
+import { formatCurrencySurcharge } from "@bino-foundry/shared/currency";
+
+import { SUNGLASSES_COPY } from "../../copy";
+
 interface ExtrasStepPanelProps {
   extrasOptions: BuilderOptionEntry[];
   selectedOptions: Record<string, boolean>;
+  currencyCode: string;
   onOptionChange: (code: string, enabled: boolean) => void;
 }
 
 export function ExtrasStepPanel({
   extrasOptions,
   selectedOptions,
+  currencyCode,
   onOptionChange,
 }: ExtrasStepPanelProps) {
+  if (extrasOptions.length === 0) {
+    return null;
+  }
+
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="type-h3">Extras</h3>
-        <p className="mt-0.5 text-sm text-muted-foreground">Optional add-ons for your sunglasses.</p>
+        <h3 className="type-h3">{SUNGLASSES_COPY.addOnsStepTitle}</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">{SUNGLASSES_COPY.addOnsStepIntro}</p>
       </div>
 
       <div className="space-y-2">
@@ -32,7 +42,7 @@ export function ExtrasStepPanel({
                 {option.label}
               </Label>
               <p className="text-xs text-muted-foreground">
-                +${option.priceSurcharge}
+                {formatCurrencySurcharge(option.priceSurcharge, currencyCode)}
                 {option.description ? ` · ${option.description}` : ""}
               </p>
               {option.tooltipText ? (
@@ -42,7 +52,7 @@ export function ExtrasStepPanel({
                       type="button"
                       className="text-xs font-medium text-primary underline underline-offset-2"
                     >
-                      details
+                      Details
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs text-center">
@@ -58,10 +68,6 @@ export function ExtrasStepPanel({
             />
           </div>
         ))}
-
-        {extrasOptions.length === 0 && (
-          <p className="text-sm text-muted-foreground">No extras are configured in admin.</p>
-        )}
       </div>
     </div>
   );

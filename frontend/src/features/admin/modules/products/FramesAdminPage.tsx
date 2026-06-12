@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { FrameEntry } from "@/data/glasses";
 import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
@@ -181,6 +182,8 @@ function FrameToolbarTitle({
   isNew: boolean;
   isEditing: boolean;
 }) {
+  const { format } = useFormatCurrency();
+
   if (isNew) {
     return (
       <div>
@@ -196,7 +199,7 @@ function FrameToolbarTitle({
       <div>
         <h3 className="type-h3">{frame.name}</h3>
         <p className="text-sm text-muted-foreground">
-          ${frame.price} · {frame.id}
+          {format(frame.price)} · {frame.id}
           {frame.isActive === false ? " · unpublished" : ""}
           {isEditing ? " · editing" : ""}
         </p>
@@ -227,6 +230,7 @@ function FrameThumb({ frame, size = "sm" }: { frame: FrameEntry; size?: "sm" | "
 }
 
 function FrameDetailView({ frame }: { frame: FrameEntry }) {
+  const { format } = useFormatCurrency();
   const clip = summarizeFrameClipStatus(frame.renderViews);
   return (
     <div className="space-y-8 pb-8">
@@ -239,7 +243,7 @@ function FrameDetailView({ frame }: { frame: FrameEntry }) {
           label={frame.isActive === false ? "Unpublished" : "Published"}
           variant={frame.isActive === false ? "danger" : "success"}
         />
-        <span className="text-xs text-muted-foreground">Base price ${frame.price}</span>
+        <span className="text-xs text-muted-foreground">Base price {format(frame.price)}</span>
       </div>
       <section>
         <h3 className="type-h3 mb-4">

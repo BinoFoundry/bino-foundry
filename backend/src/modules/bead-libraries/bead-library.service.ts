@@ -1,4 +1,5 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
+import { settingsService } from "../settings/settings.service.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
 import { isBeadCropConfigValid } from "@bino-foundry/shared/types";
@@ -85,6 +86,7 @@ export class BeadLibraryService {
 
   async create(payload: BeadLibraryCreateDTO): Promise<unknown> {
     const supabase = getSupabaseServiceRole();
+    const { currencyCode } = await settingsService.getGeneralSettings();
 
     const original =
       payload.originalImage?.trim() ||
@@ -102,7 +104,7 @@ export class BeadLibraryService {
     const insertRow = {
       public_id: payload.id.trim(),
       name: payload.name.trim(),
-      currency_code: "USD",
+      currency_code: currencyCode,
       description: payload.description?.trim() ?? "",
       bead_type_id: payload.beadTypeId,
       original_image_url: original,

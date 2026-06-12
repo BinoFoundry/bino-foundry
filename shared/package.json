@@ -20,6 +20,10 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.js"
     },
+    "./currency": {
+      "types": "./dist/currency/index.d.ts",
+      "import": "./dist/currency/index.js"
+    },
     "./storage": {
       "types": "./dist/storage/index.d.ts",
       "import": "./dist/storage/index.js"

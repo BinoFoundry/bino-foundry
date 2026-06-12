@@ -1,5 +1,11 @@
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Gem, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { BRACELET_COPY } from "@/features/bracelet/copy";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
 export interface BraceletBuilderLayoutProps {
@@ -10,9 +16,108 @@ export interface BraceletBuilderLayoutProps {
   className?: string;
 }
 
+function ScrollPanel({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      data-scroll-isolate="true"
+      onWheel={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SidebarHeader({
+  title,
+  side,
+  onClose,
+}: {
+  title: string;
+  side: "left" | "right";
+  onClose: () => void;
+}) {
+  const Icon = side === "left" ? PanelLeftClose : PanelRightClose;
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2.5 py-2">
+      <h2 className="type-h3 truncate text-sm">{title}</h2>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0"
+        onClick={onClose}
+        aria-label={`Close ${title.toLowerCase()}`}
+      >
+        <Icon className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function CollapseRail({
+  side,
+  label,
+  onOpen,
+}: {
+  side: "left" | "right";
+  label: string;
+  onOpen: () => void;
+}) {
+  const Icon = side === "left" ? PanelLeft : PanelRight;
+  return (
+    <div
+      className={cn(
+        "flex h-full w-11 shrink-0 flex-col items-center border-border/60 bg-background py-3",
+        side === "left" ? "border-r" : "border-l",
+      )}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9"
+        onClick={onOpen}
+        aria-label={label}
+        title={label}
+      >
+        <Icon className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function EdgeDrawerTrigger({
+  side,
+  label,
+  onOpen,
+}: {
+  side: "left" | "right";
+  label: string;
+  onOpen: () => void;
+}) {
+  const Icon = side === "left" ? Gem : PanelRight;
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="icon"
+      className={cn(
+        "pointer-events-auto absolute top-1/2 z-40 h-10 w-10 -translate-y-1/2 border border-border/50 bg-background/90 shadow-sm backdrop-blur-sm",
+        side === "left" ? "left-0 rounded-l-none rounded-r-lg" : "right-0 rounded-l-lg rounded-r-none",
+      )}
+      onClick={onOpen}
+      aria-label={label}
+      title={label}
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
+  );
+}
+
 /**
- * Bracelet-specific 3-column workspace.
- * Left ~260–280px · center flex · right ~300–320px so the canvas dominates.
+ * Bracelet 3-column workspace — canvas-first on tablet/laptop with collapsible sidebars.
+ * Mobile: stacked canvas + collapsible footer. Tablet: slide-over drawers. Laptop+: docked panels.
  */
 export function BraceletBuilderLayout({
   leftPanel,
@@ -21,37 +126,141 @@ export function BraceletBuilderLayout({
   mobileFooter,
   className,
 }: BraceletBuilderLayoutProps) {
-  return (
-    <div className={cn("flex h-full min-h-0 w-full flex-1 flex-col", className)}>
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(260px,280px)_minmax(0,1fr)_minmax(300px,320px)]">
-        {leftPanel ? (
-          <aside className="hidden h-full min-h-0 flex-col border-r border-border bg-background lg:flex">
-            <div
-              className="flex min-h-0 flex-1 flex-col overflow-y-auto"
-              data-scroll-isolate="true"
-              onWheel={(e) => e.stopPropagation()}
-            >
-              {leftPanel}
-            </div>
-          </aside>
-        ) : null}
+  const isMobile = useIsMobile();
+  const isDrawerMode = useMediaQuery("(min-width: 768px) and (max-width: 1023px)");
+  const isWideDesktop = useMediaQuery("(min-width: 1280px)");
 
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden">{centerPanel}</section>
+  const [leftOpen, setLeftOpen] = useState(false);
+  const [rightOpen, setRightOpen] = useState(false);
 
-        {rightPanel ? (
-          <aside className="hidden h-full min-h-0 flex-col border-l border-border bg-background lg:flex">
-            <div
-              className="flex min-h-0 flex-1 flex-col overflow-y-auto"
-              data-scroll-isolate="true"
-              onWheel={(e) => e.stopPropagation()}
-            >
-              {rightPanel}
-            </div>
-          </aside>
-        ) : null}
+  const syncLayoutForViewport = useCallback(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setLeftOpen(false);
+      setRightOpen(false);
+      return;
+    }
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setLeftOpen(false);
+      setRightOpen(false);
+      return;
+    }
+    setLeftOpen(true);
+    setRightOpen(true);
+  }, []);
+
+  useEffect(() => {
+    syncLayoutForViewport();
+    window.addEventListener("resize", syncLayoutForViewport);
+    return () => window.removeEventListener("resize", syncLayoutForViewport);
+  }, [syncLayoutForViewport]);
+
+  const leftTitle = BRACELET_COPY.libraryTitle;
+  const rightTitle = BRACELET_COPY.summaryTitle;
+
+  const dockedLeftWidth = isWideDesktop ? "w-[min(220px,20vw)]" : "w-[min(188px,22vw)]";
+  const dockedRightWidth = isWideDesktop ? "w-[min(232px,20vw)]" : "w-[min(200px,22vw)]";
+
+  if (isMobile) {
+    return (
+      <div className={cn("flex h-full min-h-0 w-full flex-1 flex-col", className)}>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{centerPanel}</section>
+        {mobileFooter ? <div className="shrink-0">{mobileFooter}</div> : null}
       </div>
+    );
+  }
 
-      {mobileFooter ? <div className="shrink-0 lg:hidden">{mobileFooter}</div> : null}
+  if (isDrawerMode) {
+    return (
+      <div className={cn("flex h-full min-h-0 w-full flex-1 flex-col", className)}>
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <section className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden">
+            {centerPanel}
+          </section>
+
+          {leftPanel && !leftOpen ? (
+            <EdgeDrawerTrigger
+              side="left"
+              label={leftTitle}
+              onOpen={() => setLeftOpen(true)}
+            />
+          ) : null}
+          {rightPanel && !rightOpen ? (
+            <EdgeDrawerTrigger
+              side="right"
+              label={rightTitle}
+              onOpen={() => setRightOpen(true)}
+            />
+          ) : null}
+
+          {leftPanel ? (
+            <Sheet open={leftOpen} onOpenChange={setLeftOpen}>
+              <SheetContent
+                side="left"
+                className="flex w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
+              >
+                <SheetTitle className="sr-only">{leftTitle}</SheetTitle>
+                <SidebarHeader title={leftTitle} side="left" onClose={() => setLeftOpen(false)} />
+                <ScrollPanel>{leftPanel}</ScrollPanel>
+              </SheetContent>
+            </Sheet>
+          ) : null}
+
+          {rightPanel ? (
+            <Sheet open={rightOpen} onOpenChange={setRightOpen}>
+              <SheetContent
+                side="right"
+                className="flex w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
+              >
+                <SheetTitle className="sr-only">{rightTitle}</SheetTitle>
+                <SidebarHeader title={rightTitle} side="right" onClose={() => setRightOpen(false)} />
+                <ScrollPanel>{rightPanel}</ScrollPanel>
+              </SheetContent>
+            </Sheet>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("flex h-full min-h-0 w-full flex-1", className)}>
+      {leftPanel ? (
+        <aside
+          className={cn(
+            "hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-background transition-[width] duration-200 ease-out lg:flex",
+            leftOpen ? dockedLeftWidth : "w-11",
+          )}
+        >
+          {leftOpen ? (
+            <>
+              <SidebarHeader title={leftTitle} side="left" onClose={() => setLeftOpen(false)} />
+              <ScrollPanel>{leftPanel}</ScrollPanel>
+            </>
+          ) : (
+            <CollapseRail side="left" label={leftTitle} onOpen={() => setLeftOpen(true)} />
+          )}
+        </aside>
+      ) : null}
+
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{centerPanel}</section>
+
+      {rightPanel ? (
+        <aside
+          className={cn(
+            "hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-border/60 bg-background transition-[width] duration-200 ease-out lg:flex",
+            rightOpen ? dockedRightWidth : "w-11",
+          )}
+        >
+          {rightOpen ? (
+            <>
+              <SidebarHeader title={rightTitle} side="right" onClose={() => setRightOpen(false)} />
+              <ScrollPanel>{rightPanel}</ScrollPanel>
+            </>
+          ) : (
+            <CollapseRail side="right" label={rightTitle} onOpen={() => setRightOpen(true)} />
+          )}
+        </aside>
+      ) : null}
     </div>
   );
 }
