@@ -20,6 +20,7 @@ export const BRACELET_COPY = {
   selectedBeadsTitle: "Selected beads",
   mainBraceletTitle: "Main bracelet",
   matchingPairTitle: "Matching pair",
+  matchingPairPreviewHint: "Both bracelets shown below",
   matchingPairEnabled: "Enabled",
   matchingPairNotEnabled: "Not enabled",
   matchingPairEdit: "Edit",

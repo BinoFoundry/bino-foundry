@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { BeadCategoryScroller } from "@/features/bracelet/components/BeadCategoryScroller";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { cn } from "@/lib/utils";
 import { BEAD_LIBRARY_DRAG_TYPE } from "@/features/bracelet/interaction";
@@ -133,7 +134,7 @@ const BeadLibrary = ({
         : BRACELET_COPY.libraryEmpty("beads");
 
   const panelClass = isEmbedded
-    ? "flex min-h-0 flex-1 flex-col"
+    ? "flex flex-col"
     : isMobile
       ? "surface-elevated fixed bottom-0 left-0 right-0 z-50 flex max-h-[min(70vh,100dvh)] flex-col rounded-t-2xl border-t border-subtle pb-[env(safe-area-inset-bottom)]"
       : "surface-elevated absolute bottom-0 left-0 top-0 z-30 flex w-64 flex-col border-r border-subtle";
@@ -146,7 +147,7 @@ const BeadLibrary = ({
       <div className={panelClass}>
         {!compact ? (
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-            <h3 className="type-h3 text-base">{BRACELET_COPY.crystalLibrary}</h3>
+            <h3 className="type-h3 text-sm">{BRACELET_COPY.crystalLibrary}</h3>
             {!isEmbedded ? (
               <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
                 <X className="h-4 w-4" />
@@ -167,33 +168,25 @@ const BeadLibrary = ({
           </div>
         </div>
 
-        <div className={cn("flex shrink-0 gap-1 overflow-x-auto border-b border-border/60", compact ? "px-2 py-1.5" : "px-2 py-2")}>
-          {activeTypes.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setActiveBeadTypeId(t.id)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider ${
-                currentBeadTypeId === t.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
+        <BeadCategoryScroller
+          types={activeTypes}
+          activeId={currentBeadTypeId}
+          onSelect={setActiveBeadTypeId}
+          compact={compact}
+        />
 
         {compact ? (
-          <div className="shrink-0 border-b border-border/60 px-2 py-1.5">
-            <p className="label-eyebrow text-muted-foreground">{BRACELET_COPY.crystalLibrary}</p>
+          <div className="shrink-0 border-b border-border/60 px-2 py-1">
+            <p className="type-label text-[10px] text-primary/75">{BRACELET_COPY.crystalLibrary}</p>
           </div>
         ) : null}
 
         <div
-          className="min-h-0 flex-1 overflow-y-auto p-2"
-          data-scroll-isolate="true"
-          onWheel={(e) => e.stopPropagation()}
+          className={cn(
+            isEmbedded ? "p-2" : "min-h-0 flex-1 overflow-y-auto overscroll-contain p-2",
+          )}
+          data-scroll-isolate={isEmbedded ? undefined : "true"}
+          onWheel={isEmbedded ? undefined : (e) => e.stopPropagation()}
         >
           {filtered.length === 0 ? (
             <p className="px-2 py-8 text-center text-xs leading-relaxed text-muted-foreground">{emptyMessage}</p>

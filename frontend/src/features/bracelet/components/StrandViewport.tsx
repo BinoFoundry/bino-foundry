@@ -1,5 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 
+import { cn } from "@/lib/utils";
+
 import type { StrandPan } from "../hooks/useStrandZoom";
 
 interface StrandViewportProps {
@@ -11,6 +13,8 @@ interface StrandViewportProps {
   viewScale?: number;
   /** When true, viewport shows grab cursor for dedicated pan mode. */
   panMode?: boolean;
+  /** Side-by-side pair layout — both strands stay visible without wrapping. */
+  twinning?: boolean;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -29,6 +33,7 @@ export function StrandViewport({
   isPanning,
   viewScale: _viewScale = 1,
   panMode = false,
+  twinning = false,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -50,7 +55,13 @@ export function StrandViewport({
       <div
         ref={contentRef}
         data-strand-viewport-content
-        className="inline-flex w-max max-w-none flex-wrap items-center justify-center gap-1 sm:gap-1.5"
+        data-twinning={twinning ? "true" : "false"}
+        className={cn(
+          "inline-flex w-max max-w-none items-center justify-center",
+          twinning
+            ? "flex-row flex-nowrap gap-1.5 sm:gap-2 md:gap-3"
+            : "flex-row flex-wrap gap-1 sm:gap-1.5",
+        )}
         style={{
           transformOrigin: "center center",
           willChange: isPanning ? "transform" : undefined,

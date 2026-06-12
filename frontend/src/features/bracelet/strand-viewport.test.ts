@@ -42,6 +42,15 @@ describe("computeStrandAutoFitScale", () => {
   it("never upscales above 1", () => {
     expect(computeStrandAutoFitScale(500, 400)).toBe(1);
   });
+
+  it("fits both twin strands within the preview width", () => {
+    const scale = computeStrandAutoFitScale(280, 320, {
+      twinning: true,
+      viewportWidthPx: 600,
+    });
+    expect(scale * 320 * 2 + 12).toBeLessThanOrEqual(600);
+    expect(scale).toBeLessThan(1);
+  });
 });
 
 describe("squareCanvasSizeForBounds", () => {

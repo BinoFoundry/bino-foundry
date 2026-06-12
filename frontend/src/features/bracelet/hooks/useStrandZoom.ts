@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { shouldApplyCanvasWheelZoom, shouldStartCanvasPan } from "../interaction";
+import { TWIN_STRAND_PREVIEW_GAP_PX } from "../strand-viewport";
 
 export interface StrandZoomOptions {
   /** When true, pan gestures are ignored (e.g. library HTML5 drag in progress). */
@@ -24,7 +25,6 @@ const ZOOM_WHEEL_SENSITIVITY = 0.0011;
 const ZOOM_SMOOTH_FACTOR = 0.28;
 const ZOOM_SNAP_EPSILON = 0.006;
 const PAN_DRAG_THRESHOLD_PX = 5;
-const TWIN_STRAND_GAP_PX = 24;
 const STRAND_CHROME_Y_PX = 52;
 
 export interface StrandPan {
@@ -85,7 +85,7 @@ function measureContentExtent(content: HTMLElement) {
 function expectedContentSize(layout: StrandZoomLayout, userZoom: number) {
   const scaled = layout.layoutCanvasSize * layout.autoFitScale * userZoom;
   return {
-    width: layout.twinning ? scaled * 2 + TWIN_STRAND_GAP_PX : scaled,
+    width: layout.twinning ? scaled * 2 + TWIN_STRAND_PREVIEW_GAP_PX : scaled,
     height: scaled + STRAND_CHROME_Y_PX,
   };
 }

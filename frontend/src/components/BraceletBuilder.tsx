@@ -45,11 +45,13 @@ interface BraceletBuilderProps {
 function useCanvasSize(isMobile: boolean, twinning: boolean) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [strandSize, setStrandSize] = useState(400);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const measure = () => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
+      setContainerSize({ width: rect.width, height: rect.height });
       setStrandSize(
         measureStrandCanvasSize({
           containerWidth: rect.width,
@@ -67,7 +69,7 @@ function useCanvasSize(isMobile: boolean, twinning: boolean) {
     return () => observer.disconnect();
   }, [isMobile, twinning]);
 
-  return { containerRef, strandSize };
+  return { containerRef, strandSize, containerSize };
 }
 
 function buildStrandBeadRows(
@@ -164,7 +166,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   ]);
 
   const wristConfirmed = builder.wristSizeConfirmed;
-  const { containerRef, strandSize } = useCanvasSize(isMobile, builder.twinning);
+  const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile, builder.twinning);
   const canvasZoomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -208,8 +210,12 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   ]);
 
   const autoFitScale = useMemo(
-    () => computeStrandAutoFitScale(strandSize, layoutCanvasSize),
-    [strandSize, layoutCanvasSize],
+    () =>
+      computeStrandAutoFitScale(strandSize, layoutCanvasSize, {
+        twinning: builder.twinning,
+        viewportWidthPx: containerSize.width,
+      }),
+    [strandSize, layoutCanvasSize, builder.twinning, containerSize.width],
   );
 
   const strandZoomLayout = useMemo(
@@ -505,7 +511,15 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         </div>
       ) : null}
 
-      <div className="pointer-events-none absolute left-3 right-3 top-2 z-30 flex flex-col gap-2 sm:left-auto sm:right-4 sm:max-w-sm">
+      <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex flex-col items-center gap-1 px-3 sm:top-3">
+        {builder.twinning ? (
+          <span className="rounded-full border border-primary/25 bg-background/90 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-foreground shadow-sm backdrop-blur-sm">
+            {BRACELET_COPY.matchingPairTitle} · {BRACELET_COPY.matchingPairPreviewHint}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="pointer-events-none absolute left-3 right-3 top-2 z-30 flex flex-col gap-2 sm:left-auto sm:right-4 sm:max-w-sm sm:top-12">
         {builder.isOverCapacity ? (
           <CapacityAlertBanner
             variant="over"
@@ -558,6 +572,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           isPanning={isPanning}
           viewScale={viewScale}
           panMode={panMode}
+          twinning={builder.twinning}
           onPointerDown={onPanPointerDown}
           onPointerMove={onPanPointerMove}
           onPointerUp={onPanPointerUp}

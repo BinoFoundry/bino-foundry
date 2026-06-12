@@ -28,6 +28,20 @@ function ScrollPanel({ children }: { children: ReactNode }) {
   );
 }
 
+/** Left library panel — single vertical scroll for context, search, categories, and beads. */
+function LibraryScrollPanel({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+      data-scroll-isolate="true"
+      data-library-scroll-panel="true"
+      onWheel={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+}
+
 function SidebarHeader({
   title,
   side,
@@ -40,7 +54,7 @@ function SidebarHeader({
   const Icon = side === "left" ? PanelLeftClose : PanelRightClose;
   return (
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2.5 py-2">
-      <h2 className="type-h3 truncate text-sm">{title}</h2>
+      <h2 className="type-h3 truncate text-xs text-foreground/90">{title}</h2>
       <Button
         type="button"
         variant="ghost"
@@ -196,11 +210,11 @@ export function BraceletBuilderLayout({
             <Sheet open={leftOpen} onOpenChange={setLeftOpen}>
               <SheetContent
                 side="left"
-                className="flex w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
+                className="flex h-full max-h-full w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
               >
                 <SheetTitle className="sr-only">{leftTitle}</SheetTitle>
                 <SidebarHeader title={leftTitle} side="left" onClose={() => setLeftOpen(false)} />
-                <ScrollPanel>{leftPanel}</ScrollPanel>
+                <LibraryScrollPanel>{leftPanel}</LibraryScrollPanel>
               </SheetContent>
             </Sheet>
           ) : null}
@@ -209,7 +223,7 @@ export function BraceletBuilderLayout({
             <Sheet open={rightOpen} onOpenChange={setRightOpen}>
               <SheetContent
                 side="right"
-                className="flex w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
+                className="flex h-full max-h-full w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
               >
                 <SheetTitle className="sr-only">{rightTitle}</SheetTitle>
                 <SidebarHeader title={rightTitle} side="right" onClose={() => setRightOpen(false)} />
@@ -234,7 +248,7 @@ export function BraceletBuilderLayout({
           {leftOpen ? (
             <>
               <SidebarHeader title={leftTitle} side="left" onClose={() => setLeftOpen(false)} />
-              <ScrollPanel>{leftPanel}</ScrollPanel>
+              <LibraryScrollPanel>{leftPanel}</LibraryScrollPanel>
             </>
           ) : (
             <CollapseRail side="left" label={leftTitle} onOpen={() => setLeftOpen(true)} />

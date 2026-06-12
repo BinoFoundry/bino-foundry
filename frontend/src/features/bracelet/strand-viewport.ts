@@ -25,6 +25,16 @@ export const STRAND_TARGET_BBOX_FILL = 0.96;
 /** Max extra uniform boost when auto-fitting strand bbox into the canvas. */
 export const STRAND_MAX_LAYOUT_FILL = 1.28;
 
+/** Horizontal gap between twin strand canvases in the preview row. */
+export const TWIN_STRAND_PREVIEW_GAP_PX = 12;
+
+export interface StrandAutoFitOptions {
+  twinning?: boolean;
+  /** Full preview viewport width (both strands). */
+  viewportWidthPx?: number;
+  gapPx?: number;
+}
+
 export interface StrandViewportMeasureInput {
   containerWidth: number;
   containerHeight: number;
@@ -54,7 +64,7 @@ export function measureStrandCanvasSize(input: StrandViewportMeasureInput): numb
   const sidebarOffset = libraryOpen ? 256 : 0;
   const availableW = w - sidebarOffset - 2;
   const strandCount = twinning ? 2 : 1;
-  const gap = twinning ? 8 : 0;
+  const gap = twinning ? TWIN_STRAND_PREVIEW_GAP_PX : 0;
   const maxByWidth = (availableW - gap) / strandCount;
   const maxByHeight = h - 2;
   const side = Math.min(maxByWidth, maxByHeight) * STRAND_VIEWPORT_FILL;
@@ -168,7 +178,14 @@ export function computeLayoutCanvasSize(params: {
 export function computeStrandAutoFitScale(
   viewportBudgetPx: number,
   layoutCanvasPx: number,
+  options?: StrandAutoFitOptions,
 ): number {
   if (layoutCanvasPx <= 0 || viewportBudgetPx <= 0) return 1;
-  return Math.min(1, viewportBudgetPx / layoutCanvasPx);
+  const single = Math.min(1, viewportBudgetPx / layoutCanvasPx);
+  if (!options?.twinning) return single;
+
+  const gap = options.gapPx ?? TWIN_STRAND_PREVIEW_GAP_PX;
+  const viewportWidth = options.viewportWidthPx ?? viewportBudgetPx * 2 + gap;
+  const byWidth = (viewportWidth - gap) / (2 * layoutCanvasPx);
+  return Math.min(1, single, byWidth);
 }

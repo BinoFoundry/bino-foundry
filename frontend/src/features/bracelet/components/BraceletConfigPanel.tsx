@@ -43,9 +43,9 @@ export function BraceletConfigPanel({
   builderActions,
 }: BraceletConfigPanelProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex flex-col">
       {embedded ? (
-        <div className="shrink-0 border-b border-border/60 p-1.5 lg:p-2">
+        <div className="shrink-0 border-b border-border/60 p-1.5">
           <BuilderSidebarContext
             wristSizeCm={wristSizeCm}
             wristSizeCmB={wristSizeCmB}

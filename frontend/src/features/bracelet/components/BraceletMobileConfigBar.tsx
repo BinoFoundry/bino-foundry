@@ -30,18 +30,20 @@ export function BraceletMobileConfigBar({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <WristSizeSlider
+            compact
             sizes={wristSizes}
             selectedId={wristSizeIdA}
             onSelect={onSelectWristA}
             label={BRACELET_COPY.currentWristSize}
           />
         </div>
-        <Button type="button" variant="secondary" size="sm" className="mt-5 shrink-0 text-xs" onClick={onOpenLibrary}>
+        <Button type="button" variant="secondary" size="sm" className="mt-4 shrink-0 text-xs" onClick={onOpenLibrary}>
           {BRACELET_COPY.library}
         </Button>
       </div>
       {twinning && onSelectWristB ? (
         <WristSizeSlider
+          compact
           sizes={wristSizes}
           selectedId={wristSizeIdB ?? null}
           onSelect={onSelectWristB}

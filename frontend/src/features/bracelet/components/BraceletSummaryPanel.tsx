@@ -192,7 +192,7 @@ export function BraceletSummaryPanel({
 
   const panelHeader = (
     <div className="shrink-0 border-b border-border/80 px-2.5 py-2 lg:px-3 lg:py-2.5">
-      <h2 className="type-h3 text-base">{BRACELET_COPY.summaryTitle}</h2>
+      <h2 className="type-h3 text-sm text-foreground/90">{BRACELET_COPY.summaryTitle}</h2>
     </div>
   );
 
@@ -213,7 +213,7 @@ export function BraceletSummaryPanel({
         onClick={() => setOpen((o) => !o)}
       >
         <div>
-          <span className="type-body font-medium text-foreground">{BRACELET_COPY.summaryTitle}</span>
+          <span className="type-h3 text-sm text-foreground/90">{BRACELET_COPY.summaryTitle}</span>
           <span className="type-price ml-2 text-body text-primary">
             {formatCurrency(pricing.total, pricing.currencyCode)}
           </span>

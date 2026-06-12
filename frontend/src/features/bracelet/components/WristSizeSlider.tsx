@@ -13,6 +13,8 @@ interface WristSizeSliderProps {
   onSelect: (entry: WristSizeEntry) => void;
   label?: string;
   className?: string;
+  /** Tighter layout for the builder sidebar (Quiet Luxury). */
+  compact?: boolean;
 }
 
 /** Discrete wrist-size control backed by catalogue entries (no hardcoded sizes). */
@@ -22,6 +24,7 @@ export function WristSizeSlider({
   onSelect,
   label,
   className,
+  compact = false,
 }: WristSizeSliderProps) {
   const options = useMemo(() => activeWristSizes(sizes), [sizes]);
 
@@ -38,14 +41,30 @@ export function WristSizeSlider({
   const maxIndex = Math.max(0, options.length - 1);
 
   return (
-    <div className={cn("space-y-2", className)}>
-      {label ? <p className="text-[10px] font-medium text-muted-foreground">{label}</p> : null}
+    <div className={cn(compact ? "space-y-1" : "space-y-2", className)}>
+      {label ? (
+        <p
+          className={cn(
+            "font-medium uppercase tracking-[0.12em] text-muted-foreground",
+            compact ? "text-[9px]" : "text-[10px]",
+          )}
+        >
+          {label}
+        </p>
+      ) : null}
       <div className="flex items-baseline justify-between gap-2">
-        <span className="type-price text-lg text-foreground">
-          {current ? formatWristSizeCm(current.sizeCm) : "—"}
+        <span
+          className={cn(
+            "tabular-nums text-foreground",
+            compact ? "text-sm font-medium leading-none" : "type-price text-lg",
+          )}
+        >
+          {current ? `${formatWristSizeCm(current.sizeCm)} cm` : "—"}
         </span>
         {current?.label && current.label !== formatWristSizeCm(current.sizeCm) ? (
-          <span className="truncate text-[10px] text-muted-foreground">{current.label}</span>
+          <span className={cn("truncate text-muted-foreground", compact ? "text-[9px]" : "text-[10px]")}>
+            {current.label}
+          </span>
         ) : null}
       </div>
       <Slider
@@ -55,13 +74,23 @@ export function WristSizeSlider({
         value={[selectedIndex]}
         disabled={options.length <= 1}
         aria-label={label ?? "Wrist size"}
-        className="py-1 [&_.bg-primary]:bg-selection/55 [&_[role=slider]]:border-selection-border [&_[role=slider]]:bg-background"
+        className={cn(
+          compact
+            ? "py-0 [&>span:first-child]:h-1 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3 [&_[role=slider]]:border [&_[role=slider]]:shadow-none"
+            : "py-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4",
+          "[&_.bg-primary]:bg-selection/55 [&_[role=slider]]:border-selection-border [&_[role=slider]]:bg-background",
+        )}
         onValueChange={([index]) => {
           const entry = options[index ?? 0];
           if (entry) onSelect(entry);
         }}
       />
-      <div className="flex justify-between text-[9px] tabular-nums text-muted-foreground">
+      <div
+        className={cn(
+          "flex justify-between tabular-nums text-muted-foreground",
+          compact ? "text-[8px]" : "text-[9px]",
+        )}
+      >
         <span>{formatWristSizeCm(options[0]!.sizeCm)}</span>
         <span>{formatWristSizeCm(options[maxIndex]!.sizeCm)}</span>
       </div>

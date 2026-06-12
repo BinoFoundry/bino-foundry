@@ -32,8 +32,9 @@ export function BuilderSidebarContext({
   builderActions,
 }: BuilderSidebarContextProps) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <WristSizeSlider
+        compact
         sizes={wristSizes}
         selectedId={wristSizeIdA}
         onSelect={onSelectWristA}
@@ -42,6 +43,7 @@ export function BuilderSidebarContext({
 
       {twinning && onSelectWristB ? (
         <WristSizeSlider
+          compact
           sizes={wristSizes}
           selectedId={wristSizeIdB ?? null}
           onSelect={onSelectWristB}
@@ -50,15 +52,15 @@ export function BuilderSidebarContext({
       ) : null}
 
       {builderActions ? (
-        <div className="space-y-2 border-t border-border/50 pt-2">
+        <div className="space-y-1.5 border-t border-border/50 pt-1.5">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
               {BRACELET_COPY.matchingPairTitle}
             </p>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <span
                 className={cn(
-                  "text-[10px] font-medium uppercase tracking-wide",
+                  "text-[9px] font-medium uppercase tracking-wide",
                   !twinning ? "text-foreground" : "text-muted-foreground",
                 )}
               >
@@ -68,11 +70,11 @@ export function BuilderSidebarContext({
                 checked={twinning}
                 onCheckedChange={() => builderActions.onToggleTwinning()}
                 aria-label={BRACELET_COPY.matchingPairTitle}
-                className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
+                className="h-5 w-9 shrink-0 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input [&>span]:h-4 [&>span]:w-4 data-[state=checked]:[&>span]:translate-x-4"
               />
               <span
                 className={cn(
-                  "text-[10px] font-medium uppercase tracking-wide",
+                  "text-[9px] font-medium uppercase tracking-wide",
                   twinning ? "text-foreground" : "text-muted-foreground",
                 )}
               >
@@ -85,12 +87,12 @@ export function BuilderSidebarContext({
               type="button"
               variant="secondary"
               size="sm"
-              className="h-7 w-full justify-start text-[11px]"
+              className="h-6 w-full justify-start px-2 text-[10px]"
               title={BRACELET_COPY.duplicateToPairHint}
               disabled={builderActions.duplicateDisabled}
               onClick={builderActions.onDuplicateToB}
             >
-              <ClipboardCopy className="mr-1.5 h-3.5 w-3.5" />
+              <ClipboardCopy className="mr-1 h-3 w-3" />
               {BRACELET_COPY.duplicateToPair}
             </Button>
           ) : null}
