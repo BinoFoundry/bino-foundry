@@ -73,7 +73,7 @@ export interface ListUsersResponse {
 export interface CreatePlatformUserRequest {
   email: string;
   password: string;
-  displayName?: string;
+  displayName: string;
   phone?: string;
   role?: AssignableUserRole;
   accountStatus?: AccountStatus;

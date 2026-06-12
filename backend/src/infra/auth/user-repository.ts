@@ -7,7 +7,7 @@ export interface DbUser {
   id: string;
   roleId: number;
   roleCode: UserRole;
-  fullName: string | null;
+  fullName: string;
   email: string;
   passwordHash: string;
   phoneNumber: string | null;
@@ -33,7 +33,7 @@ function mapUserRow(row: Record<string, unknown>): DbUser {
     id: String(row.id),
     roleId: Number(row.role_id),
     roleCode: roleCode as UserRole,
-    fullName: (row.full_name as string | null) ?? null,
+    fullName: String(row.full_name ?? ""),
     email: String(row.email),
     passwordHash: String(row.password_hash),
     phoneNumber: (row.phone_number as string | null) ?? null,
@@ -86,7 +86,7 @@ export async function findUserByEmail(email: string): Promise<DbUser | null> {
 export interface CreateUserInput {
   email: string;
   passwordHash: string;
-  fullName?: string | null;
+  fullName: string;
   phoneNumber?: string | null;
   roleCode?: UserRole;
   status?: AccountStatus;
@@ -103,7 +103,7 @@ export async function createUser(input: CreateUserInput): Promise<DbUser> {
     role_id: roleId,
     email: input.email.trim().toLowerCase(),
     password_hash: input.passwordHash,
-    full_name: input.fullName ?? null,
+    full_name: input.fullName.trim(),
     phone_number: input.phoneNumber ?? null,
     status: input.status ?? "active",
     email_verified_at: input.emailVerifiedAt ?? null,

@@ -23,7 +23,7 @@ export interface LoginRegisterResponse {
 export type MeResponse = CurrentUserResponse;
 
 export const authApi = {
-  register(body: { email: string; password: string; displayName?: string }) {
+  register(body: { email: string; password: string; displayName: string }) {
     return apiRequestData<LoginRegisterResponse>("/auth/register", { method: "POST", body });
   },
 

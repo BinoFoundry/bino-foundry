@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ACCOUNT_STATUSES, ASSIGNABLE_USER_ROLES } from "@bino-foundry/shared/types";
+import { customerNameSchema } from "../../lib/customer-name.validation.js";
 
 const assignableRoleSchema = z.enum(ASSIGNABLE_USER_ROLES);
 const accountStatusSchema = z.enum(ACCOUNT_STATUSES);
@@ -33,7 +34,7 @@ export const userIdParam = z.object({
 export const createUserDto = z.object({
   email: z.string().email().max(320),
   password: z.string().min(8).max(128),
-  displayName: z.string().trim().max(200).optional(),
+  displayName: customerNameSchema,
   phone: z.string().trim().max(40).optional(),
   role: assignableRoleSchema.default("customer"),
   accountStatus: accountStatusSchema.default("active"),
@@ -41,7 +42,7 @@ export const createUserDto = z.object({
 
 export const updateUserDto = z
   .object({
-    displayName: z.string().trim().max(200).optional(),
+    displayName: customerNameSchema.optional(),
     email: z.string().email().max(320).optional(),
     phone: z.string().trim().max(40).nullable().optional(),
     role: assignableRoleSchema.optional(),

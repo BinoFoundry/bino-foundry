@@ -1,9 +1,11 @@
 import { z } from "zod";
 
+import { customerNameSchema } from "../../lib/customer-name.validation.js";
+
 export const registerDto = z.object({
   email: z.string().trim().email().max(320),
   password: z.string().min(8).max(128),
-  displayName: z.string().trim().min(1).max(120).optional(),
+  displayName: customerNameSchema,
 });
 
 export const loginDto = z.object({
@@ -47,7 +49,7 @@ export const billingDetailsDto = z.object({
 });
 
 export const updateProfileDto = z.object({
-  displayName: z.string().trim().min(1).max(120).optional(),
+  displayName: customerNameSchema,
   phone: z.string().trim().max(40).optional(),
   billingDetails: billingDetailsDto.optional(),
 });

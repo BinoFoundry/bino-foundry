@@ -169,7 +169,7 @@ export class UsersService {
     const created = await createUser({
       email: dto.email,
       passwordHash,
-      fullName: dto.displayName ?? null,
+      fullName: dto.displayName,
       phoneNumber: dto.phone ?? null,
       roleCode: dto.role,
       status: dto.accountStatus,

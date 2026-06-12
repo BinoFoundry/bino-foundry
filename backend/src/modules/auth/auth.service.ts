@@ -79,7 +79,7 @@ export class AuthService {
     const user = await createUser({
       email: dto.email,
       passwordHash,
-      fullName: dto.displayName ?? null,
+      fullName: dto.displayName,
       emailVerifiedAt: autoVerify ? new Date().toISOString() : null,
     });
 
@@ -172,7 +172,7 @@ export class AuthService {
 
   async updateProfile(userId: string, dto: UpdateProfileDTO) {
     const patch: Record<string, unknown> = {};
-    if (dto.displayName !== undefined) patch.full_name = dto.displayName;
+    patch.full_name = dto.displayName;
     if (dto.phone !== undefined) patch.phone_number = dto.phone;
     if (dto.billingDetails !== undefined) patch.billing_details = dto.billingDetails;
 

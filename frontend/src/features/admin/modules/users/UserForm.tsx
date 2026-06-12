@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import type { AccountStatus, AdminUserDetail, AssignableUserRole } from "@bino-foundry/shared/types";
 import { ACCOUNT_STATUSES } from "@bino-foundry/shared/types";
 
+import { getCustomerNameValidationError } from "@/lib/customer-name";
+
 import { adminFieldClass } from "../../components/admin-styles";
 import { ASSIGNABLE_ROLE_OPTIONS, STATUS_LABELS } from "./user-labels";
 
@@ -48,6 +50,7 @@ export function UserForm({ mode, initial, onCancel, onSave }: UserFormProps) {
       : defaultValues,
   );
   const [saving, setSaving] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState("");
 
   const set = <K extends keyof UserFormValues>(key: K, value: UserFormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -58,18 +61,32 @@ export function UserForm({ mode, initial, onCancel, onSave }: UserFormProps) {
       className="mx-auto max-w-lg space-y-4 p-4 sm:p-6"
       onSubmit={(e) => {
         e.preventDefault();
+        const nameError = getCustomerNameValidationError(values.displayName);
+        if (nameError) {
+          setDisplayNameError(nameError);
+          return;
+        }
         setSaving(true);
-        void onSave(values).finally(() => setSaving(false));
+        void onSave({ ...values, displayName: values.displayName.trim() }).finally(() =>
+          setSaving(false),
+        );
       }}
     >
       <div>
-        <label className="type-label mb-1 block text-muted-foreground">Full name</label>
+        <label className="type-label mb-1 block text-muted-foreground">
+          Customer Name <span className="text-destructive" aria-hidden="true">*</span>
+        </label>
         <input
+          required
           className={adminFieldClass()}
           value={values.displayName}
-          onChange={(e) => set("displayName", e.target.value)}
+          onChange={(e) => {
+            set("displayName", e.target.value);
+            if (displayNameError) setDisplayNameError("");
+          }}
           placeholder="Jane Customer"
         />
+        {displayNameError ? <p className="mt-1 text-sm text-destructive">{displayNameError}</p> : null}
       </div>
 
       <div>

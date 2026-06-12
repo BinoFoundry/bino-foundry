@@ -1,7 +1,12 @@
+import { CUSTOMER_NAME_MAX_LENGTH, CUSTOMER_NAME_REQUIRED_MESSAGE } from "@bino-foundry/shared/constants";
 import { z } from "zod";
 
 export const customerDetailsDto = z.object({
-  fullName: z.string().trim().min(1).max(120),
+  fullName: z
+    .string({ required_error: CUSTOMER_NAME_REQUIRED_MESSAGE })
+    .trim()
+    .min(1, CUSTOMER_NAME_REQUIRED_MESSAGE)
+    .max(CUSTOMER_NAME_MAX_LENGTH),
   email: z.string().trim().email().max(320),
   phone: z.string().trim().max(40).optional(),
   addressLine1: z.string().trim().min(1).max(200),

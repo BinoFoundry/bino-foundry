@@ -49,6 +49,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 23. `000027_application_auth.sql` — application-owned `roles`, `users`, `user_sessions`, and verification/reset tokens (replaces Supabase Auth as identity source).
 24. `000028_default_currency_sgd.sql` — default platform currency `SGD` in `site.settings_v1` (migrates legacy `USD` default).
 25. `000029_smtp_settings.sql` — singleton `smtp_settings` table for admin-configured outbound mail (credentials encrypted by API).
+26. `000030_require_user_full_name.sql` — backfill and enforce `NOT NULL` on `users.full_name` (customer name).
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

@@ -13,7 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@bino-foundry/shared/currency";
+import { CUSTOMER_NAME_REQUIRED_MESSAGE } from "@bino-foundry/shared/constants";
 
+import { getCustomerNameValidationError } from "@/lib/customer-name";
 import { ordersApi } from "@/services/api/orders";
 import { isApiError } from "@/services/api/errors";
 import type { CustomerCheckoutDetails } from "@bino-foundry/shared/types";
@@ -54,6 +56,7 @@ export function CheckoutDialog({
     country: "US",
   });
   const [notes, setNotes] = useState("");
+  const [fullNameError, setFullNameError] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -75,11 +78,18 @@ export function CheckoutDialog({
       return;
     }
 
+    const nameError = getCustomerNameValidationError(form.fullName);
+    if (nameError) {
+      setFullNameError(nameError);
+      toast.error(CUSTOMER_NAME_REQUIRED_MESSAGE);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const order = await ordersApi.create({
         designId,
-        customerDetails: form,
+        customerDetails: { ...form, fullName: form.fullName.trim() },
         notes: notes.trim() || undefined,
       });
       toast.success(`Order ${order.id} placed. We'll be in touch shortly.`);
@@ -105,13 +115,19 @@ export function CheckoutDialog({
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="checkout-name">Full name</Label>
+              <Label htmlFor="checkout-name">
+                Customer Name <span className="text-destructive" aria-hidden="true">*</span>
+              </Label>
               <Input
                 id="checkout-name"
                 required
                 value={form.fullName}
-                onChange={(e) => update("fullName", e.target.value)}
+                onChange={(e) => {
+                  update("fullName", e.target.value);
+                  if (fullNameError) setFullNameError("");
+                }}
               />
+              {fullNameError ? <p className="text-sm text-destructive">{fullNameError}</p> : null}
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="checkout-email">Email</Label>

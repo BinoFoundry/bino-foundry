@@ -92,7 +92,7 @@ export function UsersAdminPage() {
       await usersApi.create({
         email: values.email,
         password: values.password,
-        displayName: values.displayName || undefined,
+        displayName: values.displayName.trim(),
         phone: values.phone || undefined,
         role: values.role,
         accountStatus: values.accountStatus,
@@ -110,7 +110,7 @@ export function UsersAdminPage() {
     try {
       await usersApi.update(userId, {
         email: values.email,
-        displayName: values.displayName,
+        displayName: values.displayName.trim(),
         phone: values.phone || null,
         role: values.role as AssignableUserRole,
         accountStatus: values.accountStatus,

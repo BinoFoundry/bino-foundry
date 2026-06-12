@@ -17,3 +17,5 @@ export const STORAGE_BUCKET_IDS = [
 ] as const;
 
 export type StorageBucketId = (typeof STORAGE_BUCKET_IDS)[number];
+
+export * from "./customer-name.js";

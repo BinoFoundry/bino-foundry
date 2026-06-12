@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { getCustomerNameValidationError } from "@/lib/customer-name";
 import { authApi } from "@/services/api/auth";
 import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
@@ -18,6 +19,7 @@ export function SettingsPage() {
 
   const profile = meQuery.data?.profile;
   const [displayName, setDisplayName] = useState("");
+  const [displayNameError, setDisplayNameError] = useState("");
   const [phone, setPhone] = useState("");
   const [billing, setBilling] = useState<BillingDetails>({});
   const [savingProfile, setSavingProfile] = useState(false);
@@ -38,9 +40,18 @@ export function SettingsPage() {
 
   const handleSaveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
+    const nameError = getCustomerNameValidationError(displayName);
+    if (nameError) {
+      setDisplayNameError(nameError);
+      return;
+    }
     setSavingProfile(true);
     try {
-      await authApi.updateProfile({ displayName, phone, billingDetails: billing });
+      await authApi.updateProfile({
+        displayName: displayName.trim(),
+        phone,
+        billingDetails: billing,
+      });
       await refreshUser();
       await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
       toast.success("Account details updated.");
@@ -80,8 +91,19 @@ export function SettingsPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="settings-name">Full name</Label>
-          <Input id="settings-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          <Label htmlFor="settings-name">
+            Customer Name <span className="text-destructive" aria-hidden="true">*</span>
+          </Label>
+          <Input
+            id="settings-name"
+            required
+            value={displayName}
+            onChange={(e) => {
+              setDisplayName(e.target.value);
+              if (displayNameError) setDisplayNameError("");
+            }}
+          />
+          {displayNameError ? <p className="text-sm text-destructive">{displayNameError}</p> : null}
         </div>
 
         <div className="space-y-2">

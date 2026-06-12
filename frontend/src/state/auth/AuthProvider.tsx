@@ -46,7 +46,7 @@ interface AuthContextValue {
   openAuth: (options?: { mode?: "sign-in" | "sign-up"; pendingSave?: PendingDesignSave }) => void;
   closeAuth: () => void;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName?: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
   saveDesign: (request: SaveDesignRequest, options?: { designId?: string }) => Promise<SavedDesignSummary | null>;
 }
@@ -202,8 +202,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, displayName?: string) => {
-      const response = await authApi.register({ email, password, displayName });
+    async (email: string, password: string, displayName: string) => {
+      const response = await authApi.register({ email, password, displayName: displayName.trim() });
       if (!response.session) {
         toast.message("Account created. Check your email to confirm, then sign in.");
         setAuthModalMode("sign-in");

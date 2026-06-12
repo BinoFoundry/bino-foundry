@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getCustomerNameValidationError } from "@/lib/customer-name";
 import { authApi } from "@/services/api/auth";
 import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
@@ -24,6 +25,7 @@ export function AuthModal() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [displayNameError, setDisplayNameError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -32,6 +34,7 @@ export function AuthModal() {
     if (authModalOpen) {
       setView(authModalMode);
       setError("");
+      setDisplayNameError("");
       setInfo("");
     }
   }, [authModalOpen, authModalMode]);
@@ -58,7 +61,12 @@ export function AuthModal() {
       if (view === "sign-in") {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password, displayName.trim() || undefined);
+        const nameError = getCustomerNameValidationError(displayName);
+        if (nameError) {
+          setDisplayNameError(nameError);
+          return;
+        }
+        await signUp(email.trim(), password, displayName.trim());
       }
     } catch (err) {
       setError(isApiError(err) ? err.message : "Authentication failed");
@@ -117,14 +125,22 @@ export function AuthModal() {
             <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-4">
               {view === "sign-up" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="auth-name">Name</Label>
+                  <Label htmlFor="auth-name">
+                    Customer Name <span className="text-destructive" aria-hidden="true">*</span>
+                  </Label>
                   <Input
                     id="auth-name"
+                    required
                     value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Optional"
+                    onChange={(e) => {
+                      setDisplayName(e.target.value);
+                      if (displayNameError) setDisplayNameError("");
+                    }}
                     autoComplete="name"
                   />
+                  {displayNameError ? (
+                    <p className="text-sm text-destructive">{displayNameError}</p>
+                  ) : null}
                 </div>
               ) : null}
 

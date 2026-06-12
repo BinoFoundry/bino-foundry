@@ -52,7 +52,7 @@ export interface BillingDetails {
 }
 
 export interface UpdateCustomerProfileRequest {
-  displayName?: string;
+  displayName: string;
   phone?: string;
   billingDetails?: BillingDetails;
 }
