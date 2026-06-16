@@ -10,6 +10,10 @@ import { cn } from "@/lib/utils";
 
 export interface BraceletBuilderLayoutProps {
   leftPanel?: ReactNode;
+  /** Replaces the default left sidebar title (e.g. bracelet name input). */
+  leftPanelHeader?: ReactNode;
+  /** Accessible label for left drawer / collapse controls. */
+  leftPanelLabel?: string;
   centerPanel: ReactNode;
   rightPanel?: ReactNode;
   mobileFooter?: ReactNode;
@@ -44,24 +48,31 @@ function LibraryScrollPanel({ children }: { children: ReactNode }) {
 
 function SidebarHeader({
   title,
+  headerContent,
   side,
   onClose,
 }: {
-  title: string;
+  title?: string;
+  headerContent?: ReactNode;
   side: "left" | "right";
   onClose: () => void;
 }) {
   const Icon = side === "left" ? PanelLeftClose : PanelRightClose;
+  const closeLabel = title ?? "panel";
   return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2.5 py-2">
-      <h2 className="type-h3 truncate text-xs text-foreground/90">{title}</h2>
+    <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border/60 px-2.5 py-2">
+      <div className="min-w-0 flex-1">
+        {headerContent ?? (
+          <h2 className="type-h3 truncate text-xs text-foreground/90">{title}</h2>
+        )}
+      </div>
       <Button
         type="button"
         variant="ghost"
         size="icon"
         className="h-8 w-8 shrink-0"
         onClick={onClose}
-        aria-label={`Close ${title.toLowerCase()}`}
+        aria-label={`Close ${closeLabel.toLowerCase()}`}
       >
         <Icon className="h-4 w-4" />
       </Button>
@@ -135,6 +146,8 @@ function EdgeDrawerTrigger({
  */
 export function BraceletBuilderLayout({
   leftPanel,
+  leftPanelHeader,
+  leftPanelLabel,
   centerPanel,
   rightPanel,
   mobileFooter,
@@ -168,7 +181,7 @@ export function BraceletBuilderLayout({
     return () => window.removeEventListener("resize", syncLayoutForViewport);
   }, [syncLayoutForViewport]);
 
-  const leftTitle = BRACELET_COPY.libraryTitle;
+  const leftTitle = leftPanelLabel ?? BRACELET_COPY.braceletNameLabel;
   const rightTitle = BRACELET_COPY.summaryTitle;
 
   const dockedLeftWidth = isWideDesktop ? "w-[min(220px,20vw)]" : "w-[min(188px,22vw)]";
@@ -213,7 +226,12 @@ export function BraceletBuilderLayout({
                 className="flex h-full max-h-full w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
               >
                 <SheetTitle className="sr-only">{leftTitle}</SheetTitle>
-                <SidebarHeader title={leftTitle} side="left" onClose={() => setLeftOpen(false)} />
+                <SidebarHeader
+                  headerContent={leftPanelHeader}
+                  title={leftPanelHeader ? undefined : leftTitle}
+                  side="left"
+                  onClose={() => setLeftOpen(false)}
+                />
                 <LibraryScrollPanel>{leftPanel}</LibraryScrollPanel>
               </SheetContent>
             </Sheet>
@@ -247,7 +265,12 @@ export function BraceletBuilderLayout({
         >
           {leftOpen ? (
             <>
-              <SidebarHeader title={leftTitle} side="left" onClose={() => setLeftOpen(false)} />
+              <SidebarHeader
+                headerContent={leftPanelHeader}
+                title={leftPanelHeader ? undefined : leftTitle}
+                side="left"
+                onClose={() => setLeftOpen(false)}
+              />
               <LibraryScrollPanel>{leftPanel}</LibraryScrollPanel>
             </>
           ) : (

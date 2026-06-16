@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { REGISTRATION_NAME_LABEL } from "@bino-foundry/shared/constants";
 import { getCustomerNameValidationError } from "@/lib/customer-name";
 import { authApi } from "@/services/api/auth";
 import { isApiError } from "@/services/api/errors";
@@ -126,7 +127,7 @@ export function AuthModal() {
               {view === "sign-up" ? (
                 <div className="space-y-2">
                   <Label htmlFor="auth-name">
-                    Customer Name <span className="text-destructive" aria-hidden="true">*</span>
+                    {REGISTRATION_NAME_LABEL} <span className="text-destructive" aria-hidden="true">*</span>
                   </Label>
                   <Input
                     id="auth-name"

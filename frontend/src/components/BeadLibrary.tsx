@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import { BeadCategoryScroller } from "@/features/bracelet/components/BeadCategoryScroller";
+import { BeadInfoButton } from "@/features/bracelet/components/BeadInfoButton";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { cn } from "@/lib/utils";
 import { BEAD_LIBRARY_DRAG_TYPE } from "@/features/bracelet/interaction";
@@ -207,8 +208,9 @@ const BeadLibrary = ({
                 return (
                   <div
                     key={bead.id}
-                    className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/20"
+                    className="relative flex flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/20"
                   >
+                    <BeadInfoButton bead={bead} />
                     <button
                       type="button"
                       data-bead-library-item
@@ -220,7 +222,7 @@ const BeadLibrary = ({
                       onDragEnd={endLibraryDrag}
                       onClick={() => handleLibraryClick(bead, activeSize)}
                       className={cn(
-                        "flex w-full flex-col items-center text-center transition hover:bg-muted/50",
+                        "flex w-full flex-col items-center text-center transition hover:bg-accent hover:text-accent-foreground",
                         compact ? "gap-1 p-1.5" : "gap-1.5 p-2",
                       )}
                     >

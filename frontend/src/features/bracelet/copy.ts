@@ -36,6 +36,8 @@ export const BRACELET_COPY = {
   wristTwinB: "Second bracelet",
   library: "Collection",
   libraryTitle: "Bead collection",
+  braceletNameLabel: "Bracelet name",
+  braceletNamePlaceholder: "Add bracelet name here...",
   twinOn: "Matching pair",
   twinOff: "Add matching pair",
   reset: "Start over",

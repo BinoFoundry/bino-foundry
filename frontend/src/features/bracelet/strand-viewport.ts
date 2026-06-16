@@ -1,9 +1,3 @@
-import type { PlacedBead } from "@/lib/luxe-data";
-import { getMaxSlotExtent } from "@/render/bead-crop";
-
-import { resolveStrandRingLayout } from "./strand-ring-geometry";
-import type { WristSizeBounds } from "./strand-ring";
-
 /**
  * Display-only viewport sizing for the bracelet builder canvas.
  * Does not affect wrist fit, pricing, or variant mm values.
@@ -148,30 +142,17 @@ export function squareCanvasSizeForBounds(
 }
 
 /**
- * Layout canvas size for a strand — at least the viewport budget, expanded when beads need more room.
+ * Fixed layout canvas size — always matches the viewport budget.
+ * Bead-driven expansion is handled by internal strand scaling, not DOM size.
  */
-export function computeLayoutCanvasSize(params: {
-  placed: PlacedBead[];
-  wristSizeCm: number;
-  wristSizeBounds: WristSizeBounds;
-  viewportBudgetPx: number;
-  guideSizeMm: number;
-}): number {
-  const { placed, wristSizeCm, wristSizeBounds, viewportBudgetPx, guideSizeMm } = params;
-  const layout = resolveStrandRingLayout({
-    placed,
-    wristSizeCm,
-    wristSizeBounds,
-    canvasSize: viewportBudgetPx,
-    guideSizeMm,
-  });
-  if (!layout) return viewportBudgetPx;
+export function computeLayoutCanvasSize(viewportBudgetPx: number): number {
+  return viewportBudgetPx;
+}
 
-  const maxExtent = getMaxSlotExtent(layout.prelimDims);
-  const padding =
-    STRAND_RING_EDGE_PADDING_PX * layout.scaleFactor + STRAND_CONTENT_PADDING_PX;
-  const required = Math.ceil(2 * (layout.resolved.radiusPx + maxExtent / 2 + padding));
-  return Math.max(viewportBudgetPx, required);
+/** Uniform boost (≤ 1) to fit computed strand bounds inside a fixed canvas. */
+export function computeStrandCanvasFitBoost(requiredCanvasPx: number, fixedCanvasPx: number): number {
+  if (requiredCanvasPx <= 0 || fixedCanvasPx <= 0) return 1;
+  return Math.min(1, fixedCanvasPx / requiredCanvasPx);
 }
 
 /** Scale factor to fit a layout canvas into the viewport budget (never upscales above 1). */

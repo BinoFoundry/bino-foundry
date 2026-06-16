@@ -78,7 +78,7 @@ export function WristSizeSlider({
           compact
             ? "py-0 [&>span:first-child]:h-1 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3 [&_[role=slider]]:border [&_[role=slider]]:shadow-none"
             : "py-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4",
-          "[&_.bg-primary]:bg-selection/55 [&_[role=slider]]:border-selection-border [&_[role=slider]]:bg-background",
+          "[&_[role=slider]]:border-[hsl(var(--brand-soft-gold))] [&_.bg-primary]:bg-[hsl(var(--brand-soft-gold))]/70 [&_[role=slider]]:bg-background",
         )}
         onValueChange={([index]) => {
           const entry = options[index ?? 0];

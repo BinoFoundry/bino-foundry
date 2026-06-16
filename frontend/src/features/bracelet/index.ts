@@ -21,7 +21,7 @@ export { activeWristSizes, defaultWristSize, findWristSizeByCm } from "./wrist-s
 export { StrandStage } from "./components/StrandStage";
 export { StrandViewport } from "./components/StrandViewport";
 export { StrandZoomControls } from "./components/StrandZoomControls";
-export { useStrandZoom } from "./hooks/useStrandZoom";
+export { useStrandZoom, STRAND_TWIN_DEFAULT_ZOOM } from "./hooks/useStrandZoom";
 export {
   computeLayoutCanvasSize,
   computeStrandAutoFitScale,

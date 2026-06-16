@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 
 import { CheckoutDialog } from "@/features/account/components/CheckoutDialog";
+import { formatDesignDisplayTitle } from "@/features/designs/display-title";
 import { designsApi } from "@/services/api/designs";
 import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
@@ -97,7 +98,7 @@ export function DesignsPage() {
           if (!open) setCheckoutDesign(null);
         }}
         designId={checkoutDesign?.id ?? null}
-        productLabel={checkoutDesign?.title ?? "Custom design"}
+        productLabel={checkoutDesign ? formatDesignDisplayTitle(checkoutDesign) : "Design"}
         totalAmount={checkoutDesign?.subtotal ?? 0}
         currencyCode={checkoutDesign?.currencyCode ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode}
         defaultEmail={user?.email}

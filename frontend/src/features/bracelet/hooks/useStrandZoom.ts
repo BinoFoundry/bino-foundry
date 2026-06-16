@@ -16,10 +16,14 @@ export interface StrandZoomOptions {
   suspendPan?: boolean;
   /** When false, canvas pan is disabled — editing interactions take priority. */
   panMode?: boolean;
+  /** Zoom level for reset and when twinning toggles (defaults to `initial`). */
+  defaultZoom?: number;
 }
 
 export const STRAND_ZOOM_MIN = 0.55;
 export const STRAND_ZOOM_MAX = 3;
+/** Default zoom when matching pair is enabled — keeps both bracelets in view. */
+export const STRAND_TWIN_DEFAULT_ZOOM = 0.75;
 const ZOOM_BUTTON_STEP = 0.08;
 const ZOOM_WHEEL_SENSITIVITY = 0.0011;
 const ZOOM_SMOOTH_FACTOR = 0.28;
@@ -119,9 +123,12 @@ export function useStrandZoom(
   options: StrandZoomOptions = {},
 ) {
   const { zoomSurfaceRef, containerRef, viewportRef, contentRef } = refs;
-  const { suspendPan = false, panMode = false } = options;
+  const { suspendPan = false, panMode = false, defaultZoom: defaultZoomOption } = options;
   const layoutRef = useRef<StrandZoomLayout>(layout);
   layoutRef.current = layout;
+
+  const defaultZoomRef = useRef(defaultZoomOption ?? initial);
+  defaultZoomRef.current = defaultZoomOption ?? initial;
 
   const [zoomTarget, setZoomTarget] = useState(initial);
   const [zoomSmooth, setZoomSmooth] = useState(initial);
@@ -246,12 +253,23 @@ export function useStrandZoom(
   const zoomOut = useCallback(() => nudgeZoom(-1), [nudgeZoom]);
 
   const reset = useCallback(() => {
-    setZoomTarget(1);
-    zoomSmoothRef.current = 1;
-    setZoomSmooth(1);
+    const dz = defaultZoomRef.current;
+    setZoomTarget(dz);
+    zoomSmoothRef.current = dz;
+    setZoomSmooth(dz);
     clearPan();
     applyContentTransform();
   }, [clearPan, applyContentTransform]);
+
+  useEffect(() => {
+    const dz = defaultZoomRef.current;
+    setZoomTarget(dz);
+    zoomSmoothRef.current = dz;
+    setZoomSmooth(dz);
+    panRef.current = { x: 0, y: 0 };
+    setPan({ x: 0, y: 0 });
+    applyContentTransform();
+  }, [layout.twinning, defaultZoomOption, applyContentTransform]);
 
   useEffect(() => {
     let frame = 0;

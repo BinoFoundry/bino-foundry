@@ -11,7 +11,9 @@ import {
 } from "./strand-ring-geometry";
 import { computeMaxRingRadiusPx, computeWristRingRadiusPx, wristSizeBoundsFromCatalog } from "./strand-ring";
 import {
+  computeLayoutCanvasSize,
   computeStrandAutoFitScale,
+  computeStrandCanvasFitBoost,
   computeStrandContentBounds,
   measureStrandCanvasSize,
   shiftStrandLayoutToCanvasCenter,
@@ -31,6 +33,23 @@ describe("measureStrandCanvasSize", () => {
     });
     expect(size).toBeGreaterThan(440);
     expect(size).toBeLessThanOrEqual(920);
+  });
+});
+
+describe("computeLayoutCanvasSize", () => {
+  it("always returns the viewport budget (fixed workspace)", () => {
+    expect(computeLayoutCanvasSize(400)).toBe(400);
+    expect(computeLayoutCanvasSize(520)).toBe(520);
+  });
+});
+
+describe("computeStrandCanvasFitBoost", () => {
+  it("returns 1 when content fits", () => {
+    expect(computeStrandCanvasFitBoost(380, 400)).toBe(1);
+  });
+
+  it("shrinks when content exceeds the fixed canvas", () => {
+    expect(computeStrandCanvasFitBoost(500, 400)).toBeCloseTo(0.8, 5);
   });
 });
 

@@ -15,7 +15,12 @@ function parseSiteSettings(value: unknown): SiteGeneralSettings {
     typeof o.currencyCode === "string" && o.currencyCode.length === 3
       ? o.currencyCode.toUpperCase()
       : DEFAULT_SITE_GENERAL_SETTINGS.currencyCode;
-  return { currencyCode: code };
+  const titleRaw = o.braceletBuilderLibraryTitle;
+  const braceletBuilderLibraryTitle =
+    typeof titleRaw === "string" && titleRaw.trim()
+      ? titleRaw.trim()
+      : DEFAULT_SITE_GENERAL_SETTINGS.braceletBuilderLibraryTitle;
+  return { currencyCode: code, braceletBuilderLibraryTitle };
 }
 
 export class SettingsService {
@@ -33,7 +38,12 @@ export class SettingsService {
 
   async updateGeneralSettings(payload: SiteGeneralSettings): Promise<SiteGeneralSettings> {
     const supabase = getSupabaseServiceRole();
-    const value = { currencyCode: payload.currencyCode.toUpperCase() };
+    const current = await this.getGeneralSettings();
+    const value = {
+      currencyCode: payload.currencyCode.toUpperCase(),
+      braceletBuilderLibraryTitle:
+        payload.braceletBuilderLibraryTitle?.trim() || current.braceletBuilderLibraryTitle,
+    };
 
     const { data, error } = await supabase
       .from("config_kv")

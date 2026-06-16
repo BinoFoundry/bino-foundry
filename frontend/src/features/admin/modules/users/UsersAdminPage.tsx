@@ -19,6 +19,7 @@ import { AdminListPagination } from "../../components/AdminListPagination";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminToolbar } from "../../components/AdminToolbar";
+import { formatDesignDisplayTitle } from "@/features/designs/display-title";
 import { UserForm, type UserFormValues } from "./UserForm";
 import { ASSIGNABLE_ROLE_OPTIONS, STATUS_LABELS, displayRoleLabel, formatAdminDate } from "./user-labels";
 
@@ -227,7 +228,7 @@ export function UsersAdminPage() {
                   {user.recentDesigns.map((d) => (
                     <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                       <span>
-                        <span className="font-medium">{d.title ?? "Untitled"}</span>
+                        <span className="font-medium">{formatDesignDisplayTitle(d)}</span>
                         <span className="ml-2 text-muted-foreground capitalize">{d.productType}</span>
                       </span>
                       <AdminStatusBadge label={d.status} />

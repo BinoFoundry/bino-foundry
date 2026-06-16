@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { formatCurrency } from "@bino-foundry/shared/currency";
 
 import { Button } from "@/components/ui/button";
+import { formatDesignDisplayTitle } from "@/features/designs/display-title";
 import type { SavedDesignSummary } from "@bino-foundry/shared/types";
 
 function formatDate(value: string) {
@@ -45,7 +46,7 @@ export function DesignCard({ design, onDuplicate, onDelete, onCheckout, duplicat
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h3 className="truncate font-medium text-foreground">{design.title ?? "Untitled design"}</h3>
+              <h3 className="truncate font-medium text-foreground">{formatDesignDisplayTitle(design)}</h3>
               <p className="mt-1 text-xs text-muted-foreground">
                 {design.productType === "bracelet" ? "Bracelet" : "Sunglasses"} · Updated{" "}
                 {formatDate(design.updatedAt)}

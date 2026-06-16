@@ -25,22 +25,22 @@ const buttonVariants = cva(
         /** Primary CTA — olive background, white text */
         default: [
           "bg-[hsl(var(--btn-primary-bg))] text-[hsl(var(--btn-primary-fg))]",
-          "hover:bg-[hsl(var(--btn-primary-hover))]",
-          "active:bg-[hsl(var(--btn-primary-hover))]",
+          "hover:bg-[hsl(var(--brand-blush))] hover:text-[hsl(var(--brand-olive))]",
+          "active:bg-[hsl(var(--brand-blush))] active:text-[hsl(var(--brand-olive))]",
         ].join(" "),
         primary: [
           "bg-[hsl(var(--btn-primary-bg))] text-[hsl(var(--btn-primary-fg))]",
-          "hover:bg-[hsl(var(--btn-primary-hover))]",
-          "active:bg-[hsl(var(--btn-primary-hover))]",
+          "hover:bg-[hsl(var(--brand-blush))] hover:text-[hsl(var(--brand-olive))]",
+          "active:bg-[hsl(var(--brand-blush))] active:text-[hsl(var(--brand-olive))]",
         ].join(" "),
         /** Secondary — white background, muted olive border & text */
         secondary: [
           "border border-[hsl(var(--btn-secondary-border))] bg-[hsl(var(--btn-secondary-bg))] text-[hsl(var(--btn-secondary-fg))]",
-          "hover:border-[hsl(var(--btn-secondary-border))] hover:bg-[hsl(var(--btn-secondary-hover-bg))] hover:text-[hsl(var(--btn-text-hover-fg))]",
+          "hover:border-[hsl(var(--btn-secondary-border))] hover:bg-[hsl(var(--btn-secondary-hover-bg))] hover:text-[hsl(var(--btn-secondary-hover-fg))]",
         ].join(" "),
         outline: [
           "border border-[hsl(var(--btn-secondary-border))] bg-[hsl(var(--btn-secondary-bg))] text-[hsl(var(--btn-secondary-fg))]",
-          "hover:border-[hsl(var(--btn-secondary-border))] hover:bg-[hsl(var(--btn-secondary-hover-bg))] hover:text-[hsl(var(--btn-text-hover-fg))]",
+          "hover:border-[hsl(var(--btn-secondary-border))] hover:bg-[hsl(var(--btn-secondary-hover-bg))] hover:text-[hsl(var(--btn-secondary-hover-fg))]",
         ].join(" "),
         /** Text button — no fill, subtle hover */
         ghost: [

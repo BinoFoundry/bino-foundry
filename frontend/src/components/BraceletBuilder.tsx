@@ -13,15 +13,15 @@ import {
   StrandZoomControls,
   useBraceletBuilder,
   useStrandZoom,
+  STRAND_TWIN_DEFAULT_ZOOM,
   CapacityAlertBanner,
   WristSizeStep,
 } from "@/features/bracelet";
 import { BraceletConfigPanel } from "@/features/bracelet/components/BraceletConfigPanel";
+import { BraceletNameField } from "@/features/bracelet/components/BraceletNameField";
 import { BraceletMobileConfigBar } from "@/features/bracelet/components/BraceletMobileConfigBar";
-import type { SelectedBeadRow } from "@/features/bracelet/components/SelectedBeadsList";
-import { resolveStrandRingLayout } from "@/features/bracelet/strand-ring-geometry";
+import { resolveBraceletSaveTitle, formatDesignDisplayTitle } from "@/features/designs/display-title";
 import {
-  computeLayoutCanvasSize,
   computeStrandAutoFitScale,
   measureStrandCanvasSize,
 } from "@/features/bracelet/strand-viewport";
@@ -72,28 +72,6 @@ function useCanvasSize(isMobile: boolean, twinning: boolean) {
   return { containerRef, strandSize, containerSize };
 }
 
-function buildStrandBeadRows(
-  placed: ReturnType<typeof useBraceletBuilder>["placedBeadsA"],
-  strand: "A" | "B",
-  onRemoveOffer: (strand: "A" | "B", offerKey: string) => void,
-): SelectedBeadRow[] {
-  const counts = new Map<string, { name: string; quantity: number }>();
-
-  for (const p of placed) {
-    const key = p.size.offerKey;
-    const existing = counts.get(key);
-    if (existing) existing.quantity += 1;
-    else counts.set(key, { name: p.bead.name, quantity: 1 });
-  }
-
-  return [...counts.entries()].map(([offerKey, { name, quantity }]) => ({
-    key: `${strand}-${offerKey}`,
-    name,
-    quantity,
-    onRemove: () => onRemoveOffer(strand, offerKey),
-  }));
-}
-
 const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
@@ -111,6 +89,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [libraryDragActive, setLibraryDragActive] = useState(false);
   const [libraryDragPreview, setLibraryDragPreview] = useState<LibraryDragPayload | null>(null);
   const [panMode, setPanMode] = useState(false);
+  const [braceletName, setBraceletName] = useState("");
 
   const builder = useBraceletBuilder({ onPriceChange });
 
@@ -118,6 +97,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     setPendingDesignListener((result) => {
       if (result?.productType === "bracelet") {
         setSavedDesignId(result.id);
+        if (result.title?.trim()) setBraceletName(result.title.trim());
         setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(result.id));
       }
     });
@@ -144,6 +124,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           wristSizeCmB: detail.bracelet.wristSizeCmB,
           items: detail.bracelet.items,
         });
+        setBraceletName(detail.title?.trim() ?? "");
         setSavedDesignId(detail.id);
         hydratedDesignRef.current = designIdFromUrl;
         setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(detail.id));
@@ -180,34 +161,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const guideMm = builder.activeSizeOffer?.sizeMm ?? 8;
 
-  const layoutCanvasSize = useMemo(() => {
-    const sizeA = computeLayoutCanvasSize({
-      placed: builder.placedBeadsA,
-      wristSizeCm: builder.wristSizeA,
-      wristSizeBounds: builder.wristSizeBounds,
-      viewportBudgetPx: strandSize,
-      guideSizeMm: guideMm,
-    });
-    if (!builder.twinning) return sizeA;
-    const sizeB = computeLayoutCanvasSize({
-      placed: builder.placedBeadsB,
-      wristSizeCm: builder.wristSizeB,
-      wristSizeBounds: builder.wristSizeBounds,
-      viewportBudgetPx: strandSize,
-      guideSizeMm: guideMm,
-    });
-    return Math.max(sizeA, sizeB);
-  }, [
-    builder.placedBeadsA,
-    builder.placedBeadsB,
-    builder.twinning,
-    builder.wristSizeA,
-    builder.wristSizeB,
-    builder.wristSizeBounds,
-    builder.layoutRevision,
-    strandSize,
-    guideMm,
-  ]);
+  /** Fixed workspace — sized from container only, never from bead count or ring expansion. */
+  const layoutCanvasSize = strandSize;
 
   const autoFitScale = useMemo(
     () =>
@@ -227,6 +182,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     }),
     [strandSize, layoutCanvasSize, autoFitScale, builder.twinning],
   );
+
+  const defaultStrandZoom = builder.twinning ? STRAND_TWIN_DEFAULT_ZOOM : 1;
 
   const {
     zoom,
@@ -248,55 +205,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       contentRef: contentRef as RefObject<HTMLElement | null>,
     },
     strandZoomLayout,
-    1,
-    { suspendPan: libraryDragActive, panMode },
+    defaultStrandZoom,
+    { suspendPan: libraryDragActive, panMode, defaultZoom: defaultStrandZoom },
   );
-
-  const visualLayoutA = useMemo(() => {
-    const layout = resolveStrandRingLayout({
-      placed: builder.placedBeadsA,
-      wristSizeCm: builder.wristSizeA,
-      wristSizeBounds: builder.wristSizeBounds,
-      canvasSize: strandSize,
-      guideSizeMm: guideMm,
-    });
-    if (!layout) return undefined;
-    return {
-      visuallyExpanded: layout.resolved.expanded,
-      visualOverCanvas: layout.resolved.isVisualOverCanvas,
-    };
-  }, [
-    builder.placedBeadsA,
-    builder.wristSizeA,
-    builder.wristSizeBounds,
-    builder.layoutRevision,
-    strandSize,
-    guideMm,
-  ]);
-
-  const visualLayoutB = useMemo(() => {
-    if (!builder.twinning) return undefined;
-    const layout = resolveStrandRingLayout({
-      placed: builder.placedBeadsB,
-      wristSizeCm: builder.wristSizeB,
-      wristSizeBounds: builder.wristSizeBounds,
-      canvasSize: strandSize,
-      guideSizeMm: guideMm,
-    });
-    if (!layout) return undefined;
-    return {
-      visuallyExpanded: layout.resolved.expanded,
-      visualOverCanvas: layout.resolved.isVisualOverCanvas,
-    };
-  }, [
-    builder.twinning,
-    builder.placedBeadsB,
-    builder.wristSizeB,
-    builder.wristSizeBounds,
-    builder.layoutRevision,
-    strandSize,
-    guideMm,
-  ]);
 
   useEffect(() => {
     if (!libraryDragActive) return;
@@ -309,29 +220,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     window.addEventListener("dragend", onDragEnd);
     return () => window.removeEventListener("dragend", onDragEnd);
   }, [libraryDragActive]);
-
-  const handleRemoveBeadOffer = useCallback(
-    (strand: "A" | "B", offerKey: string) => {
-      const placed = strand === "A" ? builder.placedBeadsA : builder.placedBeadsB;
-      for (const p of placed) {
-        if (p.size.offerKey === offerKey) {
-          builder.handleRemoveBead(strand, p.position);
-          return;
-        }
-      }
-    },
-    [builder.placedBeadsA, builder.placedBeadsB, builder.handleRemoveBead],
-  );
-
-  const mainBeadRows = useMemo(
-    () => buildStrandBeadRows(builder.placedBeadsA, "A", handleRemoveBeadOffer),
-    [builder.placedBeadsA, handleRemoveBeadOffer],
-  );
-
-  const matchingPairBeadRows = useMemo(
-    () => buildStrandBeadRows(builder.placedBeadsB, "B", handleRemoveBeadOffer),
-    [builder.placedBeadsB, handleRemoveBeadOffer],
-  );
 
   const builderActions = {
     twinning: builder.twinning,
@@ -358,7 +246,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       const saved = await saveDesign(
         {
           productType: "bracelet",
-          title: "Bracelet design",
+          title: resolveBraceletSaveTitle(braceletName),
           status: "saved",
           previewThumbnailDataUrl,
           bracelet: {
@@ -372,6 +260,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       );
       if (saved) {
         setSavedDesignId(saved.id);
+        if (saved.title?.trim()) setBraceletName(saved.title.trim());
         setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(saved.id));
       }
       return saved;
@@ -417,10 +306,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const summaryPanelProps = {
     summary: builder.summary,
-    mainBeadRows,
-    matchingPairBeadRows,
-    visualLayoutA,
-    visualLayoutB,
     onSave: () => void handleSaveConfiguration(),
     onAddToCart: () => void handleAddToCart(),
     saving,
@@ -486,6 +371,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               setLibraryDragPreview(active ? (payload ?? null) : null);
             }}
             builderActions={builderActions}
+            braceletName={braceletName}
+            onBraceletNameChange={setBraceletName}
           />
       ) : null}
 
@@ -578,7 +465,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           onPointerUp={onPanPointerUp}
           onPointerCancel={onPanPointerCancel}
         >
-          <StrandStage className="shrink-0">
+          <StrandStage className="shrink-0" style={{ width: strandSize, height: strandSize, minWidth: strandSize, minHeight: strandSize }}>
             <SortableCircularStrand
               key={`a-${layoutKey}`}
               layoutKey={layoutKey}
@@ -607,7 +494,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           </StrandStage>
 
           {builder.twinning ? (
-            <StrandStage className="shrink-0">
+            <StrandStage className="shrink-0" style={{ width: strandSize, height: strandSize, minWidth: strandSize, minHeight: strandSize }}>
               <SortableCircularStrand
                 key={`b-${layoutKey}`}
                 layoutKey={layoutKey}
@@ -645,6 +532,10 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     <>
     <BraceletBuilderLayout
       className="animate-fade-in"
+      leftPanelHeader={
+        <BraceletNameField id="bracelet-name" value={braceletName} onChange={setBraceletName} />
+      }
+      leftPanelLabel={braceletName.trim() || BRACELET_COPY.braceletNameLabel}
       leftPanel={
         !isMobile ? (
           <BraceletConfigPanel
@@ -675,7 +566,11 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       open={checkoutOpen}
       onOpenChange={setCheckoutOpen}
       designId={savedDesignId}
-      productLabel="Custom bracelet"
+      productLabel={
+        braceletName.trim()
+          ? braceletName.trim()
+          : formatDesignDisplayTitle({ title: null, productType: "bracelet" })
+      }
       totalAmount={builder.pricing.total}
       currencyCode={builder.currencyCode}
       defaultEmail={user?.email}

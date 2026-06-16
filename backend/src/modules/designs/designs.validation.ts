@@ -17,7 +17,7 @@ export const sunglassesConfigDto = z.object({
 export const saveDesignDto = z
   .object({
     productType: z.enum(["bracelet", "sunglasses"]),
-    title: z.string().trim().min(1).max(120).optional(),
+    title: z.string().trim().max(120).optional(),
     status: z.enum(["draft", "saved"]).optional(),
     designId: z.string().min(1).optional(),
     previewThumbnailDataUrl: z.string().max(700_000).optional(),

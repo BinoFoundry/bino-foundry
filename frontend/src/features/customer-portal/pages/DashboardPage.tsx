@@ -4,6 +4,7 @@ import { Clock3, Gem, Glasses, Package, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { designsApi } from "@/services/api/designs";
+import { formatDesignDisplayTitle } from "@/features/designs/display-title";
 import { ordersApi } from "@/services/api/orders";
 
 import { PortalEmptyState } from "../components/PortalEmptyState";
@@ -54,7 +55,7 @@ export function DashboardPage() {
                   className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-background/50 px-3 py-3"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{design.title ?? "Untitled design"}</p>
+                    <p className="truncate text-sm font-medium">{formatDesignDisplayTitle(design)}</p>
                     <p className="text-xs text-muted-foreground capitalize">
                       {design.productType} · {design.status}
                     </p>

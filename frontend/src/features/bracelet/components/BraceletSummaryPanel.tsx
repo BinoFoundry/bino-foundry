@@ -10,24 +10,14 @@ import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
 
 import { BRACELET_COPY } from "../copy";
-import { SelectedBeadsList, type SelectedBeadRow } from "./SelectedBeadsList";
 import { StrandCapacityCard } from "./StrandCapacityCard";
 import { SummaryInfoCard } from "./SummaryInfoCard";
 
-export interface StrandVisualLayoutHint {
-  visuallyExpanded?: boolean;
-  visualOverCanvas?: boolean;
-}
-
 interface BraceletSummaryPanelProps {
   summary: BraceletBuilderSummary;
-  mainBeadRows?: SelectedBeadRow[];
-  matchingPairBeadRows?: SelectedBeadRow[];
   className?: string;
   collapsible?: boolean;
   defaultOpen?: boolean;
-  visualLayoutA?: StrandVisualLayoutHint;
-  visualLayoutB?: StrandVisualLayoutHint;
   onSave?: () => void;
   onAddToCart?: () => void;
   saving?: boolean;
@@ -58,13 +48,9 @@ function CostLine({
 
 export function BraceletSummaryPanel({
   summary,
-  mainBeadRows = [],
-  matchingPairBeadRows = [],
   className,
   collapsible = false,
   defaultOpen = true,
-  visualLayoutA,
-  visualLayoutB,
   onSave,
   onAddToCart,
   saving = false,
@@ -75,7 +61,7 @@ export function BraceletSummaryPanel({
   const [open, setOpen] = useState(defaultOpen);
   const { pricing } = summary;
   const strandA = summary.strands[0];
-  const strandB = summary.strands[1];
+  const strandB = summary.twinning ? summary.strands[1] : undefined;
 
   const handleAddToCart = () => {
     if (onAddToCart) {
@@ -87,44 +73,6 @@ export function BraceletSummaryPanel({
 
   const body = (
     <div className="space-y-3">
-      <SummaryInfoCard title={BRACELET_COPY.mainBraceletTitle}>
-        <SelectedBeadsList rows={mainBeadRows} compact />
-      </SummaryInfoCard>
-
-      {summary.twinning ? (
-        <SummaryInfoCard title={BRACELET_COPY.matchingPairTitle}>
-          <SelectedBeadsList rows={matchingPairBeadRows} compact />
-        </SummaryInfoCard>
-      ) : null}
-
-      {strandA ? (
-        <SummaryInfoCard title={BRACELET_COPY.configurationSummary}>
-          <StrandCapacityCard
-            strand={strandA}
-            showStrandLabel={false}
-            compact
-            hideHeader
-            visuallyExpanded={visualLayoutA?.visuallyExpanded}
-            visualOverCanvas={visualLayoutA?.visualOverCanvas}
-            className="border-0 bg-transparent shadow-none"
-          />
-        </SummaryInfoCard>
-      ) : null}
-
-      {summary.twinning && strandB ? (
-        <SummaryInfoCard title={`${BRACELET_COPY.matchingPairTitle} · ${BRACELET_COPY.summaryCapacity}`}>
-          <StrandCapacityCard
-            strand={strandB}
-            showStrandLabel={false}
-            compact
-            hideHeader
-            visuallyExpanded={visualLayoutB?.visuallyExpanded}
-            visualOverCanvas={visualLayoutB?.visualOverCanvas}
-            className="border-0 bg-transparent shadow-none"
-          />
-        </SummaryInfoCard>
-      ) : null}
-
       <SummaryInfoCard title={BRACELET_COPY.costBreakdown}>
         {pricing.placedCount === 0 ? (
           <p className="text-[11px] text-muted-foreground">—</p>
@@ -164,6 +112,15 @@ export function BraceletSummaryPanel({
           {BRACELET_COPY.priceNote(pricing.currencyCode)}
         </p>
       </div>
+
+      {strandA ? (
+        <SummaryInfoCard title={BRACELET_COPY.configurationSummary}>
+          <div className="space-y-2">
+            <StrandCapacityCard strand={strandA} showStrandLabel={summary.twinning} compact />
+            {strandB ? <StrandCapacityCard strand={strandB} showStrandLabel compact /> : null}
+          </div>
+        </SummaryInfoCard>
+      ) : null}
 
       <div className="space-y-1.5 pt-0.5">
         {saveStatus ? (

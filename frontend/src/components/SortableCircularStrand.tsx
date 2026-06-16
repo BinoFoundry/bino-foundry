@@ -50,7 +50,6 @@ import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { BEAD_LIBRARY_DRAG_TYPE, isLibraryDragEvent } from "@/features/bracelet/interaction";
 import {
   beadTypeRotationOffsetDeg,
-  computeStrandBboxFillScale,
   computeStrandPathLayout,
   pointerAngleOnCanvas,
   STRAND_PATH_START_ANGLE,
@@ -60,11 +59,10 @@ import {
   computeStrandContentBounds,
   shiftStrandLayoutToCanvasCenter,
   squareCanvasSizeForBounds,
+  computeStrandCanvasFitBoost,
   STRAND_CONTENT_PADDING_PX,
   STRAND_LAYOUT_BASELINE_PX,
-  STRAND_MAX_LAYOUT_FILL,
   STRAND_RING_EDGE_PADDING_PX,
-  STRAND_TARGET_BBOX_FILL,
 } from "@/features/bracelet/strand-viewport";
 import { cn } from "@/lib/utils";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -391,6 +389,14 @@ const SortableCircularStrand = ({
   const placedCount = normalized.length;
   const isStrandEmpty = placedCount === 0;
 
+  /** Locks ring visual size after the first placed bead — compensates for elastic radius expansion. */
+  const stableRadiusRef = useRef<number | null>(null);
+  const layoutLockKeyRef = useRef("");
+
+  useEffect(() => {
+    if (isStrandEmpty) stableRadiusRef.current = null;
+  }, [isStrandEmpty]);
+
   useEffect(() => {
     if (placedCount < 2) {
       setReorderHintVisible(false);
@@ -415,6 +421,12 @@ const SortableCircularStrand = ({
     insertionAngles,
     effectiveCanvasSize,
   } = useMemo(() => {
+    const lockKey = `${wristSize}:${canvasSize}:${guideSizeMm}`;
+    if (layoutLockKeyRef.current !== lockKey) {
+      layoutLockKeyRef.current = lockKey;
+      stableRadiusRef.current = null;
+    }
+
     const center = canvasSize / 2;
 
     type StrandSlot = {
@@ -525,41 +537,33 @@ const SortableCircularStrand = ({
     };
 
     const base = buildLayout(1);
-    const bbox = isStrandEmpty
-      ? [
-          {
-            x: base.center,
-            y: base.center,
-            width: Math.max(1, base.radius * 2),
-            height: Math.max(1, base.radius * 2),
-          },
-        ]
-      : base.slotsWithPosition.map((slot) => {
-          const extent = Math.hypot(slot.slotDim.width, slot.slotDim.height);
-          return { x: slot.x, y: slot.y, width: extent, height: extent };
-        });
-    const fill = computeStrandBboxFillScale(
-      bbox,
-      canvasSize,
-      STRAND_TARGET_BBOX_FILL,
-      STRAND_MAX_LAYOUT_FILL,
-    );
 
-    const laidOut = fill > 1.01 ? buildLayout(fill) : base;
+    const measureRequiredCanvas = (laidOut: ReturnType<typeof buildLayout>) => {
+      const edgePad = STRAND_RING_EDGE_PADDING_PX * laidOut.scaleFactor + STRAND_CONTENT_PADDING_PX;
+      const bounds = computeStrandContentBounds(
+        laidOut.slotsWithPosition.map((slot) => ({
+          x: slot.x,
+          y: slot.y,
+          width: slot.slotDim.width,
+          height: slot.slotDim.height,
+        })),
+        laidOut.radius,
+        laidOut.center,
+      );
+      return squareCanvasSizeForBounds(bounds, edgePad);
+    };
 
-    const edgePad = STRAND_RING_EDGE_PADDING_PX * laidOut.scaleFactor + STRAND_CONTENT_PADDING_PX;
-    const bounds = computeStrandContentBounds(
-      laidOut.slotsWithPosition.map((slot) => ({
-        x: slot.x,
-        y: slot.y,
-        width: slot.slotDim.width,
-        height: slot.slotDim.height,
-      })),
-      laidOut.radius,
-      laidOut.center,
-    );
-    const requiredCanvas = squareCanvasSizeForBounds(bounds, edgePad);
-    const effectiveCanvasSize = Math.max(canvasSize, requiredCanvas);
+    let scaleBoost = 1;
+    let laidOut = base;
+    let requiredCanvas = measureRequiredCanvas(laidOut);
+
+    if (requiredCanvas > canvasSize) {
+      scaleBoost = computeStrandCanvasFitBoost(requiredCanvas, canvasSize);
+      laidOut = buildLayout(scaleBoost);
+      requiredCanvas = measureRequiredCanvas(laidOut);
+    }
+
+    const effectiveCanvasSize = canvasSize;
     const targetCenter = effectiveCanvasSize / 2;
     const shifted = shiftStrandLayoutToCanvasCenter({
       ringCenter: laidOut.center,
@@ -567,18 +571,38 @@ const SortableCircularStrand = ({
       slots: laidOut.slotsWithPosition,
     });
 
+    if (!isStrandEmpty && stableRadiusRef.current === null) {
+      stableRadiusRef.current = laidOut.radius;
+    }
+
+    let displayRadius = laidOut.radius;
+    let displaySlots = shifted.slots;
+    if (
+      !isStrandEmpty &&
+      stableRadiusRef.current !== null &&
+      laidOut.radius > stableRadiusRef.current
+    ) {
+      const displayScale = stableRadiusRef.current / laidOut.radius;
+      displayRadius = stableRadiusRef.current;
+      displaySlots = shifted.slots.map((slot) => ({
+        ...slot,
+        x: targetCenter + (slot.x - targetCenter) * displayScale,
+        y: targetCenter + (slot.y - targetCenter) * displayScale,
+      }));
+    }
+
     return {
-      slotsWithPosition: shifted.slots,
+      slotsWithPosition: displaySlots,
       scaleFactor: laidOut.scaleFactor,
       center: shifted.ringCenter,
-      radius: laidOut.radius,
+      radius: displayRadius,
       layoutSectors: laidOut.layoutSectors,
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
     };
-  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds]);
+  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle]);
 
-  const renderCanvasSize = effectiveCanvasSize;
+  const renderCanvasSize = canvasSize;
 
   const parseSlotId = (id: string | number | undefined): number | null => {
     const m = String(id ?? "").match(/^bead-(\d+)$/);

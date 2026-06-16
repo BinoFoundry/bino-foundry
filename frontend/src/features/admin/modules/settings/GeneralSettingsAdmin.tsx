@@ -5,6 +5,7 @@ import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
 
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/common";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -33,6 +34,9 @@ export function GeneralSettingsAdmin({ embedded = false }: GeneralSettingsAdminP
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [currencyCode, setCurrencyCode] = useState(DEFAULT_SITE_GENERAL_SETTINGS.currencyCode);
+  const [braceletBuilderLibraryTitle, setBraceletBuilderLibraryTitle] = useState(
+    DEFAULT_SITE_GENERAL_SETTINGS.braceletBuilderLibraryTitle,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,6 +44,9 @@ export function GeneralSettingsAdmin({ embedded = false }: GeneralSettingsAdminP
     try {
       const data = await settingsApi.getGeneralSettings();
       setCurrencyCode(data.currencyCode || DEFAULT_SITE_GENERAL_SETTINGS.currencyCode);
+      setBraceletBuilderLibraryTitle(
+        data.braceletBuilderLibraryTitle || DEFAULT_SITE_GENERAL_SETTINGS.braceletBuilderLibraryTitle,
+      );
       setValidationError(null);
     } catch (err) {
       setError(isApiError(err) ? err.message : "Failed to load general settings");
@@ -58,6 +65,7 @@ export function GeneralSettingsAdmin({ embedded = false }: GeneralSettingsAdminP
     try {
       await settingsApi.updateGeneralSettings({
         currencyCode: currencyCode.toUpperCase(),
+        braceletBuilderLibraryTitle: braceletBuilderLibraryTitle.trim(),
       });
       await queryClient.invalidateQueries({ queryKey: siteSettingsKeys.general() });
       toast.success("General settings saved");
@@ -117,6 +125,22 @@ export function GeneralSettingsAdmin({ embedded = false }: GeneralSettingsAdminP
           </Select>
           <p className="text-xs text-muted-foreground">
             Select the primary currency used for displaying prices throughout the website.
+          </p>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-border bg-card p-4">
+        <div className="space-y-2">
+          <Label htmlFor="bracelet-library-title">Bracelet builder library title</Label>
+          <Input
+            id="bracelet-library-title"
+            value={braceletBuilderLibraryTitle}
+            maxLength={80}
+            onChange={(e) => setBraceletBuilderLibraryTitle(e.target.value)}
+            placeholder="Bead collection"
+          />
+          <p className="text-xs text-muted-foreground">
+            Heading shown in the left sidebar of the bracelet builder (e.g. &quot;Name Your Bracelet&quot;).
           </p>
         </div>
       </section>

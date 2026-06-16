@@ -51,6 +51,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 25. `000029_smtp_settings.sql` — singleton `smtp_settings` table for admin-configured outbound mail (credentials encrypted by API).
 26. `000030_require_user_full_name.sql` — backfill and enforce `NOT NULL` on `users.full_name` (customer name).
 27. `000031_wrist_size_20cm.sql` — add 20 cm to the default wrist size catalog (14–20 cm range).
+28. `000032_bracelet_builder_library_title.sql` — admin-configurable bracelet builder left sidebar title in `site.settings_v1`.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

@@ -18,8 +18,10 @@ function newDesignPublicId(): string {
   return `dsn_${randomBytes(8).toString("hex")}`;
 }
 
-function defaultTitle(productType: SaveDesignDTO["productType"]): string {
-  return productType === "bracelet" ? "My bracelet" : "My sunglasses";
+function normalizeDesignTitle(title: string | undefined): string | null {
+  if (title === undefined) return null;
+  const trimmed = title.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 export class DesignsService {
@@ -66,7 +68,7 @@ export class DesignsService {
         public_id: publicId,
         user_id: userId,
         product_type: dto.productType,
-        title: dto.title ?? defaultTitle(dto.productType),
+        title: normalizeDesignTitle(dto.title),
         status,
         product_config_id: productConfigId,
         subtotal,
@@ -110,7 +112,7 @@ export class DesignsService {
     const { data, error } = await supabase
       .from("saved_designs")
       .update({
-        title: dto.title ?? existing.title,
+        title: dto.title !== undefined ? normalizeDesignTitle(dto.title) : existing.title,
         status,
         subtotal,
         currency_code: currencyCode,
@@ -169,7 +171,10 @@ export class DesignsService {
 
   async duplicateDesign(userId: string, designPublicId: string) {
     const detail = await this.getDesignDetail(userId, designPublicId);
-    const copyTitle = `${detail.title ?? "Untitled design"} (copy)`;
+    const baseTitle =
+      detail.title?.trim() ||
+      (detail.productType === "bracelet" ? "Bracelet" : "Sunglasses");
+    const copyTitle = `${baseTitle} (copy)`;
 
     if (detail.productType === "bracelet" && "bracelet" in detail && detail.bracelet) {
       const bracelet = detail.bracelet;

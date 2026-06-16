@@ -30,8 +30,7 @@ function ChevronControl({
       onClick={onClick}
       className={cn(
         "absolute top-1/2 z-10 flex h-6 w-5 -translate-y-1/2 items-center justify-center",
-        "text-muted-foreground transition-colors",
-        "hover:bg-selection-muted hover:text-foreground",
+        "text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
         side === "left" ? "left-0 rounded-r-sm" : "right-0 rounded-l-sm",
         className,
       )}
@@ -116,8 +115,8 @@ export function BeadCategoryScroller({
             className={cn(
               "shrink-0 rounded-full px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors",
               activeId === t.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-selection-muted hover:text-foreground",
+                ? "bg-accent text-accent-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground",
             )}
           >
             {t.name}
