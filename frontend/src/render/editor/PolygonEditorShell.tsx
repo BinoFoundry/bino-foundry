@@ -27,6 +27,8 @@ export interface PolygonEditorShellProps {
   className?: string;
   headerExtra?: ReactNode;
   footerExtra?: ReactNode;
+  /** Small raster thumbnail below the canvas (off for admin clip editors). */
+  showThumbnailPreview?: boolean;
 }
 
 /**
@@ -46,6 +48,7 @@ export function PolygonEditorShell({
   className,
   headerExtra,
   footerExtra,
+  showThumbnailPreview = true,
 }: PolygonEditorShellProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbRef = useRef<HTMLCanvasElement>(null);
@@ -348,7 +351,7 @@ export function PolygonEditorShell({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
         <p className={cn("text-xs", ready ? "text-status-success" : "text-status-warning")}>{status}</p>
-        {renderPreview ? (
+        {renderPreview && showThumbnailPreview ? (
           <canvas ref={thumbRef} width={200} height={80} className="surface-canvas rounded border border-subtle" />
         ) : null}
         {footerExtra}

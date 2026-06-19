@@ -78,7 +78,8 @@
 
     /* ── Buttons (premium system) ── */
     --btn-primary-bg: var(--brand-olive);
-    --btn-primary-fg: 0 0% 100%;
+    /* Foreground must alias primary-foreground — never --btn-primary-bg */
+    --btn-primary-fg: var(--primary-foreground);
     --btn-primary-hover: 64 22% 28%;
     --btn-secondary-bg: var(--brand-warm-white);
     --btn-secondary-border: var(--brand-border-soft);
@@ -519,6 +520,22 @@
   .admin-scroll-pane::-webkit-scrollbar-track,
   .customiser-options-scroll::-webkit-scrollbar-track {
     background: transparent;
+  }
+
+  /* Primary admin CTAs — belt-and-suspenders on top of Button variants */
+  .btn-primary-olive {
+    background-color: hsl(var(--brand-olive));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .btn-primary-olive:hover,
+  .btn-primary-olive:active {
+    background-color: #d9bbb0;
+    color: #404225;
+  }
+
+  .btn-primary-olive svg {
+    color: currentColor;
   }
 
   .motion-safe-animate {

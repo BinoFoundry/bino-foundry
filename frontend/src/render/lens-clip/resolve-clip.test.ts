@@ -49,6 +49,17 @@ describe("isFrameViewClipReady", () => {
       }),
     ).toBe(false);
   });
+
+  it("side view is ready with plate only (no lens clip required)", () => {
+    expect(
+      isFrameViewClipReady({
+        view: "side",
+        plateUrl: "https://example.com/side.jpg",
+        width: 800,
+        height: 600,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("lensTintEntryToGradient", () => {

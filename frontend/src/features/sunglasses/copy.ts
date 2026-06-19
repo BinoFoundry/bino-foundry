@@ -19,6 +19,13 @@ export const SUNGLASSES_COPY = {
   summaryPolarized: "Polarised",
 } as const;
 
+/** Subtle price hierarchy — slightly larger than default labels. */
+export const SUNGLASSES_PRICE = {
+  item: "type-price text-sm text-primary sm:text-base",
+  surcharge: "type-price text-xs text-muted-foreground sm:text-sm",
+  total: "type-price text-[1.65rem] text-foreground sm:text-3xl",
+} as const;
+
 /** Display polish for catalogue option descriptions (presentation only). */
 export function formatBuilderOptionDescription(description: string): string {
   return description.replace(/\breduces glare\b/gi, "Reduces Glare");

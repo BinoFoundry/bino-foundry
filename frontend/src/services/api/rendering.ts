@@ -8,6 +8,9 @@ export interface UpsertFrameViewPayload {
   plateUrl: string;
   imageWidth: number;
   imageHeight: number;
+  originalPlateUrl?: string;
+  originalImageWidth?: number;
+  originalImageHeight?: number;
   clipConfig?: LensClipConfig | null;
   clipStatus?: "draft" | "ready";
   maskConfig?: MaskConfig | null;
@@ -21,6 +24,9 @@ function mapView(row: Record<string, unknown>): FrameRenderView {
     plateUrl: String(row.plateUrl),
     width: Number(row.width),
     height: Number(row.height),
+    originalPlateUrl: row.originalPlateUrl ? String(row.originalPlateUrl) : undefined,
+    originalWidth: row.originalWidth != null ? Number(row.originalWidth) : undefined,
+    originalHeight: row.originalHeight != null ? Number(row.originalHeight) : undefined,
     clipConfig: (row.clipConfig as LensClipConfig | null) ?? null,
     clipStatus: (row.clipStatus as "draft" | "ready") ?? "draft",
     maskConfig: (row.maskConfig as MaskConfig | null) ?? null,
@@ -58,6 +64,9 @@ export const renderingApi = {
       plateUrl: row.plateUrl,
       width: row.width,
       height: row.height,
+      originalPlateUrl: row.originalPlateUrl,
+      originalWidth: row.originalWidth,
+      originalHeight: row.originalHeight,
       clipConfig: row.clipConfig,
       clipStatus: row.clipStatus,
       maskConfig: row.maskConfig,

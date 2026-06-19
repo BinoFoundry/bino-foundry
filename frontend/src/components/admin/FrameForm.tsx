@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
-import { FrameRenderViewsSection } from "@/features/admin/components/FrameRenderViewsSection";
+import { FrameRenderViewsSection, type FrameRenderViewsSectionHandle } from "@/features/admin/components/FrameRenderViewsSection";
+import {
+  describeFrameSaveBlockers,
+  isFrameViewSaveReady,
+} from "@/features/admin/lib/frameClipStatus";
 import type { FrameEntry } from "@/data/glasses";
 import type { FrameRenderView } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES } from "@/types/frame-rendering";
+import { prepareRenderViewsForSave } from "@/lib/prepare-frame-views-for-save";
 import { serializeRenderViewsForApi } from "@/lib/frame-render-views";
-import { isFrameViewClipReady } from "@/render/lens-clip";
 
 import { Button } from "../ui/button";
 
@@ -49,14 +53,13 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     normalizeViews(initial?.renderViews),
   );
   const [saving, setSaving] = useState(false);
+  const viewsSectionRef = useRef<FrameRenderViewsSectionHandle>(null);
 
-  const viewsReady = useMemo(
-    () =>
-      renderViews.every((v) => !v.plateUrl || isFrameViewClipReady(v)),
+  const frontView = useMemo(
+    () => renderViews.find((v) => v.view === "front"),
     [renderViews],
   );
-
-  const hasAnyPlate = renderViews.some((v) => v.plateUrl);
+  const frontHasPlate = Boolean(frontView?.plateUrl?.trim());
 
   const set = (k: keyof FrameEntry, v: string | number | boolean) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -64,25 +67,32 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
-    if (!form.name.trim()) return;
-    if (hasAnyPlate && !viewsReady) {
-      alert("Complete lens SVG clips for each uploaded view (3+ points per lens) before saving.");
+    if (!form.name.trim()) {
+      alert("Frame name is required.");
+      return;
+    }
+
+    const flushedViews = viewsSectionRef.current?.flushPendingEdits() ?? renderViews;
+    setRenderViews(flushedViews);
+
+    if (frontHasPlate && !flushedViews.every((v) => isFrameViewSaveReady(v))) {
+      const message = describeFrameSaveBlockers(flushedViews);
+      alert(message || "Complete the front view before saving.");
       return;
     }
 
     const id =
       form.id || form.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-    const legacyImages = renderViews
-      .filter((v) => v.plateUrl)
-      .map((v) => v.plateUrl);
-
     setSaving(true);
     try {
+      const preparedViews = await prepareRenderViewsForSave(flushedViews);
+      const legacyImages = preparedViews.filter((v) => v.plateUrl).map((v) => v.plateUrl);
+
       await onSave({
         ...form,
         id,
-        renderViews: serializeRenderViewsForApi(renderViews),
+        renderViews: serializeRenderViewsForApi(preparedViews),
         frameImages: legacyImages,
         lensColors: [],
       });
@@ -143,11 +153,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
         </label>
       </div>
 
-      <FrameRenderViewsSection
-        frameId={form.id || undefined}
-        views={renderViews}
-        onChange={setRenderViews}
-      />
+      <FrameRenderViewsSection ref={viewsSectionRef} views={renderViews} onChange={setRenderViews} />
 
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>

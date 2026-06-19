@@ -1,6 +1,7 @@
 import { memo, useId, useMemo } from "react";
 
 import { cn } from "@/lib/utils";
+import { usePlateContentBounds } from "@/render/image-bounds";
 import { resolveLensClipRenderSettings } from "@/render/lens-clip/clip-settings";
 import { SvgTintGradientDef } from "@/render/tint/SvgTintGradientDef";
 import {
@@ -26,6 +27,8 @@ export interface SvgClipCompositorViewProps {
   aspectRatio?: CompositorAspectRatio;
   label?: string;
   className?: string;
+  fillHeight?: boolean;
+  compactLabel?: boolean;
 }
 
 function SvgClipCompositorViewInner({
@@ -34,9 +37,12 @@ function SvgClipCompositorViewInner({
   aspectRatio = "16/10",
   label,
   className,
+  fillHeight = false,
+  compactLabel = false,
 }: SvgClipCompositorViewProps) {
   const uid = useId().replace(/:/g, "");
   const tintSpec = useMemo(() => normalizeTintRenderSpec(tint), [tint]);
+  const viewportVariant = fillHeight ? "fill" : "aspect";
 
   const render = useMemo(
     () =>
@@ -51,9 +57,19 @@ function SvgClipCompositorViewInner({
     [tintSpec, render.highlightStrength],
   );
 
+  const plateW = plate?.width ?? 0;
+  const plateH = plate?.height ?? 0;
+  const { viewBox } = usePlateContentBounds(plate?.plateUrl, plateW, plateH);
+
   if (!plate?.plateUrl || !plate.clipConfig?.lenses?.length) {
     return (
-      <CompositorViewport aspectRatio={aspectRatio} label={label} className={className}>
+      <CompositorViewport
+        aspectRatio={aspectRatio}
+        label={label}
+        className={className}
+        variant={viewportVariant}
+        compactLabel={compactLabel}
+      >
         <p className="text-sm text-muted-foreground">No clip paths configured for this view</p>
       </CompositorViewport>
     );
@@ -64,10 +80,16 @@ function SvgClipCompositorViewInner({
   const lenses = plate.clipConfig.lenses.filter((l) => l.pathD?.trim());
 
   return (
-    <CompositorViewport aspectRatio={aspectRatio} label={label} className={className}>
-      <div className={cn("flex h-full w-full items-center justify-center bg-muted/15")}>
+    <CompositorViewport
+      aspectRatio={aspectRatio}
+      label={label}
+      className={className}
+      variant={viewportVariant}
+      compactLabel={compactLabel}
+    >
+      <div className={cn("flex h-full w-full items-center justify-center bg-muted/10")}>
         <svg
-          viewBox={`0 0 ${w} ${h}`}
+          viewBox={viewBox}
           className="max-h-full max-w-full"
           preserveAspectRatio="xMidYMid meet"
           role="img"
@@ -158,5 +180,7 @@ export const SvgClipCompositorView = memo(
     tintRenderKey(normalizeTintRenderSpec(prev.tint)) === tintRenderKey(normalizeTintRenderSpec(next.tint)) &&
     prev.aspectRatio === next.aspectRatio &&
     prev.label === next.label &&
+    prev.fillHeight === next.fillHeight &&
+    prev.compactLabel === next.compactLabel &&
     prev.plate?.clipConfig === next.plate?.clipConfig,
 );

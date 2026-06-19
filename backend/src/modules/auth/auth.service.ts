@@ -20,6 +20,11 @@ import {
   touchLastLogin,
   updateUser,
 } from "../../infra/auth/user-repository.js";
+import { sendPlatformMail } from "../../infra/mail/mail.service.js";
+import {
+  buildPasswordResetEmail,
+  buildVerificationEmail,
+} from "../../infra/mail/mail-templates.js";
 import { ConflictError, ValidationError } from "../../lib/errors.js";
 import { signAccessToken } from "../../lib/jwt.js";
 import { hashPassword, verifyPassword } from "../../lib/password.js";
@@ -36,18 +41,76 @@ import type {
   UpdateProfileDTO,
 } from "./auth.validation.js";
 
+const EMAIL_DELIVERY_WARNING =
+  "Account created, but verification email could not be sent. Please contact support or try resending.";
+
+const RESEND_DELIVERY_WARNING =
+  "Verification email could not be sent. Check SMTP settings or try again later.";
+
 function mapSession(accessToken: string, refreshToken: string, expiresAt: number) {
   return { accessToken, refreshToken, expiresAt };
 }
 
-function authLink(path: string, token: string): string {
-  const base = resolvePublicAppUrl();
-  return `${base}${path}?token=${encodeURIComponent(token)}`;
+function buildAuthCallbackUrl(
+  token: string,
+  type: "verify-email" | "reset-password",
+  callbackBase?: string,
+): string {
+  const base = (callbackBase?.trim() || `${resolvePublicAppUrl().replace(/\/$/, "")}/auth/callback`);
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`;
 }
 
-function logAuthLink(label: string, url: string): void {
+function logAuthLinkDev(label: string, url: string): void {
   if (isProductionLike()) return;
   console.info(`[auth] ${label}: ${url}`);
+}
+
+async function sendVerificationEmail(params: {
+  email: string;
+  displayName?: string | null;
+  token: string;
+}): Promise<{ sent: boolean; warning?: string }> {
+  const verifyUrl = buildAuthCallbackUrl(params.token, "verify-email");
+  logAuthLinkDev("Email verification link", verifyUrl);
+
+  const template = buildVerificationEmail({
+    verifyUrl,
+    recipientName: params.displayName,
+  });
+
+  const result = await sendPlatformMail({
+    emailType: "verification",
+    to: params.email,
+    subject: template.subject,
+    text: template.text,
+    metadata: { flow: "verification" },
+  });
+
+  if (!result.success) {
+    return { sent: false, warning: result.error ?? EMAIL_DELIVERY_WARNING };
+  }
+  return { sent: true };
+}
+
+async function sendPasswordResetEmail(params: {
+  email: string;
+  token: string;
+  callbackBase?: string;
+}): Promise<{ sent: boolean }> {
+  const resetUrl = buildAuthCallbackUrl(params.token, "reset-password", params.callbackBase);
+  logAuthLinkDev("Password reset link", resetUrl);
+
+  const template = buildPasswordResetEmail({ resetUrl });
+  const result = await sendPlatformMail({
+    emailType: "password_reset",
+    to: params.email,
+    subject: template.subject,
+    text: template.text,
+    metadata: { flow: "password_reset" },
+  });
+
+  return { sent: result.success };
 }
 
 async function issueSession(userId: string, req?: Request) {
@@ -85,11 +148,18 @@ export class AuthService {
 
     if (!autoVerify) {
       const token = await createEmailVerificationToken(user.id);
-      logAuthLink("Email verification link", authLink("/auth/callback", token) + "&type=verify-email");
+      const delivery = await sendVerificationEmail({
+        email: user.email,
+        displayName: user.fullName,
+        token,
+      });
+
       return {
         user: buildAuthUserFromDb(user),
         session: null,
         emailConfirmationRequired: true,
+        emailSent: delivery.sent,
+        emailWarning: delivery.sent ? undefined : (delivery.warning ?? EMAIL_DELIVERY_WARNING),
       };
     }
 
@@ -97,6 +167,7 @@ export class AuthService {
     return {
       ...issued,
       emailConfirmationRequired: false,
+      emailSent: true,
     };
   }
 
@@ -197,8 +268,11 @@ export class AuthService {
     const user = await findUserByEmail(dto.email);
     if (user && !user.deletedAt) {
       const token = await createPasswordResetToken(user.id);
-      const link = authLink("/auth/callback", token) + "&type=reset-password";
-      logAuthLink("Password reset link", link);
+      await sendPasswordResetEmail({
+        email: user.email,
+        token,
+        callbackBase: dto.redirectTo,
+      });
     }
     return { ok: true, message: "If an account exists for this email, a reset link has been sent." };
   }
@@ -221,9 +295,21 @@ export class AuthService {
     const user = await findUserByEmail(dto.email);
     if (user && !user.emailVerifiedAt && !user.deletedAt) {
       const token = await createEmailVerificationToken(user.id);
-      logAuthLink("Email verification link", authLink("/auth/callback", token) + "&type=verify-email");
+      const delivery = await sendVerificationEmail({
+        email: user.email,
+        displayName: user.fullName,
+        token,
+      });
+
+      if (!delivery.sent) {
+        return {
+          ok: false,
+          message: delivery.warning ?? RESEND_DELIVERY_WARNING,
+          emailSent: false,
+        };
+      }
     }
-    return { ok: true, message: "Verification email sent if the account is unverified." };
+    return { ok: true, message: "Verification email sent if the account is unverified.", emailSent: true };
   }
 
   async confirmEmail(dto: ConfirmEmailDTO, req?: Request) {

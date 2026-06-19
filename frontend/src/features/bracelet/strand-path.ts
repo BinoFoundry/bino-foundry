@@ -100,6 +100,49 @@ export function beadTypeRotationOffsetDeg(beadTypeSlug?: string): number {
   }
 }
 
+/** Radial outward rotation so charms face away from the bracelet center (bail toward cord). */
+export function radialOutwardRotationDeg(angle: number): number {
+  return (angle * 180) / Math.PI + 90;
+}
+
+/**
+ * Strand rotation per bead type.
+ * Round beads align tangent to the path; charms face outward from the wrist.
+ */
+export function beadStrandRotationDeg(angle: number, beadTypeSlug?: string): number {
+  if (beadTypeSlug === "charm") {
+    return radialOutwardRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
+  }
+  return tangentRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
+}
+
+/**
+ * Radial offset along the ring normal (negative = toward center).
+ * Pulls charm bails onto the cord while the body hangs outward.
+ */
+export function beadRingAlignOffsetPx(
+  beadTypeSlug: string | undefined,
+  dim: { width: number; height: number },
+): number {
+  if (beadTypeSlug === "charm") {
+    return -dim.height * 0.2;
+  }
+  return 0;
+}
+
+export function applyRingAlignOffset(
+  x: number,
+  y: number,
+  angle: number,
+  offsetPx: number,
+): { x: number; y: number } {
+  if (offsetPx === 0) return { x, y };
+  return {
+    x: x + offsetPx * Math.cos(angle),
+    y: y + offsetPx * Math.sin(angle),
+  };
+}
+
 function useElasticWeights(beads: StrandPathBeadInput[], layoutCircumferenceMm?: number): boolean {
   if (!layoutCircumferenceMm || layoutCircumferenceMm <= 0) return false;
   return beads.some((b) => (b.beadMm ?? 0) > 0);

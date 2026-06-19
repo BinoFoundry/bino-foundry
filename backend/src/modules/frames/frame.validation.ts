@@ -12,6 +12,9 @@ const renderViewSchema = z.object({
   plateUrl: z.string().min(1),
   width: z.coerce.number().int().positive(),
   height: z.coerce.number().int().positive(),
+  originalPlateUrl: z.string().min(1).optional(),
+  originalWidth: z.coerce.number().int().positive().optional(),
+  originalHeight: z.coerce.number().int().positive().optional(),
   clipConfig: lensClipConfigSchema.nullable().optional(),
   clipStatus: z.enum(["draft", "ready"]).optional(),
   /** Editor anchors/handles — persisted alongside clip_config for re-edit */

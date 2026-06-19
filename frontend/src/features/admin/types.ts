@@ -11,15 +11,14 @@ export type AdminSection =
   | "bead-sizes"
   | "wrist-sizes"
   | "sunglasses-config"
-  | "general-settings"
-  | "media";
+  | "general-settings";
 
 export interface AdminNavItem {
   id: AdminSection;
   label: string;
   description: string;
   icon: LucideIcon;
-  group: "overview" | "platform" | "products" | "settings" | "sunglasses" | "assets";
+  group: "overview" | "platform" | "products" | "settings" | "sunglasses";
   /** When set, item is shown only when the current user has this permission. */
   permission?: Permission;
 }

@@ -2,17 +2,25 @@ import type {
   SmtpEncryption,
   SmtpSettingsPublic,
   SmtpSettingsUpdate,
+  SmtpTemplateTestRequest,
+  SmtpTemplateTestType,
   SmtpTestRequest,
   SmtpTestResult,
 } from "@bino-foundry/shared/types";
 
 import {
   classifySmtpError,
-  formatFromAddress,
   type ResolvedSmtpConfig,
-  sendSmtpMail,
   verifySmtpTransport,
 } from "../../infra/mail/mail-transport.js";
+import { sendPlatformMail, sendPlatformMailWithConfig } from "../../infra/mail/mail.service.js";
+import {
+  buildNotificationEmail,
+  buildPasswordResetEmail,
+  buildSmtpTestEmail,
+  buildVerificationEmail,
+} from "../../infra/mail/mail-templates.js";
+import { resolvePublicAppUrl } from "../../config/env.js";
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { ValidationError } from "../../lib/errors.js";
 import { decryptSecret, encryptSecret, maskSecretHint } from "../../lib/secret-cipher.js";
@@ -215,43 +223,131 @@ export class SmtpSettingsService {
   }
 
   async testSettings(payload: SmtpTestRequest): Promise<SmtpTestResult> {
+    return this.testTemplate({
+      recipientEmail: payload.recipientEmail,
+      templateType: "connection",
+      useSaved: payload.useSaved,
+      isActive: payload.isActive,
+      host: payload.host,
+      port: payload.port,
+      encryption: payload.encryption,
+      username: payload.username,
+      password: payload.password,
+      fromName: payload.fromName,
+      fromEmail: payload.fromEmail,
+    });
+  }
+
+  async testTemplate(payload: SmtpTemplateTestRequest): Promise<SmtpTestResult> {
     const useSaved = payload.useSaved !== false;
-    const config = await this.resolveConfigForSend(payload);
+    const message = this.buildTemplateMessage(payload.templateType, payload.recipientEmail.trim());
+    const mailOptions = {
+      emailType:
+        payload.templateType === "connection"
+          ? ("smtp_test" as const)
+          : (payload.templateType as "verification" | "password_reset" | "notification"),
+      to: payload.recipientEmail.trim(),
+      subject: message.subject,
+      text: message.text,
+      metadata: { templateType: payload.templateType, test: true },
+    };
 
     if (useSaved) {
       const row = await fetchRow();
       if (!row?.is_active) {
         throw new ValidationError("SMTP is not active. Enable it before testing.");
       }
+
+      const config = await this.resolveConfigForSend(payload);
+      try {
+        await verifySmtpTransport(config);
+      } catch (err) {
+        const friendly = classifySmtpError(err);
+        return {
+          success: false,
+          connectionOk: friendly !== "Unable to connect to SMTP server.",
+          emailSent: false,
+          message: friendly,
+        };
+      }
+
+      const result = await sendPlatformMail(mailOptions);
+      if (result.success) {
+        return {
+          success: true,
+          connectionOk: true,
+          emailSent: true,
+          message: `${this.templateLabel(payload.templateType)} sent successfully.`,
+        };
+      }
+      return {
+        success: false,
+        connectionOk: true,
+        emailSent: false,
+        message: result.error ?? "Test email could not be delivered.",
+      };
     }
 
-    const subject = "Bino Foundry SMTP Test";
-    const text =
-      "This is a test email generated from your Bino Foundry SMTP configuration. If you received this message, your email settings are working correctly.";
-
+    const config = await this.resolveConfigForSend(payload);
     try {
       await verifySmtpTransport(config);
-      await sendSmtpMail(config, {
-        to: payload.recipientEmail.trim(),
-        subject,
-        text,
-      });
+    } catch (err) {
+      const friendly = classifySmtpError(err);
+      return {
+        success: false,
+        connectionOk: friendly !== "Unable to connect to SMTP server.",
+        emailSent: false,
+        message: friendly,
+      };
+    }
 
+    const result = await sendPlatformMailWithConfig(config, mailOptions);
+    if (result.success) {
       return {
         success: true,
         connectionOk: true,
         emailSent: true,
-        message: "SMTP connection successful. Test email sent successfully.",
+        message: `${this.templateLabel(payload.templateType)} sent successfully.`,
       };
-    } catch (err) {
-      const friendly = classifySmtpError(err);
-      const connectionFailed = friendly === "Unable to connect to SMTP server.";
-      return {
-        success: false,
-        connectionOk: !connectionFailed,
-        emailSent: false,
-        message: friendly,
-      };
+    }
+
+    return {
+      success: false,
+      connectionOk: true,
+      emailSent: false,
+      message: result.error ?? "Test email could not be delivered.",
+    };
+  }
+
+  private templateLabel(templateType: SmtpTemplateTestType): string {
+    switch (templateType) {
+      case "verification":
+        return "Verification email";
+      case "password_reset":
+        return "Password reset email";
+      case "notification":
+        return "Notification email";
+      default:
+        return "SMTP test email";
+    }
+  }
+
+  private buildTemplateMessage(templateType: SmtpTemplateTestType, recipientEmail: string) {
+    const sampleVerifyUrl = `${resolvePublicAppUrl().replace(/\/$/, "")}/auth/callback?token=sample-verify-token&type=verify-email`;
+    const sampleResetUrl = `${resolvePublicAppUrl().replace(/\/$/, "")}/auth/callback?token=sample-reset-token&type=reset-password`;
+
+    switch (templateType) {
+      case "verification":
+        return buildVerificationEmail({ verifyUrl: sampleVerifyUrl, recipientName: "Test User" });
+      case "password_reset":
+        return buildPasswordResetEmail({ resetUrl: sampleResetUrl });
+      case "notification":
+        return buildNotificationEmail({
+          title: "Bino Foundry notification test",
+          body: `This is a sample customer notification delivered to ${recipientEmail}.`,
+        });
+      default:
+        return buildSmtpTestEmail();
     }
   }
 

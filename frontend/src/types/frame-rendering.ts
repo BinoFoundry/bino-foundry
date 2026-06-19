@@ -1,4 +1,4 @@
-import type { LensClipConfig } from "@bino-foundry/shared/types";
+import type { BeadCropConfig, LensClipConfig } from "@bino-foundry/shared/types";
 import type { MaskConfig } from "@/render/mask";
 
 export type FrameViewAxis = "front" | "side" | "three_quarter";
@@ -15,6 +15,12 @@ export interface FrameRenderView {
   plateUrl: string;
   width: number;
   height: number;
+  /** Untouched upload — preserved for reset / re-crop. */
+  originalPlateUrl?: string;
+  originalWidth?: number;
+  originalHeight?: number;
+  /** Draft path crop on original (BeadCropConfig v2) — cleared after save exports processed plate. */
+  plateCropConfig?: BeadCropConfig | null;
   /** Primary persisted clip data (LensClipConfig v1). */
   clipConfig?: LensClipConfig | null;
   clipStatus?: FrameClipStatus;

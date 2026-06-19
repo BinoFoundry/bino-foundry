@@ -7,6 +7,9 @@ export function serializeRenderViewsForApi(views: FrameRenderView[]): Array<{
   plateUrl: string;
   width: number;
   height: number;
+  originalPlateUrl?: string;
+  originalWidth?: number;
+  originalHeight?: number;
   clipConfig: FrameRenderView["clipConfig"];
   clipStatus: FrameRenderView["clipStatus"];
   maskConfig: MaskConfig | null;
@@ -19,6 +22,13 @@ export function serializeRenderViewsForApi(views: FrameRenderView[]): Array<{
       plateUrl: v.plateUrl.trim(),
       width: Math.max(1, Math.floor(Number(v.width) || 0)),
       height: Math.max(1, Math.floor(Number(v.height) || 0)),
+      ...(v.originalPlateUrl?.trim()
+        ? {
+            originalPlateUrl: v.originalPlateUrl.trim(),
+            originalWidth: Math.max(1, Math.floor(Number(v.originalWidth) || v.width)),
+            originalHeight: Math.max(1, Math.floor(Number(v.originalHeight) || v.height)),
+          }
+        : {}),
       clipConfig: v.clipConfig ?? null,
       clipStatus: v.clipStatus ?? (v.clipConfig ? "ready" : "draft"),
       maskConfig: v.maskConfig ?? null,

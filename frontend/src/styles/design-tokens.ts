@@ -58,7 +58,8 @@ export const typography = {
 export const buttonTokens = {
   primaryBg: "#404225",
   primaryFg: "#FFFFFF",
-  primaryHover: "hsl(64 22% 28%)",
+  primaryHoverBg: "#D9BBB0",
+  primaryHoverFg: "#404225",
   secondaryBg: "#F5EFE7",
   secondaryBorder: "#E6DCCF",
   secondaryFg: "#646345",

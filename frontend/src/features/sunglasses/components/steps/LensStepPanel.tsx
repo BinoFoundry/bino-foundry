@@ -9,7 +9,7 @@ import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catal
 
 import { formatCurrency, formatCurrencySurcharge } from "@bino-foundry/shared/currency";
 
-import { formatBuilderOptionDescription, SUNGLASSES_COPY } from "../../copy";
+import { formatBuilderOptionDescription, SUNGLASSES_COPY, SUNGLASSES_PRICE } from "../../copy";
 
 interface LensStepPanelProps {
   classicTints: LensTintEntry[];
@@ -60,7 +60,7 @@ const TintSwatch = memo(function TintSwatch({
       <span className="text-center text-xs font-medium text-foreground">{tint.name}</span>
       <span className="font-mono text-[10px] text-muted-foreground">{tint.code}</span>
       {tint.priceSurcharge > 0 && (
-        <span className="text-[10px] text-muted-foreground">
+        <span className={SUNGLASSES_PRICE.surcharge}>
           {formatCurrencySurcharge(tint.priceSurcharge, currencyCode)}
         </span>
       )}
@@ -141,8 +141,12 @@ export function LensStepPanel({
                 Upgrade to {polarizedOption.label}
               </Label>
               {(polarizedSurcharge > 0 || polarizedOption.description) && (
-                <p className="text-xs text-muted-foreground">
-                  {polarizedSurcharge > 0 ? formatCurrencySurcharge(polarizedSurcharge, currencyCode) : null}
+                <p className="text-xs text-muted-foreground sm:text-sm">
+                  {polarizedSurcharge > 0 ? (
+                    <span className={SUNGLASSES_PRICE.surcharge}>
+                      {formatCurrencySurcharge(polarizedSurcharge, currencyCode)}
+                    </span>
+                  ) : null}
                   {polarizedSurcharge > 0 && polarizedOption.description ? " · " : null}
                   {polarizedOption.description
                     ? formatBuilderOptionDescription(polarizedOption.description)

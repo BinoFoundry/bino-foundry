@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 
+import { getDefaultSectionRefresh } from "../admin-refresh";
+import { useAdminSectionRefreshOverride } from "../context/AdminSectionRefreshContext";
 import { ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS } from "../navigation";
 import type { AdminSection } from "../types";
 
@@ -22,6 +24,7 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
   const catalogue = useCatalogue();
   const sunglasses = useSunglassesCatalog();
   const { permissions } = useAuth();
+  const refreshOverride = useAdminSectionRefreshOverride();
   const visibleNavItems = ADMIN_NAV_ITEMS.filter(
     (item) => !item.permission || checkPermission(permissions, item.permission),
   );
@@ -31,6 +34,11 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
   const activeNav = visibleNavItems.find((n) => n.id === section);
   const [refreshing, setRefreshing] = useState(false);
   const hasAdminApiKey = Boolean(getAdminApiKey());
+
+  const refreshConfig = useMemo(() => {
+    const defaults = getDefaultSectionRefresh(section, catalogue, sunglasses);
+    return refreshOverride ?? defaults;
+  }, [section, catalogue, sunglasses, refreshOverride]);
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -49,14 +57,11 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
           disabled={refreshing}
           onClick={() => {
             setRefreshing(true);
-            void Promise.all([
-              catalogue.refreshFromApi(),
-              sunglasses.refreshAdminFromApi(),
-            ]).finally(() => setRefreshing(false));
+            void refreshConfig.action().finally(() => setRefreshing(false));
           }}
         >
           <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh catalogue
+          {refreshConfig.label}
         </Button>
       </header>
 

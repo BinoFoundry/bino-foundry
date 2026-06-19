@@ -25,9 +25,10 @@ import { settingsApi } from "@/services/api/settings";
 interface GeneralSettingsAdminProps {
   /** When true, omit outer page chrome (used inside GeneralSettingsPage wrapper). */
   embedded?: boolean;
+  onRegisterReload?: (reload: () => Promise<void>) => void;
 }
 
-export function GeneralSettingsAdmin({ embedded = false }: GeneralSettingsAdminProps) {
+export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: GeneralSettingsAdminProps) {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -58,6 +59,10 @@ export function GeneralSettingsAdmin({ embedded = false }: GeneralSettingsAdminP
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    onRegisterReload?.(load);
+  }, [load, onRegisterReload]);
 
   const handleSave = async () => {
     setValidationError(null);

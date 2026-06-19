@@ -205,7 +205,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, displayName: string) => {
       const response = await authApi.register({ email, password, displayName: displayName.trim() });
       if (!response.session) {
-        toast.message("Account created. Check your email to confirm, then sign in.");
+        if (response.emailSent === false && response.emailWarning) {
+          toast.error(response.emailWarning);
+        } else {
+          toast.message("Account created. Check your email to confirm, then sign in.");
+        }
         setAuthModalMode("sign-in");
         return;
       }

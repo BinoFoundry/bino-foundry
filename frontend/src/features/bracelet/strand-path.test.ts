@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   beadIndexFromPointerAngle,
+  beadStrandRotationDeg,
+  beadRingAlignOffsetPx,
   computeStrandPathLayout,
   evenBeadAngleRad,
   evenBeadAngleStepRad,
   insertionIndexFromPointerAngle,
   polarToCartesian,
+  radialOutwardRotationDeg,
   resolveStrandDropTarget,
   tangentRotationDeg,
 } from "./strand-path";
@@ -142,5 +145,25 @@ describe("computeStrandPathLayout", () => {
     expect(two[1]!.angle - two[0]!.angle).toBeCloseTo(Math.PI, 5);
     expect(four[1]!.angle - four[0]!.angle).toBeCloseTo(Math.PI / 2, 5);
     expect(two[1]!.angle).not.toBeCloseTo(four[1]!.angle, 3);
+  });
+});
+
+describe("charm strand presentation", () => {
+  it("faces charms outward from the ring center", () => {
+    expect(radialOutwardRotationDeg(0)).toBeCloseTo(90, 5);
+    expect(radialOutwardRotationDeg(Math.PI / 2)).toBeCloseTo(180, 5);
+    expect(radialOutwardRotationDeg(-Math.PI / 2)).toBeCloseTo(0, 5);
+  });
+
+  it("uses radial rotation for charms and tangent for crystals", () => {
+    const angle = -Math.PI / 2;
+    expect(beadStrandRotationDeg(angle, "charm")).toBeCloseTo(0, 5);
+    expect(beadStrandRotationDeg(angle, "crystal")).toBeCloseTo(tangentRotationDeg(angle), 5);
+  });
+
+  it("pulls charm centers toward the cord", () => {
+    const offset = beadRingAlignOffsetPx("charm", { width: 40, height: 50 });
+    expect(offset).toBeLessThan(0);
+    expect(beadRingAlignOffsetPx("crystal", { width: 40, height: 50 })).toBe(0);
   });
 });

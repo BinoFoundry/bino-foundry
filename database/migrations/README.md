@@ -52,6 +52,8 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 26. `000030_require_user_full_name.sql` — backfill and enforce `NOT NULL` on `users.full_name` (customer name).
 27. `000031_wrist_size_20cm.sql` — add 20 cm to the default wrist size catalog (14–20 cm range).
 28. `000032_bracelet_builder_library_title.sql` — admin-configurable bracelet builder left sidebar title in `site.settings_v1`.
+29. `000033_frame_plate_original.sql` — `original_plate_url` + dimensions on `frame_render_views` for non-destructive admin crop workflow.
+30. `000034_email_logs.sql` — `email_logs` audit table for outbound mail delivery diagnostics.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

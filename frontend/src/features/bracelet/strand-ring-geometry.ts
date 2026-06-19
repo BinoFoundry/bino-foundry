@@ -12,13 +12,13 @@ import { computeMaxRingRadiusPx, computeWristRingRadiusPx, type WristSizeBounds 
 import { STRAND_LAYOUT_BASELINE_PX } from "./strand-viewport";
 
 /** Tight gap between adjacent bead edges at layout scale factor 1. */
-export const BEAD_PAIR_GAP_BASE_PX = 0.35;
+export const BEAD_PAIR_GAP_BASE_PX = 0.04;
 
 /** Minimal arc per side for anti-alias bleed at layout scale factor 1. */
-export const BEAD_VISUAL_BLEED_BASE_PX = 0.4;
+export const BEAD_VISUAL_BLEED_BASE_PX = 0.1;
 
 /** Small epsilon so floating-point layout does not under-allocate arc. */
-const SPACING_EPSILON_PX = 0.25;
+const SPACING_EPSILON_PX = 0.08;
 
 export interface BeadSpacingPx {
   pairGapPx: number;
@@ -29,8 +29,8 @@ export interface BeadSpacingPx {
 export function scaledBeadSpacingPx(scaleFactor: number): BeadSpacingPx {
   const sf = Math.max(0.5, scaleFactor);
   return {
-    pairGapPx: Math.max(0.2, BEAD_PAIR_GAP_BASE_PX * sf),
-    bleedPx: Math.max(0.35, BEAD_VISUAL_BLEED_BASE_PX * sf),
+    pairGapPx: Math.max(0.03, BEAD_PAIR_GAP_BASE_PX * sf),
+    bleedPx: Math.max(0.08, BEAD_VISUAL_BLEED_BASE_PX * sf),
   };
 }
 

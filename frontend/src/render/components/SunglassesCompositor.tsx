@@ -15,6 +15,9 @@ export interface SunglassesCompositorProps {
   className?: string;
   allowSvgFallback?: boolean;
   emptyMessage?: string;
+  /** Fill parent height instead of fixed aspect ratio (builder dual preview). */
+  fillHeight?: boolean;
+  compactLabel?: boolean;
 }
 
 /**
@@ -28,9 +31,12 @@ export function SunglassesCompositor({
   className,
   allowSvgFallback = true,
   emptyMessage,
+  fillHeight = false,
+  compactLabel = false,
 }: SunglassesCompositorProps) {
   const instanceId = useId().replace(/:/g, "");
   const stack = useMemo(() => buildCompositorStack(config, view), [config, view]);
+  const viewportVariant = fillHeight ? "fill" : "aspect";
 
   const plateView =
     config.renderMode === "svg-clip"
@@ -53,13 +59,21 @@ export function SunglassesCompositor({
         aspectRatio={aspectRatio}
         label={label}
         className={className}
+        fillHeight={fillHeight}
+        compactLabel={compactLabel}
       />
     );
   }
 
   if (!allowSvgFallback) {
     return (
-      <CompositorViewport aspectRatio={aspectRatio} label={label} className={className}>
+      <CompositorViewport
+        aspectRatio={aspectRatio}
+        label={label}
+        className={className}
+        variant={viewportVariant}
+        compactLabel={compactLabel}
+      >
         <div className="flex h-full items-center justify-center px-6 text-center">
           <p className="max-w-xs text-sm font-medium text-muted-foreground">
             {emptyMessage ?? `No preview available for ${label}`}
@@ -70,7 +84,13 @@ export function SunglassesCompositor({
   }
 
   return (
-    <CompositorViewport aspectRatio={aspectRatio} label={label} className={className}>
+    <CompositorViewport
+      aspectRatio={aspectRatio}
+      label={label}
+      className={className}
+      variant={viewportVariant}
+      compactLabel={compactLabel}
+    >
       <LayerStack layers={stack.layers} instanceId={instanceId} />
     </CompositorViewport>
   );

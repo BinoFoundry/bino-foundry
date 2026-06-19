@@ -16,7 +16,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { adminSettingsApi } from "@/services/api/admin-settings";
 import { isApiError } from "@/services/api";
-import type { SmtpEncryption, SmtpSettingsPublic } from "@bino-foundry/shared/types";
+import type { SmtpEncryption, SmtpSettingsPublic, SmtpTemplateTestType } from "@bino-foundry/shared/types";
 import { SMTP_ENCRYPTION_OPTIONS } from "@bino-foundry/shared/types";
 
 const PASSWORD_PLACEHOLDER = "••••••••";
@@ -45,10 +45,10 @@ function toFormState(data: SmtpSettingsPublic): SmtpFormState {
   };
 }
 
-export function SmtpSettingsAdmin() {
+export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (reload: () => Promise<void>) => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [testingTemplate, setTestingTemplate] = useState<SmtpTemplateTestType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -85,6 +85,10 @@ export function SmtpSettingsAdmin() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    onRegisterReload?.(load);
+  }, [load, onRegisterReload]);
+
   const setField = <K extends keyof SmtpFormState>(key: K, value: SmtpFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setTestResult(null);
@@ -101,8 +105,9 @@ export function SmtpSettingsAdmin() {
     ...(form.password ? { password: form.password } : {}),
   });
 
-  const buildTestPayload = () => ({
+  const buildTestPayload = (templateType: SmtpTemplateTestType = "connection") => ({
     recipientEmail: testRecipient.trim(),
+    templateType,
     useSaved: false as const,
     isActive: form.isActive,
     host: form.host.trim(),
@@ -113,6 +118,29 @@ export function SmtpSettingsAdmin() {
     ...(form.username.trim() ? { username: form.username.trim() } : {}),
     ...(form.password ? { password: form.password } : {}),
   });
+
+  const handleTest = async (templateType: SmtpTemplateTestType = "connection") => {
+    setValidationError(null);
+    setTestResult(null);
+    if (!testRecipient.trim()) {
+      setValidationError("Enter a test recipient email address.");
+      return;
+    }
+
+    setTestingTemplate(templateType);
+    try {
+      const result = await adminSettingsApi.testSmtpTemplate(buildTestPayload(templateType));
+      setTestResult({ success: result.success, message: result.message });
+      if (result.success) {
+        toast.success(result.message);
+      }
+    } catch (err) {
+      const msg = isApiError(err) ? err.message : "SMTP test failed";
+      setTestResult({ success: false, message: msg });
+    } finally {
+      setTestingTemplate(null);
+    }
+  };
 
   const handleSave = async () => {
     setValidationError(null);
@@ -131,29 +159,6 @@ export function SmtpSettingsAdmin() {
       setValidationError(msg);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleTest = async () => {
-    setValidationError(null);
-    setTestResult(null);
-    if (!testRecipient.trim()) {
-      setValidationError("Enter a test recipient email address.");
-      return;
-    }
-
-    setTesting(true);
-    try {
-      const result = await adminSettingsApi.testSmtp(buildTestPayload());
-      setTestResult({ success: result.success, message: result.message });
-      if (result.success) {
-        toast.success("SMTP test successful");
-      }
-    } catch (err) {
-      const msg = isApiError(err) ? err.message : "SMTP test failed";
-      setTestResult({ success: false, message: msg });
-    } finally {
-      setTesting(false);
     }
   };
 
@@ -295,14 +300,49 @@ export function SmtpSettingsAdmin() {
             placeholder="you@example.com"
           />
           <p className="text-xs text-muted-foreground">
-            Sends a test message using the values above. Saved credentials are used when username or password are left
-            blank.
+            Test delivery using the values above (inline). Registration and password reset use the saved active SMTP
+            configuration — save settings before going live.
           </p>
         </div>
 
-        <Button type="button" variant="secondary" size="sm" disabled={testing} onClick={() => void handleTest()}>
-          {testing ? "Testing…" : "Test SMTP connection"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={testingTemplate !== null}
+            onClick={() => void handleTest("connection")}
+          >
+            {testingTemplate === "connection" ? "Testing…" : "Test SMTP connection"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={testingTemplate !== null}
+            onClick={() => void handleTest("verification")}
+          >
+            {testingTemplate === "verification" ? "Sending…" : "Test verification email"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={testingTemplate !== null}
+            onClick={() => void handleTest("password_reset")}
+          >
+            {testingTemplate === "password_reset" ? "Sending…" : "Test password reset email"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={testingTemplate !== null}
+            onClick={() => void handleTest("notification")}
+          >
+            {testingTemplate === "notification" ? "Sending…" : "Test notification email"}
+          </Button>
+        </div>
 
         {testResult ? (
           <div
@@ -330,10 +370,10 @@ export function SmtpSettingsAdmin() {
       ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={saving || testing}>
+        <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={saving || testingTemplate !== null}>
           Reset
         </Button>
-        <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving || testing}>
+        <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving || testingTemplate !== null}>
           {saving ? "Saving…" : "Save SMTP settings"}
         </Button>
       </div>

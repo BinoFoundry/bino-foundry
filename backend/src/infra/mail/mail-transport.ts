@@ -42,15 +42,19 @@ export async function verifySmtpTransport(config: ResolvedSmtpConfig): Promise<v
 export async function sendSmtpMail(
   config: ResolvedSmtpConfig,
   options: { to: string; subject: string; text: string },
-): Promise<void> {
+): Promise<{ messageId?: string; response?: string }> {
   const transport = createSmtpTransport(config);
   try {
-    await transport.sendMail({
+    const info = await transport.sendMail({
       from: formatFromAddress(config),
       to: options.to,
       subject: options.subject,
       text: options.text,
     });
+    return {
+      messageId: typeof info.messageId === "string" ? info.messageId : undefined,
+      response: typeof info.response === "string" ? info.response : undefined,
+    };
   } finally {
     transport.close();
   }

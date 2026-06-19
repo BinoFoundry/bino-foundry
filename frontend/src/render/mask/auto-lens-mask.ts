@@ -368,8 +368,9 @@ function maskToCanvas(mask, width, height) {
 
 /**
  * Detect lens areas from a product photo on white (full frame render).
+ * Returns a binary bitmap (1 = lens pixel).
  */
-export function detectLensMask(source, userOpts = {}) {
+export function detectLensMaskBitmap(source, userOpts = {}) {
   const opts = { ...DEFAULTS, ...userOpts };
   const { data, width, height } = getImageDataFromSource(source);
   const { lens, frame, box } = classifyPixels({ data, width, height }, opts);
@@ -392,7 +393,15 @@ export function detectLensMask(source, userOpts = {}) {
   grown = addLensHighlights(grown, data, width, height, box, opts);
   grown = constrainLensToInterior(grown, frame, data, width, height, opts);
   grown = morphCloseOpen(grown, width, height, 1, 0);
-  return maskToCanvas(grown, width, height);
+  return { bitmap: grown, width, height };
+}
+
+/**
+ * Detect lens areas from a product photo on white (full frame render).
+ */
+export function detectLensMask(source, userOpts = {}) {
+  const { bitmap, width, height } = detectLensMaskBitmap(source, userOpts);
+  return maskToCanvas(bitmap, width, height);
 }
 
 /** Pull bright specular streaks on lenses into the mask. */

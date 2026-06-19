@@ -30,6 +30,7 @@ export function AuthModal() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (authModalOpen) {
@@ -70,7 +71,11 @@ export function AuthModal() {
         await signUp(email.trim(), password, displayName.trim());
       }
     } catch (err) {
-      setError(isApiError(err) ? err.message : "Authentication failed");
+      const message = isApiError(err) ? err.message : "Authentication failed";
+      setError(message);
+      if (view === "sign-in" && message.toLowerCase().includes("verify your email")) {
+        setInfo("Need a new link? Use resend verification below.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -182,6 +187,39 @@ export function AuthModal() {
               </div>
 
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
+
+              {view === "sign-in" ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs"
+                  disabled={resending || !email.trim()}
+                  onClick={async () => {
+                    setResending(true);
+                    setError("");
+                    setInfo("");
+                    try {
+                      const response = await authApi.resendVerification(email.trim());
+                      if (response.emailSent === false) {
+                        setError(response.message);
+                        toast.error(response.message);
+                      } else {
+                        setInfo(response.message);
+                        toast.message(response.message);
+                      }
+                    } catch (err) {
+                      const message = isApiError(err) ? err.message : "Could not resend verification email";
+                      setError(message);
+                    } finally {
+                      setResending(false);
+                    }
+                  }}
+                >
+                  {resending ? "Sending…" : "Resend verification email"}
+                </Button>
+              ) : null}
 
               <TabsContent value="sign-in" className="mt-0">
                 <Button type="submit" className="w-full" disabled={submitting}>

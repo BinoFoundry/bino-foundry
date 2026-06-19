@@ -11,7 +11,7 @@ const TYPE_FOOTPRINT: Record<string, { width: number; height: number }> = {
   accent: { width: 1, height: 1 },
   connector: { width: 1, height: 1 },
   separator: { width: 0.75, height: 0.75 },
-  charm: { width: 1.4, height: 1.15 },
+  charm: { width: 1.28, height: 1.08 },
   spacer: { width: 0.5, height: 0.5 },
 };
 

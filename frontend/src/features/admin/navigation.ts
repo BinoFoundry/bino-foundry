@@ -2,7 +2,6 @@ import {
   CircleDot,
   Gem,
   Glasses,
-  Image,
   LayoutDashboard,
   Ruler,
   Settings,
@@ -78,13 +77,6 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     icon: Sun,
     group: "sunglasses",
   },
-  {
-    id: "media",
-    label: "Media",
-    description: "Upload and staging assets",
-    icon: Image,
-    group: "assets",
-  },
 ];
 
 export const ADMIN_NAV_GROUPS: { id: AdminNavItem["group"]; label: string }[] = [
@@ -93,7 +85,6 @@ export const ADMIN_NAV_GROUPS: { id: AdminNavItem["group"]; label: string }[] = 
   { id: "products", label: "Products" },
   { id: "settings", label: "Settings" },
   { id: "sunglasses", label: "Sunglasses" },
-  { id: "assets", label: "Media" },
 ];
 
 export function getAdminNavItem(id: AdminSection): AdminNavItem | undefined {

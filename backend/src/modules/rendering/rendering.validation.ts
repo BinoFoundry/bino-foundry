@@ -51,6 +51,9 @@ export const upsertFrameViewSchema = z.object({
   plateUrl: z.string().min(1),
   imageWidth: z.coerce.number().int().positive(),
   imageHeight: z.coerce.number().int().positive(),
+  originalPlateUrl: z.string().min(1).optional(),
+  originalImageWidth: z.coerce.number().int().positive().optional(),
+  originalImageHeight: z.coerce.number().int().positive().optional(),
   clipConfig: lensClipConfigSchema.nullable().optional(),
   clipStatus: z.enum(["draft", "ready"]).optional(),
   /** Editor anchors/handles — persisted for lossless re-edit */

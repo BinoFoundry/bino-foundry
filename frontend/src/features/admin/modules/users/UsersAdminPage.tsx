@@ -19,6 +19,7 @@ import { AdminListPagination } from "../../components/AdminListPagination";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminToolbar } from "../../components/AdminToolbar";
+import { useAdminSectionRefresh } from "../../context/AdminSectionRefreshContext";
 import { formatDesignDisplayTitle } from "@/features/designs/display-title";
 import { UserForm, type UserFormValues } from "./UserForm";
 import { ASSIGNABLE_ROLE_OPTIONS, STATUS_LABELS, displayRoleLabel, formatAdminDate } from "./user-labels";
@@ -78,6 +79,8 @@ export function UsersAdminPage() {
       void loadUsers();
     }
   }, [view.mode, loadUsers]);
+
+  useAdminSectionRefresh("Refresh users", loadUsers);
 
   const openUser = async (id: string, mode: "view" | "edit") => {
     try {

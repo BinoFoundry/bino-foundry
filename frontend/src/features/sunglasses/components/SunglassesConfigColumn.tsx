@@ -44,11 +44,11 @@ export function SunglassesConfigColumn({
         data-scroll-isolate="true"
         onWheel={(e) => e.stopPropagation()}
       >
-        <div className="hidden shrink-0 border-b border-border/60 px-4 py-4 sm:px-5 sm:py-5 lg:block">
+        <div className="hidden shrink-0 border-b border-border/60 px-4 py-3 sm:px-5 lg:block">
           <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
         </div>
 
-        <div className="px-4 py-4 sm:px-5 sm:py-5">
+        <div className="px-4 py-3 sm:px-5 sm:py-4">
           <CustomiserPanel
             flow={flow}
             state={state}

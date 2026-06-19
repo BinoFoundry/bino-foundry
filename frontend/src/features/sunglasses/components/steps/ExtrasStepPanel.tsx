@@ -5,7 +5,7 @@ import type { BuilderOptionEntry } from "@/types/sunglasses-catalog";
 
 import { formatCurrencySurcharge } from "@bino-foundry/shared/currency";
 
-import { SUNGLASSES_COPY } from "../../copy";
+import { SUNGLASSES_COPY, SUNGLASSES_PRICE } from "../../copy";
 
 interface ExtrasStepPanelProps {
   extrasOptions: BuilderOptionEntry[];
@@ -41,8 +41,10 @@ export function ExtrasStepPanel({
               <Label htmlFor={`extras-option-${option.code}`} className="font-medium text-foreground">
                 {option.label}
               </Label>
-              <p className="text-xs text-muted-foreground">
-                {formatCurrencySurcharge(option.priceSurcharge, currencyCode)}
+              <p className="text-xs text-muted-foreground sm:text-sm">
+                <span className={SUNGLASSES_PRICE.surcharge}>
+                  {formatCurrencySurcharge(option.priceSurcharge, currencyCode)}
+                </span>
                 {option.description ? ` · ${option.description}` : ""}
               </p>
               {option.tooltipText ? (

@@ -36,3 +36,7 @@ export const smtpTestDto = z.object({
   fromName: z.string().trim().max(120).optional(),
   fromEmail: emailSchema.optional(),
 });
+
+export const smtpTemplateTestDto = smtpTestDto.extend({
+  templateType: z.enum(["connection", "verification", "password_reset", "notification"]),
+});

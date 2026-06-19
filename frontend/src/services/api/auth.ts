@@ -18,6 +18,8 @@ export interface LoginRegisterResponse {
   user: AuthenticatedUser;
   session: AuthSessionResponse | null;
   emailConfirmationRequired?: boolean;
+  emailSent?: boolean;
+  emailWarning?: string;
 }
 
 export type MeResponse = CurrentUserResponse;
@@ -75,7 +77,7 @@ export const authApi = {
   },
 
   resendVerification(email: string) {
-    return apiRequestData<{ ok: boolean; message: string }>("/auth/resend-verification", {
+    return apiRequestData<{ ok: boolean; message: string; emailSent?: boolean }>("/auth/resend-verification", {
       method: "POST",
       body: { email },
     });

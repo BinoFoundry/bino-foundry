@@ -24,6 +24,9 @@ function mapRenderViewRow(row: Record<string, unknown>): Record<string, unknown>
     plateUrl: row.plate_url,
     width: Number(row.image_width),
     height: Number(row.image_height),
+    originalPlateUrl: row.original_plate_url ?? null,
+    originalWidth: row.original_image_width != null ? Number(row.original_image_width) : null,
+    originalHeight: row.original_image_height != null ? Number(row.original_image_height) : null,
     clipConfig: row.clip_config ?? null,
     clipStatus: row.clip_status ?? row.mask_status ?? "draft",
     maskConfig: row.mask_config ?? null,
@@ -104,6 +107,9 @@ function normalizeRenderViews(
   plateUrl: string;
   width: number;
   height: number;
+  originalPlateUrl: string | null;
+  originalWidth: number | null;
+  originalHeight: number | null;
   clipConfig: unknown | null;
   clipStatus: "draft" | "ready";
   maskConfig: unknown | null;
@@ -116,6 +122,9 @@ function normalizeRenderViews(
     plateUrl: string;
     width: number;
     height: number;
+    originalPlateUrl: string | null;
+    originalWidth: number | null;
+    originalHeight: number | null;
     clipConfig: unknown | null;
     clipStatus: "draft" | "ready";
     maskConfig: unknown | null;
@@ -133,6 +142,9 @@ function normalizeRenderViews(
       plateUrl: v.plateUrl.trim(),
       width: Math.floor(v.width),
       height: Math.floor(v.height),
+      originalPlateUrl: v.originalPlateUrl?.trim() || null,
+      originalWidth: v.originalWidth != null ? Math.floor(v.originalWidth) : null,
+      originalHeight: v.originalHeight != null ? Math.floor(v.originalHeight) : null,
       clipConfig: v.clipConfig ?? null,
       clipStatus: v.clipStatus ?? "draft",
       maskConfig: v.maskConfig ?? null,
@@ -163,6 +175,9 @@ async function syncFrameRenderViews(
     plate_url: v.plateUrl,
     image_width: v.width,
     image_height: v.height,
+    original_plate_url: v.originalPlateUrl,
+    original_image_width: v.originalWidth,
+    original_image_height: v.originalHeight,
     clip_config: v.clipConfig,
     clip_status: v.clipStatus,
     mask_config: v.maskConfig,

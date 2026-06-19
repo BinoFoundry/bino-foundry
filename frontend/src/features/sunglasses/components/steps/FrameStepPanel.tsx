@@ -4,7 +4,7 @@ import type { FrameOption } from "@/lib/luxe-data";
 
 import { formatCurrency } from "@bino-foundry/shared/currency";
 
-import { SUNGLASSES_COPY } from "../../copy";
+import { SUNGLASSES_COPY, SUNGLASSES_PRICE } from "../../copy";
 import { getFrontPlateUrl } from "../../utils/frame-plates";
 
 interface FrameStepPanelProps {
@@ -23,7 +23,7 @@ function FrameCardThumbnail({ frame }: { frame: FrameOption }) {
         <img
           src={src}
           alt=""
-          className="max-h-full max-w-full object-contain p-1"
+          className="max-h-full max-w-full object-contain p-0.5"
           crossOrigin="anonymous"
         />
       </div>
@@ -61,7 +61,7 @@ export function FrameStepPanel({
       <div
         role="radiogroup"
         aria-label="Frame styles"
-        className="grid grid-cols-2 gap-3"
+        className="grid auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-3.5"
       >
         {frames.map((frame) => {
           const active = frame.id === selectedFrameId;
@@ -74,21 +74,21 @@ export function FrameStepPanel({
               aria-label={`${frame.name}, ${formatCurrency(frame.price, currencyCode)}`}
               onClick={() => onSelectFrame(frame.id)}
               className={cn(
-                "flex min-w-0 flex-col rounded-xl border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex h-full min-w-0 flex-col rounded-xl border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-3",
                 active
                   ? "state-selected-subtle"
                   : "border-border bg-card state-hoverable",
               )}
             >
               <FrameCardThumbnail frame={frame} />
-              <div className="mt-2 min-w-0 space-y-0.5">
+              <div className="mt-2 flex min-h-0 flex-1 flex-col justify-end space-y-0.5">
                 <p className="type-small truncate font-medium text-foreground sm:text-body">{frame.name}</p>
                 {frame.description ? (
                   <p className="hidden line-clamp-2 text-[10px] text-muted-foreground sm:block">
                     {frame.description}
                   </p>
                 ) : null}
-                <p className="type-price text-label text-primary sm:text-small">
+                <p className={SUNGLASSES_PRICE.item}>
                   {formatCurrency(frame.price, currencyCode)}
                 </p>
               </div>

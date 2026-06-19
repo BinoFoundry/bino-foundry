@@ -1,4 +1,4 @@
-import { CircleDot, Gem, Glasses, Image, Ruler, Settings, Settings2, Sun, Users } from "lucide-react";
+import { CircleDot, Gem, Glasses, Ruler, Settings, Settings2, Sun, Users } from "lucide-react";
 
 import { checkPermission } from "@/lib/permissions";
 import { useAuth } from "@/state/auth/AuthProvider";
@@ -25,7 +25,6 @@ const quickLinks: {
   { section: "wrist-sizes", label: "Wrist sizes", description: "Bracelet capacity targets", icon: CircleDot },
   { section: "general-settings", label: "General settings", description: "Site-wide currency", icon: Settings },
   { section: "sunglasses-config", label: "Sunglasses config", description: "Lens tints and add-ons", icon: Sun },
-  { section: "media", label: "Media", description: "Staging uploads", icon: Image },
 ];
 
 export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
@@ -43,7 +42,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
   return (
     <AdminPage>
       <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
-        Manage catalogue products, sunglasses builder pricing, and media assets. Mutations require{" "}
+        Manage catalogue products and sunglasses builder pricing. Mutations require{" "}
         <code className="rounded bg-muted px-1 py-0.5 text-xs">VITE_ADMIN_API_KEY</code> when calling
         the API.
       </p>

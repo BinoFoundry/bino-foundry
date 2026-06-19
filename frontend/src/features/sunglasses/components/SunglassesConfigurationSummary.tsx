@@ -10,7 +10,7 @@ import type { BuilderOptionEntry } from "@/types/sunglasses-catalog";
 import { formatCurrency } from "@bino-foundry/shared/currency";
 import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
 
-import { SUNGLASSES_COPY } from "../copy";
+import { SUNGLASSES_COPY, SUNGLASSES_PRICE } from "../copy";
 
 const EMPTY = "—";
 
@@ -113,7 +113,7 @@ export function SunglassesConfigurationSummary({
     <section className={cn("space-y-4", className)}>
       <div className="flex items-baseline justify-between gap-2 px-1">
         <span className="type-body text-foreground">Estimated Total</span>
-        <span className="type-price text-2xl text-foreground">
+        <span className={SUNGLASSES_PRICE.total}>
           {formatCurrency(totalPrice, currencyCode)}
         </span>
       </div>

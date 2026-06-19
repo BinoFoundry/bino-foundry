@@ -15,6 +15,9 @@ interface CompositorViewportProps {
   aspectRatio?: CompositorAspectRatio;
   label?: string;
   className?: string;
+  /** `fill` — expand to parent height (dual preview stack). `aspect` — fixed ratio (default). */
+  variant?: "aspect" | "fill";
+  compactLabel?: boolean;
 }
 
 /**
@@ -25,18 +28,32 @@ export function CompositorViewport({
   aspectRatio = "16/10",
   label,
   className,
+  variant = "aspect",
+  compactLabel = false,
 }: CompositorViewportProps) {
   return (
     <div
       className={cn(
-        "compositor-surface relative w-full overflow-hidden rounded-[2rem]",
-        aspectClass[aspectRatio],
+        "relative w-full overflow-hidden",
+        variant === "fill"
+          ? "h-full min-h-0 rounded-xl border border-border/30 bg-card/10"
+          : cn("compositor-surface rounded-[2rem]", aspectClass[aspectRatio]),
         className,
       )}
     >
       {label && (
-        <div className="absolute left-6 top-4 z-[60] sm:left-8 sm:top-6">
-          <span className="type-label rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-muted-foreground backdrop-blur">
+        <div
+          className={cn(
+            "absolute z-[60]",
+            compactLabel ? "left-3 top-2.5" : "left-6 top-4 sm:left-8 sm:top-6",
+          )}
+        >
+          <span
+            className={cn(
+              "type-label rounded-full border border-border/70 bg-card/85 text-muted-foreground backdrop-blur",
+              compactLabel ? "px-2.5 py-0.5 text-[10px] tracking-wide" : "px-3 py-1.5",
+            )}
+          >
             {label}
           </span>
         </div>

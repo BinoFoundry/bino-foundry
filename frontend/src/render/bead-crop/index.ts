@@ -1,4 +1,4 @@
-export { loadImage } from "./image-loader";
+export { loadImage, loadImageForProcessing } from "./image-loader";
 export {
   detectBeadOutline,
   detectBeadOutlineFromRgba,

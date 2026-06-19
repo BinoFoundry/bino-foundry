@@ -29,7 +29,7 @@ export function SunglassesBuilderLayout({
       ) : null}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)]">
-        <section className="surface-canvas relative flex min-h-[min(50vh,28rem)] flex-col overflow-hidden lg:min-h-0">
+        <section className="surface-canvas relative flex min-h-[min(52vh,30rem)] flex-col overflow-hidden lg:min-h-0">
           {preview}
         </section>
 

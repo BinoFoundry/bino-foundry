@@ -2,8 +2,8 @@ import { useSearchParams } from "react-router-dom";
 
 import { AdminLayout } from "./components/AdminLayout";
 import { AdminMobileNav } from "./components/AdminMobileNav";
+import { AdminSectionRefreshProvider } from "./context/AdminSectionRefreshContext";
 import { AdminDashboardPage } from "./modules/dashboard/AdminDashboardPage";
-import { MediaManagerPage } from "./modules/media/MediaManagerPage";
 import { GeneralSettingsPage } from "./modules/settings/GeneralSettingsPage";
 import { SunglassesConfigPage } from "./modules/pricing/SunglassesConfigPage";
 import { BeadsAdminPage } from "./modules/products/BeadsAdminPage";
@@ -24,7 +24,6 @@ const ADMIN_SECTIONS = new Set<AdminSection>([
   "wrist-sizes",
   "general-settings",
   "sunglasses-config",
-  "media",
 ]);
 
 function parseAdminSection(raw: string | null): AdminSection {
@@ -60,8 +59,6 @@ function AdminSectionView({
       return <GeneralSettingsPage />;
     case "sunglasses-config":
       return <SunglassesConfigPage />;
-    case "media":
-      return <MediaManagerPage />;
     default:
       return <AdminDashboardPage onNavigate={onNavigate} />;
   }
@@ -76,10 +73,12 @@ export function AdminApp() {
   };
 
   return (
-    <AdminLayout section={section} onSectionChange={handleSectionChange}>
-      <AdminMobileNav section={section} onSectionChange={handleSectionChange} />
-      <AdminSectionView section={section} onNavigate={handleSectionChange} />
-    </AdminLayout>
+    <AdminSectionRefreshProvider>
+      <AdminLayout section={section} onSectionChange={handleSectionChange}>
+        <AdminMobileNav section={section} onSectionChange={handleSectionChange} />
+        <AdminSectionView section={section} onNavigate={handleSectionChange} />
+      </AdminLayout>
+    </AdminSectionRefreshProvider>
   );
 }
 

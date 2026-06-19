@@ -93,13 +93,15 @@ export class UploadService {
 
     const contentType = file.mimetype?.trim() ? file.mimetype : "application/octet-stream";
 
-    return putCatalogObject({
+    const stored = await putCatalogObject({
       bucket: "uploads",
       objectKey,
       body: file.buffer,
       contentType,
       upsert: false,
     });
+
+    return stored;
   }
 }
 

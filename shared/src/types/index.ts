@@ -21,3 +21,4 @@ export * from "./rbac.js";
 export * from "./user-management.js";
 export * from "./site-settings.js";
 export * from "./smtp-settings.js";
+export * from "./email-log.js";

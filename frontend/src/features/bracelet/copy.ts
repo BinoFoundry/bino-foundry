@@ -5,6 +5,7 @@ export const BRACELET_COPY = {
   wristStepTitle: "Choose Your Wrist Size",
   dropReplaceHint: "Release to replace this bead",
   dropInsertHint: "Release to add here",
+  dropCharmInsertHint: "Release to attach charm to the strand",
   dropReorderHint: "Release to place here",
   wristStepSubtitle:
     "Select your wrist measurement. Your bracelet is crafted to fit — the studio adapts to your size.",

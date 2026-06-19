@@ -49,7 +49,9 @@ import type { LibraryDragPayload } from "@/components/BeadLibrary";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { BEAD_LIBRARY_DRAG_TYPE, isLibraryDragEvent } from "@/features/bracelet/interaction";
 import {
-  beadTypeRotationOffsetDeg,
+  applyRingAlignOffset,
+  beadRingAlignOffsetPx,
+  beadStrandRotationDeg,
   computeStrandPathLayout,
   pointerAngleOnCanvas,
   STRAND_PATH_START_ANGLE,
@@ -389,14 +391,6 @@ const SortableCircularStrand = ({
   const placedCount = normalized.length;
   const isStrandEmpty = placedCount === 0;
 
-  /** Locks ring visual size after the first placed bead — compensates for elastic radius expansion. */
-  const stableRadiusRef = useRef<number | null>(null);
-  const layoutLockKeyRef = useRef("");
-
-  useEffect(() => {
-    if (isStrandEmpty) stableRadiusRef.current = null;
-  }, [isStrandEmpty]);
-
   useEffect(() => {
     if (placedCount < 2) {
       setReorderHintVisible(false);
@@ -421,12 +415,6 @@ const SortableCircularStrand = ({
     insertionAngles,
     effectiveCanvasSize,
   } = useMemo(() => {
-    const lockKey = `${wristSize}:${canvasSize}:${guideSizeMm}`;
-    if (layoutLockKeyRef.current !== lockKey) {
-      layoutLockKeyRef.current = lockKey;
-      stableRadiusRef.current = null;
-    }
-
     const center = canvasSize / 2;
 
     type StrandSlot = {
@@ -484,7 +472,8 @@ const SortableCircularStrand = ({
           scaleFactor,
         });
 
-        radius = resolved.radiusPx;
+        // Wrist size alone sets visual ring size — bead count must not expand the strand.
+        radius = wristRadius;
         const ringCircumferencePx = 2 * Math.PI * radius;
         const elastic = computeElasticBeadLayout(
           resolved.beadArcPx,
@@ -502,8 +491,6 @@ const SortableCircularStrand = ({
           radius,
           startAngle: pathStartAngle,
           minGapPx: resolved.pairGapPx,
-          rotationOffsetByIndex: (index) =>
-            beadTypeRotationOffsetDeg(normalized[index]?.bead.beadTypeSlug),
         });
 
         layoutSectors = pathLayout.map((path) => ({
@@ -516,13 +503,16 @@ const SortableCircularStrand = ({
           const beadSize = placedBeadSizeMm(placed);
           const slotDim = prelimDims[i]!;
           const path = pathLayout[i]!;
+          const slug = placed.bead.beadTypeSlug;
+          const alignOffset = beadRingAlignOffsetPx(slug, slotDim);
+          const aligned = applyRingAlignOffset(path.x, path.y, path.angle, alignOffset);
           return {
             index: i,
             angle: path.angle,
             arcSpan: path.arcSpan,
-            rotationDeg: path.rotationDeg,
-            x: path.x,
-            y: path.y,
+            rotationDeg: beadStrandRotationDeg(path.angle, slug),
+            x: aligned.x,
+            y: aligned.y,
             placed,
             beadSize,
             slotDim,
@@ -571,31 +561,11 @@ const SortableCircularStrand = ({
       slots: laidOut.slotsWithPosition,
     });
 
-    if (!isStrandEmpty && stableRadiusRef.current === null) {
-      stableRadiusRef.current = laidOut.radius;
-    }
-
-    let displayRadius = laidOut.radius;
-    let displaySlots = shifted.slots;
-    if (
-      !isStrandEmpty &&
-      stableRadiusRef.current !== null &&
-      laidOut.radius > stableRadiusRef.current
-    ) {
-      const displayScale = stableRadiusRef.current / laidOut.radius;
-      displayRadius = stableRadiusRef.current;
-      displaySlots = shifted.slots.map((slot) => ({
-        ...slot,
-        x: targetCenter + (slot.x - targetCenter) * displayScale,
-        y: targetCenter + (slot.y - targetCenter) * displayScale,
-      }));
-    }
-
     return {
-      slotsWithPosition: displaySlots,
+      slotsWithPosition: shifted.slots,
       scaleFactor: laidOut.scaleFactor,
       center: shifted.ringCenter,
-      radius: displayRadius,
+      radius: laidOut.radius,
       layoutSectors: laidOut.layoutSectors,
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
@@ -960,7 +930,9 @@ const SortableCircularStrand = ({
             <p className="text-muted-foreground">
               {libraryDropHover.mode === "replace"
                 ? BRACELET_COPY.dropReplaceHint
-                : BRACELET_COPY.dropInsertHint}
+                : libraryDragPreview?.bead?.beadTypeSlug === "charm"
+                  ? BRACELET_COPY.dropCharmInsertHint
+                  : BRACELET_COPY.dropInsertHint}
             </p>
           ) : reorderHintVisible && placedCount >= 2 ? (
             <div className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-full border border-border/50 bg-muted/20 px-3 py-1">
