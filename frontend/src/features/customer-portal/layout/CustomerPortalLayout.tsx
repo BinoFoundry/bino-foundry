@@ -2,9 +2,9 @@ import { type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
-import { GlobalHeader } from "@/layouts/GlobalHeader";
 import { useAuth } from "@/state/auth/AuthProvider";
 
+import { EmailVerificationNotice } from "../components/EmailVerificationNotice";
 import { CUSTOMER_NAV, navItemForPath } from "../navigation";
 
 interface CustomerPortalLayoutProps {
@@ -25,10 +25,7 @@ export function CustomerPortalLayout({ children }: CustomerPortalLayoutProps) {
   );
 
   return (
-    <div className="surface-page min-h-[100dvh]">
-      <GlobalHeader />
-
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:py-8">
+    <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:py-8">
         <aside className="hidden space-y-6 lg:sticky lg:top-6 lg:block lg:self-start">
           <div className="portal-card p-4">
             <p className="type-label text-muted-foreground">Signed in as</p>
@@ -88,9 +85,9 @@ export function CustomerPortalLayout({ children }: CustomerPortalLayoutProps) {
             <p className="type-label text-muted-foreground">{active.description ?? "Client portal"}</p>
             <h2 className="type-h2 mt-1 text-foreground">{active.label}</h2>
           </div>
+          <EmailVerificationNotice />
           {children}
         </main>
       </div>
-    </div>
   );
 }

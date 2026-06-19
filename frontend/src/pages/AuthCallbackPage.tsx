@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { postAuthLandingPath } from "@/lib/auth-landing";
 import { authApi } from "@/services/api/auth";
 import { isApiError } from "@/services/api/errors";
 import { saveAuthSession } from "@/services/auth/session";
+
+const VERIFICATION_REDIRECT_MS = 2500;
 
 function parseCallbackParams(searchParams: URLSearchParams): {
   token: string | null;
@@ -28,8 +30,11 @@ export default function AuthCallbackPage() {
   const tokens = useMemo(() => parseCallbackParams(searchParams), [searchParams]);
   const [mode, setMode] = useState<"loading" | "reset" | "verified" | "error">("loading");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [verifiedUser, setVerifiedUser] = useState<Awaited<ReturnType<typeof authApi.confirmEmail>>["user"]>(null);
 
   useEffect(() => {
     if (!tokens.token) {
@@ -56,11 +61,9 @@ export default function AuthCallbackPage() {
             user: response.user,
           });
         }
+        setVerifiedUser(response.user);
         setMode("verified");
-        toast.success(response.message ?? "Email verified.");
-        if (response.user) {
-          navigate(postAuthLandingPath(response.user));
-        }
+        toast.success("Your email has been verified successfully.");
       } catch (err) {
         if (!cancelled) {
           setMode("error");
@@ -74,9 +77,27 @@ export default function AuthCallbackPage() {
     };
   }, [tokens.token, tokens.type]);
 
+  useEffect(() => {
+    if (mode !== "verified" || !verifiedUser) return;
+
+    const destination = postAuthLandingPath(verifiedUser);
+    const timer = window.setTimeout(() => {
+      navigate(destination, { replace: true, state: { emailVerified: true } });
+    }, VERIFICATION_REDIRECT_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [mode, navigate, verifiedUser]);
+
   const handleResetPassword = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!tokens.token) return;
+
+    setPasswordError("");
+    if (password !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     try {
@@ -113,16 +134,16 @@ export default function AuthCallbackPage() {
 
         {mode === "verified" ? (
           <>
+            <CheckCircle2 className="h-10 w-10 text-success" aria-hidden />
             <h1 className="type-h2">Email verified</h1>
-            <p className="text-sm text-muted-foreground">Your account is ready. Continue designing or view saved work.</p>
-            <div className="flex gap-2">
-              <Button type="button" asChild>
-                <Link to="/account">My account</Link>
-              </Button>
-              <Button type="button" variant="secondary" asChild>
-                <Link to="/bracelet">Bracelet builder</Link>
-              </Button>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Your email has been verified successfully. Taking you to your dashboard…
+            </p>
+            <Button type="button" asChild variant="secondary" size="sm">
+              <Link to={verifiedUser ? postAuthLandingPath(verifiedUser) : "/account"}>
+                Go to dashboard now
+              </Link>
+            </Button>
           </>
         ) : null}
 
@@ -138,9 +159,29 @@ export default function AuthCallbackPage() {
                   minLength={8}
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (passwordError) setPasswordError("");
+                  }}
+                  autoComplete="new-password"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm your new password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  minLength={8}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (passwordError) setPasswordError("");
+                  }}
+                  autoComplete="new-password"
+                />
+              </div>
+              {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? "Updating…" : "Update password"}

@@ -20,8 +20,12 @@ import { useAuth } from "@/state/auth/AuthProvider";
 
 type AuthView = "sign-in" | "sign-up" | "forgot-password";
 
+function isUnverifiedLoginError(message: string): boolean {
+  return message.toLowerCase().includes("verify your email");
+}
+
 export function AuthModal() {
-  const { authModalOpen, authModalMode, closeAuth, signIn, signUp } = useAuth();
+  const { authModalOpen, authModalMode, closeAuth, signIn, signUp, user } = useAuth();
   const [view, setView] = useState<AuthView>(authModalMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +35,7 @@ export function AuthModal() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [resending, setResending] = useState(false);
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
 
   useEffect(() => {
     if (authModalOpen) {
@@ -38,12 +43,16 @@ export function AuthModal() {
       setError("");
       setDisplayNameError("");
       setInfo("");
+      setNeedsEmailVerification(false);
     }
   }, [authModalOpen, authModalMode]);
 
   const handleOpenChange = (open: boolean) => {
     if (!open) closeAuth();
   };
+
+  const showVerificationNotice =
+    view === "sign-in" && needsEmailVerification && !user?.emailVerified;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -68,16 +77,41 @@ export function AuthModal() {
           setDisplayNameError(nameError);
           return;
         }
-        await signUp(email.trim(), password, displayName.trim());
+        const result = await signUp(email.trim(), password, displayName.trim());
+        if (result.needsEmailVerification) {
+          setNeedsEmailVerification(true);
+          setView("sign-in");
+        }
       }
     } catch (err) {
       const message = isApiError(err) ? err.message : "Authentication failed";
       setError(message);
-      if (view === "sign-in" && message.toLowerCase().includes("verify your email")) {
-        setInfo("Need a new link? Use resend verification below.");
+      if (view === "sign-in" && isUnverifiedLoginError(message)) {
+        setNeedsEmailVerification(true);
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResending(true);
+    setError("");
+    setInfo("");
+    try {
+      const response = await authApi.resendVerification(email.trim());
+      if (response.emailSent === false) {
+        setError(response.message);
+        toast.error(response.message);
+      } else {
+        setInfo(response.message);
+        toast.message(response.message);
+      }
+    } catch (err) {
+      const message = isApiError(err) ? err.message : "Could not resend verification email";
+      setError(message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -129,6 +163,25 @@ export function AuthModal() {
             </TabsList>
 
             <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-4">
+              {showVerificationNotice ? (
+                <div
+                  className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-sm"
+                  role="status"
+                >
+                  <p className="font-medium text-foreground">Your email address has not been verified.</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3 w-full"
+                    disabled={resending || !email.trim()}
+                    onClick={() => void handleResendVerification()}
+                  >
+                    {resending ? "Sending…" : "Resend verification email"}
+                  </Button>
+                </div>
+              ) : null}
+
               {view === "sign-up" ? (
                 <div className="space-y-2">
                   <Label htmlFor="auth-name">
@@ -188,38 +241,6 @@ export function AuthModal() {
 
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
               {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
-
-              {view === "sign-in" ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-xs"
-                  disabled={resending || !email.trim()}
-                  onClick={async () => {
-                    setResending(true);
-                    setError("");
-                    setInfo("");
-                    try {
-                      const response = await authApi.resendVerification(email.trim());
-                      if (response.emailSent === false) {
-                        setError(response.message);
-                        toast.error(response.message);
-                      } else {
-                        setInfo(response.message);
-                        toast.message(response.message);
-                      }
-                    } catch (err) {
-                      const message = isApiError(err) ? err.message : "Could not resend verification email";
-                      setError(message);
-                    } finally {
-                      setResending(false);
-                    }
-                  }}
-                >
-                  {resending ? "Sending…" : "Resend verification email"}
-                </Button>
-              ) : null}
 
               <TabsContent value="sign-in" className="mt-0">
                 <Button type="submit" className="w-full" disabled={submitting}>

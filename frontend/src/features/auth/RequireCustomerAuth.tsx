@@ -17,7 +17,7 @@ export function RequireCustomerAuth({ children }: RequireCustomerAuthProps) {
 
   if (!user) {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-6 text-center">
+      <div className="mx-auto flex max-w-lg flex-col items-center justify-center gap-4 px-6 py-16 text-center">
         <h1 className="type-h2">Your portal</h1>
         <p className="max-w-sm text-sm text-muted-foreground">
           Sign in to view saved designs, track orders, and manage your account.

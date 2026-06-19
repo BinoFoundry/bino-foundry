@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import type { Permission, UserRole } from "@bino-foundry/shared/types";
@@ -46,7 +46,7 @@ interface AuthContextValue {
   openAuth: (options?: { mode?: "sign-in" | "sign-up"; pendingSave?: PendingDesignSave }) => void;
   closeAuth: () => void;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{ needsEmailVerification: boolean }>;
   signOut: () => Promise<void>;
   saveDesign: (request: SaveDesignRequest, options?: { designId?: string }) => Promise<SavedDesignSummary | null>;
 }
@@ -67,6 +67,7 @@ function sessionFromLoginResponse(
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<AuthSession | null>(() => loadAuthSession());
   const [isLoading, setIsLoading] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -211,15 +212,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           toast.message("Account created. Check your email to confirm, then sign in.");
         }
         setAuthModalMode("sign-in");
-        return;
+        return { needsEmailVerification: true };
       }
       await completeAuth(response);
+      return { needsEmailVerification: false };
     },
     [completeAuth],
   );
 
   const signOut = useCallback(async () => {
     const stored = loadAuthSession();
+    const wasOnAccount = location.pathname.startsWith("/account");
     try {
       await authApi.logout(stored?.refreshToken);
     } catch {
@@ -228,7 +231,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAuthSession();
     setSession(null);
     toast.message("Signed out.");
-  }, []);
+    if (wasOnAccount) {
+      navigate("/bracelet", { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   const saveDesign = useCallback(
     async (request: SaveDesignRequest, options?: { designId?: string }) => {
