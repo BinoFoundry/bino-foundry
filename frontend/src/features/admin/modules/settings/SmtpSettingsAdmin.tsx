@@ -144,6 +144,16 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
 
   const handleSave = async () => {
     setValidationError(null);
+
+    if (stored?.credentialsNeedResave && stored.credentialStorage.username === "invalid") {
+      if (!form.username.trim() || !form.password) {
+        setValidationError(
+          "Stored SMTP credentials could not be decrypted. Enter both username and password, then save.",
+        );
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const updated = await adminSettingsApi.updateSmtp(buildUpdatePayload());
@@ -182,6 +192,30 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
           Credentials are encrypted before storage.
         </p>
       </div>
+
+      {stored?.credentialWarning ? (
+        <div
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-sm text-foreground"
+          role="status"
+        >
+          <p className="font-medium">Credential storage notice</p>
+          <p className="mt-1 text-muted-foreground">{stored.credentialWarning}</p>
+          {stored.credentialDecryptError ? (
+            <p className="mt-1 font-mono text-xs text-muted-foreground">{stored.credentialDecryptError}</p>
+          ) : null}
+          {stored.encryptionKeyFingerprint ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Active encryption key: {stored.encryptionKeyFingerprint}
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs text-muted-foreground">
+            Username: {stored.credentialStorage.username} · Password: {stored.credentialStorage.password}
+            {stored.credentialsNeedResave && stored.credentialStorage.username !== "invalid"
+              ? " · Save once to re-encrypt with the current key"
+              : null}
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-background/60 px-3 py-3">
         <div>
@@ -247,8 +281,10 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
             placeholder={usernamePlaceholder}
             autoComplete="off"
           />
-          {stored?.usernameMasked ? (
+          {stored?.usernameMasked && stored.credentialStorage.username !== "invalid" ? (
             <p className="text-xs text-muted-foreground">Saved as {stored.usernameMasked}. Leave blank to keep.</p>
+          ) : stored?.credentialStorage.username === "invalid" ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">Re-enter username — stored value cannot be decrypted.</p>
           ) : null}
         </div>
 
@@ -262,8 +298,10 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
             placeholder={passwordPlaceholder}
             autoComplete="new-password"
           />
-          {stored?.hasPassword ? (
+          {stored?.hasPassword && stored.credentialStorage.password !== "invalid" ? (
             <p className="text-xs text-muted-foreground">Leave blank to keep the existing password.</p>
+          ) : stored?.credentialStorage.password === "invalid" ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">Re-enter password — stored value cannot be decrypted.</p>
           ) : null}
         </div>
 

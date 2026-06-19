@@ -30,7 +30,12 @@ export function createErrorHandler(logger: Logger = console): ErrorRequestHandle
     };
 
     if (statusCode >= 500) {
-      logger.error(`[${req.method} ${req.path}] request=${req.requestId}`, error);
+      logger.error(`[${req.method} ${req.path}] request=${req.requestId}`, {
+        message: httpErr.message,
+        code: httpErr.code,
+        stack: error instanceof Error ? error.stack : undefined,
+        details: httpErr.details ?? null,
+      });
     }
 
     res.status(statusCode).json(payload);

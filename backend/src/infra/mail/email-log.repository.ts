@@ -25,7 +25,7 @@ export interface CreateEmailLogInput {
   metadata?: Record<string, unknown>;
 }
 
-export async function createEmailLog(input: CreateEmailLogInput): Promise<EmailLogRow> {
+export async function createEmailLog(input: CreateEmailLogInput): Promise<EmailLogRow | null> {
   const supabase = getSupabaseServiceRole();
   const { data, error } = await supabase
     .from("email_logs")
@@ -45,6 +45,18 @@ export async function createEmailLog(input: CreateEmailLogInput): Promise<EmailL
   return data as EmailLogRow;
 }
 
+/** Best-effort logging — never fail the caller when the audit table is unavailable. */
+export async function safeCreateEmailLog(input: CreateEmailLogInput): Promise<void> {
+  try {
+    await createEmailLog(input);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[mail:log] Could not write email_logs row (${input.emailType} → ${input.recipient}): ${message}`,
+    );
+  }
+}
+
 export async function fetchLatestByStatus(status: EmailDeliveryStatus): Promise<EmailLogRow | null> {
   const supabase = getSupabaseServiceRole();
   const { data, error } = await supabase
@@ -55,7 +67,10 @@ export async function fetchLatestByStatus(status: EmailDeliveryStatus): Promise<
     .limit(1)
     .maybeSingle();
 
-  assertNoDbError(error);
+  if (error) {
+    console.warn(`[mail:log] Could not read email_logs: ${error.message}`);
+    return null;
+  }
   return (data as EmailLogRow | null) ?? null;
 }
 
@@ -68,7 +83,10 @@ export async function fetchRecentFailures(limit = 10): Promise<EmailLogRow[]> {
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  assertNoDbError(error);
+  if (error) {
+    console.warn(`[mail:log] Could not read email_logs failures: ${error.message}`);
+    return [];
+  }
   return (data as EmailLogRow[]) ?? [];
 }
 
@@ -85,7 +103,10 @@ export async function countByTypeAndStatus(
     .eq("status", status)
     .gte("created_at", sinceIso);
 
-  assertNoDbError(error);
+  if (error) {
+    console.warn(`[mail:log] Could not count email_logs: ${error.message}`);
+    return 0;
+  }
   return count ?? 0;
 }
 
@@ -97,6 +118,9 @@ export async function countByStatusSince(status: EmailDeliveryStatus, sinceIso: 
     .eq("status", status)
     .gte("created_at", sinceIso);
 
-  assertNoDbError(error);
+  if (error) {
+    console.warn(`[mail:log] Could not count email_logs: ${error.message}`);
+    return 0;
+  }
   return count ?? 0;
 }

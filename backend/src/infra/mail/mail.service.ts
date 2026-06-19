@@ -1,8 +1,9 @@
 import type { PlatformEmailType } from "@bino-foundry/shared/types";
 
+import { HttpError } from "../../lib/errors.js";
 import { smtpSettingsService } from "../../modules/settings/smtp.service.js";
 import { classifySmtpError, sendSmtpMail, type ResolvedSmtpConfig } from "./mail-transport.js";
-import { createEmailLog } from "./email-log.repository.js";
+import { safeCreateEmailLog } from "./email-log.repository.js";
 
 export interface PlatformMailMessage {
   to: string;
@@ -50,7 +51,7 @@ export async function sendPlatformMailWithConfig(
       text: options.text,
     });
 
-    await createEmailLog({
+    await safeCreateEmailLog({
       emailType: options.emailType,
       recipient: options.to,
       subject: options.subject,
@@ -72,11 +73,13 @@ export async function sendPlatformMailWithConfig(
       smtpResponse: delivery.response,
     };
   } catch (err) {
+    if (err instanceof HttpError) throw err;
+
     const friendly = classifySmtpError(err);
     const technical =
       err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown SMTP error";
 
-    await createEmailLog({
+    await safeCreateEmailLog({
       emailType: options.emailType,
       recipient: options.to,
       subject: options.subject,
@@ -95,64 +98,19 @@ export async function sendPlatformMailWithConfig(
  * All auth and transactional features must call this rather than nodemailer directly.
  */
 export async function sendPlatformMail(options: SendPlatformMailOptions): Promise<SendPlatformMailResult> {
-  const config = await smtpSettingsService.getActiveMailConfig();
-  if (!config) {
-    const error = "SMTP is not configured or not active";
-    await createEmailLog({
+  const resolved = await smtpSettingsService.resolveActiveMailConfig();
+  if (!resolved.ok) {
+    await safeCreateEmailLog({
       emailType: options.emailType,
       recipient: options.to,
       subject: options.subject,
       status: "failed",
-      failureReason: error,
-      metadata: options.metadata,
+      failureReason: resolved.message,
+      metadata: { ...options.metadata, smtpReason: resolved.reason },
     });
-    logMailEvent("error", options.emailType, options.to, error);
-    return { success: false, error };
+    logMailEvent("error", options.emailType, options.to, resolved.message);
+    return { success: false, error: resolved.message };
   }
 
-  try {
-    const delivery = await sendSmtpMail(config, {
-      to: options.to,
-      subject: options.subject,
-      text: options.text,
-    });
-
-    await createEmailLog({
-      emailType: options.emailType,
-      recipient: options.to,
-      subject: options.subject,
-      status: "sent",
-      smtpResponse: delivery.response ?? delivery.messageId ?? "accepted",
-      metadata: options.metadata,
-    });
-
-    logMailEvent(
-      "info",
-      options.emailType,
-      options.to,
-      delivery.response ?? delivery.messageId ?? "accepted",
-    );
-
-    return {
-      success: true,
-      messageId: delivery.messageId,
-      smtpResponse: delivery.response,
-    };
-  } catch (err) {
-    const friendly = classifySmtpError(err);
-    const technical =
-      err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown SMTP error";
-
-    await createEmailLog({
-      emailType: options.emailType,
-      recipient: options.to,
-      subject: options.subject,
-      status: "failed",
-      failureReason: technical,
-      metadata: { ...options.metadata, friendlyError: friendly },
-    });
-
-    logMailEvent("error", options.emailType, options.to, `${friendly} (${technical})`);
-    return { success: false, error: friendly };
-  }
+  return sendPlatformMailWithConfig(resolved.config, options);
 }

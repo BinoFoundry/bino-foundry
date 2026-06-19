@@ -25,10 +25,18 @@ export interface EmailDeliveryStats {
   failed: number;
 }
 
+import type { SmtpCredentialStorage } from "./smtp-settings.js";
+
 export interface EmailDiagnostics {
   smtpActive: boolean;
   smtpHost: string | null;
   smtpFromEmail: string | null;
+  credentialStorage: {
+    username: SmtpCredentialStorage;
+    password: SmtpCredentialStorage;
+  };
+  credentialsNeedResave: boolean;
+  credentialWarning: string | null;
   lastEmailSent: EmailLogEntry | null;
   lastEmailFailure: EmailLogEntry | null;
   recentFailures: EmailLogEntry[];

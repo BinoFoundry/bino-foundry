@@ -23,7 +23,22 @@ export interface SmtpSettingsPublic {
   fromName: string;
   fromEmail: string;
   updatedAt: string | null;
+  /** How username/password are stored in the database. */
+  credentialStorage: {
+    username: SmtpCredentialStorage;
+    password: SmtpCredentialStorage;
+  };
+  /** True when plaintext legacy values or invalid ciphertext need admin re-save. */
+  credentialsNeedResave: boolean;
+  /** Human-readable hint when credentialsNeedResave is true. */
+  credentialWarning: string | null;
+  /** Fingerprint of the active encryption key (safe to display). */
+  encryptionKeyFingerprint?: string | null;
+  /** Decrypt failure detail when credential storage is invalid. */
+  credentialDecryptError?: string | null;
 }
+
+export type SmtpCredentialStorage = "encrypted" | "plaintext" | "missing" | "invalid";
 
 export interface SmtpSettingsUpdate {
   isActive: boolean;

@@ -110,6 +110,18 @@ export function EmailDiagnosticsAdmin({ onRegisterReload }: { onRegisterReload?:
             {data.stats.passwordReset.sent}/{data.stats.passwordReset.failed}
           </p>
         </div>
+
+        <div className="rounded-lg border border-border/60 bg-background/60 p-3 sm:col-span-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credential storage</p>
+          <p className="mt-1 text-sm text-foreground">
+            Username: {data.credentialStorage.username} · Password: {data.credentialStorage.password}
+          </p>
+          {data.credentialsNeedResave && data.credentialWarning ? (
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">{data.credentialWarning}</p>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">Encrypted at rest</p>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
