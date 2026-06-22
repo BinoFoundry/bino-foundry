@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mmToBasePx } from "./strand-bead";
+import { mmToBasePx, getPlacedBeadImageFilter } from "./strand-bead";
 
 describe("mmToBasePx integration", () => {
   const sf = 1;
@@ -11,5 +11,9 @@ describe("mmToBasePx integration", () => {
     for (let i = 1; i < px.length; i++) {
       expect(px[i]).toBeGreaterThan(px[i - 1]);
     }
+  });
+
+  it("does not apply drop-shadow filters on placed beads", () => {
+    expect(getPlacedBeadImageFilter()).toBeUndefined();
   });
 });

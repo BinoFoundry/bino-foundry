@@ -66,11 +66,11 @@ export function BeadCropEditor({
       if (!options?.silent) setExportStatus("");
       try {
         const img = await loadImage(originalUrl);
-        const { points, confidence } = detectBeadOutline(img);
+        const { points, confidence, detection } = detectBeadOutline(img);
         if (points.length < 3) {
           if (!options?.silent) {
             setExportStatus(
-              "Could not detect bead — use a single bead on a plain white/light background, then try again.",
+              "Could not detect bead silhouette — use a single bead on a plain white/light background, then try again.",
             );
           }
           return false;
@@ -81,7 +81,18 @@ export function BeadCropEditor({
           img.naturalHeight,
           originalUrl,
           points,
-          { scale: initialCropRef.current?.scale ?? 1 },
+          {
+            scale: initialCropRef.current?.scale ?? 1,
+            detection: detection
+              ? {
+                  autoDetected: true,
+                  confidence,
+                  contourPointCount: detection.contourPointCount,
+                  pathPointCount: detection.pathPointCount,
+                  curvedSegmentCount: detection.curvedSegmentCount,
+                }
+              : undefined,
+          },
         );
         draftRef.current = config;
         setPathReady(isBeadCropConfigValid(config));
@@ -90,7 +101,10 @@ export function BeadCropEditor({
 
         const confidenceLabel =
           confidence >= 0.75 ? "good" : confidence >= 0.5 ? "fair" : "low";
-        const message = `Auto-detected outline (${confidenceLabel} confidence) — refine the path if needed, then save.`;
+        const detail = detection
+          ? `${detection.pathPointCount} path points (${detection.curvedSegmentCount} curved) from ${detection.contourPointCount} contour samples`
+          : `${points.length} path points`;
+        const message = `Silhouette detected (${confidenceLabel} confidence, ${detail}) — refine if needed, then save.`;
         if (!options?.silent || confidence >= 0.5) {
           setExportStatus(message);
         }
@@ -134,13 +148,39 @@ export function BeadCropEditor({
 
   const renderPreview = useCallback((lenses: LensPolygon[], imgW: number, imgH: number, thumb: HTMLCanvasElement) => {
     if (!isBeadCropEditorValid(lenses)) return;
-    const mask = pathsToMaskCanvas(imgW, imgH, lenses);
     const ctx = thumb.getContext("2d");
     if (!ctx) return;
     const scale = Math.min(thumb.width / imgW, thumb.height / imgH);
-    ctx.fillStyle = "#fff";
+    const drawW = imgW * scale;
+    const drawH = imgH * scale;
+
+    ctx.fillStyle = "#f4f4f5";
     ctx.fillRect(0, 0, thumb.width, thumb.height);
-    ctx.drawImage(mask, 0, 0, imgW, imgH, 0, 0, imgW * scale, imgH * scale);
+
+    const mask = pathsToMaskCanvas(imgW, imgH, lenses);
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "rgba(236, 72, 153, 0.55)";
+    ctx.drawImage(mask, 0, 0, imgW, imgH, 0, 0, drawW, drawH);
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(236, 72, 153, 0.95)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const lens = lenses[0];
+    if (lens && lens.points.length >= 2) {
+      const pts = lens.points;
+      const p0 = pts[0]!;
+      ctx.moveTo(p0.x * drawW, p0.y * drawH);
+      for (let i = 1; i < pts.length; i++) {
+        const p = pts[i]!;
+        ctx.lineTo(p.x * drawW, p.y * drawH);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.restore();
   }, []);
 
   const commitCropPath = () => {
@@ -229,7 +269,7 @@ export function BeadCropEditor({
         singlePathLabel="Crop boundary"
         previewLabel="Crop preview"
         handlesLabel="Bézier handles"
-        helpText="Draw the visible bead boundary · Shift+click edge inserts point · Select (V) + Del removes · Undo ⌘Z · Redo ⇧⌘Z · Pan (H) or Space · C toggles curve"
+        helpText="Silhouette path overlays the bead — drag points, Shift+click edge to insert, C toggles curves · Undo ⌘Z · Pan (H) or Space"
       />
 
       {exportStatus ? <p className="text-xs text-muted-foreground">{exportStatus}</p> : null}

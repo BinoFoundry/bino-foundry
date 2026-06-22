@@ -1,63 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { calibratedVisualDiameterPx, VISUAL_BEAD_SCALE_ANCHORS } from "./visual-bead-scale";
+import {
+  calibratedVisualDiameterPx,
+  VISUAL_BEAD_BASE_PX,
+  VISUAL_BEAD_MAX_PX,
+  VISUAL_PX_PER_MM,
+} from "./visual-bead-scale";
 import { mmToBasePx, STRAND_BEAD_VISUAL_SCALE } from "./strand-bead";
 
-const MIXED_SIZES_MM = [0.5, 2.5, 4, 6, 8, 10] as const;
-const CATALOG_SIZES_MM = [0.1, 0.25, 0.5, 1, 2.5, 4, 6, 8, 10, 12, 20] as const;
+const CATALOG_SIZES_MM = [0.1, 0.25, 0.5, 1, 2.5, 4, 6, 8, 10, 12, 15, 20] as const;
 
 describe("calibratedVisualDiameterPx", () => {
-  it("hits every calibrated anchor exactly", () => {
-    for (const { mm, px } of VISUAL_BEAD_SCALE_ANCHORS) {
-      expect(calibratedVisualDiameterPx(mm)).toBeCloseTo(px, 5);
-    }
+  it("scales linearly with mm for mid-range sizes", () => {
+    expect(calibratedVisualDiameterPx(2)).toBeCloseTo(VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 2, 5);
+    expect(calibratedVisualDiameterPx(8)).toBeCloseTo(VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8, 5);
+    expect(calibratedVisualDiameterPx(8) / calibratedVisualDiameterPx(2)).toBeCloseTo(3.31, 1);
   });
 
-  it("preserves strict ordering across the full catalog range", () => {
+  it("preserves strict ordering for any positive decimal mm", () => {
     const px = CATALOG_SIZES_MM.map((mm) => calibratedVisualDiameterPx(mm));
     for (let i = 1; i < px.length; i++) {
-      expect(px[i]).toBeGreaterThan(px[i - 1]);
+      expect(px[i]).toBeGreaterThan(px[i - 1]!);
     }
   });
 
-  it("keeps tiny beads visible without collapsing to one size", () => {
-    const tiny = [0.1, 0.25, 0.5, 1].map((mm) => calibratedVisualDiameterPx(mm));
-    const unique = new Set(tiny.map((v) => v.toFixed(2)));
-    expect(unique.size).toBe(tiny.length);
-    for (const px of tiny) {
-      expect(px).toBeGreaterThanOrEqual(9);
-      expect(px).toBeLessThan(calibratedVisualDiameterPx(2.5));
-    }
+  it("keeps tiny beads visible", () => {
+    expect(calibratedVisualDiameterPx(0.1)).toBeGreaterThan(2);
+    expect(calibratedVisualDiameterPx(0.1)).toBeLessThan(calibratedVisualDiameterPx(1));
   });
 
-  it("compresses large-bead growth vs linear mm scaling", () => {
-    const eight = calibratedVisualDiameterPx(8);
-    const ten = calibratedVisualDiameterPx(10);
-    const twelve = calibratedVisualDiameterPx(12);
-    const twenty = calibratedVisualDiameterPx(20);
-    const linearTen = (10 / 8) * eight;
-    const linearTwelve = (12 / 8) * eight;
-    const linearTwenty = (20 / 8) * eight;
-    expect(ten).toBeLessThan(linearTen);
-    expect(twelve).toBeLessThan(linearTwelve);
-    expect(twenty).toBeLessThan(linearTwenty);
+  it("clamps very large beads to the maximum diameter", () => {
+    expect(calibratedVisualDiameterPx(40)).toBe(VISUAL_BEAD_MAX_PX);
+    expect(calibratedVisualDiameterPx(100)).toBe(VISUAL_BEAD_MAX_PX);
   });
 
-  it("produces a smooth progression for the mixed-size bracelet test set", () => {
-    const px = MIXED_SIZES_MM.map((mm) => calibratedVisualDiameterPx(mm));
+  it("supports arbitrary decimal sizes without breakpoints", () => {
+    const samples = [0.11, 0.25, 1, 2.75, 6.5, 14.2];
+    const px = samples.map((mm) => calibratedVisualDiameterPx(mm));
     for (let i = 1; i < px.length; i++) {
-      const stepRatio = px[i] / px[i - 1];
-      expect(stepRatio).toBeGreaterThan(1);
-      expect(stepRatio).toBeLessThan(1.5);
+      expect(px[i]).toBeGreaterThan(px[i - 1]!);
     }
-    expect(px[0]).toBeGreaterThanOrEqual(12);
-    expect(px[px.length - 1]).toBeLessThanOrEqual(32);
-  });
-
-  it("extrapolates sub-anchor and supra-anchor sizes gently", () => {
-    expect(calibratedVisualDiameterPx(0.01)).toBeCloseTo(9, 5);
-    expect(calibratedVisualDiameterPx(40)).toBeCloseTo(35, 5);
-    expect(calibratedVisualDiameterPx(100)).toBeLessThanOrEqual(35);
   });
 });
 
@@ -69,6 +51,9 @@ describe("mmToBasePx", () => {
   });
 
   it("applies the global visual density multiplier", () => {
-    expect(mmToBasePx(8, 1)).toBeCloseTo(27 * STRAND_BEAD_VISUAL_SCALE, 5);
+    expect(mmToBasePx(8, 1)).toBeCloseTo(
+      (VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8) * STRAND_BEAD_VISUAL_SCALE,
+      5,
+    );
   });
 });

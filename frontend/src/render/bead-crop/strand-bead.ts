@@ -3,16 +3,17 @@ import type { BeadSize, PlacedBead } from "@/lib/luxe-data";
 import type { BeadLibraryEntry } from "@/types/beads";
 
 import { beadDisplayImageStyles, getBeadDisplayImageUrl } from "./apply-crop";
+import { resolveBeadVisualBoundsNorm } from "./crop-visual-bounds";
 import { calibratedVisualDiameterPx } from "./visual-bead-scale";
 
-/** Visual footprint multiplier per bead type (relative to mm-based base size). */
+/** Subtle type tweaks — applied after crop-aware sizing, not as size substitutes. */
 const TYPE_FOOTPRINT: Record<string, { width: number; height: number }> = {
   crystal: { width: 1, height: 1 },
   accent: { width: 1, height: 1 },
   connector: { width: 1, height: 1 },
-  separator: { width: 0.75, height: 0.75 },
-  charm: { width: 1.28, height: 1.08 },
-  spacer: { width: 0.5, height: 0.5 },
+  separator: { width: 1, height: 1 },
+  charm: { width: 1, height: 1 },
+  spacer: { width: 1, height: 1 },
 };
 
 /**
@@ -29,6 +30,10 @@ export interface BeadSlotDimensions {
   height: number;
 }
 
+/**
+ * Crop-aware footprint: wrapper matches the visible silhouette aspect ratio.
+ * Physical mm maps to the largest cropped dimension — no inflation beyond the crop.
+ */
 export function getBeadSlotDimensions(
   bead: PlacedBead | null,
   beadSize: BeadSize,
@@ -39,11 +44,16 @@ export function getBeadSlotDimensions(
   const typeScale = TYPE_FOOTPRINT[slug] ?? TYPE_FOOTPRINT.crystal;
   const customW = meta?.strandScale?.width;
   const customH = meta?.strandScale?.height;
-  const base = mmToBasePx(beadSize, scaleFactor);
-  return {
-    width: base * (customW ?? typeScale.width),
-    height: base * (customH ?? typeScale.height),
-  };
+
+  const visual = resolveBeadVisualBoundsNorm(bead?.bead);
+  const basePx = mmToBasePx(beadSize, scaleFactor);
+  const maxNorm = Math.max(visual.width, visual.height, 0.001);
+  const pxPerNorm = basePx / maxNorm;
+
+  const width = visual.width * pxPerNorm * (customW ?? typeScale.width);
+  const height = visual.height * pxPerNorm * (customH ?? typeScale.height);
+
+  return { width, height };
 }
 
 export function getMaxSlotExtent(slots: { width: number; height: number }[]): number {
@@ -52,11 +62,11 @@ export function getMaxSlotExtent(slots: { width: number; height: number }[]): nu
 }
 
 /**
- * Arc length along the ring tangent after strand rotation (width axis = tangent).
- * Used for neighbor spacing — not max(width, height), which over-counts radial extent.
+ * Arc length along the ring tangent — uses the larger crop-aware dimension
+ * so rotated charms do not overlap neighbors.
  */
 export function getBeadTangentArcPx(dim: BeadSlotDimensions): number {
-  return dim.width;
+  return Math.max(dim.width, dim.height);
 }
 
 export function getBeadImageUrl(bead: PlacedBead | null): string | null {
@@ -66,13 +76,16 @@ export function getBeadImageUrl(bead: PlacedBead | null): string | null {
   return url.startsWith("data:") ? url : `${url}?v=2`;
 }
 
-/** Image styles: transparent PNG/WebP, no circular clip; path clip only for unprocessed v2. */
+/** Strand bead image — fills the crop-tight wrapper with no letterboxing. */
 export function getStrandBeadImageStyle(bead: BeadLibraryEntry | null | undefined): CSSProperties {
+  const visual = resolveBeadVisualBoundsNorm(bead);
   return {
     width: "100%",
     height: "100%",
-    objectFit: "contain",
+    objectFit: "fill",
+    objectPosition: `${(visual.centerX * 100).toFixed(2)}% ${(visual.centerY * 100).toFixed(2)}%`,
     display: "block",
+    background: "transparent",
     ...beadDisplayImageStyles(bead ?? undefined),
   };
 }
@@ -139,16 +152,19 @@ export function getPlacedBeadShellStyle(
   return {
     width: dim.width,
     height: dim.height,
-    background: hasImage ? "transparent" : "hsl(var(--muted) / 0.35)",
+    background: "transparent",
     border: hasImage ? "none" : "1px solid hsl(var(--border) / 0.5)",
     borderRadius: hasImage ? 0 : 4,
-    boxShadow: hasImage ? "none" : "inset 0 1px 2px rgba(0,0,0,0.06)",
-    overflow: "visible",
+    boxShadow: "none",
+    overflow: "hidden",
+    padding: 0,
+    margin: 0,
   };
 }
 
+/** Strand beads render flat — no drop-shadow or glow. */
 export function getPlacedBeadImageFilter(): CSSProperties["filter"] {
-  return "drop-shadow(0 1px 2px rgba(0,0,0,0.2)) drop-shadow(0 3px 8px rgba(0,0,0,0.12))";
+  return undefined;
 }
 
 /** Hint raster decode size for sharp strand rendering at layout pixel dimensions. */

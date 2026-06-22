@@ -17,6 +17,7 @@ import {
 } from "@/render/mask/mask-types";
 import { pathsToMaskCanvas, traceLensPath } from "@/render/mask/bezier-path";
 
+import { defringeCanvas } from "./defringe";
 import { loadImage } from "./image-loader";
 
 const CROP_PATH_ID = "crop";
@@ -132,16 +133,17 @@ export async function exportCroppedBeadBlob(
   const bounds = pathMaskBounds(w, h, points);
   if (!bounds) throw new Error("Could not compute crop bounds");
 
-  const pad = Math.round(Math.max(bounds.width, bounds.height) * 0.06);
-  const side = Math.max(bounds.width, bounds.height) + pad * 2;
-  const out = createCanvas(side, side);
+  const pad = Math.round(Math.max(bounds.width, bounds.height) * 0.04);
+  const outW = bounds.width + pad * 2;
+  const outH = bounds.height + pad * 2;
+  const out = createCanvas(outW, outH);
   const ctx = out.getContext("2d");
   if (!ctx) throw new Error("Canvas not supported");
 
-  const offsetX = pad + (side - pad * 2 - bounds.width) / 2 - bounds.x;
-  const offsetY = pad + (side - pad * 2 - bounds.height) / 2 - bounds.y;
+  const offsetX = pad - bounds.x;
+  const offsetY = pad - bounds.y;
 
-  ctx.clearRect(0, 0, side, side);
+  ctx.clearRect(0, 0, outW, outH);
   ctx.save();
   ctx.translate(offsetX, offsetY);
   ctx.beginPath();
@@ -149,6 +151,7 @@ export async function exportCroppedBeadBlob(
   ctx.clip();
   ctx.drawImage(img, 0, 0, w, h);
   ctx.restore();
+  defringeCanvas(ctx, outW, outH);
 
   return new Promise((resolve, reject) => {
     out.toBlob(

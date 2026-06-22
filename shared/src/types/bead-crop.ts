@@ -43,6 +43,14 @@ export interface BeadCropConfigV1 {
   updatedAt?: number;
 }
 
+export interface BeadCropDetectionMeta {
+  autoDetected?: boolean;
+  confidence?: number;
+  contourPointCount?: number;
+  pathPointCount?: number;
+  curvedSegmentCount?: number;
+}
+
 /** v2 — manual closed path crop (curve/point editor). */
 export interface BeadCropConfigV2 {
   version: typeof BEAD_CROP_CONFIG_V2;
@@ -54,6 +62,8 @@ export interface BeadCropConfigV2 {
   points: BeadPathAnchor[];
   scale: number;
   updatedAt?: number;
+  /** Non-destructive auto-detect metadata (original image unchanged). */
+  detection?: BeadCropDetectionMeta;
 }
 
 export type BeadCropConfig = BeadCropConfigV1 | BeadCropConfigV2;
@@ -110,7 +120,7 @@ export function createBeadCropConfigV2(
   imageHeight: number,
   originalUrl: string,
   points: BeadPathAnchor[],
-  options?: Partial<Pick<BeadCropConfigV2, "processedUrl" | "scale">>,
+  options?: Partial<Pick<BeadCropConfigV2, "processedUrl" | "scale" | "detection">>,
 ): BeadCropConfigV2 {
   return {
     version: BEAD_CROP_CONFIG_V2,
@@ -121,6 +131,7 @@ export function createBeadCropConfigV2(
     points: migrateBeadAnchors(points),
     scale: options?.scale ?? 1,
     updatedAt: Date.now(),
+    detection: options?.detection,
   };
 }
 

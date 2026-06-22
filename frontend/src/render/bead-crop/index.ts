@@ -1,10 +1,24 @@
+export {
+  beadVisualBoundsFromCropConfig,
+  resolveBeadVisualBoundsNorm,
+  usesProcessedVisualBounds,
+  type BeadVisualBoundsNorm,
+} from "./crop-visual-bounds";
 export { loadImage, loadImageForProcessing } from "./image-loader";
+export {
+  calibratedVisualDiameterPx,
+  VISUAL_BEAD_BASE_PX,
+  VISUAL_BEAD_MAX_PX,
+  VISUAL_PX_PER_MM,
+} from "./visual-bead-scale";
 export {
   detectBeadOutline,
   detectBeadOutlineFromRgba,
   type DetectBeadOutlineOptions,
   type DetectBeadOutlineResult,
+  type BeadOutlineDetectionMeta,
 } from "./auto-detect-bead";
+export { contourToBeadPathAnchors } from "./contour-to-bead-path";
 export {
   beadCropConfigToEditorLenses,
   beadCropEditorPlateKey,

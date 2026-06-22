@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { contourToBeadPathAnchors } from "./contour-to-bead-path";
 import { detectBeadOutlineFromRgba } from "./auto-detect-bead";
 
 function makeRgba(
@@ -38,8 +39,10 @@ describe("detectBeadOutlineFromRgba", () => {
     });
 
     const result = detectBeadOutlineFromRgba(data, w, h);
-    expect(result.points.length).toBeGreaterThanOrEqual(8);
+    expect(result.points.length).toBeGreaterThanOrEqual(12);
     expect(result.confidence).toBeGreaterThan(0.5);
+    expect(result.detection?.contourPointCount).toBeGreaterThan(20);
+    expect(result.detection?.curvedSegmentCount).toBeGreaterThan(0);
 
     const norms = result.points.map((p) => ({ x: p.x * w, y: p.y * h }));
     const centroid = norms.reduce(
@@ -50,8 +53,8 @@ describe("detectBeadOutlineFromRgba", () => {
 
     for (const p of norms) {
       const r = dist(p, { x: cx, y: cy });
-      expect(r).toBeGreaterThan(radius * 0.75);
-      expect(r).toBeLessThan(radius * 1.2);
+      expect(r).toBeGreaterThan(radius * 0.7);
+      expect(r).toBeLessThan(radius * 1.25);
     }
   });
 
@@ -64,7 +67,7 @@ describe("detectBeadOutlineFromRgba", () => {
     });
 
     const result = detectBeadOutlineFromRgba(data, w, h);
-    expect(result.points.length).toBeGreaterThanOrEqual(8);
+    expect(result.points.length).toBeGreaterThanOrEqual(12);
     expect(result.confidence).toBeGreaterThan(0.5);
   });
 
@@ -89,12 +92,66 @@ describe("detectBeadOutlineFromRgba", () => {
     });
 
     const result = detectBeadOutlineFromRgba(data, w, h);
-    expect(result.points.length).toBeGreaterThanOrEqual(8);
+    expect(result.points.length).toBeGreaterThanOrEqual(12);
     const norms = result.points.map((p) => ({ x: p.x * w, y: p.y * h }));
     const centroid = norms.reduce(
       (acc, p) => ({ x: acc.x + p.x / norms.length, y: acc.y + p.y / norms.length }),
       { x: 0, y: 0 },
     );
     expect(dist(centroid, { x: 80, y: 80 })).toBeLessThan(15);
+  });
+
+  it("preserves concave inward bends on an L-shaped silhouette", () => {
+    const w = 120;
+    const h = 120;
+    const data = makeRgba(w, h, (x, y) => {
+      const inVertical = x >= 24 && x <= 52 && y >= 24 && y <= 88;
+      const inHorizontal = x >= 24 && x <= 88 && y >= 60 && y <= 88;
+      return inVertical || inHorizontal ? [80, 40, 120, 255] : [255, 255, 255, 255];
+    });
+
+    const result = detectBeadOutlineFromRgba(data, w, h);
+    expect(result.points.length).toBeGreaterThanOrEqual(8);
+    expect(result.confidence).toBeGreaterThan(0.4);
+
+    const norms = result.points.map((p) => ({ x: p.x * w, y: p.y * h }));
+    const reentrantCorner = { x: 52, y: 60 };
+    const nearestToConcavity = norms.reduce((best, p) =>
+      dist(p, reentrantCorner) < dist(best, reentrantCorner) ? p : best,
+    );
+    expect(dist(nearestToConcavity, reentrantCorner)).toBeLessThan(10);
+  });
+
+  it("fits curved segments on a rounded capsule shape", () => {
+    const w = 160;
+    const h = 100;
+    const data = makeRgba(w, h, (x, y) => {
+      const left = (x - 50) ** 2 + (y - 50) ** 2 <= 30 ** 2;
+      const right = (x - 110) ** 2 + (y - 50) ** 2 <= 30 ** 2;
+      const bar = x >= 50 && x <= 110 && y >= 20 && y <= 80;
+      return left || right || bar ? [30, 90, 60, 255] : [255, 255, 255, 255];
+    });
+
+    const result = detectBeadOutlineFromRgba(data, w, h);
+    expect(result.points.length).toBeGreaterThanOrEqual(12);
+    expect(result.detection?.curvedSegmentCount ?? 0).toBeGreaterThan(4);
+    expect(result.points.some((p) => p.curved)).toBe(true);
+  });
+});
+
+describe("contourToBeadPathAnchors", () => {
+  it("marks gentle arcs as curved segments", () => {
+    const w = 100;
+    const h = 100;
+    const cx = 50;
+    const cy = 50;
+    const r = 30;
+    const contour = Array.from({ length: 24 }, (_, i) => {
+      const t = (i / 24) * Math.PI * 2;
+      return { x: cx + Math.cos(t) * r, y: cy + Math.sin(t) * r };
+    });
+    const { anchors, curvedSegmentCount } = contourToBeadPathAnchors(contour, w, h);
+    expect(anchors.length).toBe(24);
+    expect(curvedSegmentCount).toBeGreaterThan(10);
   });
 });

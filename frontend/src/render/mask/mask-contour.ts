@@ -9,12 +9,31 @@ const NEIGHBORS = [
   { dx: 1, dy: -1 },
 ] as const;
 
-/** Moore-neighbor outer contour trace (clockwise). */
+export type ContourPoint = { x: number; y: number };
+
+export interface ProcessContourOptions {
+  /** Target vertex count after simplification (adaptive when omitted). */
+  targetPoints?: number;
+  /** Minimum spacing between retained contour samples (px). */
+  minSpacing?: number;
+  /** Chaikin smoothing passes (0–3). */
+  smoothPasses?: number;
+  /** Image max dimension — used for adaptive simplification epsilon. */
+  maxDim?: number;
+}
+
+export interface ProcessedContour {
+  rawPointCount: number;
+  points: ContourPoint[];
+  perimeter: number;
+}
+
+/** Moore-neighbor outer contour trace (clockwise). Preserves concave bends. */
 export function traceOuterContour(
   mask: Uint8Array,
   width: number,
   height: number,
-): { x: number; y: number }[] {
+): ContourPoint[] {
   let startX = -1;
   let startY = -1;
   for (let y = 0; y < height && startX < 0; y++) {
@@ -58,6 +77,63 @@ export function traceOuterContour(
   return path;
 }
 
+/** Drop densely sampled contour vertices while preserving spacing along the path. */
+export function decimateContour(points: ContourPoint[], minSpacing: number): ContourPoint[] {
+  if (points.length < 3) return points;
+  const out = [points[0]!];
+  for (let i = 1; i < points.length; i++) {
+    const prev = out[out.length - 1]!;
+    const p = points[i]!;
+    if (Math.hypot(p.x - prev.x, p.y - prev.y) >= minSpacing) out.push(p);
+  }
+  return out.length >= 3 ? out : points;
+}
+
+/** Chaikin corner-cutting — smooths pixel stair-steps without filling concavities. */
+export function smoothContourChaikin(points: ContourPoint[], passes = 1): ContourPoint[] {
+  if (points.length < 3 || passes < 1) return points;
+
+  let current = points;
+  for (let pass = 0; pass < passes; pass++) {
+    const next: ContourPoint[] = [];
+    const n = current.length;
+    for (let i = 0; i < n; i++) {
+      const p0 = current[i]!;
+      const p1 = current[(i + 1) % n]!;
+      next.push(
+        { x: p0.x * 0.75 + p1.x * 0.25, y: p0.y * 0.75 + p1.y * 0.25 },
+        { x: p0.x * 0.25 + p1.x * 0.75, y: p0.y * 0.25 + p1.y * 0.75 },
+      );
+    }
+    current = next;
+  }
+  return current;
+}
+
+export function contourPerimeter(points: ContourPoint[]): number {
+  if (points.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    total += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return total;
+}
+
+/** Pick a point budget from contour complexity (longer / more detailed silhouettes keep more vertices). */
+export function adaptiveContourTargetCount(
+  points: ContourPoint[],
+  maxDim: number,
+  minPoints = 16,
+  maxPoints = 56,
+): number {
+  const perimeter = contourPerimeter(points);
+  const perimeterRatio = perimeter / Math.max(1, maxDim * 4);
+  const raw = Math.round(minPoints + perimeterRatio * (maxPoints - minPoints) * 2.2);
+  return Math.max(minPoints, Math.min(maxPoints, raw));
+}
+
 function perpendicularDistance(
   point: { x: number; y: number },
   lineStart: { x: number; y: number },
@@ -75,7 +151,7 @@ function perpendicularDistance(
   return Math.hypot(point.x - projX, point.y - projY);
 }
 
-function simplifyRdp(points: { x: number; y: number }[], epsilon: number): { x: number; y: number }[] {
+function simplifyRdp(points: ContourPoint[], epsilon: number): ContourPoint[] {
   if (points.length <= 2) return points;
 
   let maxDist = 0;
@@ -99,10 +175,10 @@ function simplifyRdp(points: { x: number; y: number }[], epsilon: number): { x: 
 
 /** Reduce a dense contour to a manageable polygon for the editor. */
 export function simplifyContourToPolygon(
-  points: { x: number; y: number }[],
+  points: ContourPoint[],
   targetCount: number,
   maxDim: number,
-): { x: number; y: number }[] {
+): ContourPoint[] {
   if (points.length <= targetCount) return points;
   let lo = 0;
   let hi = maxDim * 0.45;
@@ -117,6 +193,36 @@ export function simplifyContourToPolygon(
     }
   }
   return best.length >= 3 ? best : points.slice(0, Math.max(3, targetCount));
+}
+
+/**
+ * Full silhouette processing: decimate → smooth → simplify.
+ * Keeps concave detail by using light smoothing and adaptive point budgets.
+ */
+export function processSilhouetteContour(
+  contour: ContourPoint[],
+  width: number,
+  height: number,
+  options: ProcessContourOptions = {},
+): ProcessedContour {
+  const maxDim = options.maxDim ?? Math.max(width, height);
+  const rawPointCount = contour.length;
+  if (contour.length < 3) {
+    return { rawPointCount, points: [], perimeter: 0 };
+  }
+
+  const minSpacing = options.minSpacing ?? Math.max(1, maxDim * 0.004);
+  const decimated = decimateContour(contour, minSpacing);
+  const smoothed = smoothContourChaikin(decimated, options.smoothPasses ?? 2);
+  const target =
+    options.targetPoints ?? adaptiveContourTargetCount(smoothed, maxDim);
+  const simplified = simplifyContourToPolygon(smoothed, target, maxDim);
+
+  return {
+    rawPointCount,
+    points: simplified,
+    perimeter: contourPerimeter(simplified),
+  };
 }
 
 export interface MaskComponent {

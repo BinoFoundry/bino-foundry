@@ -23,7 +23,6 @@ import {
   getBeadSlotDimensions,
   getGuideSlotDimensions,
   getMaxSlotExtent,
-  getPlacedBeadImageFilter,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
   getStrandBeadRasterSize,
@@ -203,9 +202,7 @@ function SortableBead({
     pointerEvents: bead && libraryDragActive ? "none" : "auto",
     transformOrigin: "center center",
     transform: beadShellTransform(rotationDeg, { dragOverlay: isDragging }),
-    boxShadow: isDragging
-      ? "0 6px 18px rgba(0,0,0,0.16)"
-      : shell.boxShadow,
+    boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.12)" : shell.boxShadow,
   };
 
   const slotExtent = Math.max(slotDim.width, slotDim.height);
@@ -240,10 +237,10 @@ function SortableBead({
         bead
           ? cn(
               "cursor-grab bg-transparent active:cursor-grabbing",
-              "transition-[transform,box-shadow] duration-200 ease-out",
-              "hover:scale-[1.03] hover:shadow-[0_4px_14px_rgba(0,0,0,0.14)]",
+              "transition-transform duration-200 ease-out",
+              "hover:scale-[1.02]",
               isDragging && "cursor-grabbing",
-              isSelected && "ring-2 ring-selection/55 ring-offset-1 ring-offset-canvas",
+              isSelected && "ring-2 ring-inset ring-primary/45",
             )
           : "cursor-pointer state-hoverable",
       )}
@@ -257,11 +254,8 @@ function SortableBead({
           draggable={false}
           decoding="async"
           {...getStrandBeadRasterSize(slotDim)}
-          className="pointer-events-none h-full w-full select-none transition-[filter] duration-200 ease-out group-hover:brightness-[1.03]"
-          style={{
-            ...getStrandBeadImageStyle(bead.bead),
-            filter: getPlacedBeadImageFilter(),
-          }}
+          className="pointer-events-none h-full w-full select-none"
+          style={getStrandBeadImageStyle(bead.bead)}
         />
       ) : null}
       {bead && (
@@ -839,8 +833,7 @@ const SortableCircularStrand = ({
                   pointerEvents: "none",
                   // When we have a bead image, ensure the wrapper does not paint any background.
                   ...getPlacedBeadShellStyle(activeSlotDim, hasImage),
-                  opacity: 0.92,
-                  boxShadow: "0 4px 14px rgba(0,0,0,0.16)",
+                  opacity: 0.94,
                   transformOrigin: "center center",
                   transform: beadShellTransform(activeRotationDeg, { dragOverlay: true }),
                 }}
@@ -853,10 +846,7 @@ const SortableCircularStrand = ({
                     decoding="async"
                     {...getStrandBeadRasterSize(activeSlotDim)}
                     className="h-full w-full"
-                    style={{
-                      ...getStrandBeadImageStyle(activeBead.bead),
-                      filter: getPlacedBeadImageFilter(),
-                    }}
+                    style={getStrandBeadImageStyle(activeBead.bead)}
                   />
                 ) : null}
               </div>
