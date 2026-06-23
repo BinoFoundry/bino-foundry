@@ -20,7 +20,6 @@ import {
 } from "@/render/frame-plate/crop";
 import {
   detectFrameLensSideFromSource,
-  detectFrameLensSideFromUrl,
   hasAnyLensMask,
   isDualLensMaskValid,
   isLensSideValid,
@@ -238,7 +237,10 @@ export const FrameRenderViewsSection = forwardRef<
     setFramePathReady(false);
     if (panel === "left" || panel === "right") {
       const view = getView(axis);
-      const restored = draftRef.current[axis] ?? resolveMaskConfigForEditor(view);
+      const restored =
+        previewMasks[axis] ??
+        draftRef.current[axis] ??
+        resolveMaskConfigForEditor(view);
       lensSnapshotRef.current[axis] = restored ? structuredClone(restored) : null;
       if (restored) {
         draftRef.current[axis] = restored;
@@ -356,9 +358,14 @@ export const FrameRenderViewsSection = forwardRef<
 
   const handleDetectLensSide = async (axis: FrameViewAxis, side: FrameLensSide) => {
     const view = getView(axis);
-    if (!view.plateUrl) return;
+    const original = resolveOriginalPlate(view);
+    if (!original.url) {
+      setAxisNotice(axis, "Upload a plate photo before running lens detection.", "warning");
+      return;
+    }
 
     setBusyAction({ axis, kind: side === "left" ? "detect-left" : "detect-right" });
+    setAxisNotice(axis, `Detecting ${LENS_SIDE_LABELS[side].toLowerCase()}…`, "warning");
 
     try {
       const plate = await getWorkingPlate(axis);
@@ -367,47 +374,85 @@ export const FrameRenderViewsSection = forwardRef<
         return;
       }
 
+      if (import.meta.env.DEV) {
+        console.info(`[lens-detect:${side}] plate`, {
+          url: plate.url.slice(0, 80),
+          width: plate.width,
+          height: plate.height,
+        });
+      }
+
+      const img = await loadImageForProcessing(plate.url);
+      const imgW = img.naturalWidth;
+      const imgH = img.naturalHeight;
+      if (imgW <= 0 || imgH <= 0) {
+        setAxisNotice(axis, "Could not read plate image dimensions for lens detection.", "warning");
+        return;
+      }
+
+      if (import.meta.env.DEV) {
+        console.info(`[lens-detect:${side}] image loaded`, { imgW, imgH });
+      }
+
       const existing =
         draftRef.current[axis] ?? resolveMaskConfigForEditor(view) ?? null;
 
-      let detection;
-      if (plate.url.startsWith("blob:")) {
-        const img = await loadImageForProcessing(plate.url);
-        detection = detectFrameLensSideFromSource(img, side);
-      } else {
-        detection = await detectFrameLensSideFromUrl(plate.url, side);
+      const detection = detectFrameLensSideFromSource(img, side);
+
+      if (import.meta.env.DEV) {
+        console.info(`[lens-detect:${side}] result`, {
+          detected: detection.detected,
+          pointCount: detection.diagnostics?.pointCount,
+          regions: detection.diagnostics?.regionCount,
+          source: detection.diagnostics?.imageSource,
+        });
       }
 
       if (detection.detected && detection.anchors) {
         const mask = mergeLensSideIntoMask(
           existing,
-          plate.width,
-          plate.height,
+          imgW,
+          imgH,
           side,
           detection.anchors,
         );
         draftRef.current[axis] = mask;
         setPreviewMasks((prev) => ({ ...prev, [axis]: mask }));
+
         const sessionKey = `${axis}-${side}`;
-        setEditSession((s) => ({ ...s, [sessionKey]: (s[sessionKey] ?? 0) + 1 }));
+        const editorOpen =
+          expandedEditor?.axis === axis && expandedEditor.panel === side;
+
+        if (!editorOpen) {
+          openEditor(axis, side);
+        } else {
+          setEditSession((s) => ({ ...s, [sessionKey]: (s[sessionKey] ?? 0) + 1 }));
+        }
+
+        const diag = detection.diagnostics
+          ? ` (${detection.diagnostics.pointCount} points, ${detection.diagnostics.imageSource})`
+          : "";
         setAxisNotice(
           axis,
-          `${LENS_SIDE_LABELS[side]} detected — save changes to apply.`,
+          `${LENS_SIDE_LABELS[side]} detected${diag} — review the overlay, then save changes.`,
           "success",
         );
       } else {
+        const diag = detection.diagnostics
+          ? ` ${detection.diagnostics.imageWidth}×${detection.diagnostics.imageHeight}px, ${detection.diagnostics.regionCount} region(s) found.`
+          : "";
         setAxisNotice(
           axis,
-          detection.message ?? `Could not detect ${LENS_SIDE_LABELS[side].toLowerCase()}.`,
+          `${detection.message ?? `Could not detect ${LENS_SIDE_LABELS[side].toLowerCase()}.`}${diag}`,
           "warning",
         );
       }
     } catch (err) {
-      setAxisNotice(
-        axis,
-        err instanceof Error ? err.message : "Lens detection failed",
-        "warning",
-      );
+      const message = err instanceof Error ? err.message : "Lens contour detection failed.";
+      if (import.meta.env.DEV) {
+        console.error(`[lens-detect:${side}] failed`, err);
+      }
+      setAxisNotice(axis, message, "warning");
     } finally {
       setBusyAction(null);
     }
@@ -444,7 +489,7 @@ export const FrameRenderViewsSection = forwardRef<
 
       {FRAME_VIEW_AXES.map((axis) => {
         const view = getView(axis);
-        const hasPlate = Boolean(view.plateUrl);
+        const hasPlate = Boolean(resolveOriginalPlate(view).url);
         const original = resolveOriginalPlate(view);
         const framePathSet = hasPlateCropApplied(view);
         const committedCrop =
@@ -589,16 +634,32 @@ export const FrameRenderViewsSection = forwardRef<
                 >
                   <p className="mb-2 text-xs font-medium text-foreground">Left lens</p>
                   {!isLeftPanelOpen ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={working}
-                      onClick={() => openEditor(axis, "left")}
-                    >
-                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Left Lens
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={working}
+                        onClick={() => openEditor(axis, "left")}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit Left Lens
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={isBusy(axis, "detect-left")}
+                        onClick={() => void handleDetectLensSide(axis, "left")}
+                      >
+                        {isBusy(axis, "detect-left") ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Scan className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Auto Detect Left Lens
+                      </Button>
+                    </div>
                   ) : null}
 
                   {isLeftPanelOpen ? (
@@ -642,7 +703,11 @@ export const FrameRenderViewsSection = forwardRef<
                           view={view}
                           editSession={editSession[`${axis}-left`] ?? 0}
                           getWorkingPlate={getWorkingPlate}
-                          initialMask={draftRef.current[axis] ?? resolveMaskConfigForEditor(view)}
+                          initialMask={
+                            previewMasks[axis] ??
+                            draftRef.current[axis] ??
+                            resolveMaskConfigForEditor(view)
+                          }
                           onChange={(config) => handleEditorChange(axis, config)}
                         />
                       </Suspense>
@@ -658,16 +723,32 @@ export const FrameRenderViewsSection = forwardRef<
                 >
                   <p className="mb-2 text-xs font-medium text-foreground">Right lens</p>
                   {!isRightPanelOpen ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={working}
-                      onClick={() => openEditor(axis, "right")}
-                    >
-                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Right Lens
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={working}
+                        onClick={() => openEditor(axis, "right")}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit Right Lens
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={isBusy(axis, "detect-right")}
+                        onClick={() => void handleDetectLensSide(axis, "right")}
+                      >
+                        {isBusy(axis, "detect-right") ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Scan className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Auto Detect Right Lens
+                      </Button>
+                    </div>
                   ) : null}
 
                   {isRightPanelOpen ? (
@@ -711,7 +792,11 @@ export const FrameRenderViewsSection = forwardRef<
                           view={view}
                           editSession={editSession[`${axis}-right`] ?? 0}
                           getWorkingPlate={getWorkingPlate}
-                          initialMask={draftRef.current[axis] ?? resolveMaskConfigForEditor(view)}
+                          initialMask={
+                            previewMasks[axis] ??
+                            draftRef.current[axis] ??
+                            resolveMaskConfigForEditor(view)
+                          }
                           onChange={(config) => handleEditorChange(axis, config)}
                         />
                       </Suspense>
@@ -735,6 +820,7 @@ function LensEditorForView({
   getWorkingPlate,
   initialMask,
   onChange,
+  onPlateError,
 }: {
   axis: FrameViewAxis;
   side: FrameLensSide;
@@ -743,18 +829,41 @@ function LensEditorForView({
   getWorkingPlate: (axis: FrameViewAxis) => Promise<{ url: string; width: number; height: number }>;
   initialMask?: MaskConfig | null;
   onChange: (config: MaskConfig | null) => void;
+  onPlateError?: (message: string) => void;
 }) {
   const [plate, setPlate] = useState<{ url: string; width: number; height: number } | null>(null);
+  const [plateError, setPlateError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void getWorkingPlate(axis).then((result) => {
-      if (!cancelled) setPlate(result);
-    });
+    setPlateError(null);
+    void getWorkingPlate(axis)
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.url) {
+          const message = "No plate image available for the lens editor.";
+          setPlateError(message);
+          onPlateError?.(message);
+          setPlate(null);
+          return;
+        }
+        setPlate(result);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : "Could not prepare plate for lens editing.";
+        setPlateError(message);
+        onPlateError?.(message);
+        setPlate(null);
+      });
     return () => {
       cancelled = true;
     };
-  }, [axis, getWorkingPlate, view.plateUrl, view.plateCropConfig, editSession]);
+  }, [axis, getWorkingPlate, onPlateError, view.plateUrl, view.plateCropConfig, editSession]);
+
+  if (plateError) {
+    return <p className="text-xs text-status-warning">{plateError}</p>;
+  }
 
   if (!plate?.url) {
     return <LoadingState label="Preparing plate…" className="h-40" />;
@@ -762,12 +871,13 @@ function LensEditorForView({
 
   return (
     <FrameMaskEditor
-      key={`${editorPlateKey(view)}|${side}|s${editSession}`}
+      key={`${editorPlateKey(view)}|${side}`}
       plateUrl={plate.url}
       width={plate.width}
       height={plate.height}
       focusedLensId={side}
       initialMask={initialMask}
+      lensRevision={editSession}
       onChange={onChange}
     />
   );

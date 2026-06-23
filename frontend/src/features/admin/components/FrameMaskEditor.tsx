@@ -18,6 +18,8 @@ interface FrameMaskEditorProps {
   width: number;
   height: number;
   initialMask?: MaskConfig | null;
+  /** Bump when initialMask paths change externally (auto-detect). */
+  lensRevision?: number;
   /** When set, editor focuses on one lens path only (left or right). */
   focusedLensId?: FrameLensSide;
   onChange?: (config: MaskConfig | null) => void;
@@ -28,6 +30,7 @@ interface FrameMaskEditorProps {
 export function FrameMaskEditor({
   plateUrl,
   initialMask,
+  lensRevision = 0,
   focusedLensId,
   onChange,
   className,
@@ -85,6 +88,7 @@ export function FrameMaskEditor({
         return defaultLensSet();
       }}
       onLensesChange={handleLensesChange}
+      lensRevision={lensRevision}
       showThumbnailPreview={false}
       showLensTabs={!focusedLensId}
       singlePathLabel={focusedLabel ?? "Lens path"}

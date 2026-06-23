@@ -29,8 +29,13 @@ export const LENS_SIDE_LABELS: Record<FrameLensSide, string> = {
 };
 
 export const LENS_SIDE_DETECT_FAILED: Record<FrameLensSide, string> = {
-  left: "No left lens region detected. Use Edit Left Lens to draw the mask manually.",
-  right: "No right lens region detected. Use Edit Right Lens to draw the mask manually.",
+  left: "No enclosed left lens region detected. Use Edit Left Lens to draw the mask manually.",
+  right: "No enclosed right lens region detected. Use Edit Right Lens to draw the mask manually.",
+};
+
+const LENS_CONTOUR_DETECT_FAILED: Record<FrameLensSide, string> = {
+  left: "Left lens contour detection failed. Try a PNG with transparent lens openings or draw the path manually.",
+  right: "Right lens contour detection failed. Try a PNG with transparent lens openings or draw the path manually.",
 };
 
 /** @deprecated Use LENS_DUAL_DETECT_FAILED_MESSAGE */
@@ -199,9 +204,22 @@ function detectLensAnchorsFromBitmap(
   return anchorMap;
 }
 
-function readImageRgba(source: HTMLImageElement | HTMLCanvasElement): Uint8ClampedArray {
+function sourceDimensions(source: HTMLImageElement | HTMLCanvasElement): { width: number; height: number } {
   const width = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
   const height = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
+  return { width, height };
+}
+
+function countMaskPixels(mask: Uint8Array): number {
+  let count = 0;
+  for (let idx = 0; idx < mask.length; idx++) {
+    if (mask[idx]) count += 1;
+  }
+  return count;
+}
+
+function readImageRgba(source: HTMLImageElement | HTMLCanvasElement): Uint8ClampedArray {
+  const { width, height } = sourceDimensions(source);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -209,6 +227,20 @@ function readImageRgba(source: HTMLImageElement | HTMLCanvasElement): Uint8Clamp
   if (!ctx) throw new Error("Canvas not supported");
   ctx.drawImage(source, 0, 0);
   return ctx.getImageData(0, 0, width, height).data;
+}
+
+function detectSideFromAlphaHoles(
+  source: HTMLImageElement | HTMLCanvasElement,
+  side: FrameLensSide,
+  width: number,
+  height: number,
+): PathAnchor[] | null {
+  const rgba = readImageRgba(source);
+  const holeMask = buildAlphaHoleMask(rgba, width, height);
+  const minHolePixels = width * height * 0.002;
+  if (countMaskPixels(holeMask) < minHolePixels) return null;
+  const anchorMap = detectLensAnchorsFromBitmap(holeMask, width, height);
+  return anchorMap[side] ?? null;
 }
 
 /**
@@ -256,6 +288,25 @@ export interface DetectLensSideResult {
   anchors: PathAnchor[] | null;
   detected: boolean;
   message?: string;
+  diagnostics?: LensSideDetectDiagnostics;
+}
+
+export interface LensSideDetectDiagnostics {
+  imageWidth: number;
+  imageHeight: number;
+  imageSource: "alpha-holes" | "classifier" | "none";
+  alphaHolePixels: number;
+  regionCount: number;
+  pointCount: number;
+}
+
+function countEligibleRegions(bitmap: Uint8Array, width: number, height: number): number {
+  const minPixels = width * height * MIN_LENS_AREA_RATIO;
+  return labelMaskComponents(bitmap, width, height).filter((c) => c.size >= minPixels).length;
+}
+
+function formatDetectDiagnostics(diag: LensSideDetectDiagnostics): string {
+  return `${diag.imageWidth}×${diag.imageHeight}px · ${diag.regionCount} region(s) · ${diag.pointCount} path point(s) · via ${diag.imageSource}`;
 }
 
 /** Detect anchors for a single lens (left or right) from a frame plate. */
@@ -263,30 +314,75 @@ export function detectFrameLensSideFromSource(
   source: HTMLImageElement | HTMLCanvasElement,
   side: FrameLensSide,
 ): DetectLensSideResult {
-  const { bitmap, width, height } = detectLensMaskBitmap(source);
+  const { width, height } = sourceDimensions(source);
   if (width <= 0 || height <= 0) {
-    return { anchors: null, detected: false, message: LENS_SIDE_DETECT_FAILED[side] };
+    return {
+      anchors: null,
+      detected: false,
+      message: LENS_CONTOUR_DETECT_FAILED[side],
+      diagnostics: {
+        imageWidth: width,
+        imageHeight: height,
+        imageSource: "none",
+        alphaHolePixels: 0,
+        regionCount: 0,
+        pointCount: 0,
+      },
+    };
   }
 
-  let anchorMap = detectLensAnchorsFromBitmap(bitmap, width, height);
+  let anchors: PathAnchor[] | null = null;
+  let imageSource: LensSideDetectDiagnostics["imageSource"] = "none";
+  let alphaHolePixels = 0;
+  let regionCount = 0;
 
-  if (!anchorMap[side]) {
-    try {
-      const rgba = readImageRgba(source);
-      const holeMask = buildAlphaHoleMask(rgba, width, height);
-      const holeAnchors = detectLensAnchorsFromBitmap(holeMask, width, height);
-      anchorMap = { ...anchorMap, [side]: anchorMap[side] ?? holeAnchors[side] };
-    } catch {
-      /* keep classifier result */
-    }
+  try {
+    const rgba = readImageRgba(source);
+    const holeMask = buildAlphaHoleMask(rgba, width, height);
+    alphaHolePixels = countMaskPixels(holeMask);
+    regionCount = countEligibleRegions(holeMask, width, height);
+    anchors = detectSideFromAlphaHoles(source, side, width, height);
+    if (anchors) imageSource = "alpha-holes";
+  } catch {
+    /* fall through to classifier */
   }
 
-  const anchors = anchorMap[side];
-  if (!anchors || migrateAnchors(anchors).length < 3) {
-    return { anchors: null, detected: false, message: LENS_SIDE_DETECT_FAILED[side] };
+  if (!anchors) {
+    const { bitmap } = detectLensMaskBitmap(source);
+    regionCount = countEligibleRegions(bitmap, width, height);
+    const anchorMap = detectLensAnchorsFromBitmap(bitmap, width, height);
+    anchors = anchorMap[side] ?? null;
+    if (anchors) imageSource = "classifier";
   }
 
-  return { anchors, detected: true };
+  const pointCount = anchors ? migrateAnchors(anchors).length : 0;
+  const diagnostics: LensSideDetectDiagnostics = {
+    imageWidth: width,
+    imageHeight: height,
+    imageSource,
+    alphaHolePixels,
+    regionCount,
+    pointCount,
+  };
+
+  if (!anchors || pointCount < 3) {
+    const noRegions = regionCount === 0 && alphaHolePixels === 0;
+    const message = noRegions
+      ? "Frame image has no detectable lens opening. Use a PNG with transparent lens cut-outs or draw the path manually."
+      : LENS_SIDE_DETECT_FAILED[side];
+    return {
+      anchors: null,
+      detected: false,
+      message,
+      diagnostics,
+    };
+  }
+
+  if (import.meta.env.DEV) {
+    console.info(`[lens-detect:${side}]`, formatDetectDiagnostics(diagnostics));
+  }
+
+  return { anchors, detected: true, diagnostics };
 }
 
 export async function detectFrameLensSideFromUrl(

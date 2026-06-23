@@ -4,7 +4,7 @@ export const SUNGLASSES_COPY = {
   frameStepTitle: "Select Frame",
   lensStepTitle: "Lens options",
   lensStepIntro:
-    "Choose between standard or polarised lenses, then pick the available tint options. Tint is applied to the lens only, the frame stays unchanged. Preview changes.",
+    "Choose standard or polarised lenses, then pick a Classic or Gradient tint from the tabs below.",
   rxStepTitle: "Prescription lenses",
   rxStepIntro:
     "Enjoy clear vision when you're out in the sun. Upgrade to prescription lenses so you can step out hassle free. Our team will be in touch to confirm your details before production.",

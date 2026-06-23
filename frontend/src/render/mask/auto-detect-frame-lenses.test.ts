@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  detectFrameLensSideFromSource,
   isDualLensMaskValid,
   isLensSideValid,
   LENS_DUAL_DETECT_FAILED_MESSAGE,
@@ -58,5 +59,12 @@ describe("auto-detect-frame-lenses", () => {
   it("exposes per-side detection failure copy", () => {
     expect(LENS_SIDE_DETECT_FAILED.left).toContain("left lens");
     expect(LENS_SIDE_DETECT_FAILED.right).toContain("right lens");
+  });
+
+  it("reports failure for invalid plate dimensions", () => {
+    const badSource = { width: 0, height: 0 } as HTMLCanvasElement;
+    const result = detectFrameLensSideFromSource(badSource, "left");
+    expect(result.detected).toBe(false);
+    expect(result.message).toContain("contour");
   });
 });

@@ -29,6 +29,8 @@ export interface PolygonEditorShellProps {
   footerExtra?: ReactNode;
   /** Small raster thumbnail below the canvas (off for admin clip editors). */
   showThumbnailPreview?: boolean;
+  /** Bump when external lens paths change (auto-detect, reset) so the editor reloads anchors. */
+  lensRevision?: number;
 }
 
 /**
@@ -49,6 +51,7 @@ export function PolygonEditorShell({
   headerExtra,
   footerExtra,
   showThumbnailPreview = true,
+  lensRevision = 0,
 }: PolygonEditorShellProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbRef = useRef<HTMLCanvasElement>(null);
@@ -178,6 +181,13 @@ export function PolygonEditorShell({
       editorRef.current = null;
     };
   }, [imageUrl]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !editorReady) return;
+    editor.replaceLenses(getInitialLensesRef.current());
+    emitChangeRef.current();
+  }, [lensRevision, editorReady]);
 
   const runEditor = (fn: (e: PolygonEditor) => void) => {
     const editor = editorRef.current;

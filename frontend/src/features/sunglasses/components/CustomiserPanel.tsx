@@ -115,6 +115,7 @@ export function CustomiserPanel({
         currencyCode={currencyCode}
         onPolarizedChange={(value) => setOption(POLARIZED_CODE, value)}
         onSelectTint={selectTintById}
+        onContinue={flow.goNext}
       />
     ),
     rx: (
@@ -149,16 +150,16 @@ export function CustomiserPanel({
   };
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
+    <div className={cn(className, flow.step === "lens" && "flex min-h-0 flex-1 flex-col")}>
       <div
-        className="customiser-options-scroll admin-scroll-pane min-h-0 flex-1 px-0.5"
         aria-label="Customiser options"
+        className={cn(flow.step === "lens" && "flex min-h-0 flex-1 flex-col")}
       >
-        <div className="pb-2">{stepContent[flow.step]}</div>
+        {stepContent[flow.step]}
       </div>
 
       {showFooter ? (
-        <div className="mt-3 flex shrink-0 items-center justify-between gap-2 border-t border-border/80 pt-3">
+        <div className="mt-5 flex shrink-0 items-center justify-between gap-2 border-t border-border/80 pt-4">
           <Button type="button" variant="secondary" size="sm" disabled={flow.isFirst} onClick={flow.goBack}>
             <ChevronLeft className="mr-1 h-4 w-4" />
             Back

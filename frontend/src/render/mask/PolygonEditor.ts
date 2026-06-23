@@ -687,6 +687,20 @@ export class PolygonEditor {
     this.draw();
   }
 
+  /** Replace all lens paths (e.g. after auto-detect) without reloading the image. */
+  replaceLenses(lenses) {
+    this._recordHistory();
+    this.lenses = lenses.map((l) => ({
+      ...l,
+      points: migrateAnchors(l.points),
+    }));
+    this.activeLensIndex = Math.min(this.activeLensIndex, Math.max(0, this.lenses.length - 1));
+    this.selectedPointIndex = -1;
+    this.emitChange();
+    this.fitToView();
+    this.draw();
+  }
+
   /** @deprecated Use undo() for full history. */
   undoLastPoint() {
     this.undo();
