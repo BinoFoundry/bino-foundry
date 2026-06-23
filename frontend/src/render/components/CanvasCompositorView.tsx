@@ -1,7 +1,5 @@
 import { useEffect, useRef } from "react";
 
-import { cn } from "@/lib/utils";
-
 import {
   autoMaskOptionsForView,
   renderMaskedViewToCanvas,
@@ -65,7 +63,7 @@ export function CanvasCompositorView({
 
   return (
     <CompositorViewport aspectRatio={aspectRatio} label={label} className={className}>
-      <div className={cn("relative flex h-full w-full items-center justify-center bg-muted/20")}>
+      <div className="relative flex h-full w-full items-center justify-center">
         {plate?.plateUrl ? (
           <canvas ref={canvasRef} className="max-h-full max-w-full object-contain" />
         ) : (

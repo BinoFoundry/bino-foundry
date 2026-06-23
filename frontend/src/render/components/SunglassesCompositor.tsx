@@ -45,7 +45,7 @@ export function SunglassesCompositor({
 
   const clipConfig = plateView ? resolveLensClipConfig(plateView) : null;
 
-  if (plateView?.plateUrl && clipConfig) {
+  if (plateView?.plateUrl) {
     return (
       <SvgClipCompositorView
         view={view}
@@ -53,7 +53,12 @@ export function SunglassesCompositor({
           plateUrl: plateView.plateUrl,
           width: plateView.width,
           height: plateView.height,
-          clipConfig,
+          clipConfig: clipConfig ?? {
+            version: 1,
+            imageWidth: plateView.width,
+            imageHeight: plateView.height,
+            lenses: [],
+          },
         }}
         tint={config.tint}
         aspectRatio={aspectRatio}

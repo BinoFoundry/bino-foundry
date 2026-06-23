@@ -34,10 +34,8 @@ export function CompositorViewport({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden",
-        variant === "fill"
-          ? "h-full min-h-0 rounded-xl border border-border/30 bg-card/10"
-          : cn("compositor-surface rounded-[2rem]", aspectClass[aspectRatio]),
+        "compositor-surface relative w-full overflow-hidden",
+        variant === "fill" ? "h-full min-h-0" : aspectClass[aspectRatio],
         className,
       )}
     >
