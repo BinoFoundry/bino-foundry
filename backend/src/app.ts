@@ -51,8 +51,8 @@ export function createApplication(): Application {
   }
 
   app.use(requestContextMiddleware);
-  app.use(mutationRateLimit);
   app.use(cors(buildCorsConfiguration()));
+  app.use(mutationRateLimit);
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 

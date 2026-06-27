@@ -3,7 +3,10 @@ import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BeadCropEditor, beadCropEditorPlateKey } from "@/features/admin/components/BeadCropEditor";
+import { BeadAssetValidationPanel } from "@/features/admin/components/BeadAssetValidationPanel";
+import { NormalizedExportDebugPanel } from "@/features/admin/components/NormalizedExportDebugPanel";
 import { BeadLibrarySizesPanel } from "@/features/admin/components/BeadLibrarySizesPanel";
+import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { useCatalogue } from "@/state/catalogue";
@@ -41,6 +44,7 @@ function buildSizeRows(
 
 export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadFormProps) {
   const cat = useCatalogue();
+  const developerMode = useAdminDeveloperMode();
   const defaultType =
     defaultBeadTypeId ?? cat.beadTypes.find((t) => t.slug === "crystal")?.id ?? cat.beadTypes[0]?.id ?? "";
 
@@ -91,6 +95,11 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       setSizeRows(buildSizeRows(globalSizes, libraryId, offers));
     },
     [cat.beadLibrarySizes, globalSizes],
+  );
+
+  const enabledSizeMms = useMemo(
+    () => sizeRows.filter((r) => r.enabled).map((r) => r.sizeMm),
+    [sizeRows],
   );
 
   const originalUrl = form.originalImage?.trim() || form.image?.trim() || "";
@@ -288,10 +297,9 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
             <input type="file" accept="image/*" className="absolute inset-0 opacity-0" onChange={handleUpload} disabled={uploading} />
           </label>
           <p className="text-xs text-muted-foreground">
-            Upload a single bead on a plain white/light background (PNG with transparency works best).
-            The crop outline is auto-detected; refine it in the editor below. Status:{" "}
+            Upload a clear photo of the bead, then refine the outline in the editor below. Status:{" "}
             <span className={cropReady ? "text-status-success" : "text-status-warning"}>
-              {cropReady ? "crop ready" : form.cropStatus ?? "draft"}
+              {cropReady ? "Ready" : form.cropStatus === "ready" ? "Ready" : "Draft"}
             </span>
           </p>
         </div>
@@ -319,14 +327,41 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
               </Button>
             </div>
             {editingCrop ? (
-              <BeadCropEditor
-                key={`${beadCropEditorPlateKey(originalUrl, form.cropConfig)}|s${cropEditSession}`}
-                originalUrl={originalUrl}
-                initialCrop={draftCropRef.current ?? form.cropConfig ?? undefined}
-                onDraftChange={handleCropDraft}
-                onSaveCrop={handleSaveCrop}
-                onProcessedUpload={handleProcessed}
-              />
+              <>
+                <BeadCropEditor
+                  key={`${beadCropEditorPlateKey(originalUrl, form.cropConfig)}|s${cropEditSession}`}
+                  originalUrl={originalUrl}
+                  initialCrop={draftCropRef.current ?? form.cropConfig ?? undefined}
+                  libraryId={form.id || undefined}
+                  enabledSizeMms={enabledSizeMms}
+                  beadSizes={cat.beadSizes}
+                  existingOffers={existingOffers}
+                  onDraftChange={handleCropDraft}
+                  onSaveCrop={handleSaveCrop}
+                  onProcessedUpload={handleProcessed}
+                  onBeforeNormalizedExport={async () => {
+                    await cat.recalculateMmGroupReferences();
+                    await cat.refreshBeadLibrarySizes();
+                  }}
+                  onNormalizedExportsSaved={() => cat.refreshBeadLibrarySizes()}
+                />
+                {developerMode ? (
+                  <>
+                    <BeadAssetValidationPanel
+                      bead={form}
+                      draftConfig={draftCropRef.current ?? form.cropConfig}
+                    />
+                    {isBeadCropConfigValid(draftCropRef.current ?? form.cropConfig) ? (
+                      <NormalizedExportDebugPanel
+                        beadName={form.name}
+                        cropConfig={(draftCropRef.current ?? form.cropConfig)!}
+                        enabledSizeMms={enabledSizeMms}
+                        beadSizes={cat.beadSizes}
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+              </>
             ) : (
               <img
                 src={form.processedImage?.trim() || originalUrl}

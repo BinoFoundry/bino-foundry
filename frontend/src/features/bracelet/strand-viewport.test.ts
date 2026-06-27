@@ -12,6 +12,7 @@ import {
 import { computeMaxRingRadiusPx, computeWristRingRadiusPx, wristSizeBoundsFromCatalog } from "./strand-ring";
 import {
   computeLayoutCanvasSize,
+  computeDefaultStrandZoom,
   computeStrandAutoFitScale,
   computeStrandCanvasFitBoost,
   computeStrandContentBounds,
@@ -20,7 +21,71 @@ import {
   slotCentersOnRing,
   squareCanvasSizeForBounds,
   STRAND_LAYOUT_BASELINE_PX,
+  viewportStrandZoomFactor,
 } from "./strand-viewport";
+
+describe("computeDefaultStrandZoom", () => {
+  it("targets larger single-bracelet zoom on laptop widths", () => {
+    const zoom = computeDefaultStrandZoom({
+      twinning: false,
+      containerWidth: 1200,
+      containerHeight: 800,
+      isMobile: false,
+      autoFitScale: 1,
+    });
+    expect(zoom).toBeGreaterThan(1.4);
+    expect(zoom).toBeLessThan(1.75);
+  });
+
+  it("targets ~102% effective twin zoom on laptop when auto-fit is 1", () => {
+    const zoom = computeDefaultStrandZoom({
+      twinning: true,
+      containerWidth: 1200,
+      containerHeight: 800,
+      isMobile: false,
+      autoFitScale: 1,
+    });
+    expect(zoom).toBeGreaterThan(0.95);
+    expect(zoom).toBeLessThan(1.15);
+  });
+
+  it("eases zoom down on mobile", () => {
+    const laptop = computeDefaultStrandZoom({
+      twinning: false,
+      containerWidth: 1200,
+      containerHeight: 800,
+      isMobile: false,
+      autoFitScale: 1,
+    });
+    const mobile = computeDefaultStrandZoom({
+      twinning: false,
+      containerWidth: 390,
+      containerHeight: 700,
+      isMobile: true,
+      autoFitScale: 1,
+    });
+    expect(mobile).toBeLessThan(laptop);
+  });
+
+  it("compensates when auto-fit shrinks the layout", () => {
+    const zoom = computeDefaultStrandZoom({
+      twinning: false,
+      containerWidth: 1200,
+      containerHeight: 800,
+      isMobile: false,
+      autoFitScale: 0.8,
+    });
+    expect(zoom * 0.8).toBeGreaterThan(1.4);
+  });
+});
+
+describe("viewportStrandZoomFactor", () => {
+  it("boosts slightly on large desktops", () => {
+    expect(
+      viewportStrandZoomFactor(1680, 900, false, false),
+    ).toBeGreaterThan(viewportStrandZoomFactor(1100, 800, false, false));
+  });
+});
 
 describe("measureStrandCanvasSize", () => {
   it("uses more of a large desktop viewport than the old 440px cap", () => {

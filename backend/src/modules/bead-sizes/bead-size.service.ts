@@ -4,6 +4,7 @@ import { ConflictError, NotFoundError } from "../../lib/errors.js";
 import type { BeadSizeCreateDTO, BeadSizeUpdateDTO } from "./bead-size.validation.js";
 
 function mapRow(row: Record<string, unknown>) {
+  const ref = row.group_reference_diameter_px;
   return {
     id: row.id,
     sizeMm: Number(row.size_mm),
@@ -11,6 +12,8 @@ function mapRow(row: Record<string, unknown>) {
     displayOrder: row.display_order,
     isActive: row.is_active,
     isDefault: row.is_default,
+    groupReferenceDiameterPx:
+      ref != null && Number(ref) > 0 ? Number(ref) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

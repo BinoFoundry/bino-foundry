@@ -113,6 +113,13 @@ export function beadStrandRotationDeg(angle: number, beadTypeSlug?: string): num
   if (beadTypeSlug === "charm") {
     return radialOutwardRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
   }
+  if (
+    beadTypeSlug === "spacer" ||
+    beadTypeSlug === "separator" ||
+    beadTypeSlug === "connector"
+  ) {
+    return radialOutwardRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
+  }
   return tangentRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
 }
 

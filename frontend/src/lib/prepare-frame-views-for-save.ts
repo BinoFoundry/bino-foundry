@@ -16,6 +16,7 @@ function processedFileName(axis: string): string {
 /**
  * Export cropped plates and upload processed assets. Called only on Save frame.
  * Original URLs are preserved; plateUrl becomes the processed crop for compositing.
+ * plateCropConfig is retained for lossless re-edit on reopen.
  */
 export async function prepareRenderViewsForSave(views: FrameRenderView[]): Promise<FrameRenderView[]> {
   const prepared: FrameRenderView[] = [];
@@ -47,7 +48,14 @@ export async function prepareRenderViewsForSave(views: FrameRenderView[]): Promi
         originalPlateUrl: sourceUrl,
         originalWidth: original.width,
         originalHeight: original.height,
-        plateCropConfig: undefined,
+        plateCropConfig: {
+          ...config,
+          originalUrl: sourceUrl,
+          imageWidth: config.imageWidth || original.width,
+          imageHeight: config.imageHeight || original.height,
+          processedUrl: imageUrl,
+          updatedAt: Date.now(),
+        },
       });
     } else {
       prepared.push({
@@ -55,7 +63,6 @@ export async function prepareRenderViewsForSave(views: FrameRenderView[]): Promi
         originalPlateUrl: view.originalPlateUrl?.trim() || sourceUrl,
         originalWidth: original.width,
         originalHeight: original.height,
-        plateCropConfig: undefined,
       });
     }
   }

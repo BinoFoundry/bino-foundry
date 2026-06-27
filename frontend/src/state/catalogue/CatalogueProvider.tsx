@@ -29,6 +29,18 @@ import {
   type CatalogueStore,
 } from "./store";
 
+function replaceById<T extends { id: string }>(list: T[], item: T): T[] {
+  const idx = list.findIndex((x) => x.id === item.id);
+  if (idx < 0) return [...list, item];
+  const next = list.slice();
+  next[idx] = item;
+  return next;
+}
+
+function removeById<T extends { id: string }>(list: T[], id: string): T[] {
+  return list.filter((x) => x.id !== id);
+}
+
 export interface CatalogueActions {
   addBeadLibrary: (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => Promise<void>;
   updateBeadLibrary: (entry: BeadLibraryEntry) => Promise<void>;
@@ -37,6 +49,9 @@ export interface CatalogueActions {
     payload: Parameters<typeof beadsApi.updateCrop>[1],
   ) => Promise<void>;
   deleteBeadLibrary: (id: string) => Promise<void>;
+  recalculateBeadBoundsMetadata: () => Promise<{ updated: number; skipped: number }>;
+  recalculateMmGroupReferences: () => Promise<{ groups: number; updated: number; skipped: number }>;
+  refreshBeadLibrarySizes: () => Promise<void>;
   addBeadType: (
     entry: Pick<BeadTypeEntry, "name" | "description"> & {
       displayOrder?: number;
@@ -117,37 +132,95 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     void refreshFromApi();
   }, [refreshFromApi]);
 
+  const mergeStore = useCallback((updater: (prev: CatalogueStore) => CatalogueStore) => {
+    setStore((prev) => {
+      const next = updater(prev);
+      saveToStorage(next);
+      syncCatalogueSnapshot(next);
+      return next;
+    });
+  }, []);
+
   const addBeadLibrary = useCallback(
     async (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => {
-      await beadsApi.createLibrary(entry, sizes);
-      await refreshFromApi();
+      const [created, librarySizes] = await Promise.all([
+        beadsApi.createLibrary(entry, sizes),
+        beadLibrarySizesApi.list(),
+      ]);
+      mergeStore((prev) => ({
+        ...prev,
+        beadLibraries: replaceById(prev.beadLibraries, created),
+        beadLibrarySizes: librarySizes,
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const updateBeadLibrary = useCallback(
     async (entry: BeadLibraryEntry) => {
-      await beadsApi.updateLibrary(entry.id, entry);
-      await refreshFromApi();
+      const updated = await beadsApi.updateLibrary(entry.id, entry);
+      mergeStore((prev) => ({
+        ...prev,
+        beadLibraries: replaceById(prev.beadLibraries, updated),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const updateBeadCrop = useCallback(
     async (publicId: string, payload: Parameters<typeof beadsApi.updateCrop>[1]) => {
-      await beadsApi.updateCrop(publicId, payload);
-      await refreshFromApi();
+      const updated = await beadsApi.updateCrop(publicId, payload);
+      mergeStore((prev) => ({
+        ...prev,
+        beadLibraries: replaceById(prev.beadLibraries, updated),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const deleteBeadLibrary = useCallback(
     async (id: string) => {
-      await beadsApi.deleteLibrary(id);
-      await refreshFromApi();
+      const [_, librarySizes] = await Promise.all([
+        beadsApi.deleteLibrary(id),
+        beadLibrarySizesApi.list(),
+      ]);
+      mergeStore((prev) => ({
+        ...prev,
+        beadLibraries: removeById(prev.beadLibraries, id),
+        beadLibrarySizes: librarySizes,
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
+
+  const recalculateBeadBoundsMetadata = useCallback(async () => {
+    const result = await beadsApi.recalculateBoundsMetadata();
+    const [beadLibraries, beadLibrarySizes, beadSizes] = await Promise.all([
+      beadsApi.listLibraries(),
+      beadLibrarySizesApi.list(),
+      beadSizesApi.list(true),
+    ]);
+    mergeStore((prev) => ({ ...prev, beadLibraries, beadLibrarySizes, beadSizes }));
+    return result;
+  }, [mergeStore]);
+
+  const recalculateMmGroupReferences = useCallback(async () => {
+    const result = await beadSizesApi.recalculateMmGroupReferences();
+    const [beadLibrarySizes, beadSizes] = await Promise.all([
+      beadLibrarySizesApi.list(),
+      beadSizesApi.list(true),
+    ]);
+    mergeStore((prev) => ({ ...prev, beadLibrarySizes, beadSizes }));
+    return result;
+  }, [mergeStore]);
+
+  const refreshBeadLibrarySizes = useCallback(async () => {
+    const [beadLibrarySizes, beadSizes] = await Promise.all([
+      beadLibrarySizesApi.list(),
+      beadSizesApi.list(true),
+    ]);
+    mergeStore((prev) => ({ ...prev, beadLibrarySizes, beadSizes }));
+  }, [mergeStore]);
 
   const addBeadType = useCallback(
     async (
@@ -156,98 +229,134 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         isActive?: boolean;
       },
     ) => {
-      await beadsApi.createType(entry);
-      await refreshFromApi();
+      const created = await beadsApi.createType(entry);
+      mergeStore((prev) => ({
+        ...prev,
+        beadTypes: replaceById(prev.beadTypes, created),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const updateBeadType = useCallback(
     async (entry: BeadTypeEntry) => {
-      await beadsApi.updateType(entry.id, entry);
-      await refreshFromApi();
+      const updated = await beadsApi.updateType(entry.id, entry);
+      mergeStore((prev) => ({
+        ...prev,
+        beadTypes: replaceById(prev.beadTypes, updated),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const deleteBeadType = useCallback(
     async (id: string) => {
       await beadsApi.deleteType(id);
-      await refreshFromApi();
+      mergeStore((prev) => ({
+        ...prev,
+        beadTypes: removeById(prev.beadTypes, id),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const addBeadSize = useCallback(
     async (entry: Omit<BeadSizeEntry, "id" | "createdAt" | "updatedAt">) => {
-      await beadSizesApi.create(entry);
-      await refreshFromApi();
+      const created = await beadSizesApi.create(entry);
+      mergeStore((prev) => ({
+        ...prev,
+        beadSizes: replaceById(prev.beadSizes, created),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const updateBeadSize = useCallback(
     async (entry: BeadSizeEntry) => {
-      await beadSizesApi.update(entry.id, entry);
-      await refreshFromApi();
+      const updated = await beadSizesApi.update(entry.id, entry);
+      mergeStore((prev) => ({
+        ...prev,
+        beadSizes: replaceById(prev.beadSizes, updated),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const deleteBeadSize = useCallback(
     async (id: string) => {
       await beadSizesApi.delete(id);
-      await refreshFromApi();
+      mergeStore((prev) => ({
+        ...prev,
+        beadSizes: removeById(prev.beadSizes, id),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const addWristSize = useCallback(
     async (entry: Omit<WristSizeEntry, "id" | "createdAt" | "updatedAt">) => {
-      await wristSizesApi.create(entry);
-      await refreshFromApi();
+      const created = await wristSizesApi.create(entry);
+      mergeStore((prev) => ({
+        ...prev,
+        wristSizes: replaceById(prev.wristSizes, created),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const updateWristSize = useCallback(
     async (entry: WristSizeEntry) => {
-      await wristSizesApi.update(entry.id, entry);
-      await refreshFromApi();
+      const updated = await wristSizesApi.update(entry.id, entry);
+      mergeStore((prev) => ({
+        ...prev,
+        wristSizes: replaceById(prev.wristSizes, updated),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const deleteWristSize = useCallback(
     async (id: string) => {
       await wristSizesApi.delete(id);
-      await refreshFromApi();
+      mergeStore((prev) => ({
+        ...prev,
+        wristSizes: removeById(prev.wristSizes, id),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const addFrame = useCallback(
     async (entry: FrameEntry) => {
-      await catalogueApi.createFrame(entry);
-      await refreshFromApi();
+      const created = await catalogueApi.createFrame(entry);
+      mergeStore((prev) => ({
+        ...prev,
+        frames: replaceById(prev.frames, created),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const updateFrame = useCallback(
     async (entry: FrameEntry) => {
-      await catalogueApi.updateFrame(entry.id, entry);
-      await refreshFromApi();
+      const updated = await catalogueApi.updateFrame(entry.id, entry);
+      mergeStore((prev) => ({
+        ...prev,
+        frames: replaceById(prev.frames, updated),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const deleteFrame = useCallback(
     async (id: string) => {
       await catalogueApi.deleteFrame(id);
-      await refreshFromApi();
+      mergeStore((prev) => ({
+        ...prev,
+        frames: removeById(prev.frames, id),
+      }));
     },
-    [refreshFromApi],
+    [mergeStore],
   );
 
   const resetToDefaults = useCallback(() => {
@@ -265,6 +374,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       updateBeadLibrary,
       updateBeadCrop,
       deleteBeadLibrary,
+      recalculateBeadBoundsMetadata,
+      recalculateMmGroupReferences,
+      refreshBeadLibrarySizes,
       addBeadType,
       updateBeadType,
       deleteBeadType,
@@ -288,6 +400,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       updateBeadLibrary,
       updateBeadCrop,
       deleteBeadLibrary,
+      recalculateBeadBoundsMetadata,
+      recalculateMmGroupReferences,
+      refreshBeadLibrarySizes,
       addBeadType,
       updateBeadType,
       deleteBeadType,

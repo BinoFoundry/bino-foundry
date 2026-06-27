@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { lensClipConfigSchema, maskConfigSchema } from "../rendering/rendering.validation.js";
+import {
+  beadCropConfigSchema,
+  lensClipConfigSchema,
+  maskConfigSchema,
+} from "../rendering/rendering.validation.js";
 
 const lensColorSchema = z.object({
   colorName: z.string().min(1),
@@ -15,6 +19,7 @@ const renderViewSchema = z.object({
   originalPlateUrl: z.string().min(1).optional(),
   originalWidth: z.coerce.number().int().positive().optional(),
   originalHeight: z.coerce.number().int().positive().optional(),
+  plateCropConfig: beadCropConfigSchema.nullable().optional(),
   clipConfig: lensClipConfigSchema.nullable().optional(),
   clipStatus: z.enum(["draft", "ready"]).optional(),
   /** Editor anchors/handles — persisted alongside clip_config for re-edit */

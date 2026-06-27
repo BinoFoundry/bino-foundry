@@ -16,6 +16,7 @@ export interface FrameRenderViewRow {
   originalPlateUrl: string | null;
   originalWidth: number | null;
   originalHeight: number | null;
+  plateCropConfig: unknown | null;
   clipConfig: unknown | null;
   clipStatus: "draft" | "ready";
   maskConfig: unknown | null;
@@ -33,6 +34,7 @@ function mapViewRow(row: Record<string, unknown>): FrameRenderViewRow {
     originalPlateUrl: row.original_plate_url ? String(row.original_plate_url) : null,
     originalWidth: row.original_image_width != null ? Number(row.original_image_width) : null,
     originalHeight: row.original_image_height != null ? Number(row.original_image_height) : null,
+    plateCropConfig: row.plate_crop_config ?? null,
     clipConfig: row.clip_config ?? null,
     clipStatus: (row.clip_status as "draft" | "ready") ?? "draft",
     maskConfig: row.mask_config ?? null,
@@ -89,6 +91,7 @@ export class RenderingService {
       original_plate_url: payload.originalPlateUrl ?? null,
       original_image_width: payload.originalImageWidth ?? null,
       original_image_height: payload.originalImageHeight ?? null,
+      plate_crop_config: payload.plateCropConfig ?? null,
       clip_config: payload.clipConfig ?? null,
       clip_status: clipStatus,
       mask_config: payload.maskConfig ?? null,

@@ -95,4 +95,11 @@ export const beadsApi = {
       method: "DELETE",
     });
   },
+
+  recalculateBoundsMetadata(): Promise<{ updated: number; skipped: number }> {
+    return apiRequest<{ updated: number; skipped: number }>(
+      "/bead-libraries/recalculate-bounds-metadata",
+      { method: "POST" },
+    );
+  },
 };

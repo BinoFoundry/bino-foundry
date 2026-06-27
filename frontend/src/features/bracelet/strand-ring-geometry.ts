@@ -12,13 +12,13 @@ import { computeMaxRingRadiusPx, computeWristRingRadiusPx, type WristSizeBounds 
 import { STRAND_LAYOUT_BASELINE_PX } from "./strand-viewport";
 
 /** Tight gap between adjacent bead edges at layout scale factor 1. */
-export const BEAD_PAIR_GAP_BASE_PX = 0.04;
+export const BEAD_PAIR_GAP_BASE_PX = 0.012;
 
 /** Minimal arc per side for anti-alias bleed at layout scale factor 1. */
-export const BEAD_VISUAL_BLEED_BASE_PX = 0.1;
+export const BEAD_VISUAL_BLEED_BASE_PX = 0.04;
 
 /** Small epsilon so floating-point layout does not under-allocate arc. */
-const SPACING_EPSILON_PX = 0.08;
+const SPACING_EPSILON_PX = 0.02;
 
 export interface BeadSpacingPx {
   pairGapPx: number;
@@ -29,8 +29,8 @@ export interface BeadSpacingPx {
 export function scaledBeadSpacingPx(scaleFactor: number): BeadSpacingPx {
   const sf = Math.max(0.5, scaleFactor);
   return {
-    pairGapPx: Math.max(0.03, BEAD_PAIR_GAP_BASE_PX * sf),
-    bleedPx: Math.max(0.08, BEAD_VISUAL_BLEED_BASE_PX * sf),
+    pairGapPx: Math.max(0.008, BEAD_PAIR_GAP_BASE_PX * sf),
+    bleedPx: Math.max(0.03, BEAD_VISUAL_BLEED_BASE_PX * sf),
   };
 }
 
@@ -38,7 +38,10 @@ export function scaledBeadSpacingPx(scaleFactor: number): BeadSpacingPx {
  * Rendered arc occupancy for layout: tangent width + bleed on both sides.
  * Does not include inter-bead pair gap (added separately between neighbors).
  */
-export function beadLayoutArcPx(dim: BeadSlotDimensions, scaleFactor: number): number {
+export function beadLayoutArcPx(
+  dim: BeadSlotDimensions,
+  scaleFactor: number,
+): number {
   const { bleedPx } = scaledBeadSpacingPx(scaleFactor);
   return getBeadTangentArcPx(dim) + bleedPx * 2;
 }

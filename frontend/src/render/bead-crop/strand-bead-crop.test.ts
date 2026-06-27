@@ -33,7 +33,7 @@ describe("beadVisualBoundsFromCropConfig", () => {
 });
 
 describe("getBeadSlotDimensions", () => {
-  it("matches crop aspect ratio instead of forcing a square wrapper", () => {
+  it("round beads use a square layout at the target visible diameter", () => {
     const config = {
       version: BEAD_CROP_CONFIG_V1,
       imageWidth: 100,
@@ -44,9 +44,8 @@ describe("getBeadSlotDimensions", () => {
     } as const;
     const placed = mockPlaced(config);
     const dim = getBeadSlotDimensions(placed, 8, 1);
-    const ratio = dim.width / dim.height;
-    expect(ratio).toBeCloseTo(1.5, 1);
-    expect(Math.max(dim.width, dim.height)).toBeCloseTo(mmToBasePx(8, 1), 1);
+    expect(dim.width).toBeCloseTo(dim.height, 5);
+    expect(dim.width).toBeCloseTo(mmToBasePx(8, 1), 1);
   });
 
   it("scales proportionally with mm", () => {
@@ -76,6 +75,27 @@ describe("getBeadSlotDimensions", () => {
       scale: 1,
     } as const;
     const dim = getBeadSlotDimensions(mockPlaced(config), 8, 1);
-    expect(getBeadTangentArcPx(dim)).toBeCloseTo(dim.width, 5);
+    expect(getBeadTangentArcPx(dim)).toBeCloseTo(Math.max(dim.width, dim.height), 5);
+  });
+
+  it("round spacers use the same mm slot as other round beads", () => {
+    const config = {
+      version: BEAD_CROP_CONFIG_V1,
+      imageWidth: 100,
+      imageHeight: 100,
+      originalUrl: "https://example.com/spacer.png",
+      crop: { x: 0.1, y: 0.2, width: 0.75, height: 0.35 },
+      scale: 1,
+    } as const;
+    const spacer = getBeadSlotDimensions(
+      {
+        ...mockPlaced(config),
+        bead: { ...mockPlaced(config).bead, beadTypeSlug: "spacer" },
+      },
+      8,
+      1,
+    );
+    expect(spacer.width).toBeCloseTo(spacer.height, 5);
+    expect(spacer.width).toBeCloseTo(mmToBasePx(8, 1), 1);
   });
 });

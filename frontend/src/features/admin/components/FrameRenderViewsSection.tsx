@@ -134,6 +134,19 @@ export const FrameRenderViewsSection = forwardRef<
     };
   }, []);
 
+  useEffect(() => {
+    for (const axis of FRAME_VIEW_AXES) {
+      const view = views.find((v) => v.view === axis);
+      if (!view) continue;
+      if (draftRef.current[axis] && hasAnyLensMask(draftRef.current[axis]!)) continue;
+      const resolved = resolveMaskConfigForEditor(view);
+      if (resolved && hasAnyLensMask(resolved)) {
+        draftRef.current[axis] = resolved;
+        setPreviewMasks((prev) => (prev[axis] ? prev : { ...prev, [axis]: resolved }));
+      }
+    }
+  }, [views]);
+
   const getView = useCallback(
     (axis: FrameViewAxis) => views.find((v) => v.view === axis) ?? emptyView(axis),
     [views],

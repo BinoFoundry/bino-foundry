@@ -7,6 +7,7 @@ import {
   normFromPx,
   toggleSegmentCurved,
 } from "./bezier-path";
+import { UI_CANVAS_BACKGROUND } from "../constants";
 import {
   CursorState,
   EditorInteractionState,
@@ -241,7 +242,7 @@ export class PolygonEditor {
     const h = rect.height;
     this.ctx.save();
     this.ctx.clearRect(0, 0, w, h);
-    this.ctx.fillStyle = '#e8e6e1';
+    this.ctx.fillStyle = UI_CANVAS_BACKGROUND;
     this.ctx.fillRect(0, 0, w, h);
 
     this.ctx.translate(this.offsetX, this.offsetY);

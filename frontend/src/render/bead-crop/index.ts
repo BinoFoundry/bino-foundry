@@ -1,9 +1,30 @@
 export {
   beadVisualBoundsFromCropConfig,
+  resolveBeadPhysicalMetrics,
+  resolveBeadPhysicalMetricsAudit,
+  resolveBeadPhysicalMetricsForRender,
   resolveBeadVisualBoundsNorm,
-  usesProcessedVisualBounds,
+  clearBeadVisualBoundsCache,
   type BeadVisualBoundsNorm,
 } from "./crop-visual-bounds";
+export { computeBeadRenderSizingDebug, type BeadRenderSizingDebug } from "./bead-render-sizing";
+export {
+  isStrandBeadGeometryOverlayEnabled,
+  normBBoxFromPoints,
+  polygonAreaNorm,
+  resolveBeadCropGeometryDebug,
+  type BeadCropGeometryDebug,
+} from "./crop-geometry-audit";
+export {
+  isRoundVisualBeadType,
+  resolveBeadSlotSizing,
+  type BeadClipBoundsPx,
+  type BeadRenderSizingPath,
+  type BeadSlotSizingCatalogueContext,
+  type BeadSlotSizingResult,
+  type SquareFallbackReason,
+} from "./strand-bead-sizing";
+export { resolveBeadCropConfig } from "./resolve-bead-crop-config";
 export { loadImage, loadImageForProcessing } from "./image-loader";
 export {
   calibratedVisualDiameterPx,
@@ -27,8 +48,20 @@ export {
   ensureBeadCropLens,
   editorLensesToBeadCropConfig,
   exportCroppedBeadBlob,
+  exportCroppedBeadDeliveryBlobs,
+  exportNormalizedBeadBlobs,
+  deliveryUrlsFromUploads,
+  computeProcessedExportDimensions,
+  computeBeadPhysicalMetricsForSave,
+  diagnoseNormalizedExport,
+  exportBitmapComparison,
   isBeadCropEditorValid,
+  measureCanvasVisibleFootprint,
+  normalizedExportCanvasSidePx,
   upgradeBeadCropOnSave,
+  type BitmapExportComparison,
+  type NormalizedExportRenderDiagnosis,
+  type CanvasVisibleFootprint,
 } from "./crop-path";
 export {
   beadCropClipPathStyles,
@@ -36,10 +69,20 @@ export {
   beadDisplayImageStyles,
   beadShapeClass,
   getBeadDisplayImageUrl,
+  getBeadLibraryImageUrl,
+  getBeadStrandImageUrl,
+  getBeadImageUrlForVariant,
+  resolveBeadDeliveryUrl,
+  hasDistinctProcessedAsset,
+  hasPreNormalizedStrandAsset,
+  mergeSizeOfferFromCatalogue,
+  resolvePreNormalizedDeliveryUrl,
 } from "./apply-crop";
 export {
   getBeadImageUrl,
   getBeadSlotDimensions,
+  beadTargetDiameterPx,
+  usesProcessedStrandAsset,
   buildStrandLoopPath,
   getGuideEmptySlotShellStyle,
   getGuideSlotDimensions,

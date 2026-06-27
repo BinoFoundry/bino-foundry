@@ -27,6 +27,7 @@ function mapRenderViewRow(row: Record<string, unknown>): Record<string, unknown>
     originalPlateUrl: row.original_plate_url ?? null,
     originalWidth: row.original_image_width != null ? Number(row.original_image_width) : null,
     originalHeight: row.original_image_height != null ? Number(row.original_image_height) : null,
+    plateCropConfig: row.plate_crop_config ?? null,
     clipConfig: row.clip_config ?? null,
     clipStatus: row.clip_status ?? row.mask_status ?? "draft",
     maskConfig: row.mask_config ?? null,
@@ -110,6 +111,7 @@ function normalizeRenderViews(
   originalPlateUrl: string | null;
   originalWidth: number | null;
   originalHeight: number | null;
+  plateCropConfig: unknown | null;
   clipConfig: unknown | null;
   clipStatus: "draft" | "ready";
   maskConfig: unknown | null;
@@ -125,6 +127,7 @@ function normalizeRenderViews(
     originalPlateUrl: string | null;
     originalWidth: number | null;
     originalHeight: number | null;
+    plateCropConfig: unknown | null;
     clipConfig: unknown | null;
     clipStatus: "draft" | "ready";
     maskConfig: unknown | null;
@@ -145,6 +148,7 @@ function normalizeRenderViews(
       originalPlateUrl: v.originalPlateUrl?.trim() || null,
       originalWidth: v.originalWidth != null ? Math.floor(v.originalWidth) : null,
       originalHeight: v.originalHeight != null ? Math.floor(v.originalHeight) : null,
+      plateCropConfig: v.plateCropConfig ?? null,
       clipConfig: v.clipConfig ?? null,
       clipStatus: v.clipStatus ?? "draft",
       maskConfig: v.maskConfig ?? null,
@@ -178,6 +182,7 @@ async function syncFrameRenderViews(
     original_plate_url: v.originalPlateUrl,
     original_image_width: v.originalWidth,
     original_image_height: v.originalHeight,
+    plate_crop_config: v.plateCropConfig,
     clip_config: v.clipConfig,
     clip_status: v.clipStatus,
     mask_config: v.maskConfig,

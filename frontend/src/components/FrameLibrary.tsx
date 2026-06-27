@@ -3,6 +3,7 @@ import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
+import { resolveAssetImageUrl } from "@/lib/asset-image-url";
 import type { FrameOption } from "@/lib/luxe-data";
 import { useCatalogue } from "@/data/index";
 
@@ -50,7 +51,10 @@ const FrameLibrary = ({ onSelectFrame, open, onClose }: FrameLibraryProps) => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-3 content-start">
-        {filteredFrames.map((frame) => (
+        {filteredFrames.map((frame) => {
+          const thumb =
+            resolveAssetImageUrl(frame.frameImages?.[0], "thumbnail") ?? frame.frameImages?.[0];
+          return (
           <button
             key={frame.id}
             onClick={() => {
@@ -59,18 +63,23 @@ const FrameLibrary = ({ onSelectFrame, open, onClose }: FrameLibraryProps) => {
             className="flex flex-col items-center gap-2 p-3 rounded-lg border-2 border-border hover:border-primary transition-all group bg-background"
           >
             <div className="w-full aspect-video bg-gradient-to-br from-gray-50 to-gray-100 rounded flex items-center justify-center overflow-hidden">
+              {thumb ? (
               <img
-                src={frame.frameImages?.[0]}
+                src={thumb}
                 alt={frame.name}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-contain p-2"
               />
+              ) : null}
             </div>
             <div className="text-center">
               <p className="type-body font-medium text-foreground">{frame.name}</p>
               <p className="text-xs text-muted-foreground">{format(frame.price)}</p>
             </div>
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

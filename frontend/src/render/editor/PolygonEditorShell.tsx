@@ -344,7 +344,7 @@ export function PolygonEditorShell({
       <p className="text-xs text-muted-foreground">{helpText}</p>
 
       <div
-        className="relative w-full overflow-hidden rounded-lg border border-border bg-muted/30"
+        className="surface-canvas relative w-full overflow-hidden rounded-lg border border-border"
         style={{ height: "min(52vh, 520px)", minHeight: 360 }}
       >
         <canvas
@@ -353,7 +353,7 @@ export function PolygonEditorShell({
           className="absolute inset-0 block h-full w-full touch-none"
         />
         {!editorReady ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-muted/40 text-sm text-muted-foreground">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[hsl(var(--surface-canvas)/0.85)] text-sm text-muted-foreground">
             Loading editor…
           </div>
         ) : null}

@@ -24,6 +24,14 @@ const DEFAULTS: Required<DetectContentBoundsOptions> = {
   paddingPx: 2,
 };
 
+/** Sunglasses plate preview — trim warm studio grays (#DED6D2, off-white) around frames. */
+export const PLATE_PREVIEW_BOUNDS_OPTS: DetectContentBoundsOptions = {
+  alphaMax: 12,
+  bgLumMin: 200,
+  bgSatMax: 42,
+  paddingPx: 4,
+};
+
 function lum(r: number, g: number, b: number): number {
   return r * 0.299 + g * 0.587 + b * 0.114;
 }

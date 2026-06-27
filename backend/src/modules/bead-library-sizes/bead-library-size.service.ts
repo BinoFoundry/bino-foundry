@@ -1,13 +1,25 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
-import type { SyncLibrarySizesDTO } from "./bead-library-size.validation.js";
+import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
+import type { SaveNormalizedExportsDTO, SyncLibrarySizesDTO } from "./bead-library-size.validation.js";
 
 function mapRow(row: Record<string, unknown>) {
   const lib = row.bead_libraries as { public_id?: string } | null | undefined;
-  const size = row.bead_sizes as { id?: string; size_mm?: number; label?: string; display_order?: number } | null;
+  const size = row.bead_sizes as {
+    id?: string;
+    size_mm?: number;
+    label?: string;
+    display_order?: number;
+    group_reference_diameter_px?: number | null;
+  } | null;
   const sizeMm = Number(size?.size_mm ?? row.size_mm ?? 0);
   const libraryPublicId = lib?.public_id ?? "";
+  const norm = row.normalization_factor;
+  const visible = row.asset_visible_diameter_px;
+  const normalizedVisible = row.normalized_visible_diameter_px;
+  const groupRef = size?.group_reference_diameter_px;
+  const deliveryUrls = row.normalized_delivery_urls;
   return {
     id: row.id,
     beadLibraryId: libraryPublicId,
@@ -19,6 +31,22 @@ function mapRow(row: Record<string, unknown>) {
     currencyCode: row.currency_code,
     displayOrder: size?.display_order ?? 0,
     isDefault: row.is_default === true,
+    normalizationFactor: norm != null && Number(norm) > 0 ? Number(norm) : 1,
+    assetVisibleDiameterPx:
+      visible != null && Number(visible) > 0 ? Number(visible) : null,
+    groupReferenceDiameterPx:
+      groupRef != null && Number(groupRef) > 0 ? Number(groupRef) : null,
+    normalizedProcessedImageUrl:
+      typeof row.normalized_processed_image_url === "string"
+        ? row.normalized_processed_image_url
+        : undefined,
+    normalizedDeliveryUrls:
+      deliveryUrls && typeof deliveryUrls === "object" ? deliveryUrls : undefined,
+    normalizedVisibleDiameterPx:
+      normalizedVisible != null && Number(normalizedVisible) > 0
+        ? Number(normalizedVisible)
+        : null,
+    needsNormalizedReexport: row.needs_normalized_reexport === true,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     /** Stable client key (library public id + mm). */
@@ -27,7 +55,7 @@ function mapRow(row: Record<string, unknown>) {
 }
 
 const SELECT =
-  "*, bead_libraries(public_id, name, bead_types(slug)), bead_sizes(size_mm, label, display_order, is_active)";
+  "*, bead_libraries(public_id, name, bead_types(slug)), bead_sizes(size_mm, label, display_order, is_active, group_reference_diameter_px)";
 
 async function resolveLibraryUuid(publicOrUuid: string): Promise<string> {
   const supabase = getSupabaseServiceRole();
@@ -152,6 +180,7 @@ export class BeadLibrarySizeService {
       .upsert(upsertRows, { onConflict: "bead_library_id,bead_size_id" })
       .select(SELECT);
     assertNoDbError(error);
+    await mmGroupNormalizationService.recalculateForLibrary(libraryId);
     return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
   }
 
@@ -245,6 +274,57 @@ export class BeadLibrarySizeService {
       });
     }
     return map;
+  }
+
+  async saveNormalizedExports(libraryId: string, dto: SaveNormalizedExportsDTO) {
+    const supabase = getSupabaseServiceRole();
+    const libraryUuid = await resolveLibraryUuid(libraryId);
+
+    const { data: junctionRows, error: junctionErr } = await supabase
+      .from("bead_library_sizes")
+      .select("id, bead_size_id, bead_sizes(size_mm)")
+      .eq("bead_library_id", libraryUuid);
+    assertNoDbError(junctionErr);
+
+    const junctionByMm = new Map(
+      (junctionRows ?? []).map((r) => {
+        const row = r as {
+          id: string;
+          bead_sizes: { size_mm?: number } | null;
+        };
+        return [Number(row.bead_sizes?.size_mm ?? 0), row.id] as const;
+      }),
+    );
+
+    const updatedIds: string[] = [];
+
+    for (const item of dto.exports) {
+      const junctionId = junctionByMm.get(item.sizeMm);
+      if (!junctionId) {
+        throw new ValidationError(
+          `Bead library is not enabled for size ${item.sizeMm} mm — enable the size before saving normalized exports.`,
+        );
+      }
+
+      const { error: upErr } = await supabase
+        .from("bead_library_sizes")
+        .update({
+          normalized_processed_image_url: item.normalizedProcessedImageUrl,
+          normalized_delivery_urls: item.normalizedDeliveryUrls ?? null,
+          normalized_visible_diameter_px: item.normalizedVisibleDiameterPx,
+          needs_normalized_reexport: false,
+        })
+        .eq("id", junctionId);
+      assertNoDbError(upErr);
+      updatedIds.push(junctionId);
+    }
+
+    const { data, error } = await supabase
+      .from("bead_library_sizes")
+      .select(SELECT)
+      .in("id", updatedIds);
+    assertNoDbError(error);
+    return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
   }
 }
 

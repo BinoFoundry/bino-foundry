@@ -1,3 +1,5 @@
+import type { BeadDeliveryUrls } from "@bino-foundry/shared/types";
+
 /** Admin/API payload for one enabled size on a bead library. */
 export interface BeadLibrarySizeInput {
   sizeMm: number;
@@ -24,6 +26,15 @@ export interface BeadLibrarySizeOffer {
   offerKey: string;
   isDefault?: boolean;
   displayOrder?: number;
+  /** group_reference / asset_visible — legacy runtime factor metadata. */
+  normalizationFactor?: number;
+  assetVisibleDiameterPx?: number | null;
+  groupReferenceDiameterPx?: number | null;
+  /** Save-time normalized export for this mm group. */
+  normalizedProcessedImageUrl?: string;
+  normalizedDeliveryUrls?: BeadDeliveryUrls | null;
+  normalizedVisibleDiameterPx?: number | null;
+  needsNormalizedReexport?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

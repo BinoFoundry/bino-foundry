@@ -22,6 +22,75 @@ export const STRAND_MAX_LAYOUT_FILL = 1.28;
 /** Horizontal gap between twin strand canvases in the preview row. */
 export const TWIN_STRAND_PREVIEW_GAP_PX = 12;
 
+/** Strand zoom clamps — keep in sync with useStrandZoom.ts */
+export const STRAND_ZOOM_MIN = 0.55;
+export const STRAND_ZOOM_MAX = 3;
+
+/** Target effective scale (autoFit × userZoom) on a laptop-width builder stage. */
+const STRAND_EFFECTIVE_ZOOM_SINGLE_LAPTOP = 1.56;
+const STRAND_EFFECTIVE_ZOOM_TWIN_LAPTOP = 1.02;
+const LAPTOP_REF_WIDTH_PX = 1120;
+
+function clampStrandZoom(value: number): number {
+  return Math.max(STRAND_ZOOM_MIN, Math.min(STRAND_ZOOM_MAX, value));
+}
+
+/**
+ * Viewport-aware multiplier for default strand zoom.
+ * Laptop ≈ 1.0; large desktop slightly larger; mobile/tablet ease back to prevent clipping.
+ */
+export function viewportStrandZoomFactor(
+  containerWidth: number,
+  containerHeight: number,
+  isMobile: boolean,
+  twinning: boolean,
+): number {
+  if (containerWidth <= 0 || containerHeight <= 0) return 1;
+
+  const shortest = Math.min(containerWidth, containerHeight);
+
+  if (isMobile) {
+    const floor = twinning ? 0.8 : 0.88;
+    const t = Math.min(1, shortest / 400);
+    return floor + (1 - floor) * t;
+  }
+
+  let factor = 1;
+
+  if (containerWidth >= 1560) factor *= 1.06;
+  else if (containerWidth >= 1400) factor *= 1.03;
+
+  if (containerWidth < LAPTOP_REF_WIDTH_PX) {
+    const t = Math.max(0, (containerWidth - 640) / (LAPTOP_REF_WIDTH_PX - 640));
+    const tabletFloor = twinning ? 0.9 : 0.94;
+    factor *= tabletFloor + (1 - tabletFloor) * t;
+  }
+
+  return factor;
+}
+
+/** Default user zoom for the strand canvas — responsive, not a fixed percentage. */
+export function computeDefaultStrandZoom(input: {
+  twinning: boolean;
+  containerWidth: number;
+  containerHeight: number;
+  isMobile: boolean;
+  autoFitScale: number;
+}): number {
+  const baseEffective = input.twinning
+    ? STRAND_EFFECTIVE_ZOOM_TWIN_LAPTOP
+    : STRAND_EFFECTIVE_ZOOM_SINGLE_LAPTOP;
+  const factor = viewportStrandZoomFactor(
+    input.containerWidth,
+    input.containerHeight,
+    input.isMobile,
+    input.twinning,
+  );
+  const targetEffective = baseEffective * factor;
+  const fit = Math.max(input.autoFitScale, 0.01);
+  return clampStrandZoom(targetEffective / fit);
+}
+
 export interface StrandAutoFitOptions {
   twinning?: boolean;
   /** Full preview viewport width (both strands). */

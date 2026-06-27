@@ -85,7 +85,7 @@ export function BeadsAdminPage() {
                 } else {
                   await cat.updateBeadLibrary(entry);
                   await beadLibrarySizesApi.sync(entry.id, sizes);
-                  await cat.refreshFromApi();
+                  await cat.refreshBeadLibrarySizes();
                 }
                 setModal(null);
               } catch (err) {
@@ -136,9 +136,8 @@ export function BeadsAdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{b.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {typeName(b.beadTypeId)} ·{" "}
-                    {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)} · crop{" "}
-                    {b.cropStatus ?? "draft"}
+                    {typeName(b.beadTypeId)} · {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)}
+                    {b.isActive === false ? null : b.cropStatus === "ready" ? " · Ready" : " · Draft"}
                   </p>
                 </div>
                 {b.isActive === false ? <AdminStatusBadge label="Inactive" variant="danger" /> : null}

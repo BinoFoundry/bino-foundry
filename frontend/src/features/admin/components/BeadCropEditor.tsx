@@ -7,8 +7,10 @@ import { PolygonEditorShell } from "@/render/editor/PolygonEditorShell";
 import {
   beadCropConfigToEditorLenses,
   beadCropEditorPlateKey,
+  computeBeadPhysicalMetricsForSave,
   detectBeadOutline,
-  exportCroppedBeadBlob,
+  deliveryUrlsFromUploads,
+  exportCroppedBeadDeliveryBlobs,
   isBeadCropEditorValid,
   loadImage,
   upgradeBeadCropOnSave,
@@ -16,8 +18,19 @@ import {
 import { pathsToMaskCanvas } from "@/render/mask/bezier-path";
 import type { LensPolygon } from "@/render/mask/mask-types";
 import { uploadApi } from "@/services/api/upload";
+import { beadSizesApi } from "@/services/api/bead-sizes";
+import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
+import {
+  assetVisibleDiameterFromConfig,
+  filterStaleNormalizationTargets,
+  resolveNormalizedSizeTargets,
+  saveNormalizedExportsForLibrary,
+} from "@/features/admin/lib/normalized-bead-export";
+import type { BeadSizeEntry } from "@/types/bead-sizes";
+import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import {
   createBeadCropConfigV2,
+  getBeadCropPoints,
   isBeadCropConfigValid,
   type BeadCropConfig,
 } from "@bino-foundry/shared/types";
@@ -25,11 +38,16 @@ import {
 interface BeadCropEditorProps {
   originalUrl: string;
   initialCrop?: BeadCropConfig | null;
-  /** Live path edits (draft only — does not update parent form state). */
+  libraryId?: string;
+  enabledSizeMms?: number[];
+  beadSizes?: BeadSizeEntry[];
+  existingOffers?: BeadLibrarySizeOffer[];
   onDraftChange?: (config: BeadCropConfig | null, valid: boolean) => void;
-  /** Committed crop path saved to bead record (no processed PNG). */
   onSaveCrop?: (config: BeadCropConfig) => void;
   onProcessedUpload?: (processedUrl: string, config: BeadCropConfig) => void;
+  onBeforeNormalizedExport?: () => Promise<void>;
+  onNormalizedExportsSaved?: () => void | Promise<void>;
+  onScheduleGroupRegen?: () => void;
   className?: string;
 }
 
@@ -40,11 +58,19 @@ interface BeadCropEditorProps {
 export function BeadCropEditor({
   originalUrl,
   initialCrop,
+  libraryId,
+  enabledSizeMms = [],
+  beadSizes = [],
+  existingOffers = [],
   onDraftChange,
   onSaveCrop,
   onProcessedUpload,
+  onBeforeNormalizedExport,
+  onNormalizedExportsSaved,
+  onScheduleGroupRegen,
   className,
 }: BeadCropEditorProps) {
+  const developerMode = useAdminDeveloperMode();
   const [busy, setBusy] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [exportStatus, setExportStatus] = useState("");
@@ -101,10 +127,14 @@ export function BeadCropEditor({
 
         const confidenceLabel =
           confidence >= 0.75 ? "good" : confidence >= 0.5 ? "fair" : "low";
-        const detail = detection
-          ? `${detection.pathPointCount} path points (${detection.curvedSegmentCount} curved) from ${detection.contourPointCount} contour samples`
-          : `${points.length} path points`;
-        const message = `Silhouette detected (${confidenceLabel} confidence, ${detail}) — refine if needed, then save.`;
+        const message = developerMode
+          ? (() => {
+              const detail = detection
+                ? `${detection.pathPointCount} path points (${detection.curvedSegmentCount} curved) from ${detection.contourPointCount} contour samples`
+                : `${points.length} path points`;
+              return `Silhouette detected (${confidenceLabel} confidence, ${detail}) — refine if needed, then save.`;
+            })()
+          : "Outline detected — adjust if needed, then save.";
         if (!options?.silent || confidence >= 0.5) {
           setExportStatus(message);
         }
@@ -118,7 +148,7 @@ export function BeadCropEditor({
         setDetecting(false);
       }
     },
-    [originalUrl],
+    [originalUrl, developerMode],
   );
 
   useEffect(() => {
@@ -186,13 +216,17 @@ export function BeadCropEditor({
   const commitCropPath = () => {
     const config = draftRef.current;
     if (!config || !isBeadCropConfigValid(config)) {
-      alert("Draw a closed crop path (≥3 points) before saving.");
+      alert("Draw a closed outline (at least 3 points) before saving.");
       return;
     }
-    const committed = { ...config, updatedAt: Date.now() };
+    const points = getBeadCropPoints(config);
+    const physicalMetrics =
+      computeBeadPhysicalMetricsForSave(config.imageWidth, config.imageHeight, points) ??
+      config.physicalMetrics;
+    const committed = { ...config, physicalMetrics, updatedAt: Date.now() };
     draftRef.current = committed;
     onSaveCropRef.current?.(committed);
-    setExportStatus("Crop path saved — export processed asset when ready");
+    setExportStatus("Crop saved");
   };
 
   const handleExport = async () => {
@@ -204,14 +238,81 @@ export function BeadCropEditor({
     setBusy(true);
     setExportStatus("");
     try {
-      const blob = await exportCroppedBeadBlob(config);
-      const file = new File([blob], "bead-cropped.png", { type: "image/png" });
-      const uploaded = await uploadApi.uploadImage(file);
-      const next = { ...config, processedUrl: uploaded.url, updatedAt: Date.now() };
+      const blobs = await exportCroppedBeadDeliveryBlobs(config);
+      const [pngUp, webpUp] = await Promise.all([
+        uploadApi.uploadImage(new File([blobs.png], "bead-cropped.png", { type: "image/png" })),
+        uploadApi.uploadImage(new File([blobs.webp], "bead-cropped.webp", { type: "image/webp" })),
+      ]);
+      let avifUrl: string | null = null;
+      if (blobs.avif?.size) {
+        try {
+          const avifUp = await uploadApi.uploadImage(
+            new File([blobs.avif], "bead-cropped.avif", { type: "image/avif" }),
+          );
+          avifUrl = avifUp.imageUrl;
+        } catch {
+          // Storage bucket may not allow image/avif — WebP/PNG are sufficient.
+        }
+      }
+
+      const deliveryUrls = deliveryUrlsFromUploads({
+        png: pngUp.imageUrl,
+        webp: webpUp.imageUrl,
+        avif: avifUrl,
+      });
+
+      const points = getBeadCropPoints(config);
+      const physicalMetrics =
+        computeBeadPhysicalMetricsForSave(config.imageWidth, config.imageHeight, points) ??
+        config.physicalMetrics;
+
+      const next = {
+        ...config,
+        processedUrl: pngUp.imageUrl,
+        deliveryUrls,
+        physicalMetrics: physicalMetrics ?? config.physicalMetrics,
+        updatedAt: Date.now(),
+      };
       draftRef.current = next;
-      onProcessedUpload?.(uploaded.url, next);
+      onProcessedUpload?.(pngUp.imageUrl, next);
       onSaveCropRef.current?.(next);
-      setExportStatus("Processed asset uploaded to storage");
+
+      if (libraryId && enabledSizeMms.length > 0) {
+        await onBeforeNormalizedExport?.();
+        const freshBeadSizes = await beadSizesApi.list();
+        const assetVisible = assetVisibleDiameterFromConfig(next);
+        const allTargets = resolveNormalizedSizeTargets(
+          enabledSizeMms,
+          freshBeadSizes,
+          assetVisible,
+        );
+        const staleTargets = filterStaleNormalizationTargets(
+          allTargets,
+          existingOffers,
+          assetVisible,
+          next.updatedAt,
+        );
+        if (staleTargets.length > 0) {
+          await saveNormalizedExportsForLibrary(libraryId, next, staleTargets, {
+            existingOffers,
+          });
+          await onNormalizedExportsSaved?.();
+          onScheduleGroupRegen?.();
+          setExportStatus(
+            developerMode
+              ? `Processed asset saved · normalized ${staleTargets.length} size group(s)${
+                  allTargets.length - staleTargets.length > 0
+                    ? ` (${allTargets.length - staleTargets.length} unchanged)`
+                    : ""
+                }`
+              : "Image saved successfully",
+          );
+        } else {
+          setExportStatus("Image saved successfully");
+        }
+      } else {
+        setExportStatus("Image saved successfully");
+      }
     } catch (e) {
       setExportStatus(e instanceof Error ? e.message : "Export failed");
     } finally {
@@ -254,7 +355,7 @@ export function BeadCropEditor({
             disabled={busy || !pathReady}
             onClick={() => void handleExport()}
           >
-            {busy ? "Uploading…" : "Save processed asset"}
+            {busy ? "Saving…" : "Save image"}
           </Button>
         </div>
       </div>
@@ -269,15 +370,19 @@ export function BeadCropEditor({
         singlePathLabel="Crop boundary"
         previewLabel="Crop preview"
         handlesLabel="Bézier handles"
-        helpText="Silhouette path overlays the bead — drag points, Shift+click edge to insert, C toggles curves · Undo ⌘Z · Pan (H) or Space"
+        helpText={
+          developerMode
+            ? "Silhouette path overlays the bead — drag points, Shift+click edge to insert, C toggles curves · Undo ⌘Z · Pan (H) or Space"
+            : "Drag the points to match the bead outline. Use Auto-detect outline for a quick start."
+        }
       />
 
       {exportStatus ? <p className="text-xs text-muted-foreground">{exportStatus}</p> : null}
-      {initialCrop ? (
+      {developerMode && initialCrop ? (
         <p className="text-[10px] text-muted-foreground">
           {initialCrop.version === 2
-            ? "Editing saved crop path. Use Save crop to store path changes; Save processed asset exports PNG for the strand."
-            : "Legacy rect crop loaded as corner points — refine, Save crop, then export processed asset."}
+            ? "Editing saved crop path. Save crop stores outline changes; Save image uploads the cropped asset."
+            : "Legacy rect crop loaded as corner points — refine, save crop, then save image."}
         </p>
       ) : null}
     </div>

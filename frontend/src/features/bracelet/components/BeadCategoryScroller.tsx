@@ -100,7 +100,7 @@ export function BeadCategoryScroller({
       <div
         ref={scrollerRef}
         className={cn(
-          "flex gap-1 overflow-x-auto scroll-smooth",
+          "flex touch-pan-x gap-1 overflow-x-auto scroll-smooth",
           compact ? "px-2 py-1.5" : "px-2 py-2",
           canScrollLeft && "pl-5",
           canScrollRight && "pr-5",

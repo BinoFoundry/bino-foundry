@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Gem, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
+import { useLibraryPanelWheelScroll } from "@/features/bracelet/hooks/use-library-panel-wheel-scroll";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
@@ -34,12 +35,15 @@ function ScrollPanel({ children }: { children: ReactNode }) {
 
 /** Left library panel — single vertical scroll for context, search, categories, and beads. */
 function LibraryScrollPanel({ children }: { children: ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useLibraryPanelWheelScroll(scrollRef);
+
   return (
     <div
+      ref={scrollRef}
       className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
       data-scroll-isolate="true"
       data-library-scroll-panel="true"
-      onWheel={(e) => e.stopPropagation()}
     >
       {children}
     </div>

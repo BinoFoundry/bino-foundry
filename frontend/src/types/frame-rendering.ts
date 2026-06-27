@@ -19,7 +19,7 @@ export interface FrameRenderView {
   originalPlateUrl?: string;
   originalWidth?: number;
   originalHeight?: number;
-  /** Draft path crop on original (BeadCropConfig v2) — cleared after save exports processed plate. */
+  /** Path crop on original (BeadCropConfig v2) — persisted for re-edit; plateUrl holds processed export. */
   plateCropConfig?: BeadCropConfig | null;
   /** Primary persisted clip data (LensClipConfig v1). */
   clipConfig?: LensClipConfig | null;

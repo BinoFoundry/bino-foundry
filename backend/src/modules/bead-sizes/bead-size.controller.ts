@@ -4,6 +4,7 @@ import { asyncHandler } from "../../lib/async-handler.js";
 import { sendCreated, sendJson } from "../../lib/http-response.js";
 import { validateBody } from "../../lib/validation.js";
 import { beadSizeService } from "./bead-size.service.js";
+import { mmGroupNormalizationService } from "./mm-group-normalization.service.js";
 import { beadSizeIdParam, createBeadSizeDto, updateBeadSizeDto } from "./bead-size.validation.js";
 
 async function list(req: Request, res: Response) {
@@ -32,10 +33,21 @@ async function remove(req: Request, res: Response) {
   sendJson(res, await beadSizeService.remove(id));
 }
 
+async function recalculateMmGroupReferences(_req: Request, res: Response) {
+  sendJson(res, await mmGroupNormalizationService.recalculateAll());
+}
+
+async function listPendingNormalizedReexport(req: Request, res: Response) {
+  const { id } = beadSizeIdParam.parse(req.params);
+  sendJson(res, await mmGroupNormalizationService.listPendingNormalizedReexport(id));
+}
+
 export const beadSizeHandlers = {
   list: asyncHandler(list),
   retrieve: asyncHandler(retrieve),
   create: asyncHandler(create),
   update: asyncHandler(update),
   remove: asyncHandler(remove),
+  recalculateMmGroupReferences: asyncHandler(recalculateMmGroupReferences),
+  listPendingNormalizedReexport: asyncHandler(listPendingNormalizedReexport),
 };

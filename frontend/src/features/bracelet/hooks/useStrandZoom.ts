@@ -22,8 +22,8 @@ export interface StrandZoomOptions {
 
 export const STRAND_ZOOM_MIN = 0.55;
 export const STRAND_ZOOM_MAX = 3;
-/** Default zoom when matching pair is enabled — keeps both bracelets in view. */
-export const STRAND_TWIN_DEFAULT_ZOOM = 0.75;
+/** Default zoom when matching pair is enabled — use {@link computeDefaultStrandZoom} for responsive defaults. */
+export const STRAND_TWIN_DEFAULT_ZOOM = 1.02;
 const ZOOM_BUTTON_STEP = 0.08;
 const ZOOM_WHEEL_SENSITIVITY = 0.0011;
 const ZOOM_SMOOTH_FACTOR = 0.28;

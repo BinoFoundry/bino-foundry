@@ -26,4 +26,22 @@ export const beadLibrarySizesApi = {
       },
     );
   },
+
+  saveNormalizedExports(
+    libraryId: string,
+    exports: {
+      sizeMm: number;
+      normalizedProcessedImageUrl: string;
+      normalizedDeliveryUrls?: { png?: string; webp?: string; avif?: string } | null;
+      normalizedVisibleDiameterPx: number;
+    }[],
+  ): Promise<BeadLibrarySizeOffer[]> {
+    return apiRequest<BeadLibrarySizeOffer[]>(
+      `/bead-library-sizes/library/${encodeURIComponent(libraryId)}/normalized-exports`,
+      {
+        method: "PUT",
+        body: { exports },
+      },
+    );
+  },
 };

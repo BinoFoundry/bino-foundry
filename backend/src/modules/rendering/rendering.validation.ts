@@ -47,6 +47,59 @@ export const lensClipConfigSchema = z.object({
   updatedAt: z.number().optional(),
 });
 
+const beadNormPointSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
+const beadPathAnchorSchema = beadNormPointSchema.extend({
+  curved: z.boolean().optional(),
+  handleIn: beadNormPointSchema.nullable().optional(),
+  handleOut: beadNormPointSchema.nullable().optional(),
+});
+
+const beadCropRectSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+});
+
+/** Frame plate path crop — BeadCropConfig v1 (rect) or v2 (path). */
+export const beadCropConfigSchema = z.union([
+  z.object({
+    version: z.literal(1),
+    imageWidth: z.number().int().positive(),
+    imageHeight: z.number().int().positive(),
+    originalUrl: z.string().min(1),
+    processedUrl: z.string().optional(),
+    crop: beadCropRectSchema,
+    scale: z.number(),
+    shape: z.enum(["circle", "rect"]),
+    autoDetected: z.boolean().optional(),
+    updatedAt: z.number().optional(),
+  }),
+  z.object({
+    version: z.literal(2),
+    imageWidth: z.number().int().positive(),
+    imageHeight: z.number().int().positive(),
+    originalUrl: z.string().min(1),
+    processedUrl: z.string().optional(),
+    points: z.array(beadPathAnchorSchema).min(3),
+    scale: z.number(),
+    updatedAt: z.number().optional(),
+    detection: z
+      .object({
+        autoDetected: z.boolean().optional(),
+        confidence: z.number().optional(),
+        contourPointCount: z.number().optional(),
+        pathPointCount: z.number().optional(),
+        curvedSegmentCount: z.number().optional(),
+      })
+      .optional(),
+  }),
+]);
+
 export const upsertFrameViewSchema = z.object({
   plateUrl: z.string().min(1),
   imageWidth: z.coerce.number().int().positive(),
@@ -54,6 +107,7 @@ export const upsertFrameViewSchema = z.object({
   originalPlateUrl: z.string().min(1).optional(),
   originalImageWidth: z.coerce.number().int().positive().optional(),
   originalImageHeight: z.coerce.number().int().positive().optional(),
+  plateCropConfig: beadCropConfigSchema.nullable().optional(),
   clipConfig: lensClipConfigSchema.nullable().optional(),
   clipStatus: z.enum(["draft", "ready"]).optional(),
   /** Editor anchors/handles — persisted for lossless re-edit */

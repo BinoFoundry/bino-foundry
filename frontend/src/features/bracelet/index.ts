@@ -25,6 +25,7 @@ export { useStrandZoom, STRAND_TWIN_DEFAULT_ZOOM } from "./hooks/useStrandZoom";
 export {
   computeLayoutCanvasSize,
   computeStrandAutoFitScale,
+  computeDefaultStrandZoom,
   measureStrandCanvasSize,
 } from "./strand-viewport";
 export { useBraceletBuilder } from "./hooks/useBraceletBuilder";

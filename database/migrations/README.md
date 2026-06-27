@@ -54,6 +54,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 28. `000032_bracelet_builder_library_title.sql` — admin-configurable bracelet builder left sidebar title in `site.settings_v1`.
 29. `000033_frame_plate_original.sql` — `original_plate_url` + dimensions on `frame_render_views` for non-destructive admin crop workflow.
 30. `000034_email_logs.sql` — `email_logs` audit table for outbound mail delivery diagnostics.
+31. `000035_frame_plate_crop_config.sql` — `plate_crop_config` JSONB on `frame_render_views` for lossless frame path re-edit.
+32. `000036_mm_group_normalization.sql` — `bead_sizes.group_reference_diameter_px` + per-library-size `normalization_factor`.
+33. `000037_bead_normalized_exports.sql` — per-junction `normalized_processed_image_url` + `needs_normalized_reexport` for save-time asset normalization.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

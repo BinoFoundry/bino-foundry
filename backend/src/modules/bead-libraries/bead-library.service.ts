@@ -2,8 +2,13 @@ import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { settingsService } from "../settings/settings.service.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
-import { isBeadCropConfigValid } from "@bino-foundry/shared/types";
+import {
+  isBeadCropConfigValid,
+  refreshBeadCropStoredMetrics,
+  type BeadCropConfig,
+} from "@bino-foundry/shared/types";
 import { beadLibrarySizeService } from "../bead-library-sizes/bead-library-size.service.js";
+import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
 import type {
   BeadLibraryCreateDTO,
   BeadLibraryCropDTO,
@@ -186,6 +191,9 @@ export class BeadLibraryService {
       .single();
 
     assertNoDbError(error);
+    if (payload.cropConfig !== undefined) {
+      await mmGroupNormalizationService.recalculateForLibrary(clientId);
+    }
     return mapBeadLibraryRow(data as Record<string, unknown>);
   }
 
@@ -214,6 +222,47 @@ export class BeadLibraryService {
 
     assertNoDbError(error);
     return { message: "Bead removed" };
+  }
+
+  /**
+   * Refresh visible bounds metadata on all beads from stored crop paths (no recrop).
+   */
+  async recalculateBoundsMetadata(): Promise<{ updated: number; skipped: number }> {
+    const supabase = getSupabaseServiceRole();
+
+    const { data: libraries, error: libErr } = await supabase
+      .from("bead_libraries")
+      .select("id, crop_config");
+    assertNoDbError(libErr);
+
+    let updated = 0;
+    let skipped = 0;
+
+    for (const lib of libraries ?? []) {
+      const row = lib as { id: string; crop_config: BeadCropConfig | null };
+      const cropConfig = row.crop_config;
+      if (!cropConfig || !isBeadCropConfigValid(cropConfig)) {
+        skipped += 1;
+        continue;
+      }
+
+      const nextConfig = refreshBeadCropStoredMetrics(cropConfig);
+      if (!nextConfig) {
+        skipped += 1;
+        continue;
+      }
+
+      const { error: upErr } = await supabase
+        .from("bead_libraries")
+        .update({ crop_config: nextConfig })
+        .eq("id", row.id);
+      assertNoDbError(upErr);
+      updated += 1;
+    }
+
+    await mmGroupNormalizationService.recalculateAll();
+
+    return { updated, skipped };
   }
 }
 

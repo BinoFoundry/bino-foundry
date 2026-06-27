@@ -1,8 +1,7 @@
-import { Info } from "lucide-react";
-
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { BeadLibraryEntry } from "@/types/beads";
+import { Info } from "lucide-react";
 
 const META_FIELDS: { key: string; label: string }[] = [
   { key: "material", label: "Material" },
@@ -61,7 +60,7 @@ export function BeadInfoButton({ bead, className }: BeadInfoButtonProps) {
       <PopoverContent
         side="top"
         align="end"
-        className="w-64 border-border/80 bg-popover p-3 text-sm shadow-md"
+        className="w-72 border-border/80 bg-popover p-3 text-sm shadow-md"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <p className="type-h3 text-sm text-foreground">{bead.name}</p>

@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useCallback, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search, X, Info, Gem } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
 import { BeadCategoryScroller } from "@/features/bracelet/components/BeadCategoryScroller";
 import { BeadInfoButton } from "@/features/bracelet/components/BeadInfoButton";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
+import { useLibraryPanelWheelScroll } from "@/features/bracelet/hooks/use-library-panel-wheel-scroll";
 import { cn } from "@/lib/utils";
 import { BEAD_LIBRARY_DRAG_TYPE } from "@/features/bracelet/interaction";
 import {
@@ -22,9 +24,9 @@ import {
 } from "@/features/bracelet/library-sizes";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
-import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
+import { getBeadLibraryImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
-import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
 export interface LibraryDragPayload {
@@ -62,6 +64,101 @@ function startLibraryDrag(
   onLibraryDragChange?.(true, { bead, size });
 }
 
+interface BeadLibraryCardProps {
+  bead: BeadLibraryEntry;
+  compact: boolean;
+  isMobile: boolean;
+  currency: string;
+  sizes: BeadLibrarySizeOffer[];
+  activeSize: BeadLibrarySizeOffer | undefined;
+  selectValue: string;
+  onSelectSize: (offerKey: string) => void;
+  onClick: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}
+
+const BeadLibraryCard = memo(function BeadLibraryCard({
+  bead,
+  compact,
+  isMobile,
+  currency,
+  sizes,
+  activeSize,
+  selectValue,
+  onSelectSize,
+  onClick,
+  onDragStart,
+  onDragEnd,
+}: BeadLibraryCardProps) {
+  const img = getBeadLibraryImageUrl(bead);
+
+  return (
+    <div className="relative flex flex-col overflow-visible rounded-lg border border-border/60 bg-muted/20">
+      <BeadInfoButton bead={bead} />
+      <button
+        type="button"
+        data-bead-library-item
+        draggable={!isMobile && !!activeSize}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onClick={onClick}
+        className={cn(
+          "flex w-full flex-col items-center overflow-hidden rounded-t-lg text-center transition hover:bg-accent hover:text-accent-foreground",
+          compact ? "gap-1 p-1.5" : "gap-1.5 p-2",
+        )}
+      >
+        <div className={cn("flex shrink-0 items-center justify-center", compact ? "h-11 w-11" : "h-12 w-12")}>
+          {img ? (
+            <img
+              src={img}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="max-h-full max-w-full"
+              style={getStrandBeadImageStyle(bead)}
+            />
+          ) : (
+            <Gem className="h-5 w-5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="min-w-0 w-full">
+          <p
+            className={cn(
+              "font-medium text-foreground",
+              compact ? "line-clamp-2 text-[10px] leading-tight" : "truncate text-xs",
+            )}
+          >
+            {bead.name}
+          </p>
+        </div>
+      </button>
+      {activeSize && sizes.length > 0 ? (
+        <div className="overflow-hidden rounded-b-lg border-t border-border/50 px-1.5 py-1.5">
+          <Select value={selectValue} onValueChange={onSelectSize}>
+            <SelectTrigger
+              className={cn(
+                "h-7 w-full bg-background text-[10px] focus:ring-selection/40",
+                compact ? "px-2" : "px-2.5",
+              )}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <SelectValue placeholder="Select size" />
+            </SelectTrigger>
+            <SelectContent>
+              {sizes.map((s) => (
+                <SelectItem key={s.offerKey} value={s.offerKey} className="text-xs">
+                  {s.sizeMm} mm · {formatSizeOfferPrice(s, currency)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
 const BeadLibrary = ({
   onSelectBead,
   onLibraryDragActiveChange,
@@ -78,7 +175,17 @@ const BeadLibrary = ({
   const [activeBeadTypeId, setActiveBeadTypeId] = useState<string>("");
   const [sizeByBeadId, setSizeByBeadId] = useState<Record<string, string>>({});
   const suppressClickAfterDragRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const gridAnchorRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
+  const isEmbedded = variant === "embedded";
+
+  useLibraryPanelWheelScroll(scrollRef, !isEmbedded);
+
+  const getScrollElement = useCallback(() => {
+    if (!isEmbedded) return scrollRef.current;
+    return gridAnchorRef.current?.closest<HTMLElement>("[data-library-scroll-panel]") ?? scrollRef.current;
+  }, [isEmbedded]);
 
   const endLibraryDrag = () => {
     onLibraryDragActiveChange?.(false);
@@ -89,21 +196,27 @@ const BeadLibrary = ({
     }, 0);
   };
 
-  const resolveSizeOffer = (
-    beadId: string,
-    sizes: BeadLibrarySizeOffer[],
-    def: BeadLibrarySizeOffer | undefined,
-  ): BeadLibrarySizeOffer | undefined => {
-    const key = sizeByBeadId[beadId];
-    if (key) return sizes.find((s) => s.offerKey === key) ?? def;
-    return def;
-  };
+  const resolveSizeOffer = useCallback(
+    (
+      beadId: string,
+      sizes: BeadLibrarySizeOffer[],
+      def: BeadLibrarySizeOffer | undefined,
+    ): BeadLibrarySizeOffer | undefined => {
+      const key = sizeByBeadId[beadId];
+      if (key) return sizes.find((s) => s.offerKey === key) ?? def;
+      return def;
+    },
+    [sizeByBeadId],
+  );
 
-  const handleLibraryClick = (bead: BeadLibraryEntry, size: BeadLibrarySizeOffer | undefined) => {
-    if (suppressClickAfterDragRef.current) return;
-    if (!size) return;
-    onSelectBead(bead, size);
-  };
+  const handleLibraryClick = useCallback(
+    (bead: BeadLibraryEntry, size: BeadLibrarySizeOffer | undefined) => {
+      if (suppressClickAfterDragRef.current) return;
+      if (!size) return;
+      onSelectBead(bead, size);
+    },
+    [onSelectBead],
+  );
 
   const activeTypes = useMemo(
     () =>
@@ -124,7 +237,17 @@ const BeadLibrary = ({
     });
   }, [cat.beadLibraries, currentBeadTypeId, search]);
 
-  const isEmbedded = variant === "embedded";
+  const gridColumns = compact ? 2 : isMobile ? 1 : 2;
+  const rowCount = Math.ceil(filtered.length / gridColumns);
+  const rowEstimate = compact ? 118 : 132;
+
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement,
+    estimateSize: () => rowEstimate,
+    overscan: 4,
+  });
+
   if (!open && !isEmbedded) return null;
 
   const emptyMessage =
@@ -135,10 +258,106 @@ const BeadLibrary = ({
         : BRACELET_COPY.libraryEmpty("beads");
 
   const panelClass = isEmbedded
-    ? "flex flex-col"
+    ? "flex min-h-0 flex-1 flex-col"
     : isMobile
       ? "surface-elevated fixed bottom-0 left-0 right-0 z-50 flex max-h-[min(70vh,100dvh)] flex-col rounded-t-2xl border-t border-subtle pb-[env(safe-area-inset-bottom)]"
       : "surface-elevated absolute bottom-0 left-0 top-0 z-30 flex w-64 flex-col border-r border-subtle";
+
+  const beadGrid = (
+    <div ref={gridAnchorRef} className="p-2">
+      {filtered.length === 0 ? (
+        <p className="px-2 py-8 text-center text-xs leading-relaxed text-muted-foreground">{emptyMessage}</p>
+      ) : (
+        <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const rowStart = virtualRow.index * gridColumns;
+            const rowBeads = filtered.slice(rowStart, rowStart + gridColumns);
+
+            return (
+              <div
+                key={virtualRow.key}
+                className={cn("absolute left-0 right-0 grid gap-2 px-0", compact ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2")}
+                style={{
+                  top: virtualRow.start,
+                  height: virtualRow.size,
+                }}
+              >
+                {rowBeads.map((bead) => {
+                  const sizes = sizesForLibrary(cat.beadLibrarySizes, bead.id);
+                  const def = defaultSizeForLibrary(cat.beadLibrarySizes, bead.id);
+                  const activeSize = resolveSizeOffer(bead.id, sizes, def);
+                  const selectValue = activeSize?.offerKey ?? def?.offerKey ?? "";
+
+                  return (
+                    <BeadLibraryCard
+                      key={bead.id}
+                      bead={bead}
+                      compact={compact}
+                      isMobile={isMobile}
+                      currency={currency}
+                      sizes={sizes}
+                      activeSize={activeSize}
+                      selectValue={selectValue}
+                      onSelectSize={(offerKey) => {
+                        setSizeByBeadId((prev) => ({ ...prev, [bead.id]: offerKey }));
+                        const next = sizes.find((s) => s.offerKey === offerKey);
+                        if (next) onSelectBead(bead, next);
+                      }}
+                      onClick={() => handleLibraryClick(bead, activeSize)}
+                      onDragStart={(e) =>
+                        activeSize &&
+                        startLibraryDrag(
+                          e,
+                          bead,
+                          activeSize,
+                          onLibraryDragActiveChange,
+                          onLibraryDragChange,
+                        )
+                      }
+                      onDragEnd={endLibraryDrag}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const libraryBody = (
+    <>
+      <div className={cn("shrink-0 border-b border-border/60", compact ? "p-2" : "p-3")}>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search collection…"
+            className="w-full rounded-md border border-border bg-muted/40 py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      </div>
+
+      <BeadCategoryScroller
+        types={activeTypes}
+        activeId={currentBeadTypeId}
+        onSelect={setActiveBeadTypeId}
+        compact={compact}
+      />
+
+      {compact ? (
+        <div className="shrink-0 border-b border-border/60 px-2 py-1">
+          <p className="type-label text-[10px] text-primary/75">
+            {currentType?.name ?? BRACELET_COPY.crystalLibrary}
+          </p>
+        </div>
+      ) : null}
+
+      {beadGrid}
+    </>
+  );
 
   return (
     <>
@@ -148,7 +367,7 @@ const BeadLibrary = ({
       <div className={panelClass}>
         {!compact ? (
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-            <h3 className="type-h3 text-sm">{BRACELET_COPY.crystalLibrary}</h3>
+            <h3 className="type-h3 text-sm">{currentType?.name ?? BRACELET_COPY.crystalLibrary}</h3>
             {!isEmbedded ? (
               <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
                 <X className="h-4 w-4" />
@@ -157,133 +376,18 @@ const BeadLibrary = ({
           </div>
         ) : null}
 
-        <div className={cn("shrink-0 border-b border-border/60", compact ? "p-2" : "p-3")}>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search collection…"
-              className="w-full rounded-md border border-border bg-muted/40 py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+        {isEmbedded ? (
+          libraryBody
+        ) : (
+          <div
+            ref={scrollRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            data-scroll-isolate="true"
+            data-library-scroll-panel="true"
+          >
+            {libraryBody}
           </div>
-        </div>
-
-        <BeadCategoryScroller
-          types={activeTypes}
-          activeId={currentBeadTypeId}
-          onSelect={setActiveBeadTypeId}
-          compact={compact}
-        />
-
-        {compact ? (
-          <div className="shrink-0 border-b border-border/60 px-2 py-1">
-            <p className="type-label text-[10px] text-primary/75">{BRACELET_COPY.crystalLibrary}</p>
-          </div>
-        ) : null}
-
-        <div
-          className={cn(
-            isEmbedded ? "p-2" : "min-h-0 flex-1 overflow-y-auto overscroll-contain p-2",
-          )}
-          data-scroll-isolate={isEmbedded ? undefined : "true"}
-          onWheel={isEmbedded ? undefined : (e) => e.stopPropagation()}
-        >
-          {filtered.length === 0 ? (
-            <p className="px-2 py-8 text-center text-xs leading-relaxed text-muted-foreground">{emptyMessage}</p>
-          ) : (
-            <div
-              className={cn(
-                "grid gap-2",
-                compact ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2",
-              )}
-            >
-              {filtered.map((bead) => {
-                const img = getBeadDisplayImageUrl(bead);
-                const sizes = sizesForLibrary(cat.beadLibrarySizes, bead.id);
-                const def = defaultSizeForLibrary(cat.beadLibrarySizes, bead.id);
-                const activeSize = resolveSizeOffer(bead.id, sizes, def);
-                const selectValue = activeSize?.offerKey ?? def?.offerKey ?? "";
-
-                return (
-                  <div
-                    key={bead.id}
-                    className="relative flex flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/20"
-                  >
-                    <BeadInfoButton bead={bead} />
-                    <button
-                      type="button"
-                      data-bead-library-item
-                      draggable={!isMobile && !!activeSize}
-                      onDragStart={(e) =>
-                        activeSize &&
-                        startLibraryDrag(e, bead, activeSize, onLibraryDragActiveChange, onLibraryDragChange)
-                      }
-                      onDragEnd={endLibraryDrag}
-                      onClick={() => handleLibraryClick(bead, activeSize)}
-                      className={cn(
-                        "flex w-full flex-col items-center text-center transition hover:bg-accent hover:text-accent-foreground",
-                        compact ? "gap-1 p-1.5" : "gap-1.5 p-2",
-                      )}
-                    >
-                      <div className={cn("flex shrink-0 items-center justify-center", compact ? "h-11 w-11" : "h-12 w-12")}>
-                        {img ? (
-                          <img
-                            src={img}
-                            alt=""
-                            className="max-h-full max-w-full"
-                            style={getStrandBeadImageStyle(bead)}
-                          />
-                        ) : (
-                          <Gem className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="min-w-0 w-full">
-                        <p className={cn("font-medium text-foreground", compact ? "line-clamp-2 text-[10px] leading-tight" : "truncate text-xs")}>
-                          {bead.name}
-                        </p>
-                        {sizes.length <= 1 && activeSize ? (
-                          <p className="text-[9px] text-muted-foreground">
-                            {activeSize.sizeMm} mm · {formatSizeOfferPrice(activeSize, currency)}
-                          </p>
-                        ) : null}
-                      </div>
-                    </button>
-                    {sizes.length > 1 ? (
-                      <div className="border-t border-border/50 px-1.5 py-1.5">
-                        <Select
-                          value={selectValue}
-                          onValueChange={(offerKey) => {
-                            setSizeByBeadId((prev) => ({ ...prev, [bead.id]: offerKey }));
-                            const next = sizes.find((s) => s.offerKey === offerKey);
-                            if (next) onSelectBead(bead, next);
-                          }}
-                        >
-                          <SelectTrigger
-                            className={cn(
-                              "h-7 w-full bg-background text-[10px] focus:ring-selection/40",
-                              compact ? "px-2" : "px-2.5",
-                            )}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <SelectValue placeholder="Select size" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sizes.map((s) => (
-                              <SelectItem key={s.offerKey} value={s.offerKey} className="text-xs">
-                                {s.sizeMm} mm · {formatSizeOfferPrice(s, currency)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        )}
 
         <div className="flex shrink-0 items-start gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />

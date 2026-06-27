@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, useEffect, type KeyboardEvent } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect, memo, type KeyboardEvent } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { X } from "lucide-react";
 import {
@@ -26,6 +26,7 @@ import {
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
   getStrandBeadRasterSize,
+  resolveBeadSlotSizing,
   STRAND_CORD,
   type BeadSlotDimensions,
 } from "@/render/bead-crop";
@@ -67,6 +68,8 @@ import {
 } from "@/features/bracelet/strand-viewport";
 import { cn } from "@/lib/utils";
 import type { BeadLibraryEntry } from "@/types/beads";
+import { useCatalogue } from "@/state/catalogue";
+import type { BeadSlotSizingCatalogueContext } from "@/render/bead-crop";
 
 type EmptySlotGuideMode = "prominent" | "moderate" | "none";
 
@@ -157,9 +160,11 @@ interface SortableBeadProps {
   libraryDragActive?: boolean;
   ringCenterX: number;
   ringCenterY: number;
+  scaleFactor: number;
+  sizingCatalogue?: BeadSlotSizingCatalogueContext;
 }
 
-function SortableBead({
+function SortableBeadInner({
   bead,
   position,
   x,
@@ -175,13 +180,15 @@ function SortableBead({
   libraryDragActive = false,
   ringCenterX,
   ringCenterY,
+  scaleFactor,
+  sizingCatalogue,
 }: SortableBeadProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({
     id: `bead-${position}`,
     disabled: !bead || libraryDragActive,
   });
 
-  const imgSrc = getBeadImageUrl(bead);
+  const imgSrc = getBeadImageUrl(bead, sizingCatalogue);
   const hasImage = !!imgSrc;
   const mm = bead ? placedBeadSizeMm(bead) : 0;
   const shell = hasImage
@@ -189,7 +196,7 @@ function SortableBead({
     : getPlacedBeadShellStyle(slotDim, false);
 
   const isEmptySlot = !bead;
-  const style: React.CSSProperties = {
+  const outerStyle: React.CSSProperties = {
     ...shell,
     left: x - slotDim.width / 2,
     top: y - slotDim.height / 2,
@@ -222,11 +229,15 @@ function SortableBead({
     }
   };
 
+  const sizing = bead
+    ? resolveBeadSlotSizing(bead, placedBeadSizeMm(bead), scaleFactor, sizingCatalogue)
+    : null;
+
   return (
     <div
       ref={setNodeRef}
       data-strand-slot
-      style={style}
+      style={outerStyle}
       {...(bead && !libraryDragActive ? { ...attributes, ...listeners } : {})}
       role={isEmptySlot ? "button" : undefined}
       tabIndex={isEmptySlot && !libraryDragActive ? 0 : undefined}
@@ -248,15 +259,21 @@ function SortableBead({
       aria-label={isEmptySlot ? BRACELET_COPY.emptySlotHint : title}
     >
       {hasImage && bead ? (
-        <img
-          src={imgSrc}
-          alt=""
-          draggable={false}
-          decoding="async"
-          {...getStrandBeadRasterSize(slotDim)}
-          className="pointer-events-none h-full w-full select-none"
-          style={getStrandBeadImageStyle(bead.bead)}
-        />
+        <div
+          className="relative h-full w-full"
+          style={{ width: slotDim.width, height: slotDim.height }}
+        >
+          <img
+            src={imgSrc}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            {...getStrandBeadRasterSize(slotDim)}
+            className="pointer-events-none select-none"
+            style={getStrandBeadImageStyle(bead.bead, sizing)}
+          />
+        </div>
       ) : null}
       {bead && (
         <span className="pointer-events-none absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
@@ -306,6 +323,25 @@ function SortableBead({
   );
 }
 
+const SortableBead = memo(SortableBeadInner, (prev, next) =>
+  prev.position === next.position &&
+  prev.bead === next.bead &&
+  prev.x === next.x &&
+  prev.y === next.y &&
+  prev.rotationDeg === next.rotationDeg &&
+  prev.slotDim.width === next.slotDim.width &&
+  prev.slotDim.height === next.slotDim.height &&
+  prev.isDragActive === next.isDragActive &&
+  prev.emptyGuideMode === next.emptyGuideMode &&
+  prev.showRemoveAlways === next.showRemoveAlways &&
+  prev.isSelected === next.isSelected &&
+  prev.libraryDragActive === next.libraryDragActive &&
+  prev.ringCenterX === next.ringCenterX &&
+  prev.ringCenterY === next.ringCenterY &&
+  prev.scaleFactor === next.scaleFactor &&
+  prev.sizingCatalogue === next.sizingCatalogue,
+);
+
 const SortableCircularStrand = ({
   placedBeads,
   onBeadsReorder,
@@ -326,6 +362,11 @@ const SortableCircularStrand = ({
   layoutKey = 0,
 }: SortableCircularStrandProps) => {
   const isMobile = useIsMobile();
+  const { beadSizes, beadLibrarySizes } = useCatalogue();
+  const sizingCatalogue = useMemo<BeadSlotSizingCatalogueContext>(
+    () => ({ beadSizes, beadLibrarySizes }),
+    [beadSizes, beadLibrarySizes],
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragClientPos, setDragClientPos] = useState<{ x: number; y: number } | null>(null);
   const [isLibraryDragOver, setIsLibraryDragOver] = useState(false);
@@ -432,11 +473,12 @@ const SortableCircularStrand = ({
 
       let slotsWithPosition: StrandSlot[] = [];
       let maxExtent = Math.max(guideSlotDim.width, guideSlotDim.height);
+      let prelimDims: BeadSlotDimensions[] = [];
 
       if (!isStrandEmpty) {
-        const prelimDims = normalized.map((placed) => {
+        prelimDims = normalized.map((placed) => {
           const beadSize = placedBeadSizeMm(placed);
-          return getBeadSlotDimensions(placed, beadSize, scaleFactor);
+          return getBeadSlotDimensions(placed, beadSize, scaleFactor, sizingCatalogue);
         });
         maxExtent = getMaxSlotExtent(prelimDims);
       }
@@ -453,10 +495,6 @@ const SortableCircularStrand = ({
       let insertionAngles: number[] = [];
 
       if (!isStrandEmpty) {
-        const prelimDims = normalized.map((placed) => {
-          const beadSize = placedBeadSizeMm(placed);
-          return getBeadSlotDimensions(placed, beadSize, scaleFactor);
-        });
         const beadLayoutArcsPx = prelimDims.map((dim) => beadLayoutArcPx(dim, scaleFactor));
 
         const resolved = computeResolvedRingRadiusPx({
@@ -564,7 +602,7 @@ const SortableCircularStrand = ({
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
     };
-  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle]);
+  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue]);
 
   const renderCanvasSize = canvasSize;
 
@@ -759,9 +797,11 @@ const SortableCircularStrand = ({
     ? normalized.find((b) => `bead-${b.position}` === activeId)
     : null;
 
-  const activeSlotDim = activeBead
-    ? getBeadSlotDimensions(activeBead, placedBeadSizeMm(activeBead), scaleFactor)
+  const activeSizing = activeBead
+    ? resolveBeadSlotSizing(activeBead, placedBeadSizeMm(activeBead), scaleFactor, sizingCatalogue)
     : null;
+
+  const activeSlotDim = activeSizing?.dimensions ?? null;
 
   const activeRotationDeg = activeBead
     ? (renderSlots.find((s) => s.index === activeBead.position)?.rotationDeg ?? 0)
@@ -821,7 +861,7 @@ const SortableCircularStrand = ({
         >
           {activeBead && activeSlotDim && dragClientPos ? (() => {
             const { x: localX, y: localY } = clientToCanvas(dragClientPos.x, dragClientPos.y);
-            const dragImgUrl = getBeadImageUrl(activeBead);
+            const dragImgUrl = getBeadImageUrl(activeBead, sizingCatalogue);
             const hasImage = !!dragImgUrl;
             return (
               <div
@@ -839,15 +879,20 @@ const SortableCircularStrand = ({
                 }}
               >
                 {hasImage ? (
-                  <img
-                    src={dragImgUrl!}
-                    alt=""
-                    draggable={false}
-                    decoding="async"
-                    {...getStrandBeadRasterSize(activeSlotDim)}
-                    className="h-full w-full"
-                    style={getStrandBeadImageStyle(activeBead.bead)}
-                  />
+                  <div
+                    className="relative"
+                    style={{ width: activeSlotDim.width, height: activeSlotDim.height }}
+                  >
+                    <img
+                      src={dragImgUrl!}
+                      alt=""
+                      draggable={false}
+                      decoding="async"
+                      {...getStrandBeadRasterSize(activeSlotDim)}
+                      className="pointer-events-none"
+                      style={getStrandBeadImageStyle(activeBead.bead, activeSizing)}
+                    />
+                  </div>
                 ) : null}
               </div>
             );
@@ -904,6 +949,8 @@ const SortableCircularStrand = ({
                 libraryDragActive={externalDrag}
                 ringCenterX={center}
                 ringCenterY={center}
+                scaleFactor={scaleFactor}
+                sizingCatalogue={sizingCatalogue}
               />
             ))}
           </SortableContext>

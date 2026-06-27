@@ -42,6 +42,10 @@ async function remove(req: Request, res: Response): Promise<void> {
   sendJson(res, await beadLibraryService.remove(id));
 }
 
+async function recalculateBoundsMetadata(_req: Request, res: Response): Promise<void> {
+  sendJson(res, await beadLibraryService.recalculateBoundsMetadata());
+}
+
 export const beadLibraryHandlers = {
   list: asyncHandler(list),
   retrieve: asyncHandler(retrieve),
@@ -49,4 +53,5 @@ export const beadLibraryHandlers = {
   update: asyncHandler(update),
   updateCrop: asyncHandler(updateCrop),
   remove: asyncHandler(remove),
+  recalculateBoundsMetadata: asyncHandler(recalculateBoundsMetadata),
 };

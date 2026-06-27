@@ -6,9 +6,24 @@ import { HttpError } from "../lib/errors.js";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
+function normalizeApiKey(req: Request): string | undefined {
+  const raw = typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : undefined;
+  if (raw?.startsWith("Bearer ")) {
+    return raw.slice("Bearer ".length).trim();
+  }
+  return raw?.trim();
+}
+
 /** Basic in-memory rate limit for mutation methods per IP. */
 export function mutationRateLimit(req: Request, res: Response, next: NextFunction): void {
   if (SAFE_METHODS.has(req.method)) {
+    next();
+    return;
+  }
+
+  const adminKey = getEnv().ADMIN_API_KEY?.trim();
+  const providedKey = normalizeApiKey(req);
+  if (adminKey && providedKey === adminKey) {
     next();
     return;
   }

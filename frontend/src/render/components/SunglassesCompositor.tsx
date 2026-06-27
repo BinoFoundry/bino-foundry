@@ -1,5 +1,6 @@
 import { useId, useMemo } from "react";
 
+import { resolveAssetImageUrl } from "@/lib/asset-image-url";
 import { resolveLensClipConfig } from "@/render/lens-clip";
 import { buildCompositorStack } from "../engine/compositor";
 import { LayerStack } from "../layers/LayerStack";
@@ -45,21 +46,27 @@ export function SunglassesCompositor({
 
   const clipConfig = plateView ? resolveLensClipConfig(plateView) : null;
 
-  if (plateView?.plateUrl) {
+  const displayPlate = useMemo(() => {
+    if (!plateView?.plateUrl) return null;
+    const plateUrl = resolveAssetImageUrl(plateView.plateUrl, "medium") ?? plateView.plateUrl;
+    return {
+      plateUrl,
+      width: plateView.width,
+      height: plateView.height,
+      clipConfig: clipConfig ?? {
+        version: 1 as const,
+        imageWidth: plateView.width,
+        imageHeight: plateView.height,
+        lenses: [],
+      },
+    };
+  }, [plateView, clipConfig]);
+
+  if (displayPlate) {
     return (
       <SvgClipCompositorView
         view={view}
-        plate={{
-          plateUrl: plateView.plateUrl,
-          width: plateView.width,
-          height: plateView.height,
-          clipConfig: clipConfig ?? {
-            version: 1,
-            imageWidth: plateView.width,
-            imageHeight: plateView.height,
-            lenses: [],
-          },
-        }}
+        plate={displayPlate}
         tint={config.tint}
         aspectRatio={aspectRatio}
         label={label}

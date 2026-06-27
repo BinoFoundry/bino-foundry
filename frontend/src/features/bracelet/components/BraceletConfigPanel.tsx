@@ -48,7 +48,7 @@ export function BraceletConfigPanel({
   onBraceletNameChange,
 }: BraceletConfigPanelProps) {
   return (
-    <div className="flex flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {!embedded && onBraceletNameChange ? (
         <div className="shrink-0 border-b border-border/60 px-2.5 py-2.5">
           <BraceletNameField

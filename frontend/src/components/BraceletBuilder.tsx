@@ -13,7 +13,7 @@ import {
   StrandZoomControls,
   useBraceletBuilder,
   useStrandZoom,
-  STRAND_TWIN_DEFAULT_ZOOM,
+  computeDefaultStrandZoom,
   CapacityAlertBanner,
   WristSizeStep,
 } from "@/features/bracelet";
@@ -183,7 +183,23 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     [strandSize, layoutCanvasSize, autoFitScale, builder.twinning],
   );
 
-  const defaultStrandZoom = builder.twinning ? STRAND_TWIN_DEFAULT_ZOOM : 1;
+  const defaultStrandZoom = useMemo(
+    () =>
+      computeDefaultStrandZoom({
+        twinning: builder.twinning,
+        containerWidth: containerSize.width,
+        containerHeight: containerSize.height,
+        isMobile,
+        autoFitScale,
+      }),
+    [
+      builder.twinning,
+      containerSize.width,
+      containerSize.height,
+      isMobile,
+      autoFitScale,
+    ],
+  );
 
   const {
     zoom,

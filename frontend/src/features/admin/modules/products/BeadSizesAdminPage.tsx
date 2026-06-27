@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Ruler, Trash2 } from "lucide-react";
+import { RefreshCw, Ruler, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { NormalizedRegenProgressPanel } from "@/features/admin/components/NormalizedRegenProgressPanel";
+import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
+import {
+  runRefreshBeadAssetsJob,
+  type NormalizedRegenJobProgress,
+} from "@/features/admin/lib/normalized-asset-regen";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
-import { isApiError } from "@/services/api";
+import { isApiError, formatApiErrorMessage } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 
@@ -15,6 +21,22 @@ import { AdminToolbar } from "../../components/AdminToolbar";
 import { useAdminList } from "../../hooks/useAdminList";
 
 type ModalState = { type: "add" } | { type: "edit"; entry: BeadSizeEntry } | null;
+
+const IDLE_PROGRESS: NormalizedRegenJobProgress = {
+  status: "idle",
+  done: 0,
+  total: 0,
+  saved: 0,
+  reference: 0,
+  unchanged: 0,
+  skipped: 0,
+  failed: 0,
+  succeeded: 0,
+  currentLabel: null,
+  etaMs: null,
+  errorMessage: null,
+  summary: null,
+};
 
 function SizeForm({
   initial,
@@ -101,13 +123,31 @@ function SizeForm({
 
 export function BeadSizesAdminPage() {
   const cat = useCatalogue();
+  const developerMode = useAdminDeveloperMode();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [progress, setProgress] = useState<NormalizedRegenJobProgress>(IDLE_PROGRESS);
   const list = useAdminList(cat.beadSizes, (s, q) => s.label.toLowerCase().includes(q));
+
+  const jobRunning = progress.status === "preparing" || progress.status === "running";
+  const regenCtx = {
+    beadLibraries: cat.beadLibraries,
+    beadLibrarySizes: cat.beadLibrarySizes,
+    beadSizes: cat.beadSizes,
+    beadTypes: cat.beadTypes,
+    recalculateMmGroupReferences: cat.recalculateMmGroupReferences,
+    refreshBeadLibrarySizes: cat.refreshBeadLibrarySizes,
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [modal]);
+
+  const cancelJob = () => {
+    abortRef.current?.abort();
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -120,9 +160,71 @@ export function BeadSizesAdminPage() {
         addLabel="Add size"
         onBack={modal ? () => setModal(null) : undefined}
         title={modal ? (modal.type === "add" ? "New bead size" : "Edit bead size") : "Bead sizes"}
+        trailing={
+          !modal ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={refreshing || jobRunning}
+                className="text-xs"
+                title="Update bead assets after changing crops or bead sizes"
+                onClick={() => {
+                  abortRef.current?.abort();
+                  const controller = new AbortController();
+                  abortRef.current = controller;
+                  setRefreshing(true);
+                  setProgress({ ...IDLE_PROGRESS, status: "preparing", phase: "preparing" });
+
+                  void runRefreshBeadAssetsJob(regenCtx, {
+                    signal: controller.signal,
+                    onProgress: setProgress,
+                  })
+                    .then(async ({ regen }) => {
+                      await cat.refreshBeadLibrarySizes();
+                      setProgress(regen);
+                    })
+                    .catch((err) => {
+                      setProgress({
+                        ...IDLE_PROGRESS,
+                        status: "failed",
+                        errorMessage: formatApiErrorMessage(err),
+                      });
+                    })
+                    .finally(() => {
+                      abortRef.current = null;
+                      setRefreshing(false);
+                    });
+                }}
+              >
+                <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                Refresh bead assets
+              </Button>
+              {jobRunning ? (
+                <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={cancelJob}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          ) : undefined
+        }
       />
 
       <AdminPage scrollRef={scrollRef} footer={`${cat.beadSizes.length} size option(s)`}>
+        {!modal && progress.status !== "idle" ? (
+          <div className="mb-4">
+            <NormalizedRegenProgressPanel progress={progress} />
+          </div>
+        ) : null}
+
+        {!modal ? (
+          <p className="mb-4 text-xs text-muted-foreground">
+            After changing crops or bead sizes, use <span className="font-medium">Refresh bead assets</span> to
+            update optimized images across the catalogue.
+          </p>
+        ) : null}
+
         {modal ? (
           <SizeForm
             initial={modal.type === "edit" ? modal.entry : undefined}
@@ -131,6 +233,8 @@ export function BeadSizesAdminPage() {
               try {
                 if (modal.type === "add") await cat.addBeadSize(entry);
                 else await cat.updateBeadSize({ ...modal.entry, ...entry });
+                await cat.recalculateMmGroupReferences();
+                await cat.refreshBeadLibrarySizes();
                 setModal(null);
               } catch (err) {
                 alert(isApiError(err) ? err.message : "Save failed");
@@ -179,6 +283,9 @@ export function BeadSizesAdminPage() {
                   </p>
                   <p className="text-[10px] text-muted-foreground">
                     {s.sizeMm} mm{s.isActive === false ? " · inactive" : ""}
+                    {developerMode && s.groupReferenceDiameterPx != null
+                      ? ` · ref ${Math.round(s.groupReferenceDiameterPx)} px`
+                      : ""}
                   </p>
                 </div>
               </AdminListRow>

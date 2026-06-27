@@ -68,8 +68,8 @@ export function SunglassesConfigColumn({
         >
           <div
             className={cn(
-              "px-4 py-3 sm:px-5 sm:py-4",
-              flow.step === "lens" ? "flex min-h-0 flex-1 flex-col pb-4" : "pb-8 sm:pb-10",
+              "px-4 sm:px-5",
+              flow.step === "lens" ? "flex min-h-0 flex-1 flex-col py-2 sm:py-2.5" : "py-3 pb-8 sm:py-4 sm:pb-10",
             )}
           >
             <CustomiserPanel
