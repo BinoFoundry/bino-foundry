@@ -57,6 +57,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 31. `000035_frame_plate_crop_config.sql` — `plate_crop_config` JSONB on `frame_render_views` for lossless frame path re-edit.
 32. `000036_mm_group_normalization.sql` — `bead_sizes.group_reference_diameter_px` + per-library-size `normalization_factor`.
 33. `000037_bead_normalized_exports.sql` — per-junction `normalized_processed_image_url` + `needs_normalized_reexport` for save-time asset normalization.
+34. `000038_strand_render_profiles.sql` — seeds `metadata.strandRender` on `bead_types` (occupancy, anchor, rotation, visual scale) for data-driven bracelet rendering.
+35. `000039_strand_render_system_defaults.sql` — seeds `bracelet.strand_render_defaults_v1` in `config_kv` as platform-wide strand rendering fallbacks (admin-editable via Settings).
+36. `000040_strand_render_auto_migration.sql` — backfills missing `metadata.strandRender` on all bead types (slug-aware presets + round-bead fallback) and removes empty per-bead override shells.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

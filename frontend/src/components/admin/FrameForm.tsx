@@ -53,7 +53,11 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     normalizeViews(initial?.renderViews),
   );
   const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [viewsError, setViewsError] = useState<string | null>(null);
   const viewsSectionRef = useRef<FrameRenderViewsSectionHandle>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const viewsBlockRef = useRef<HTMLDivElement>(null);
 
   const frontView = useMemo(
     () => renderViews.find((v) => v.view === "front"),
@@ -68,18 +72,22 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     e.preventDefault();
     if (saving) return;
     if (!form.name.trim()) {
-      alert("Frame name is required.");
+      setNameError("Frame name is required.");
+      nameRef.current?.focus();
       return;
     }
+    setNameError(null);
 
     const flushedViews = viewsSectionRef.current?.flushPendingEdits() ?? renderViews;
     setRenderViews(flushedViews);
 
     if (frontHasPlate && !flushedViews.every((v) => isFrameViewSaveReady(v))) {
       const message = describeFrameSaveBlockers(flushedViews);
-      alert(message || "Complete the front view before saving.");
+      setViewsError(message || "Complete the front view before saving.");
+      viewsBlockRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
     }
+    setViewsError(null);
 
     const id =
       form.id || form.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
@@ -107,13 +115,19 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
         <div className="col-span-2">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Frame name *</label>
           <input
+            ref={nameRef}
             autoFocus
             required
             className="w-full rounded border border-border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-primary"
             value={form.name}
-            onChange={(e) => set("name", e.target.value)}
+            onChange={(e) => {
+              set("name", e.target.value);
+              setNameError(null);
+            }}
             placeholder="e.g. Aviator Classic"
+            aria-invalid={nameError ? true : undefined}
           />
+          {nameError ? <p className="mt-1 text-xs text-destructive">{nameError}</p> : null}
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Price</label>
@@ -153,7 +167,10 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
         </label>
       </div>
 
-      <FrameRenderViewsSection ref={viewsSectionRef} views={renderViews} onChange={setRenderViews} />
+      <div ref={viewsBlockRef} className="space-y-2">
+        {viewsError ? <p className="text-xs text-destructive">{viewsError}</p> : null}
+        <FrameRenderViewsSection ref={viewsSectionRef} views={renderViews} onChange={setRenderViews} />
+      </div>
 
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>

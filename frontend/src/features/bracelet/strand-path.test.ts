@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   beadIndexFromPointerAngle,
-  beadStrandRotationDeg,
-  beadRingAlignOffsetPx,
+  computeBeadShellPosition,
   computeStrandPathLayout,
   evenBeadAngleRad,
   evenBeadAngleStepRad,
@@ -11,8 +10,11 @@ import {
   polarToCartesian,
   radialOutwardRotationDeg,
   resolveStrandDropTarget,
+  strandRotationDeg,
   tangentRotationDeg,
 } from "./strand-path";
+import { resolveStrandRenderConfigForType } from "@/render/bead-crop/strand-render-profile";
+import { TEST_STRAND_RENDER_CATALOGUE } from "@/render/bead-crop/strand-render-test-catalogue";
 
 describe("polarToCartesian", () => {
   it("places top of ring at start angle", () => {
@@ -157,13 +159,19 @@ describe("charm strand presentation", () => {
 
   it("uses radial rotation for charms and tangent for crystals", () => {
     const angle = -Math.PI / 2;
-    expect(beadStrandRotationDeg(angle, "charm")).toBeCloseTo(0, 5);
-    expect(beadStrandRotationDeg(angle, "crystal")).toBeCloseTo(tangentRotationDeg(angle), 5);
+    const charmProfile = resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE);
+    const crystalProfile = resolveStrandRenderConfigForType("crystal", TEST_STRAND_RENDER_CATALOGUE);
+    expect(strandRotationDeg(angle, charmProfile)).toBeCloseTo(0, 5);
+    expect(strandRotationDeg(angle, crystalProfile)).toBeCloseTo(tangentRotationDeg(angle), 5);
   });
 
-  it("pulls charm centers toward the cord", () => {
-    const offset = beadRingAlignOffsetPx("charm", { width: 40, height: 50 });
-    expect(offset).toBeLessThan(0);
-    expect(beadRingAlignOffsetPx("crystal", { width: 40, height: 50 })).toBe(0);
+  it("anchors charm loop on the ring point", () => {
+    const profile = resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE);
+    const dim = { width: 40, height: 50 };
+    const ringX = 100;
+    const ringY = 100;
+    const pos = computeBeadShellPosition(ringX, ringY, -Math.PI / 2, dim, profile);
+    expect(pos.top + pos.transformOriginY).toBeCloseTo(ringY, 1);
+    expect(pos.left + pos.transformOriginX).toBeCloseTo(ringX, 1);
   });
 });

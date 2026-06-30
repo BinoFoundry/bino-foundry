@@ -1,8 +1,12 @@
 /**
  * Circular path layout on the bracelet ring.
- * Default: even polar positioning when bead mm weights are absent.
- * Elastic: arc-length distribution from actual bead sizes when `layoutCircumferenceMm` is set.
+ * Stage 1: elastic arc-length distribution from strand occupancy.
+ * Stage 2: anchor / offset / rotation applied in the renderer (see strand-render-profile).
  */
+import type { StrandRenderProfile } from "@bino-foundry/shared/types";
+
+import { resolveStrandRenderProfileBySlug } from "@/render/bead-crop/strand-render-profile";
+
 import { computeElasticBeadLayout } from "./strand-elastic-layout";
 
 /** Default ring start — top of canvas (12 o'clock). */
@@ -88,53 +92,97 @@ export function visualMmFromArcExtent(
   return (extentPx / circumferencePx) * layoutCircumferenceMm;
 }
 
-/** Per-type fine-tune after path rotation (e.g. charm bail orientation). */
-export function beadTypeRotationOffsetDeg(beadTypeSlug?: string): number {
-  switch (beadTypeSlug) {
-    case "charm":
-      return 0;
-    case "spacer":
-      return 0;
-    default:
-      return 0;
-  }
-}
-
-/** Radial outward rotation so charms face away from the bracelet center (bail toward cord). */
+/** Radial outward rotation so hanging assets face away from the bracelet centre. */
 export function radialOutwardRotationDeg(angle: number): number {
   return (angle * 180) / Math.PI + 90;
 }
 
-/**
- * Strand rotation per bead type.
- * Round beads align tangent to the path; charms face outward from the wrist.
- */
-export function beadStrandRotationDeg(angle: number, beadTypeSlug?: string): number {
-  if (beadTypeSlug === "charm") {
-    return radialOutwardRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
+/** Strand rotation from data-driven render profile (never from category slug). */
+export function strandRotationDeg(angle: number, profile: StrandRenderProfile): number {
+  let base = 0;
+  switch (profile.rotationMode) {
+    case "radial-upright":
+      base = radialOutwardRotationDeg(angle);
+      break;
+    case "fixed-upright":
+      base = 0;
+      break;
+    case "none":
+      base = 0;
+      break;
+    case "tangent":
+    default:
+      base = tangentRotationDeg(angle);
+      break;
   }
-  if (
-    beadTypeSlug === "spacer" ||
-    beadTypeSlug === "separator" ||
-    beadTypeSlug === "connector"
-  ) {
-    return radialOutwardRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
-  }
-  return tangentRotationDeg(angle) + beadTypeRotationOffsetDeg(beadTypeSlug);
+  return base + profile.rotationOffsetDeg;
 }
 
 /**
- * Radial offset along the ring normal (negative = toward center).
- * Pulls charm bails onto the cord while the body hangs outward.
+ * @deprecated Use strandRotationDeg(angle, profile). Slug lookup is fallback only.
+ */
+export function beadStrandRotationDeg(angle: number, beadTypeSlug?: string): number {
+  return strandRotationDeg(angle, resolveStrandRenderProfileBySlug(beadTypeSlug));
+}
+
+export interface BeadSlotDimensions {
+  width: number;
+  height: number;
+}
+
+export interface BeadShellPlacement {
+  left: number;
+  top: number;
+  /** Anchor pivot in shell-local pixels (for CSS transform-origin). */
+  transformOriginX: number;
+  transformOriginY: number;
+}
+
+/**
+ * Position shell so the profile anchor sits on the ring point.
+ * Stage 2 render positioning — separate from strand occupancy layout.
+ * Bitmap size affects rendering only; attachment uses anchor + vertical offset.
+ */
+export function computeBeadShellPosition(
+  ringX: number,
+  ringY: number,
+  angle: number,
+  dim: BeadSlotDimensions,
+  profile: StrandRenderProfile,
+): BeadShellPlacement {
+  const renderDim = visualSlotDimensions(dim, profile);
+  const radial = profile.verticalOffset * renderDim.height;
+  const anchorX = ringX + radial * Math.cos(angle);
+  const anchorY = ringY + radial * Math.sin(angle);
+  const originX = profile.anchorX * renderDim.width;
+  const originY = profile.anchorY * renderDim.height;
+  return {
+    left: anchorX - originX,
+    top: anchorY - originY,
+    transformOriginX: originX,
+    transformOriginY: originY,
+  };
+}
+
+/** Visual slot size after visualScale — does not affect strand occupancy. */
+export function visualSlotDimensions(
+  dim: BeadSlotDimensions,
+  profile: Pick<StrandRenderProfile, "visualScale">,
+): BeadSlotDimensions {
+  const s = profile.visualScale;
+  return { width: dim.width * s, height: dim.height * s };
+}
+
+/**
+ * @deprecated Use computeBeadShellPosition with StrandRenderProfile.
  */
 export function beadRingAlignOffsetPx(
   beadTypeSlug: string | undefined,
   dim: { width: number; height: number },
 ): number {
-  if (beadTypeSlug === "charm") {
-    return -dim.height * 0.2;
-  }
-  return 0;
+  const profile = resolveStrandRenderProfileBySlug(beadTypeSlug);
+  if (profile.verticalOffset === 0 && profile.anchorPreset === "center") return 0;
+  return profile.verticalOffset * dim.height;
 }
 
 export function applyRingAlignOffset(
@@ -148,6 +196,13 @@ export function applyRingAlignOffset(
     x: x + offsetPx * Math.cos(angle),
     y: y + offsetPx * Math.sin(angle),
   };
+}
+
+/**
+ * @deprecated Use profile.rotationOffsetDeg via resolveStrandRenderProfile.
+ */
+export function beadTypeRotationOffsetDeg(beadTypeSlug?: string): number {
+  return resolveStrandRenderProfileBySlug(beadTypeSlug).rotationOffsetDeg;
 }
 
 function useElasticWeights(beads: StrandPathBeadInput[], layoutCircumferenceMm?: number): boolean {

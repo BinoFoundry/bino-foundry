@@ -3,6 +3,8 @@ import { useCallback, useRef } from "react";
 import { AdminPage } from "../../components/AdminPage";
 import { useAdminSectionRefresh } from "../../context/AdminSectionRefreshContext";
 import { GeneralSettingsAdmin } from "./GeneralSettingsAdmin";
+import { StrandRenderDefaultsAdmin } from "./StrandRenderDefaultsAdmin";
+import { StrandRenderMigrationAdmin } from "./StrandRenderMigrationAdmin";
 import { EmailDiagnosticsAdmin } from "./EmailDiagnosticsAdmin";
 import { SmtpSettingsAdmin } from "./SmtpSettingsAdmin";
 
@@ -10,6 +12,7 @@ import { SmtpSettingsAdmin } from "./SmtpSettingsAdmin";
 export function GeneralSettingsPage() {
   const reloadGeneralRef = useRef<(() => Promise<void>) | null>(null);
   const reloadSmtpRef = useRef<(() => Promise<void>) | null>(null);
+  const reloadStrandRef = useRef<(() => Promise<void>) | null>(null);
   const reloadDiagnosticsRef = useRef<(() => Promise<void>) | null>(null);
 
   const reloadSettings = useCallback(async () => {
@@ -17,6 +20,7 @@ export function GeneralSettingsPage() {
       reloadGeneralRef.current?.() ?? Promise.resolve(),
       reloadSmtpRef.current?.() ?? Promise.resolve(),
       reloadDiagnosticsRef.current?.() ?? Promise.resolve(),
+      reloadStrandRef.current?.() ?? Promise.resolve(),
     ]);
   }, []);
 
@@ -32,12 +36,18 @@ export function GeneralSettingsPage() {
     reloadDiagnosticsRef.current = reload;
   }, []);
 
+  const registerStrandReload = useCallback((reload: () => Promise<void>) => {
+    reloadStrandRef.current = reload;
+  }, []);
+
   useAdminSectionRefresh("Reload settings", reloadSettings);
 
   return (
     <AdminPage>
       <div className="mx-auto max-w-2xl space-y-8 pb-4">
         <GeneralSettingsAdmin embedded onRegisterReload={registerGeneralReload} />
+        <StrandRenderDefaultsAdmin embedded onRegisterReload={registerStrandReload} />
+        <StrandRenderMigrationAdmin embedded />
         <SmtpSettingsAdmin onRegisterReload={registerSmtpReload} />
         <EmailDiagnosticsAdmin onRegisterReload={registerDiagnosticsReload} />
       </div>

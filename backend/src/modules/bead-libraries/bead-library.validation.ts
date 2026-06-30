@@ -84,6 +84,11 @@ export const beadLibraryCropSchema = z.object({
   processedImage: z.string().optional(),
 });
 
+export const beadLibraryCompleteSaveSchema = z.object({
+  library: beadLibraryUpdateSchema,
+  sizes: z.array(librarySizeInputSchema).optional(),
+});
+
 export const createBeadLibraryDto = beadLibraryCreateSchema;
 export const updateBeadLibraryDto = beadLibraryUpdateSchema;
 export const beadLibraryCropDto = beadLibraryCropSchema;
@@ -91,4 +96,5 @@ export const beadLibraryIdParam = z.object({ id: z.string().min(1) });
 
 export type BeadLibraryCreateDTO = z.infer<typeof createBeadLibraryDto>;
 export type BeadLibraryUpdateDTO = z.infer<typeof updateBeadLibraryDto>;
+export type BeadLibraryCompleteSaveDTO = z.infer<typeof beadLibraryCompleteSaveSchema>;
 export type BeadLibraryCropDTO = z.infer<typeof beadLibraryCropDto>;

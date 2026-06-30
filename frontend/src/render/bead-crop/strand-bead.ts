@@ -17,11 +17,12 @@ import {
   type BeadSlotSizingCatalogueContext,
   type BeadSlotSizingResult,
 } from "./strand-bead-sizing";
+import { resolveStrandRenderProfile } from "./strand-render-profile";
 import { calibratedVisualDiameterPx } from "./visual-bead-scale";
 
 export type { BeadSlotDimensions, BeadSlotSizingCatalogueContext };
 
-const STRAND_IMAGE_TYPE_SLUGS = new Set(["spacer", "separator", "connector"]);
+export { STRAND_CORD };
 
 export const STRAND_BEAD_VISUAL_SCALE = 1;
 
@@ -47,8 +48,9 @@ export function getMaxSlotExtent(slots: { width: number; height: number }[]): nu
   return Math.max(...slots.map((s) => Math.max(s.width, s.height)));
 }
 
+/** Tangential extent along the strand (slot width at the anchor). */
 export function getBeadTangentArcPx(dim: BeadSlotDimensions): number {
-  return Math.max(dim.width, dim.height);
+  return dim.width;
 }
 
 function resolveStrandImageUrl(bead: BeadLibraryEntry): string | null {
@@ -63,7 +65,7 @@ export function getBeadImageUrl(
   catalogue?: BeadSlotSizingCatalogueContext,
 ): string | null {
   if (!bead) return null;
-  const slug = bead.bead.beadTypeSlug ?? "crystal";
+  const profile = resolveStrandRenderProfile(bead.bead, catalogue);
   const mergedOffer = mergeSizeOfferFromCatalogue(bead.size, catalogue, bead.bead.id);
 
   const normalized = resolvePreNormalizedDeliveryUrl(mergedOffer, "full", catalogue);
@@ -78,7 +80,7 @@ export function getBeadImageUrl(
       : withAssetCacheBuster(normalized, cacheToken);
   }
 
-  const url = STRAND_IMAGE_TYPE_SLUGS.has(slug)
+  const url = profile.preferStrandImageUrl
     ? resolveStrandImageUrl(bead.bead)
     : resolveBeadDeliveryUrl(bead.bead, "medium");
   if (!url) return null;
@@ -141,12 +143,11 @@ export function getGuideSlotDimensions(scaleFactor: number, beadSizeMm = 8): Bea
   return { width: base, height: base };
 }
 
-export const STRAND_CORD = {
+const STRAND_CORD = {
   stroke: "hsl(var(--strand-cord) / 0.55)",
   strokeDrag: "hsl(var(--strand-cord-active) / 0.65)",
   widthFactor: 3.4,
   opacity: 0.92,
-  opacityComplete: 0.55,
 } as const;
 
 export function getGuideEmptySlotShellStyle(dim: BeadSlotDimensions): CSSProperties {

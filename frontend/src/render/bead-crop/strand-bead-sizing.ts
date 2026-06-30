@@ -3,6 +3,7 @@ import type { BeadSize, PlacedBead } from "@/lib/luxe-data";
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
+import type { BeadTypeEntry } from "@/types/beads";
 import type { BeadCropMetricsResolution, BeadCropMetricsSource } from "@bino-foundry/shared/types";
 
 import {
@@ -13,16 +14,17 @@ import {
 } from "./apply-crop";
 import { resolveBeadCropConfig } from "./resolve-bead-crop-config";
 import { calibratedVisualDiameterPx } from "./visual-bead-scale";
-import type { BeadCropGeometryDebug } from "./crop-geometry-audit";
+import { resolveStrandRenderProfile } from "./strand-render-profile";
 
 export interface BeadSlotDimensions {
   width: number;
   height: number;
 }
 
-export interface BeadSlotSizingCatalogueContext {
+export interface BeadSlotSizingCatalogueContext extends StrandRenderCatalogueContext {
   beadSizes?: BeadSizeEntry[];
   beadLibrarySizes?: BeadLibrarySizeOffer[];
+  beadTypes?: BeadTypeEntry[];
 }
 
 function mmToBasePx(sizeMm: number, scaleFactor: number): number {
@@ -111,24 +113,34 @@ const TYPE_FOOTPRINT: Record<string, { width: number; height: number }> = {
   spacer: { width: 1, height: 1 },
 };
 
-const ROUND_VISUAL_SLUGS = new Set(["crystal", "gemstone", "accent", "round-bead", "round"]);
-
-export function isRoundVisualBeadType(slug: string | undefined | null): boolean {
-  return ROUND_VISUAL_SLUGS.has(slug ?? "crystal");
+export function isRoundVisualBeadType(
+  slug: string | undefined | null,
+  catalogue?: StrandRenderCatalogueContext,
+  bead?: BeadLibraryEntry | null,
+): boolean {
+  return resolveStrandRenderProfile(bead ?? null, catalogue).forceRoundFootprint;
 }
 
 function finalizeLayoutFootprint(
   footprint: BeadSlotDimensions,
-  slug: string | undefined | null,
+  forceRound: boolean,
 ): BeadSlotDimensions {
-  if (!isRoundVisualBeadType(slug)) return footprint;
+  if (!forceRound) return footprint;
   const d = Math.max(footprint.width, footprint.height);
   return { width: d, height: d };
 }
 
-function typeScaleFor(bead: BeadLibraryEntry | null | undefined) {
-  const slug = bead?.beadTypeSlug ?? "crystal";
-  return TYPE_FOOTPRINT[slug] ?? TYPE_FOOTPRINT.crystal;
+function typeScaleFor(bead: BeadLibraryEntry | null | undefined, catalogue?: StrandRenderCatalogueContext) {
+  const profile = resolveStrandRenderProfile(bead ?? null, catalogue);
+  const meta = strandScaleMeta(bead);
+  const widthScale = meta?.strandScale?.width ?? 1;
+  const heightScale = meta?.strandScale?.height ?? 1;
+  const maxScale = Math.max(widthScale, heightScale);
+  return {
+    width: widthScale / maxScale,
+    height: heightScale / maxScale,
+    forceRound: profile.forceRoundFootprint,
+  };
 }
 
 function strandScaleMeta(bead: BeadLibraryEntry | null | undefined) {
@@ -139,19 +151,17 @@ function layoutDimensionsForMm(
   beadSize: BeadSize,
   scaleFactor: number,
   entry: BeadLibraryEntry | null,
+  catalogue?: StrandRenderCatalogueContext,
 ): BeadSlotDimensions {
   const baseTargetDiameterPx = mmToBasePx(beadSize, scaleFactor);
-  const typeScale = typeScaleFor(entry);
-  const meta = strandScaleMeta(entry);
-  const widthScale = meta?.strandScale?.width ?? typeScale.width;
-  const heightScale = meta?.strandScale?.height ?? typeScale.height;
-  const maxScale = Math.max(widthScale, heightScale);
+  const typeScale = typeScaleFor(entry, catalogue);
+  const maxScale = Math.max(typeScale.width, typeScale.height);
   return finalizeLayoutFootprint(
     {
-      width: baseTargetDiameterPx * (widthScale / maxScale),
-      height: baseTargetDiameterPx * (heightScale / maxScale),
+      width: baseTargetDiameterPx * (typeScale.width / maxScale),
+      height: baseTargetDiameterPx * (typeScale.height / maxScale),
     },
-    entry?.beadTypeSlug,
+    typeScale.forceRound,
   );
 }
 
@@ -185,10 +195,11 @@ function resolvePassiveStrandSlotSizing(
   scaleFactor: number,
   entry: BeadLibraryEntry | null,
   sizingPath: BeadRenderSizingPath,
+  catalogue?: BeadSlotSizingCatalogueContext,
   groupReferenceDiameterPx: number | null = null,
 ): BeadSlotSizingResult {
   const baseTargetDiameterPx = mmToBasePx(beadSize, scaleFactor);
-  const dimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry);
+  const dimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry, catalogue);
   const bounds = { left: 0, top: 0, width: dimensions.width, height: dimensions.height };
 
   return {
@@ -212,7 +223,7 @@ function resolvePassiveStrandSlotSizing(
     cropConfigPresent: Boolean(entry?.cropConfig),
     renderResolution: null,
     usesProcessedCanvas: true,
-    isRoundVisualBead: isRoundVisualBeadType(entry?.beadTypeSlug),
+    isRoundVisualBead: isRoundVisualBeadType(entry?.beadTypeSlug, catalogue, entry),
     objectFit: null,
     usesClipPath: false,
     wrapperDiameterPx: Math.max(dimensions.width, dimensions.height),
@@ -258,6 +269,7 @@ export function resolveBeadSlotSizing(
       scaleFactor,
       entry,
       "normalizedVisibleDiameter",
+      catalogue,
       sizeOffer?.groupReferenceDiameterPx ?? null,
     );
   }
@@ -268,12 +280,13 @@ export function resolveBeadSlotSizing(
       scaleFactor,
       entry,
       "processedImageNormalized",
+      catalogue,
     );
   }
 
   const config = entry ? resolveBeadCropConfig(entry) : null;
   const usesClipPath = Boolean(config && beadCropClipPathStyles(config));
-  const dimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry);
+  const dimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry, catalogue);
   const baseTargetDiameterPx = mmToBasePx(beadSize, scaleFactor);
 
   let sizingPath: BeadRenderSizingPath = "squareTargetFallback";
@@ -308,7 +321,7 @@ export function resolveBeadSlotSizing(
     cropConfigPresent: Boolean(config?.imageWidth && config?.imageHeight),
     renderResolution: null,
     usesProcessedCanvas: false,
-    isRoundVisualBead: isRoundVisualBeadType(entry?.beadTypeSlug),
+    isRoundVisualBead: isRoundVisualBeadType(entry?.beadTypeSlug, catalogue, entry),
     objectFit: null,
     usesClipPath,
     wrapperDiameterPx: Math.max(dimensions.width, dimensions.height),

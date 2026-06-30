@@ -16,6 +16,7 @@ export const beadsApi = {
     payload: Pick<BeadTypeEntry, "name" | "description"> & {
       displayOrder?: number;
       isActive?: boolean;
+      metadata?: BeadTypeEntry["metadata"];
     },
   ): Promise<BeadTypeEntry> {
     return apiRequest<BeadTypeEntry>("/bead-types", { method: "POST", body: payload });
@@ -55,6 +56,24 @@ export const beadsApi = {
         isActive: payload.isActive,
         displayOrder: payload.displayOrder,
       },
+    });
+  },
+
+  saveLibraryComplete(
+    publicId: string,
+    payload: {
+      library: Partial<BeadLibraryEntry>;
+      sizes?: BeadLibrarySizeInput[];
+    },
+  ): Promise<{
+    library: BeadLibraryEntry;
+    sizes: import("@/types/bead-library-sizes").BeadLibrarySizeOffer[] | null;
+    sizesChanged: boolean;
+    cropChanged: boolean;
+  }> {
+    return apiRequest(`/bead-libraries/${encodeURIComponent(publicId)}/save`, {
+      method: "PUT",
+      body: payload,
     });
   },
 

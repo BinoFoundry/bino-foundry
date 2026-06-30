@@ -14,6 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  notifyAdminSaveFailed,
+  notifyAdminSavedEdit,
+} from "@/features/admin/lib/admin-save-feedback";
 import { adminSettingsApi } from "@/services/api/admin-settings";
 import { isApiError } from "@/services/api";
 import type { SmtpEncryption, SmtpSettingsPublic, SmtpTemplateTestType } from "@bino-foundry/shared/types";
@@ -159,8 +163,9 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
       const updated = await adminSettingsApi.updateSmtp(buildUpdatePayload());
       setStored(updated);
       setForm(toFormState(updated));
-      toast.success("SMTP settings saved");
+      notifyAdminSavedEdit();
     } catch (err) {
+      notifyAdminSaveFailed(err, "Failed to save SMTP settings");
       const msg = isApiError(err)
         ? err.details
           ? `${err.message}: ${JSON.stringify(err.details)}`

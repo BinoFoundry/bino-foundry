@@ -1,20 +1,33 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Upload } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { BeadCropEditor, beadCropEditorPlateKey } from "@/features/admin/components/BeadCropEditor";
 import { BeadAssetValidationPanel } from "@/features/admin/components/BeadAssetValidationPanel";
 import { NormalizedExportDebugPanel } from "@/features/admin/components/NormalizedExportDebugPanel";
 import { BeadLibrarySizesPanel } from "@/features/admin/components/BeadLibrarySizesPanel";
+import { StrandRenderConfigPanel } from "@/features/admin/components/StrandRenderConfigPanel";
 import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
+import { resolveStrandRenderConfigForBead } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import type { BeadSizeDraftRow } from "@/types/bead-library-sizes";
 import type { BeadLibraryEntry } from "@/types/beads";
-import { isApiError, uploadApi } from "@/services/api";
-import { isBeadCropConfigValid, type BeadCropConfig } from "@bino-foundry/shared/types";
+import { isApiError, uploadApi, beadLibrarySizesApi } from "@/services/api";
+import {
+  DEFAULT_STRAND_RENDER_PROFILE,
+  isBeadCropConfigValid,
+  mergeLazyStrandRenderOverride,
+  parseStrandRenderProfile,
+  pruneStrandRenderOverride,
+  resolveStrandRenderConfig,
+  strandRenderOverrideIsEmpty,
+  type BeadCropConfig,
+  type StrandRenderProfile,
+} from "@bino-foundry/shared/types";
 
 interface BeadFormProps {
   initial?: BeadLibraryEntry;
@@ -40,6 +53,38 @@ function buildSizeRows(
         unitPrice: offer?.unitPrice ?? 0,
       };
     });
+}
+
+function updateStrandOverride(
+  form: BeadLibraryEntry,
+  patch: Record<string, unknown>,
+  inherited: StrandRenderProfile,
+): BeadLibraryEntry {
+  const meta = form.metadata as { strandRenderOverride?: unknown } | undefined;
+  const current = parseStrandRenderProfile(meta?.strandRenderOverride) ?? {};
+  const next = mergeLazyStrandRenderOverride(current, patch, inherited);
+  if (strandRenderOverrideIsEmpty(next)) {
+    return setInheritTypeDefaults(form, true);
+  }
+  return {
+    ...form,
+    metadata: {
+      ...(form.metadata ?? {}),
+      useTypeStrandDefaults: false,
+      strandRenderOverride: next,
+    },
+  };
+}
+
+function setInheritTypeDefaults(form: BeadLibraryEntry, inherit: boolean): BeadLibraryEntry {
+  const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
+  if (inherit) {
+    delete meta.strandRenderOverride;
+    meta.useTypeStrandDefaults = true;
+  } else {
+    meta.useTypeStrandDefaults = false;
+  }
+  return { ...form, metadata: meta };
 }
 
 export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadFormProps) {
@@ -68,9 +113,11 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
   const [form, setForm] = useState<BeadLibraryEntry>(initial ?? blank);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sizesError, setSizesError] = useState<string | null>(null);
   const [editingCrop, setEditingCrop] = useState(Boolean(initial?.originalImage || initial?.image));
   const [cropEditSession, setCropEditSession] = useState(0);
   const draftCropRef = useRef<BeadCropConfig | null>(initial?.cropConfig ?? null);
+  const sizesSectionRef = useRef<HTMLElement>(null);
 
   const globalSizes = useMemo(
     () =>
@@ -125,8 +172,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       setCropEditSession((s) => s + 1);
       setEditingCrop(true);
     } catch (err) {
-      const msg = isApiError(err) ? err.message : "Failed to upload image.";
-      alert(msg);
+      toast.error(isApiError(err) ? err.message : "Failed to upload image.");
     } finally {
       setUploading(false);
       if (e.target) e.target.value = "";
@@ -167,19 +213,23 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
   const collectSizes = (): BeadLibrarySizeInput[] | null => {
     const enabled = sizeRows.filter((r) => r.enabled);
     if (!enabled.length) {
-      alert("Select at least one available size and set its price.");
+      setSizesError("Select at least one available size and set its price.");
+      sizesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return null;
     }
     const invalidSize = enabled.find((r) => validateBeadSizeMm(r.sizeMm));
     if (invalidSize) {
-      alert(validateBeadSizeMm(invalidSize.sizeMm));
+      setSizesError(validateBeadSizeMm(invalidSize.sizeMm));
+      sizesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return null;
     }
     const invalidPrice = enabled.find((r) => r.unitPrice < 0 || Number.isNaN(r.unitPrice));
     if (invalidPrice) {
-      alert("Each enabled size needs a valid price.");
+      setSizesError("Each enabled size needs a valid price.");
+      sizesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return null;
     }
+    setSizesError(null);
     return enabled.map((r, i) => ({
       sizeMm: r.sizeMm,
       unitPrice: r.unitPrice,
@@ -224,6 +274,28 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
   };
 
   const cropReady = Boolean(form.cropConfig && isBeadCropConfigValid(form.cropConfig));
+  const inheritTypeDefaults = Boolean(
+    (form.metadata as { useTypeStrandDefaults?: boolean; strandRenderOverride?: unknown } | undefined)
+      ?.useTypeStrandDefaults !== false &&
+      (form.metadata as { strandRenderOverride?: unknown } | undefined)?.strandRenderOverride == null,
+  );
+  const renderCatalogue = useMemo(
+    () => ({ beadTypes: cat.beadTypes, strandRenderDefaults: cat.strandRenderDefaults }),
+    [cat.beadTypes, cat.strandRenderDefaults],
+  );
+  const resolvedStrand = useMemo(
+    () => resolveStrandRenderConfigForBead(form, renderCatalogue),
+    [form, renderCatalogue],
+  );
+  const inheritedTypeStrand = useMemo(() => {
+    const type = cat.beadTypes.find((t) => t.id === form.beadTypeId);
+    const meta = type?.metadata as { strandRender?: unknown } | undefined;
+    return resolveStrandRenderConfig({
+      systemDefaults: cat.strandRenderDefaults,
+      beadTypeDefaults: parseStrandRenderProfile(meta?.strandRender),
+    });
+  }, [form.beadTypeId, cat.beadTypes, cat.strandRenderDefaults]);
+  const [showStrandAdvanced, setShowStrandAdvanced] = useState(false);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -340,10 +412,17 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
                   onSaveCrop={handleSaveCrop}
                   onProcessedUpload={handleProcessed}
                   onBeforeNormalizedExport={async () => {
-                    await cat.recalculateMmGroupReferences();
-                    await cat.refreshBeadLibrarySizes();
+                    if (!form.id) return;
+                    await beadLibrarySizesApi.recalculateNormalization(form.id);
+                    const offers = await beadLibrarySizesApi.list(form.id);
+                    cat.patchBeadLibrarySizes(form.id, offers);
                   }}
-                  onNormalizedExportsSaved={() => cat.refreshBeadLibrarySizes()}
+                  onNormalizedExportsSaved={() => {
+                    if (!form.id) return;
+                    void beadLibrarySizesApi.list(form.id).then((offers) => {
+                      cat.patchBeadLibrarySizes(form.id, offers);
+                    });
+                  }}
                 />
                 {developerMode ? (
                   <>
@@ -374,9 +453,50 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
         ) : null}
       </section>
 
-      <section className="space-y-3">
+      <StrandRenderConfigPanel
+        mode="bead"
+        value={resolvedStrand}
+        provenance={resolvedStrand.provenance}
+        inheritTypeDefaults={inheritTypeDefaults}
+        showAdvanced={showStrandAdvanced}
+        onInheritTypeDefaultsChange={(inherit) => setForm((f) => setInheritTypeDefaults(f, inherit))}
+        onChange={(patch) => setForm((f) => updateStrandOverride(f, patch, inheritedTypeStrand))}
+        onResetToType={() => setForm((f) => setInheritTypeDefaults(f, true))}
+        onResetToSystem={() =>
+          setForm((f) => {
+            const system = cat.strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE;
+            const override = pruneStrandRenderOverride(system, inheritedTypeStrand);
+            if (strandRenderOverrideIsEmpty(override)) {
+              return setInheritTypeDefaults(f, true);
+            }
+            return {
+              ...f,
+              metadata: {
+                ...(f.metadata ?? {}),
+                useTypeStrandDefaults: false,
+                strandRenderOverride: override,
+              },
+            };
+          })
+        }
+      />
+
+      <div className="flex justify-end">
+        <Button type="button" variant="outline" size="sm" onClick={() => setShowStrandAdvanced((v) => !v)}>
+          {showStrandAdvanced ? "Hide advanced appearance" : "Advanced appearance"}
+        </Button>
+      </div>
+
+      <section ref={sizesSectionRef} className="space-y-3">
         <h3 className="type-h3 text-base">Available sizes</h3>
-        <BeadLibrarySizesPanel rows={sizeRows} onRowsChange={setSizeRows} />
+        {sizesError ? <p className="text-xs text-destructive">{sizesError}</p> : null}
+        <BeadLibrarySizesPanel
+          rows={sizeRows}
+          onRowsChange={(rows) => {
+            setSizeRows(rows);
+            setSizesError(null);
+          }}
+        />
         {form.id && existingOffers.length > 0 ? (
           <button
             type="button"

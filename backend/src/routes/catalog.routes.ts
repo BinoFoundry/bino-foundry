@@ -5,6 +5,7 @@ import { attachJwtAuth } from "../middleware/auth-jwt.js";
 import { requireMutationAuth } from "../middleware/auth-mutations.js";
 import { createBeadLibraryRoutes } from "../modules/bead-libraries/bead-library.routes.js";
 import { createBeadTypeRoutes } from "../modules/bead-types/bead-type.routes.js";
+import { createStrandRenderMigrationRoutes } from "../modules/strand-render/strand-render-migration.routes.js";
 import { createBeadSizeRoutes } from "../modules/bead-sizes/bead-size.routes.js";
 import { createWristSizeRoutes } from "../modules/wrist-sizes/wrist-size.routes.js";
 import { beadLibrarySizeHandlers } from "../modules/bead-library-sizes/bead-library-size.controller.js";
@@ -36,6 +37,7 @@ export function createCatalogRoutes(): Router {
   router.use("/rendering", createRenderingRoutes());
   router.use("/frames", createFrameRoutes());
   router.use("/bead-types", createBeadTypeRoutes());
+  router.use("/strand-render-migration", createStrandRenderMigrationRoutes());
   router.use("/bead-sizes", createBeadSizeRoutes());
   router.use("/wrist-sizes", createWristSizeRoutes());
   router.use("/bead-libraries", createBeadLibraryRoutes());

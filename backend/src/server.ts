@@ -3,6 +3,7 @@ import "./config/load-env.js";
 import { createApplication } from "./app.js";
 import { configureCloudinary } from "./infra/cloudinary.js";
 import { verifySupabaseCatalogReady } from "./infra/supabase/verify-catalog.js";
+import { strandRenderMigrationService } from "./modules/strand-render/strand-render-migration.service.js";
 import { getEnv, resolveListenHost } from "./config/env.js";
 
 async function bootstrap(): Promise<void> {
@@ -24,6 +25,19 @@ async function bootstrap(): Promise<void> {
     if (APP_ENV === "development") {
       console.log("Mutations guarded when ADMIN_API_KEY is set.");
     }
+
+    void strandRenderMigrationService
+      .runStartupMigration()
+      .then((stats) => {
+        if (stats.typesInitialized > 0 || stats.librariesCleaned > 0) {
+          console.log(
+            `Strand render migration: ${stats.typesInitialized} type(s) initialized, ${stats.librariesCleaned} library override(s) cleaned.`,
+          );
+        }
+      })
+      .catch((error) => {
+        console.warn("Strand render startup migration skipped:", error);
+      });
   };
 
   if (host) {

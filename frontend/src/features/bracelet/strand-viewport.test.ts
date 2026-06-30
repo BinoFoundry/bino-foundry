@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
-import { getBeadSlotDimensions } from "@/render/bead-crop";
+import { getBeadSlotDimensions, resolveStrandRenderConfigForType } from "@/render/bead-crop";
+import { TEST_STRAND_RENDER_CATALOGUE } from "@/render/bead-crop/strand-render-test-catalogue";
 
 import { computeStrandPathLayout } from "./strand-path";
 import { computeElasticBeadLayout } from "./strand-elastic-layout";
@@ -178,12 +179,19 @@ function layoutMixedSizesOnRing(
   const maxExtent = Math.max(...prelimDims.map((d) => Math.max(d.width, d.height)));
   const wristRadius = computeWristRingRadiusPx(center, 16, scaleFactor, maxExtent, bounds);
   const maxRadiusPx = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
-  const layoutArcs = prelimDims.map((d) => beadLayoutArcPx(d, scaleFactor));
+  const layoutArcs = prelimDims.map((d, i) =>
+    beadLayoutArcPx(
+      d,
+      scaleFactor,
+      resolveStrandRenderConfigForType(beads[i]?.bead.beadTypeSlug, TEST_STRAND_RENDER_CATALOGUE),
+    ),
+  );
   const resolved = computeResolvedRingRadiusPx({
     beadLayoutArcPx: layoutArcs,
     wristRadiusPx: wristRadius,
     maxRadiusPx,
     scaleFactor,
+    pairGapPx: 0,
   });
   const circumference = 2 * Math.PI * resolved.radiusPx;
   const pathLayout = computeStrandPathLayout({
@@ -192,7 +200,7 @@ function layoutMixedSizesOnRing(
     centerX: center,
     centerY: center,
     radius: resolved.radiusPx,
-    minGapPx: resolved.pairGapPx,
+    minGapPx: 0,
   });
   const slots = pathLayout.map((path, i) => ({
     x: path.x,

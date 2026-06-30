@@ -8,6 +8,7 @@ export function createBeadLibraryRoutes(): Router {
   router.post("/recalculate-bounds-metadata", beadLibraryHandlers.recalculateBoundsMetadata);
   router.get("/:id", beadLibraryHandlers.retrieve);
   router.post("/", beadLibraryHandlers.create);
+  router.put("/:id/save", beadLibraryHandlers.saveComplete);
   router.put("/:id/crop", beadLibraryHandlers.updateCrop);
   router.put("/:id", beadLibraryHandlers.update);
   router.delete("/:id", beadLibraryHandlers.remove);

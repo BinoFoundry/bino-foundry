@@ -5,6 +5,7 @@ import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError } from "../../lib/errors.js";
 import { slugifyKebab } from "../../lib/slug.js";
 import type { BeadTypeCreateDTO, BeadTypeUpdateDTO } from "./bead-type.validation.js";
+import { metadataWithStrandRenderDefaults } from "../strand-render/strand-render-migration.service.js";
 
 function mapBeadTypeRow(row: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -57,6 +58,12 @@ export class BeadTypeService {
   async create(payload: BeadTypeCreateDTO): Promise<unknown> {
     const supabase = getSupabaseServiceRole();
     const slug = await allocateSlug(payload.name);
+    const metadata = metadataWithStrandRenderDefaults(
+      slug,
+      payload.name.trim(),
+      payload.description?.trim() ?? "",
+      payload.metadata as Record<string, unknown> | undefined,
+    );
 
     const insertRow = {
       slug,
@@ -64,7 +71,7 @@ export class BeadTypeService {
       description: payload.description?.trim() ?? "",
       display_order: payload.displayOrder ?? 0,
       is_active: payload.isActive ?? true,
-      metadata: payload.metadata ?? {},
+      metadata,
     };
 
     const { data, error } = await supabase.from("bead_types").insert(insertRow).select("*").single();

@@ -1,6 +1,7 @@
 import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { FramePlateCropEditorHandle } from "./FramePlateCropEditor";
 import { Frame, Loader2, Pencil, RotateCcw, Scan, UploadCloud, Wand2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -311,7 +312,7 @@ export const FrameRenderViewsSection = forwardRef<
         "success",
       );
     } catch (err) {
-      alert(isApiError(err) ? err.message : "Upload failed");
+      toast.error(isApiError(err) ? err.message : "Upload failed");
     } finally {
       setUploading(null);
     }
@@ -481,7 +482,7 @@ export const FrameRenderViewsSection = forwardRef<
   const saveLensEditor = (axis: FrameViewAxis, side: FrameLensSide) => {
     const mask = draftRef.current[axis];
     if (!mask || !isLensSideValid(mask, side)) {
-      alert(`Draw a closed path for the ${LENS_SIDE_LABELS[side].toLowerCase()} (≥3 points) before saving.`);
+      toast.error(`Draw a closed path for the ${LENS_SIDE_LABELS[side].toLowerCase()} (≥3 points) before saving.`);
       return;
     }
     if (commitMaskToView(axis, mask)) {
@@ -617,7 +618,7 @@ export const FrameRenderViewsSection = forwardRef<
                       onSave={() => {
                         const config = frameCropEditorRef.current?.commitDraft();
                         if (!config) {
-                          alert("Draw a closed frame path (≥3 points) before saving.");
+                          toast.error("Draw a closed frame path (≥3 points) before saving.");
                           return;
                         }
                         handleFramePathSave(axis, config);

@@ -24,6 +24,17 @@ export {
   type BeadSlotSizingResult,
   type SquareFallbackReason,
 } from "./strand-bead-sizing";
+export {
+  resolveStrandRenderProfile,
+  resolveStrandRenderProfileBySlug,
+  resolveStrandRenderConfigForBead,
+  resolveStrandRenderConfigForType,
+  buildStrandRenderConfigCache,
+  strandRenderCacheVersion,
+  type ResolvedStrandRenderConfig,
+  type StrandRenderCatalogueContext,
+} from "./strand-render-profile";
+export { useStrandRenderConfigCache } from "./use-strand-render-config-cache";
 export { resolveBeadCropConfig } from "./resolve-bead-crop-config";
 export { loadImage, loadImageForProcessing } from "./image-loader";
 export {

@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { CircleDot, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
+import {
+  applyAdminSaveModalState,
+  notifyAdminSaveFailed,
+  type AdminEditorModalState,
+} from "@/features/admin/lib/admin-save-feedback";
+import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
@@ -12,8 +17,6 @@ import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { useAdminList } from "../../hooks/useAdminList";
-
-type ModalState = { type: "add" } | { type: "edit"; entry: WristSizeEntry } | null;
 
 function WristSizeForm({
   initial,
@@ -30,33 +33,53 @@ function WristSizeForm({
   const [active, setActive] = useState(initial?.isActive ?? true);
   const [isDefault, setIsDefault] = useState(initial?.isDefault ?? false);
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [sizeError, setSizeError] = useState<string | null>(null);
+  const sizeRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    if (sizeCm < 1 || sizeCm > 50) {
+      setSizeError("Enter a wrist size between 1 and 50 cm.");
+      sizeRef.current?.focus();
+      return;
+    }
+    setSizeError(null);
+    setSaving(true);
+    try {
+      await onSave({
+        sizeCm,
+        label: label.trim(),
+        displayOrder: order,
+        isActive: active,
+        isDefault,
+        notes: notes.trim() || null,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <form
-      className="mx-auto max-w-md space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSave({
-          sizeCm,
-          label: label.trim(),
-          displayOrder: order,
-          isActive: active,
-          isDefault,
-          notes: notes.trim() || null,
-        });
-      }}
-    >
+    <form className="mx-auto max-w-md space-y-4" onSubmit={handleSubmit}>
       <div>
         <label className="mb-1 block text-xs text-muted-foreground">Size (cm)</label>
         <input
+          ref={sizeRef}
           type="number"
           min={1}
           max={50}
           step={0.5}
           value={sizeCm}
-          onChange={(e) => setSizeCm(Number(e.target.value))}
+          onChange={(e) => {
+            setSizeCm(Number(e.target.value));
+            setSizeError(null);
+          }}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          aria-invalid={sizeError ? true : undefined}
         />
+        {sizeError ? <p className="mt-1 text-xs text-destructive">{sizeError}</p> : null}
       </div>
       <div>
         <label className="mb-1 block text-xs text-muted-foreground">Display name</label>
@@ -94,10 +117,12 @@ function WristSizeForm({
         Default selection
       </label>
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit">Save</Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
       </div>
     </form>
   );
@@ -106,12 +131,10 @@ function WristSizeForm({
 export function WristSizesAdminPage() {
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [modal, setModal] = useState<ModalState>(null);
+  const [modal, setModal] = useState<AdminEditorModalState<WristSizeEntry>>(null);
   const list = useAdminList(cat.wristSizes, (s, q) => s.label.toLowerCase().includes(q));
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [modal]);
+  useAdminEditorScroll(scrollRef, modal);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -129,15 +152,20 @@ export function WristSizesAdminPage() {
       <AdminPage scrollRef={scrollRef} footer={`${cat.wristSizes.length} wrist size option(s)`}>
         {modal ? (
           <WristSizeForm
+            key={modal.type === "add" ? "new" : modal.entry.id}
             initial={modal.type === "edit" ? modal.entry : undefined}
             onCancel={() => setModal(null)}
             onSave={async (entry) => {
+              const mode = modal.type;
               try {
-                if (modal.type === "add") await cat.addWristSize(entry);
-                else await cat.updateWristSize({ ...modal.entry, ...entry });
-                setModal(null);
+                const saved =
+                  mode === "add"
+                    ? await cat.addWristSize(entry)
+                    : await cat.updateWristSize({ ...modal.entry, ...entry });
+                applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Wrist size" });
               } catch (err) {
-                alert(isApiError(err) ? err.message : "Save failed");
+                notifyAdminSaveFailed(err);
+                throw err;
               }
             }}
           />

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
-import { getBeadSlotDimensions } from "@/render/bead-crop";
+import { getBeadSlotDimensions, resolveStrandRenderConfigForType } from "@/render/bead-crop";
+import { TEST_STRAND_RENDER_CATALOGUE } from "@/render/bead-crop/strand-render-test-catalogue";
 
 import { computeElasticBeadLayout } from "./strand-elastic-layout";
 import {
@@ -46,6 +47,7 @@ function layoutForWrist(
     canvasSize,
     guideSizeMm: 8,
     beadScaleBoost: scaleFactor,
+    renderCatalogue: TEST_STRAND_RENDER_CATALOGUE,
   });
   if (!layout) throw new Error("expected layout");
   const resolved = layout.resolved;
@@ -67,13 +69,18 @@ function assertCleanLayout(
   canvasCenter = 200,
 ) {
   const { resolved, elastic, pairGapPx } = layoutForWrist(wristCm, beads, scaleFactor, canvasCenter);
-  expect(beadSectorsOverlap(elastic.angles, elastic.arcSpans)).toBe(false);
+  const circumferencePx = 2 * Math.PI * resolved.radiusPx;
+  const totalArcPx = resolved.beadArcPx.reduce((sum, arc) => sum + arc, 0);
+  const closedLoop =
+    elastic.isOverCapacity || totalArcPx >= circumferencePx * (1 - 1e-4);
+  expect(beadSectorsOverlap(elastic.angles, elastic.arcSpans, 1, closedLoop)).toBe(false);
   expect(
     adjacentPairsMeetGap(
       elastic.angles,
       resolved.beadArcPx,
       resolved.radiusPx,
       pairGapPx,
+      closedLoop,
     ),
   ).toBe(true);
   return resolved;
@@ -95,7 +102,13 @@ describe("computeResolvedRingRadiusPx", () => {
     const prelimDims = beads.map((b) =>
       getBeadSlotDimensions(b, placedBeadSizeMm(b), scaleFactor),
     );
-    const layoutArcs = prelimDims.map((d) => beadLayoutArcPx(d, scaleFactor));
+    const layoutArcs = prelimDims.map((d, i) =>
+      beadLayoutArcPx(
+        d,
+        scaleFactor,
+        resolveStrandRenderConfigForType(beads[i]?.bead.beadTypeSlug, TEST_STRAND_RENDER_CATALOGUE),
+      ),
+    );
     const maxExtent = Math.max(...prelimDims.map((d) => Math.max(d.width, d.height)));
     const wristRadius = computeWristRingRadiusPx(center, 14, scaleFactor, maxExtent, BOUNDS);
     const maxRadius = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
@@ -202,12 +215,13 @@ describe("wrist sizes 14–19 cm", () => {
     assertCleanLayout(14, beads);
   });
 
-  it("scales pair gap with layout scale factor", () => {
+  it("uses zero pair gap for continuous edge-to-edge layout", () => {
     const beads = [8, 10, 8].map((mm) => mockPlaced(mm));
     const base = layoutForWrist(16, beads, 1);
     const boosted = layoutForWrist(16, beads, 1.25);
-    expect(boosted.pairGapPx).toBeGreaterThan(base.pairGapPx);
-    expect(scaledBeadSpacingPx(1.25).pairGapPx).toBeGreaterThan(scaledBeadSpacingPx(1).pairGapPx);
+    expect(base.pairGapPx).toBe(0);
+    expect(boosted.pairGapPx).toBe(0);
+    expect(scaledBeadSpacingPx(1.25).pairGapPx).toBe(0);
     assertCleanLayout(16, beads, 1.25);
   });
 });
@@ -221,6 +235,7 @@ describe("resolveStrandRingLayout", () => {
       wristSizeBounds: BOUNDS,
       canvasSize: 400,
       guideSizeMm: 8,
+      renderCatalogue: TEST_STRAND_RENDER_CATALOGUE,
     });
     expect(result).not.toBeNull();
     expect(result!.resolved.radiusPx).toBeGreaterThanOrEqual(result!.wristRadiusPx);

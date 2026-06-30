@@ -16,6 +16,8 @@ export const syncLibrarySizesDto = z.object({
       }),
     )
     .min(0),
+  skipNormalization: z.boolean().optional(),
+  force: z.boolean().optional(),
 });
 
 const deliveryUrlsDto = z

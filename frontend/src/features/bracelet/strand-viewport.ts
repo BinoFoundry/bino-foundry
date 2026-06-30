@@ -169,7 +169,9 @@ export function computeStrandContentBounds(
  * Shift bead centers and ring center together so the bracelet path stays on canvas center.
  * Uses the ring center (not the asymmetric bead bbox) so mixed sizes remain path-aligned.
  */
-export function shiftStrandLayoutToCanvasCenter<T extends { x: number; y: number }>(params: {
+export function shiftStrandLayoutToCanvasCenter<
+  T extends { x: number; y: number; shellLeft?: number; shellTop?: number },
+>(params: {
   ringCenter: number;
   targetCenter: number;
   slots: T[];
@@ -182,6 +184,8 @@ export function shiftStrandLayoutToCanvasCenter<T extends { x: number; y: number
       ...slot,
       x: slot.x + shift,
       y: slot.y + shift,
+      ...(slot.shellLeft != null ? { shellLeft: slot.shellLeft + shift } : {}),
+      ...(slot.shellTop != null ? { shellTop: slot.shellTop + shift } : {}),
     })),
   };
 }

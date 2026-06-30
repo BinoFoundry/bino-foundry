@@ -1,5 +1,7 @@
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 
+import { findBalancedInsertIndex } from "./balanced-strand-layout";
+
 /** Guide ring slot count when the strand is empty (display only). */
 export const EMPTY_GUIDE_SLOT_COUNT = 8;
 
@@ -51,26 +53,9 @@ export function strandCircumferenceMm(placed: PlacedBead[], guideMm: number): nu
   return sorted.reduce((sum, b) => sum + placedBeadSizeMm(b), 0);
 }
 
-/** Largest arc gap on the ring — best place to auto-insert the next bead. */
-export function findBestInsertIndex(placed: PlacedBead[], newMm: number): number {
-  const sorted = normalizeFromSlots(placed);
-  const n = sorted.length;
-  if (n === 0) return 0;
-  if (n === 1) return 1;
-
-  let bestIdx = 1;
-  let bestGap = -1;
-  for (let i = 0; i < n; i++) {
-    const curr = sorted[i]!;
-    const next = sorted[(i + 1) % n]!;
-    const gap = placedBeadSizeMm(curr) + placedBeadSizeMm(next) + newMm * 0.01;
-    const insertIdx = i + 1;
-    if (gap > bestGap) {
-      bestGap = gap;
-      bestIdx = insertIdx;
-    }
-  }
-  return Math.min(bestIdx, n);
+/** Balanced angular gap — next bead fills the largest open sector on the ring. */
+export function findBestInsertIndex(placed: PlacedBead[], _newMm?: number): number {
+  return findBalancedInsertIndex(normalizeFromSlots(placed).length);
 }
 
 export function insertBeadAt(

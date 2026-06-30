@@ -75,7 +75,7 @@ describe("getBeadSlotDimensions", () => {
       scale: 1,
     } as const;
     const dim = getBeadSlotDimensions(mockPlaced(config), 8, 1);
-    expect(getBeadTangentArcPx(dim)).toBeCloseTo(Math.max(dim.width, dim.height), 5);
+    expect(getBeadTangentArcPx(dim)).toBeCloseTo(dim.width, 5);
   });
 
   it("round spacers use the same mm slot as other round beads", () => {

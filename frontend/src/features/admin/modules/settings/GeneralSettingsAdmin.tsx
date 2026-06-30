@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
 
@@ -18,6 +17,10 @@ import {
   SUPPORTED_CURRENCIES,
   getCurrencyLabel,
 } from "@/features/admin/constants/currency";
+import {
+  notifyAdminSaveFailed,
+  notifyAdminSavedEdit,
+} from "@/features/admin/lib/admin-save-feedback";
 import { siteSettingsKeys } from "@/hooks/use-site-settings";
 import { isApiError } from "@/services/api";
 import { settingsApi } from "@/services/api/settings";
@@ -73,8 +76,9 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
         braceletBuilderLibraryTitle: braceletBuilderLibraryTitle.trim(),
       });
       await queryClient.invalidateQueries({ queryKey: siteSettingsKeys.general() });
-      toast.success("General settings saved");
+      notifyAdminSavedEdit();
     } catch (err) {
+      notifyAdminSaveFailed(err, "Failed to save general settings");
       const msg = isApiError(err)
         ? err.details
           ? `${err.message}: ${JSON.stringify(err.details)}`

@@ -10,3 +10,5 @@ export { sunglassesApi } from "./sunglasses";
 export { renderingApi, isApiFrameId } from "./rendering";
 export { uploadApi, type CloudinaryUploadResult, type StagingUploadResult } from "./upload";
 export { adminSettingsApi } from "./admin-settings";
+export { settingsApi } from "./settings";
+export { strandRenderMigrationApi } from "./strand-render-migration";

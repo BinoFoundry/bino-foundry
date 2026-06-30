@@ -17,7 +17,14 @@ async function list(req: Request, res: Response) {
 async function sync(req: Request, res: Response) {
   const { id } = beadLibraryIdParam.parse(req.params);
   const payload = validateBody(syncLibrarySizesDto, req.body);
-  sendJson(res, await beadLibrarySizeService.syncLibrarySizes(id, payload));
+  const result = await beadLibrarySizeService.syncLibrarySizes(id, payload);
+  sendJson(res, result.rows);
+}
+
+async function recalculateNormalization(req: Request, res: Response) {
+  const { id } = beadLibraryIdParam.parse(req.params);
+  await beadLibrarySizeService.recalculateNormalizationForLibrary(id);
+  sendJson(res, { ok: true });
 }
 
 async function saveNormalizedExports(req: Request, res: Response) {
@@ -30,4 +37,5 @@ export const beadLibrarySizeHandlers = {
   list,
   sync,
   saveNormalizedExports,
+  recalculateNormalization,
 };

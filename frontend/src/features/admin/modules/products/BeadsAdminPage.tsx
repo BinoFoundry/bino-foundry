@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Gem, Trash2 } from "lucide-react";
 
 import { BeadForm } from "@/components/admin/BeadForm";
 import { Button } from "@/components/ui/button";
 import { formatLibraryPriceRange } from "@/features/bracelet/library-sizes";
+import { sizesForLibrary } from "@/features/bracelet/library-sizes";
+import { BeadSavePerf } from "@/features/admin/lib/bead-save-pipeline";
+import {
+  applyAdminSaveModalState,
+  notifyAdminSaveFailed,
+  type AdminEditorModalState,
+} from "@/features/admin/lib/admin-save-feedback";
+import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
-import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
-import { formatApiErrorMessage } from "@/services/api";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -20,14 +26,12 @@ import { AdminToolbar } from "../../components/AdminToolbar";
 import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
-type ModalState = { type: "add" } | { type: "edit"; entry: BeadLibraryEntry } | null;
-
 export function BeadsAdminPage() {
   const { currencyCode } = useFormatCurrency();
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [modal, setModal] = useState<ModalState>(null);
+  const [modal, setModal] = useState<AdminEditorModalState<BeadLibraryEntry>>(null);
 
   const filtered = useMemo(() => {
     if (typeFilter === "all") return cat.beadLibraries;
@@ -36,9 +40,7 @@ export function BeadsAdminPage() {
 
   const list = useAdminList(filtered, (b, q) => b.name.toLowerCase().includes(q));
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [modal, typeFilter]);
+  useAdminEditorScroll(scrollRef, modal, [typeFilter]);
 
   const typeName = (beadTypeId: string) => cat.beadTypes.find((t) => t.id === beadTypeId)?.name ?? "—";
   const defaultTypeId = typeFilter !== "all" ? typeFilter : undefined;
@@ -75,21 +77,36 @@ export function BeadsAdminPage() {
       <AdminPage scrollRef={scrollRef} footer={`${filtered.length} bead(s)`}>
         {modal ? (
           <BeadForm
+            key={modal.type === "add" ? "new" : modal.entry.id}
             initial={modal.type === "edit" ? modal.entry : undefined}
             defaultBeadTypeId={defaultTypeId}
             onCancel={() => setModal(null)}
             onSave={async (entry, sizes: BeadLibrarySizeInput[]) => {
+              const perf = new BeadSavePerf();
+              const mode = modal.type;
               try {
-                if (modal.type === "add") {
-                  await cat.addBeadLibrary(entry, sizes);
+                let saved: BeadLibraryEntry;
+                if (mode === "add") {
+                  saved = await perf.measure("create", () => cat.addBeadLibrary(entry, sizes));
                 } else {
-                  await cat.updateBeadLibrary(entry);
-                  await beadLibrarySizesApi.sync(entry.id, sizes);
-                  await cat.refreshBeadLibrarySizes();
+                  const initialSizes = sizesForLibrary(cat.beadLibrarySizes, modal.entry.id).map(
+                    (offer) => ({
+                      sizeMm: offer.sizeMm,
+                      unitPrice: offer.unitPrice,
+                      isDefault: offer.isDefault,
+                    }),
+                  );
+                  saved = await perf.measure("save", () =>
+                    cat.saveBeadLibraryEntry(entry, sizes, {
+                      initial: modal.entry,
+                      initialSizes,
+                    }),
+                  );
                 }
-                setModal(null);
+                perf.finish(mode === "add" ? "Bead create" : "Bead save");
+                applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Bead" });
               } catch (err) {
-                alert(formatApiErrorMessage(err));
+                notifyAdminSaveFailed(err);
                 throw err;
               }
             }}

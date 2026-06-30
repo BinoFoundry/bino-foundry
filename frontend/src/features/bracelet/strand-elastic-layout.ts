@@ -1,4 +1,5 @@
 import { STRAND_PATH_START_ANGLE } from "./strand-path";
+import { balancedFractionsForSequence } from "./balanced-strand-layout";
 
 export interface ElasticBeadLayout {
   angles: number[];
@@ -48,10 +49,7 @@ export function computeElasticBeadLayout(
   const totalBeadMm = beadArcMm.reduce((sum, mm) => sum + mm, 0);
   const minTotalGap = n * minGapPx;
   const isOverCapacity = totalBeadMm + minTotalGap > layoutCircumferenceMm + 1e-6;
-
-  const gapMm = isOverCapacity
-    ? 0
-    : Math.max(minGapPx, (layoutCircumferenceMm - totalBeadMm) / n);
+  const gapMm = 0;
 
   const angles: number[] = [];
   const arcSpans: number[] = [];
@@ -61,19 +59,23 @@ export function computeElasticBeadLayout(
     for (let i = 0; i < n; i++) {
       const arcMm = (beadArcMm[i]! / totalBeadMm) * layoutCircumferenceMm;
       const centerMm = cursorMm + arcMm / 2;
-      angles.push(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI);
+      angles.push(
+        normalizeAngleRad(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI),
+      );
       arcSpans.push((arcMm / layoutCircumferenceMm) * 2 * Math.PI);
       cursorMm += arcMm;
     }
+  } else if (n === 1) {
+    const mm = beadArcMm[0]!;
+    angles.push(normalizeAngleRad(startAngle));
+    arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
   } else {
-    // Anchor first bead center at startAngle; grow clockwise along the ring.
-    let cursorMm = -beadArcMm[0]! / 2;
+    // Balanced distribution — fill largest arc gaps as items are added.
+    const fractions = balancedFractionsForSequence(n);
     for (let i = 0; i < n; i++) {
       const mm = beadArcMm[i]!;
-      const centerMm = cursorMm + mm / 2;
-      angles.push(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI);
+      angles.push(normalizeAngleRad(startAngle + fractions[i]! * 2 * Math.PI));
       arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
-      cursorMm += mm + gapMm;
     }
   }
 

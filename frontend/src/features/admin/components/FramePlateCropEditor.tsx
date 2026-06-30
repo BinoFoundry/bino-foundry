@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Scan } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -155,7 +156,7 @@ export const FramePlateCropEditor = forwardRef<FramePlateCropEditorHandle, Frame
     const handleLegacySave = () => {
       const committed = commitDraft();
       if (!committed) {
-        alert("Draw a closed frame path (≥3 points) before saving.");
+        toast.error("Draw a closed frame path (≥3 points) before saving.");
         return;
       }
       onSaveCropRef.current?.(committed);

@@ -11,5 +11,9 @@ export function createBeadLibrarySizeRoutes(): Router {
     asyncHandler(beadLibrarySizeHandlers.saveNormalizedExports),
   );
   router.put("/library/:id", asyncHandler(beadLibrarySizeHandlers.sync));
+  router.post(
+    "/library/:id/recalculate-normalization",
+    asyncHandler(beadLibrarySizeHandlers.recalculateNormalization),
+  );
   return router;
 }

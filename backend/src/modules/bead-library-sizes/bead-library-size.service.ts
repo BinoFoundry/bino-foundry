@@ -1,6 +1,8 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
+import { librarySizesSemanticallyEqual } from "../../lib/save-payload-equal.js";
+import { runBackgroundTask } from "../../lib/run-background-task.js";
 import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
 import type { SaveNormalizedExportsDTO, SyncLibrarySizesDTO } from "./bead-library-size.validation.js";
 
@@ -100,7 +102,10 @@ export class BeadLibrarySizeService {
       .map((r) => mapRow(r as Record<string, unknown>));
   }
 
-  async syncLibrarySizes(libraryId: string, dto: SyncLibrarySizesDTO) {
+  async syncLibrarySizes(
+    libraryId: string,
+    dto: SyncLibrarySizesDTO,
+  ): Promise<{ rows: ReturnType<typeof mapRow>[]; changed: boolean }> {
     const supabase = getSupabaseServiceRole();
     const libraryUuid = await resolveLibraryUuid(libraryId);
 
@@ -132,9 +137,27 @@ export class BeadLibrarySizeService {
 
     const { data: existingRows, error: existingErr } = await supabase
       .from("bead_library_sizes")
-      .select("id, bead_size_id, bead_sizes(size_mm, label)")
+      .select("id, bead_size_id, unit_price, is_default, bead_sizes(size_mm, label)")
       .eq("bead_library_id", libraryUuid);
     assertNoDbError(existingErr);
+
+    const existingFingerprint = (existingRows ?? []).map((raw) => {
+      const row = raw as {
+        unit_price: number;
+        is_default: boolean;
+        bead_sizes: { size_mm?: number } | null;
+      };
+      return {
+        sizeMm: Number(row.bead_sizes?.size_mm ?? 0),
+        unitPrice: Number(row.unit_price),
+        isDefault: row.is_default === true,
+      };
+    });
+
+    if (librarySizesSemanticallyEqual(dto.sizes, existingFingerprint) && !dto.force) {
+      const current = await this.list({ libraryId });
+      return { rows: current, changed: false };
+    }
 
     if (!dto.sizes.length) {
       await this.deleteUnreferencedLibrarySizes(
@@ -142,7 +165,7 @@ export class BeadLibrarySizeService {
         libraryUuid,
         (existingRows ?? []) as { id: string; bead_size_id: string; bead_sizes: { size_mm?: number; label?: string } | null }[],
       );
-      return [];
+      return { rows: [], changed: true };
     }
 
     let defaultSet = false;
@@ -180,8 +203,17 @@ export class BeadLibrarySizeService {
       .upsert(upsertRows, { onConflict: "bead_library_id,bead_size_id" })
       .select(SELECT);
     assertNoDbError(error);
+    const rows = (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+    if (!dto.skipNormalization) {
+      runBackgroundTask("mm-normalization", async () => {
+        await mmGroupNormalizationService.recalculateForLibrary(libraryId);
+      });
+    }
+    return { rows, changed: true };
+  }
+
+  async recalculateNormalizationForLibrary(libraryId: string): Promise<void> {
     await mmGroupNormalizationService.recalculateForLibrary(libraryId);
-    return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
   }
 
   private async deleteUnreferencedLibrarySizes(

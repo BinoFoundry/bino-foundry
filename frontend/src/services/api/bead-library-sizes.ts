@@ -10,6 +10,7 @@ export const beadLibrarySizesApi = {
   sync(
     libraryId: string,
     sizes: { sizeMm: number; unitPrice: number; isDefault?: boolean }[],
+    options?: { skipNormalization?: boolean },
   ): Promise<BeadLibrarySizeOffer[]> {
     const payload = {
       sizes: sizes.map((s) => ({
@@ -22,8 +23,15 @@ export const beadLibrarySizesApi = {
       `/bead-library-sizes/library/${encodeURIComponent(libraryId)}`,
       {
         method: "PUT",
-        body: payload,
+        body: { sizes: payload.sizes, skipNormalization: options?.skipNormalization },
       },
+    );
+  },
+
+  recalculateNormalization(libraryId: string): Promise<{ ok: boolean }> {
+    return apiRequest<{ ok: boolean }>(
+      `/bead-library-sizes/library/${encodeURIComponent(libraryId)}/recalculate-normalization`,
+      { method: "POST" },
     );
   },
 

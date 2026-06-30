@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Glasses, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { FrameEntry } from "@/data/glasses";
 import { formatApiErrorMessage, isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
+import {
+  applyAdminSaveModalState,
+  notifyAdminSaveFailed,
+  type AdminEditorModalState,
+} from "@/features/admin/lib/admin-save-feedback";
+import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
@@ -21,7 +28,7 @@ import { FrameForm } from "../../forms";
 import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
-type ModalState = { type: "add" } | { type: "edit"; frame: FrameEntry } | null;
+type ModalState = AdminEditorModalState<FrameEntry>;
 
 export function FramesAdminPage() {
   const cat = useCatalogue();
@@ -32,9 +39,7 @@ export function FramesAdminPage() {
   const frames = cat.frames ?? [];
   const list = useAdminList(frames, (f, q) => f.name.toLowerCase().includes(q));
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [modal]);
+  useAdminEditorScroll(scrollRef, modal);
 
   const modalTitle = useMemo(() => {
     if (!modal) return "Frames";
@@ -66,20 +71,17 @@ export function FramesAdminPage() {
         {modal ? (
           <div className="mx-auto w-full max-w-4xl">
             <FrameForm
-              key={modal.type === "add" ? "new" : modal.frame.id}
-              initial={modal.type === "edit" ? modal.frame : undefined}
+              key={modal.type === "add" ? "new" : modal.entry.id}
+              initial={modal.type === "edit" ? modal.entry : undefined}
               onCancel={() => setModal(null)}
               onSave={async (entry) => {
+                const mode = modal.type;
                 try {
-                  if (modal.type === "add") {
-                    await cat.addFrame(entry);
-                  } else {
-                    await cat.updateFrame(entry);
-                    await cat.refreshFromApi();
-                  }
-                  setModal(null);
+                  const saved =
+                    mode === "add" ? await cat.addFrame(entry) : await cat.updateFrame(entry);
+                  applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Frame" });
                 } catch (err) {
-                  alert(formatApiErrorMessage(err));
+                  notifyAdminSaveFailed(err);
                   throw err;
                 }
               }}
@@ -101,7 +103,7 @@ export function FramesAdminPage() {
                 return (
                   <AdminListRow
                     key={f.id}
-                    onClick={() => setModal({ type: "edit", frame: f })}
+                    onClick={() => setModal({ type: "edit", entry: f })}
                     actions={
                       list.isDeleting(f.id) ? (
                         <AdminDeleteConfirm
@@ -111,7 +113,9 @@ export function FramesAdminPage() {
                               await cat.deleteFrame(f.id);
                               list.cancelDelete();
                             } catch (err) {
-                              alert(isApiError(err) ? err.message : "Failed to delete frame");
+                              toast.error(
+                                isApiError(err) ? err.message : formatApiErrorMessage(err) || "Failed to delete frame",
+                              );
                             }
                           }}
                         />

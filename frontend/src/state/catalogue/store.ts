@@ -3,6 +3,7 @@ import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { FrameEntry } from "@/types/catalogue";
+import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
 export const CATALOGUE_STORAGE_KEY = "bino_catalogue_v7";
 
@@ -13,6 +14,7 @@ export interface CatalogueStore {
   beadLibrarySizes: BeadLibrarySizeOffer[];
   beadLibraries: BeadLibraryEntry[];
   frames: FrameEntry[];
+  strandRenderDefaults: StrandRenderProfile | null;
 }
 
 export function loadFromStorage(): Partial<CatalogueStore> {
@@ -31,6 +33,7 @@ export function createInitialCatalogueStore(): CatalogueStore {
     beadLibrarySizes: [],
     beadLibraries: [],
     frames: [],
+    strandRenderDefaults: null,
   };
 }
 

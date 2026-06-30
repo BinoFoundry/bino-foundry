@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   computeElasticBeadLayout,
+  midpointAngleRad,
   resolveDropTargetFromLayout,
   resolveLibraryInsertTarget,
 } from "./strand-elastic-layout";
@@ -13,10 +14,11 @@ describe("computeElasticBeadLayout", () => {
     expect(layout.arcSpans[1]!).toBeGreaterThan(layout.arcSpans[2]!);
   });
 
-  it("reduces gap as more beads fill the wrist circumference", () => {
+  it("packs edge-to-edge with zero inter-bead gap when under capacity", () => {
     const sparse = computeElasticBeadLayout([8, 8], 160);
     const dense = computeElasticBeadLayout([8, 8, 8, 8, 8, 8, 8, 8], 160);
-    expect(dense.gapMm).toBeLessThan(sparse.gapMm);
+    expect(sparse.gapMm).toBe(0);
+    expect(dense.gapMm).toBe(0);
   });
 
   it("keeps bead sectors from overlapping on a mixed-size strand", () => {
@@ -104,7 +106,7 @@ describe("resolveDropTargetFromLayout", () => {
     expect(atBead.index).toBe(1);
 
     const atGap = resolveDropTargetFromLayout(
-      elastic.insertionAngles[1]!,
+      midpointAngleRad(elastic.angles[0]!, elastic.angles[2]!),
       sectors,
       elastic.insertionAngles,
     );

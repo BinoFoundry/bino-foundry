@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Settings2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BeadTypeForm } from "../../components/BeadTypeForm";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
-import { isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadTypeEntry } from "@/types/beads";
+import {
+  applyAdminSaveModalState,
+  notifyAdminSaveFailed,
+  type AdminEditorModalState,
+} from "@/features/admin/lib/admin-save-feedback";
+import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
@@ -16,17 +21,13 @@ import { AdminToolbar } from "../../components/AdminToolbar";
 import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
-type ModalState = { type: "add" } | { type: "edit"; entry: BeadTypeEntry } | null;
-
 export function BeadTypesAdminPage() {
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [modal, setModal] = useState<ModalState>(null);
+  const [modal, setModal] = useState<AdminEditorModalState<BeadTypeEntry>>(null);
   const list = useAdminList(cat.beadTypes, (t, q) => t.name.toLowerCase().includes(q));
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [modal]);
+  useAdminEditorScroll(scrollRef, modal);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -44,23 +45,25 @@ export function BeadTypesAdminPage() {
       <AdminPage scrollRef={scrollRef} footer={`${cat.beadTypes.length} type(s)`}>
         {modal ? (
           <BeadTypeForm
+            key={modal.type === "add" ? "new" : modal.entry.id}
             initial={modal.type === "edit" ? modal.entry : undefined}
             onCancel={() => setModal(null)}
             onSave={async (entry) => {
+              const mode = modal.type;
               try {
-                if (modal.type === "add") {
-                  await cat.addBeadType({
-                    name: entry.name,
-                    description: entry.description,
-                    displayOrder: entry.displayOrder,
-                    isActive: entry.isActive,
-                  });
-                } else {
-                  await cat.updateBeadType(entry);
-                }
-                setModal(null);
+                const saved =
+                  mode === "add"
+                    ? await cat.addBeadType({
+                        name: entry.name,
+                        description: entry.description,
+                        displayOrder: entry.displayOrder,
+                        isActive: entry.isActive,
+                        metadata: entry.metadata,
+                      })
+                    : await cat.updateBeadType(entry);
+                applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Bead type" });
               } catch (err) {
-                alert(isApiError(err) ? err.message : "Save failed");
+                notifyAdminSaveFailed(err);
                 throw err;
               }
             }}

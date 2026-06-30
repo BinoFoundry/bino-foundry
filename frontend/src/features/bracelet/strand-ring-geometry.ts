@@ -1,49 +1,53 @@
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 import {
   getBeadSlotDimensions,
-  getMaxSlotExtent,
   getBeadTangentArcPx,
+  getMaxSlotExtent,
+  resolveStrandRenderConfigForBead,
   type BeadSlotDimensions,
+  type StrandRenderCatalogueContext,
 } from "@/render/bead-crop";
+import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
 import { normalizeFromSlots } from "./composition";
 
 import { computeMaxRingRadiusPx, computeWristRingRadiusPx, type WristSizeBounds } from "./strand-ring";
 import { STRAND_LAYOUT_BASELINE_PX } from "./strand-viewport";
 
-/** Tight gap between adjacent bead edges at layout scale factor 1. */
-export const BEAD_PAIR_GAP_BASE_PX = 0.012;
+/** Continuous bracelet — no inter-bead gaps at layout scale factor 1. */
+export const BEAD_PAIR_GAP_BASE_PX = 0;
 
-/** Minimal arc per side for anti-alias bleed at layout scale factor 1. */
-export const BEAD_VISUAL_BLEED_BASE_PX = 0.04;
-
-/** Small epsilon so floating-point layout does not under-allocate arc. */
-const SPACING_EPSILON_PX = 0.02;
+/** No bleed padding — occupancy comes from physical footprint only. */
+export const BEAD_VISUAL_BLEED_BASE_PX = 0;
 
 export interface BeadSpacingPx {
   pairGapPx: number;
   bleedPx: number;
 }
 
-/** Scaled spacing buffers — subtle at all canvas sizes, never shrinks beads. */
+/** Scaled spacing buffers — zero for continuous edge-to-edge layout. */
 export function scaledBeadSpacingPx(scaleFactor: number): BeadSpacingPx {
   const sf = Math.max(0.5, scaleFactor);
   return {
-    pairGapPx: Math.max(0.008, BEAD_PAIR_GAP_BASE_PX * sf),
-    bleedPx: Math.max(0.03, BEAD_VISUAL_BLEED_BASE_PX * sf),
+    pairGapPx: BEAD_PAIR_GAP_BASE_PX * sf,
+    bleedPx: BEAD_VISUAL_BLEED_BASE_PX * sf,
   };
 }
 
 /**
- * Rendered arc occupancy for layout: tangent width + bleed on both sides.
- * Does not include inter-bead pair gap (added separately between neighbors).
+ * Strand arc occupancy from render profile and slot dimensions.
+ * Tangential width × strandOccupancy — adjacent centres are (arcᵢ + arcⱼ) / 2 apart (edge-to-edge).
  */
 export function beadLayoutArcPx(
   dim: BeadSlotDimensions,
   scaleFactor: number,
+  profile?: Pick<StrandRenderProfile, "strandOccupancy" | "collisionPadding">,
 ): number {
+  const occupancy = profile?.strandOccupancy ?? 1;
+  const arc = getBeadTangentArcPx(dim) * occupancy;
+  const padding = (profile?.collisionPadding ?? 0) * Math.max(0.5, scaleFactor);
   const { bleedPx } = scaledBeadSpacingPx(scaleFactor);
-  return getBeadTangentArcPx(dim) + bleedPx * 2;
+  return arc + bleedPx * 2 + padding;
 }
 
 /**
@@ -99,8 +103,7 @@ export function computeResolvedRingRadiusPx(params: {
 
   for (let iter = 0; iter < 16; iter++) {
     beadArcPx = layoutArcs.map(beadArcPxOnRing);
-    const totalArcPx =
-      beadArcPx.reduce((sum, arc) => sum + arc, 0) + n * pairGapPx + SPACING_EPSILON_PX;
+    const totalArcPx = beadArcPx.reduce((sum, arc) => sum + arc, 0) + n * pairGapPx;
     const neededRadius = totalArcPx / (2 * Math.PI);
     const nextRadius = Math.max(wristRadiusPx, neededRadius);
     if (Math.abs(nextRadius - radiusPx) < 0.25) {
@@ -142,6 +145,7 @@ export function resolveStrandRingLayout(params: {
   canvasSize: number;
   guideSizeMm: number;
   beadScaleBoost?: number;
+  renderCatalogue?: StrandRenderCatalogueContext;
 }): ResolveStrandRingLayoutResult | null {
   const {
     placed,
@@ -150,6 +154,7 @@ export function resolveStrandRingLayout(params: {
     canvasSize,
     guideSizeMm,
     beadScaleBoost = 1,
+    renderCatalogue,
   } = params;
 
   const normalized = normalizeFromSlots(placed);
@@ -174,7 +179,13 @@ export function resolveStrandRingLayout(params: {
     bounds,
   );
   const maxRadiusPx = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
-  const beadLayoutArcsPx = prelimDims.map((dim) => beadLayoutArcPx(dim, scaleFactor));
+  const beadLayoutArcsPx = prelimDims.map((dim, i) =>
+    beadLayoutArcPx(
+      dim,
+      scaleFactor,
+      resolveStrandRenderConfigForBead(normalized[i]?.bead, renderCatalogue),
+    ),
+  );
   const resolved = computeResolvedRingRadiusPx({
     beadLayoutArcPx: beadLayoutArcsPx,
     wristRadiusPx,
@@ -211,14 +222,17 @@ export function beadSectorsOverlap(
   angles: number[],
   arcSpans: number[],
   tolerance = 1,
+  closedLoop = true,
 ): boolean {
   if (angles.length < 2) return false;
-  for (let i = 0; i < angles.length; i++) {
+  const pairCount = closedLoop ? angles.length : angles.length - 1;
+  for (let i = 0; i < pairCount; i++) {
     const j = (i + 1) % angles.length;
     let delta = Math.abs(angles[j]! - angles[i]!);
     if (delta > Math.PI) delta = 2 * Math.PI - delta;
     const minSep = (arcSpans[i]! + arcSpans[j]!) / 2;
-    if (delta < minSep * tolerance) return true;
+    // Touching (delta === minSep) is valid for edge-to-edge layout; only true overlap fails.
+    if (delta + 1e-6 < minSep * tolerance) return true;
   }
   return false;
 }
@@ -229,9 +243,11 @@ export function adjacentPairsMeetGap(
   beadArcPx: number[],
   radiusPx: number,
   minGapPx: number,
+  closedLoop = true,
 ): boolean {
   if (angles.length < 2) return true;
-  for (let i = 0; i < angles.length; i++) {
+  const pairCount = closedLoop ? angles.length : angles.length - 1;
+  for (let i = 0; i < pairCount; i++) {
     const j = (i + 1) % angles.length;
     const clearance = adjacentArcClearancePx(
       angles[i]!,

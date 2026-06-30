@@ -2,6 +2,8 @@ import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { settingsService } from "../settings/settings.service.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
+import { cropConfigSemanticallyEqual } from "../../lib/save-payload-equal.js";
+import { runBackgroundTask } from "../../lib/run-background-task.js";
 import {
   isBeadCropConfigValid,
   refreshBeadCropStoredMetrics,
@@ -14,6 +16,7 @@ import type {
   BeadLibraryCropDTO,
   BeadLibraryUpdateDTO,
 } from "./bead-library.validation.js";
+import type { SyncLibrarySizesDTO } from "../bead-library-sizes/bead-library-size.validation.js";
 
 type Specs = Record<string, unknown>;
 
@@ -191,8 +194,16 @@ export class BeadLibraryService {
       .single();
 
     assertNoDbError(error);
-    if (payload.cropConfig !== undefined) {
-      await mmGroupNormalizationService.recalculateForLibrary(clientId);
+    const cropChanged =
+      payload.cropConfig !== undefined &&
+      !cropConfigSemanticallyEqual(
+        row.crop_config as BeadCropConfig | null,
+        payload.cropConfig as BeadCropConfig | null,
+      );
+    if (cropChanged) {
+      runBackgroundTask("mm-normalization", async () => {
+        await mmGroupNormalizationService.recalculateForLibrary(clientId);
+      });
     }
     return mapBeadLibraryRow(data as Record<string, unknown>);
   }
@@ -212,6 +223,46 @@ export class BeadLibraryService {
     }
 
     return this.update(clientId, updates);
+  }
+
+  /**
+   * Single-request bead save — avoids duplicate normalization and redundant size sync.
+   */
+  async saveComplete(
+    clientId: string,
+    payload: { library: BeadLibraryUpdateDTO; sizes?: SyncLibrarySizesDTO["sizes"] },
+  ): Promise<{
+    library: Record<string, unknown>;
+    sizes: unknown[] | null;
+    sizesChanged: boolean;
+    cropChanged: boolean;
+  }> {
+    const existing = (await this.getByClientId(clientId)) as Record<string, unknown>;
+    const existingCrop = existing.cropConfig as BeadCropConfig | null;
+    const cropChanged =
+      payload.library.cropConfig !== undefined &&
+      !cropConfigSemanticallyEqual(existingCrop, payload.library.cropConfig as BeadCropConfig | null);
+
+    const library = (await this.update(clientId, payload.library)) as Record<string, unknown>;
+
+    let sizes: unknown[] | null = null;
+    let sizesChanged = false;
+    if (payload.sizes) {
+      const syncResult = await beadLibrarySizeService.syncLibrarySizes(clientId, {
+        sizes: payload.sizes,
+        skipNormalization: true,
+      });
+      sizes = syncResult.rows;
+      sizesChanged = syncResult.changed;
+    }
+
+    if (sizesChanged && !cropChanged) {
+      runBackgroundTask("mm-normalization", async () => {
+        await mmGroupNormalizationService.recalculateForLibrary(clientId);
+      });
+    }
+
+    return { library, sizes, sizesChanged, cropChanged };
   }
 
   async remove(clientId: string): Promise<{ message: string }> {

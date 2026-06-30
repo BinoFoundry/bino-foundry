@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Scan } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -216,7 +217,7 @@ export function BeadCropEditor({
   const commitCropPath = () => {
     const config = draftRef.current;
     if (!config || !isBeadCropConfigValid(config)) {
-      alert("Draw a closed outline (at least 3 points) before saving.");
+      toast.error("Draw a closed outline (at least 3 points) before saving.");
       return;
     }
     const points = getBeadCropPoints(config);

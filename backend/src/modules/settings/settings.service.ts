@@ -1,12 +1,17 @@
 import {
   DEFAULT_SITE_GENERAL_SETTINGS,
+  DEFAULT_STRAND_RENDER_PROFILE,
+  parseStrandRenderProfile,
+  STRAND_RENDER_SYSTEM_DEFAULTS_KEY,
   type SiteGeneralSettings,
+  type StrandRenderProfile,
 } from "@bino-foundry/shared/types";
 
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 
 export const SITE_SETTINGS_KEY = "site.settings_v1";
+export { STRAND_RENDER_SYSTEM_DEFAULTS_KEY };
 
 function parseSiteSettings(value: unknown): SiteGeneralSettings {
   if (!value || typeof value !== "object") return DEFAULT_SITE_GENERAL_SETTINGS;
@@ -21,6 +26,11 @@ function parseSiteSettings(value: unknown): SiteGeneralSettings {
       ? titleRaw.trim()
       : DEFAULT_SITE_GENERAL_SETTINGS.braceletBuilderLibraryTitle;
   return { currencyCode: code, braceletBuilderLibraryTitle };
+}
+
+function parseStrandRenderDefaults(value: unknown): StrandRenderProfile {
+  const partial = parseStrandRenderProfile(value);
+  return { ...DEFAULT_STRAND_RENDER_PROFILE, ...partial };
 }
 
 export class SettingsService {
@@ -60,6 +70,39 @@ export class SettingsService {
 
     assertNoDbError(error);
     return parseSiteSettings(data?.value ?? value);
+  }
+
+  async getStrandRenderDefaults(): Promise<StrandRenderProfile> {
+    const supabase = getSupabaseServiceRole();
+    const { data, error } = await supabase
+      .from("config_kv")
+      .select("value")
+      .eq("key", STRAND_RENDER_SYSTEM_DEFAULTS_KEY)
+      .maybeSingle();
+
+    assertNoDbError(error);
+    return parseStrandRenderDefaults(data?.value ?? null);
+  }
+
+  async updateStrandRenderDefaults(payload: StrandRenderProfile): Promise<StrandRenderProfile> {
+    const supabase = getSupabaseServiceRole();
+    const value = parseStrandRenderDefaults(payload);
+
+    const { data, error } = await supabase
+      .from("config_kv")
+      .upsert(
+        {
+          key: STRAND_RENDER_SYSTEM_DEFAULTS_KEY,
+          value,
+          description: "Bracelet builder strand rendering system defaults",
+        },
+        { onConflict: "key" },
+      )
+      .select("value")
+      .single();
+
+    assertNoDbError(error);
+    return parseStrandRenderDefaults(data?.value ?? value);
   }
 }
 

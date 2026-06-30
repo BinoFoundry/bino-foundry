@@ -5,6 +5,7 @@ import { sendCreated, sendJson } from "../../lib/http-response.js";
 import { validateBody } from "../../lib/validation.js";
 import { beadLibraryService } from "./bead-library.service.js";
 import {
+  beadLibraryCompleteSaveSchema,
   beadLibraryCropDto,
   beadLibraryIdParam,
   createBeadLibraryDto,
@@ -37,6 +38,12 @@ async function updateCrop(req: Request, res: Response): Promise<void> {
   sendJson(res, await beadLibraryService.updateCrop(id, payload));
 }
 
+async function saveComplete(req: Request, res: Response): Promise<void> {
+  const { id } = beadLibraryIdParam.parse(req.params);
+  const payload = validateBody(beadLibraryCompleteSaveSchema, req.body);
+  sendJson(res, await beadLibraryService.saveComplete(id, payload));
+}
+
 async function remove(req: Request, res: Response): Promise<void> {
   const { id } = beadLibraryIdParam.parse(req.params);
   sendJson(res, await beadLibraryService.remove(id));
@@ -51,6 +58,7 @@ export const beadLibraryHandlers = {
   retrieve: asyncHandler(retrieve),
   create: asyncHandler(create),
   update: asyncHandler(update),
+  saveComplete: asyncHandler(saveComplete),
   updateCrop: asyncHandler(updateCrop),
   remove: asyncHandler(remove),
   recalculateBoundsMetadata: asyncHandler(recalculateBoundsMetadata),
