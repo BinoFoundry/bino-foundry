@@ -1,8 +1,10 @@
-import { Save, ShoppingBag } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { BuilderSaveStatus } from "@/features/designs/BuilderSaveStatus";
+import type { DesignAutoSaveStatus } from "@/features/designs/design-autosave-controller";
 import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
 import type { BuilderOptionEntry } from "@/types/sunglasses-catalog";
@@ -26,9 +28,10 @@ export interface ConfigurationSummaryProps {
 interface SunglassesConfigurationSummaryProps {
   totalPrice: number;
   currencyCode: string;
-  onSaveDesign?: () => void;
   onAddToCart?: () => void;
-  saving?: boolean;
+  autoSaveStatus?: DesignAutoSaveStatus;
+  autoSaveVisible?: boolean;
+  signedIn?: boolean;
   className?: string;
 }
 
@@ -88,9 +91,10 @@ export function buildAddOnsLabel(
 export function SunglassesConfigurationSummary({
   totalPrice,
   currencyCode = DEFAULT_SITE_GENERAL_SETTINGS.currencyCode,
-  onSaveDesign,
   onAddToCart,
-  saving = false,
+  autoSaveStatus = "idle",
+  autoSaveVisible = false,
+  signedIn = false,
   className,
 }: SunglassesConfigurationSummaryProps) {
   const handleAddToCart = () => {
@@ -99,14 +103,6 @@ export function SunglassesConfigurationSummary({
       return;
     }
     toast.message(BUILDER_COPY.addToCartComingSoon);
-  };
-
-  const handleSave = () => {
-    if (onSaveDesign) {
-      onSaveDesign();
-      return;
-    }
-    toast.message("Save design will be available when checkout launches.");
   };
 
   return (
@@ -121,20 +117,14 @@ export function SunglassesConfigurationSummary({
       <Separator />
 
       <div className="space-y-2">
+        <BuilderSaveStatus
+          status={autoSaveStatus}
+          visible={autoSaveVisible}
+          signedIn={signedIn}
+        />
         <Button type="button" className="w-full" size="lg" onClick={handleAddToCart}>
           <ShoppingBag className="mr-2 h-4 w-4" />
           {BUILDER_COPY.addToCart}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full"
-          size="lg"
-          disabled={saving}
-          onClick={handleSave}
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {saving ? "Saving…" : "Save Design"}
         </Button>
       </div>
     </section>

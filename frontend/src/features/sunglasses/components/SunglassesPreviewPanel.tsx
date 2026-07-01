@@ -1,6 +1,7 @@
 import { SunglassesCompositor } from "@/render";
 import type { SunglassesCompositorConfig } from "@/render/types";
 
+import { BuilderPreviewFitScope } from "@/features/builder/components/BuilderPreviewFitScope";
 import { getCustomiserDisplayViews } from "../utils/compositor-views";
 import { NO_PREVIEW_MESSAGE } from "../utils/frame-plates";
 
@@ -50,7 +51,10 @@ export function SunglassesPreviewPanel({ config }: SunglassesPreviewPanelProps) 
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex min-h-0 flex-1 flex-col justify-center px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-9">
+      <BuilderPreviewFitScope
+        builder="sunglasses"
+        className="flex min-h-0 flex-1 flex-col justify-center px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-9"
+      >
         <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-3 sm:gap-3.5">
           <div className="flex min-h-0 flex-[3] flex-col">
             <PreviewSlot
@@ -86,7 +90,7 @@ export function SunglassesPreviewPanel({ config }: SunglassesPreviewPanelProps) 
             )
           ) : null}
         </div>
-      </div>
+      </BuilderPreviewFitScope>
     </div>
   );
 }

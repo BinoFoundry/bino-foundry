@@ -3,6 +3,8 @@ import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollMoreHint } from "@/components/common";
+import { BuilderSaveStatus } from "@/features/designs/BuilderSaveStatus";
+import type { DesignAutoSaveStatus } from "@/features/designs/design-autosave-controller";
 import { useScrollOverflowHint } from "@/hooks/use-scroll-overflow-hint";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +20,10 @@ interface SunglassesConfigColumnProps {
   flow: ReturnType<typeof useCustomiserFlow>;
   state: CustomiserState;
   currencyCode: string;
-  onSaveDesign?: () => void;
   onAddToCart?: () => void;
-  saving?: boolean;
+  autoSaveStatus?: DesignAutoSaveStatus;
+  autoSaveVisible?: boolean;
+  signedIn?: boolean;
   className?: string;
 }
 
@@ -34,9 +37,10 @@ export function SunglassesConfigColumn({
   flow,
   state,
   currencyCode,
-  onSaveDesign,
   onAddToCart,
-  saving = false,
+  autoSaveStatus = "idle",
+  autoSaveVisible = false,
+  signedIn = false,
   className,
 }: SunglassesConfigColumnProps) {
   const { totalPrice } = state;
@@ -51,7 +55,15 @@ export function SunglassesConfigColumn({
       )}
     >
       <div className="hidden shrink-0 border-b border-border/60 px-4 py-3 sm:px-5 lg:block">
-        <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
+        <div className="flex items-center justify-between gap-3">
+          <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
+          <BuilderSaveStatus
+            status={autoSaveStatus}
+            visible={autoSaveVisible}
+            signedIn={signedIn}
+            className="shrink-0 justify-end"
+          />
+        </div>
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -90,9 +102,10 @@ export function SunglassesConfigColumn({
                   <SunglassesConfigurationSummary
                     totalPrice={totalPrice}
                     currencyCode={currencyCode}
-                    onSaveDesign={onSaveDesign}
                     onAddToCart={onAddToCart}
-                    saving={saving}
+                    autoSaveStatus={autoSaveStatus}
+                    autoSaveVisible={autoSaveVisible}
+                    signedIn={signedIn}
                   />
                 )}
               </div>

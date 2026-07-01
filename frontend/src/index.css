@@ -361,6 +361,17 @@
     box-shadow: var(--shadow-none);
   }
 
+  /* Builder preview framing — layout only; renderers stay unchanged. */
+  .builder-preview-fit svg {
+    max-height: 100%;
+    max-width: var(--builder-preview-fit, 100%);
+  }
+
+  .builder-preview-fit [data-strand-viewport-content] {
+    max-height: 100%;
+    max-width: var(--builder-preview-fit, 100%);
+  }
+
   /* Builder / card selection — blush warmth, not olive blocks */
   .state-selected {
     border-color: hsl(var(--brand-border-soft));

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BuilderPreviewFitScope } from "@/features/builder/components/BuilderPreviewFitScope";
 import { Button } from "@/components/ui/button";
 import SortableCircularStrand, { type StrandDropHover } from "@/components/SortableCircularStrand";
 import {
@@ -18,9 +19,16 @@ import {
   WristSizeStep,
 } from "@/features/bracelet";
 import { BraceletConfigPanel } from "@/features/bracelet/components/BraceletConfigPanel";
+import { BraceletDragOnboardingHint } from "@/features/bracelet/components/BraceletDragOnboardingHint";
 import { BraceletNameField } from "@/features/bracelet/components/BraceletNameField";
 import { BraceletMobileConfigBar } from "@/features/bracelet/components/BraceletMobileConfigBar";
+import { useBraceletDragOnboarding } from "@/features/bracelet/hooks/useBraceletDragOnboarding";
 import { resolveBraceletSaveTitle, formatDesignDisplayTitle } from "@/features/designs/display-title";
+import {
+  fingerprintBraceletPayload,
+  fingerprintBraceletVisual,
+} from "@/features/designs/design-save-fingerprint";
+import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import {
   computeStrandAutoFitScale,
   measureStrandCanvasSize,
@@ -37,6 +45,7 @@ import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
+import type { BeadLibraryEntry } from "@/types/beads";
 
 interface BraceletBuilderProps {
   onPriceChange: (price: number) => void;
@@ -74,15 +83,15 @@ function useCanvasSize(isMobile: boolean, twinning: boolean) {
 
 const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const isMobile = useIsMobile();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const designIdFromUrl = searchParams.get("design");
   const { user, saveDesign, openAuth } = useAuth();
   const catalogue = useCatalogue();
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [saveStatus, setSaveStatus] = useState("");
-  const [saving, setSaving] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [savedDesignId, setSavedDesignId] = useState<string | null>(designIdFromUrl);
+  const [hydrationDone, setHydrationDone] = useState(!designIdFromUrl);
+  const baselineSetRef = useRef(false);
   const hydratedDesignRef = useRef<string | null>(null);
   const [hoverA, setHoverA] = useState<StrandDropHover>(null);
   const [hoverB, setHoverB] = useState<StrandDropHover>(null);
@@ -93,16 +102,129 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const builder = useBraceletBuilder({ onPriceChange });
 
+  const dragOnboarding = useBraceletDragOnboarding({
+    enabled: builder.wristSizeConfirmed,
+    placedCount: builder.pricing.placedCount,
+  });
+
+  const handleStrandBeadDrop = useCallback(
+    (
+      bracelet: "A" | "B",
+      target: { mode: "insert" | "replace"; index: number; anchorAngleRad?: number },
+      data: {
+        bead?: BeadLibraryEntry;
+        variantId?: string;
+        sizeOfferKey?: string;
+        beadSizeMm?: number;
+      },
+    ) => {
+      if (libraryDragActive && builder.pricing.placedCount === 0) {
+        dragOnboarding.notifyLibraryDropAttempt();
+      }
+      builder.handleBeadDrop(bracelet, target, data);
+    },
+    [builder, dragOnboarding.notifyLibraryDropAttempt, libraryDragActive],
+  );
+
+  const autoSaveEnabled =
+    Boolean(user) &&
+    builder.wristSizeConfirmed &&
+    builder.pricing.placedCount > 0 &&
+    !builder.isOverCapacity;
+
+  const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
+
+  const braceletPayload = useMemo(() => {
+    if (!autoSaveEnabled) return null;
+    return builder.toSavedPayload("saved");
+  }, [
+    autoSaveEnabled,
+    builder.placedBeadsA,
+    builder.placedBeadsB,
+    builder.twinning,
+    builder.wristSizeA,
+    builder.wristSizeB,
+    builder.pricing,
+  ]);
+
+  const getBraceletFingerprint = useCallback(() => {
+    if (!braceletPayload) return null;
+    return fingerprintBraceletPayload(braceletPayload, braceletName);
+  }, [braceletPayload, braceletName]);
+
+  const getBraceletVisualFingerprint = useCallback(() => {
+    if (!braceletPayload) return null;
+    return fingerprintBraceletVisual(braceletPayload);
+  }, [braceletPayload]);
+
+  const buildBraceletRequest = useCallback(
+    async (ctx: { includeThumbnail: boolean }) => {
+      if (!braceletPayload) return null;
+      let previewThumbnailDataUrl: string | undefined;
+      if (ctx.includeThumbnail) {
+        previewThumbnailDataUrl =
+          (await captureBraceletThumbnail(builder.placedBeadsA, builder.wristSizeA)) ?? undefined;
+      }
+      return {
+        productType: "bracelet" as const,
+        title: resolveBraceletSaveTitle(braceletName),
+        status: "saved" as const,
+        previewThumbnailDataUrl,
+        bracelet: {
+          twinning: braceletPayload.twinning,
+          wristSizeCmA: braceletPayload.wristSizeCmA,
+          wristSizeCmB: braceletPayload.wristSizeCmB,
+          items: braceletPayload.items,
+        },
+      };
+    },
+    [braceletPayload, braceletName, builder.placedBeadsA, builder.wristSizeA],
+  );
+
+  const handleDesignSaved = useCallback(
+    (saved: { id: string; title?: string | null }) => {
+      setSavedDesignId(saved.id);
+      if (saved.title?.trim()) setBraceletName(saved.title.trim());
+      if (!designIdFromUrl) {
+        setSearchParams({ design: saved.id }, { replace: true });
+      }
+    },
+    [designIdFromUrl, setSearchParams],
+  );
+
+  const { status: autoSaveStatus, setBaseline, flush, hasPendingChanges } = useDesignAutoSave({
+    enabled: autoSaveEnabled,
+    paused: autoSavePaused,
+    designId: savedDesignId,
+    saveDesign,
+    onSaved: handleDesignSaved,
+    getFingerprint: getBraceletFingerprint,
+    getVisualFingerprint: getBraceletVisualFingerprint,
+    buildRequest: buildBraceletRequest,
+  });
+
+  useEffect(() => {
+    if (!hydrationDone || baselineSetRef.current || !braceletPayload) return;
+    const fp = fingerprintBraceletPayload(braceletPayload, braceletName);
+    const visual = fingerprintBraceletVisual(braceletPayload);
+    setBaseline(fp, visual);
+    baselineSetRef.current = true;
+  }, [hydrationDone, braceletPayload, braceletName, setBaseline]);
+
   useEffect(() => {
     setPendingDesignListener((result) => {
       if (result?.productType === "bracelet") {
-        setSavedDesignId(result.id);
-        if (result.title?.trim()) setBraceletName(result.title.trim());
-        setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(result.id));
+        handleDesignSaved(result);
+        if (braceletPayload) {
+          setBaseline(
+            fingerprintBraceletPayload(braceletPayload, result.title ?? braceletName),
+            fingerprintBraceletVisual(braceletPayload),
+          );
+        }
       }
     });
     return () => setPendingDesignListener(null);
-  }, []);
+  }, [handleDesignSaved, braceletPayload, braceletName, setBaseline]);
 
   useEffect(() => {
     if (designIdFromUrl) setSavedDesignId(designIdFromUrl);
@@ -127,10 +249,11 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         setBraceletName(detail.title?.trim() ?? "");
         setSavedDesignId(detail.id);
         hydratedDesignRef.current = designIdFromUrl;
-        setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(detail.id));
+        setHydrationDone(true);
       } catch (err) {
         if (!cancelled) {
-          setSaveStatus(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
+          setHydrationDone(true);
+          toast.error(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
         }
       }
     })();
@@ -244,50 +367,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     duplicateDisabled: builder.placedBeadsA.length === 0 || !builder.canDuplicateToB,
   };
 
-  const handleSaveConfiguration = async () => {
-    if (builder.pricing.placedCount === 0) {
-      setSaveStatus(CUSTOMER_COPY.saveDesignNeedBeads);
-      return;
-    }
-    if (builder.isOverCapacity) {
-      setSaveStatus(BRACELET_COPY.saveBlockedOverCapacity);
-      return;
-    }
-    setSaving(true);
-    setSaveStatus("");
-    try {
-      const payload = builder.toSavedPayload("saved");
-      const previewThumbnailDataUrl =
-        (await captureBraceletThumbnail(builder.placedBeadsA, builder.wristSizeA)) ?? undefined;
-      const saved = await saveDesign(
-        {
-          productType: "bracelet",
-          title: resolveBraceletSaveTitle(braceletName),
-          status: "saved",
-          previewThumbnailDataUrl,
-          bracelet: {
-            twinning: payload.twinning,
-            wristSizeCmA: payload.wristSizeCmA,
-            wristSizeCmB: payload.wristSizeCmB,
-            items: payload.items,
-          },
-        },
-        { designId: savedDesignId ?? undefined },
-      );
-      if (saved) {
-        setSavedDesignId(saved.id);
-        if (saved.title?.trim()) setBraceletName(saved.title.trim());
-        setSaveStatus(CUSTOMER_COPY.saveDesignSuccess(saved.id));
-      }
-      return saved;
-    } catch (err) {
-      setSaveStatus(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
-      return null;
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleAddToCart = useCallback(async () => {
     if (!user) {
       openAuth({ mode: "sign-in" });
@@ -303,9 +382,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     }
 
     let designId = savedDesignId;
-    if (!designId) {
-      const saved = await handleSaveConfiguration();
-      designId = saved?.id ?? null;
+    if (!designId || hasPendingChanges()) {
+      const saved = await flush();
+      designId = saved?.id ?? savedDesignId;
     }
     if (!designId) return;
     setCheckoutOpen(true);
@@ -315,18 +394,19 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     builder.pricing.placedCount,
     builder.isOverCapacity,
     savedDesignId,
-    handleSaveConfiguration,
+    flush,
+    hasPendingChanges,
   ]);
 
-  const saveDisabled = saving || builder.pricing.placedCount === 0 || builder.isOverCapacity;
+  const saveDisabled = builder.pricing.placedCount === 0 || builder.isOverCapacity;
 
   const summaryPanelProps = {
     summary: builder.summary,
-    onSave: () => void handleSaveConfiguration(),
     onAddToCart: () => void handleAddToCart(),
-    saving,
-    saveStatus,
     saveDisabled,
+    autoSaveStatus,
+    autoSaveVisible: builder.wristSizeConfirmed,
+    signedIn: Boolean(user),
   };
 
   if (!wristConfirmed) {
@@ -450,6 +530,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         className="absolute bottom-3 left-3 z-30 sm:bottom-4 sm:left-4"
       />
 
+      <BraceletDragOnboardingHint hint={dragOnboarding.activeHint} visible={dragOnboarding.hintVisible} />
+
       <Button
         type="button"
         variant="ghost"
@@ -468,6 +550,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden"
         data-strand-zoom-surface
       >
+        <BuilderPreviewFitScope builder="bracelet" className="relative flex min-h-0 flex-1 flex-col">
         <StrandViewport
           viewportRef={viewportRef}
           contentRef={contentRef}
@@ -491,7 +574,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                 const result = builder.handleSlotClick("A", pos);
                 if (result?.openLibrary) setLibraryOpen(true);
               }}
-              onBeadDrop={(target, data) => builder.handleBeadDrop("A", target, data)}
+              onBeadDrop={(target, data) => handleStrandBeadDrop("A", target, data)}
               onBeadRemove={(pos) => builder.handleRemoveBead("A", pos)}
               label={builder.twinning ? BRACELET_COPY.wristTwinA : undefined}
               wristSize={builder.wristSizeA}
@@ -520,7 +603,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                   const result = builder.handleSlotClick("B", pos);
                   if (result?.openLibrary) setLibraryOpen(true);
                 }}
-                onBeadDrop={(target, data) => builder.handleBeadDrop("B", target, data)}
+                onBeadDrop={(target, data) => handleStrandBeadDrop("B", target, data)}
                 onBeadRemove={(pos) => builder.handleRemoveBead("B", pos)}
                 label={BRACELET_COPY.wristTwinB}
                 wristSize={builder.wristSizeB}
@@ -539,6 +622,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             </StrandStage>
           ) : null}
         </StrandViewport>
+        </BuilderPreviewFitScope>
       </div>
       </div>
     </div>

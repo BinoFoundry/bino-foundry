@@ -7,7 +7,6 @@ import {
   contentBoundsViewBox,
   detectContentBoundsFromRgba,
   fullPlateViewBox,
-  PLATE_PREVIEW_BOUNDS_OPTS,
   type ImageContentBounds,
 } from "./content-bounds";
 
@@ -34,7 +33,7 @@ async function measurePlateBounds(
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0);
     const { data } = ctx.getImageData(0, 0, w, h);
-    const bounds = detectContentBoundsFromRgba(data, w, h, PLATE_PREVIEW_BOUNDS_OPTS);
+    const bounds = detectContentBoundsFromRgba(data, w, h, { paddingPx: 4 });
     boundsCache.set(key, bounds);
     return bounds;
   } catch {

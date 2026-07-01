@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Save, ShoppingBag } from "lucide-react";
+import { ChevronDown, ChevronUp, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -6,6 +6,8 @@ import type { BraceletBuilderSummary } from "@bino-foundry/shared/types";
 import { formatCurrency } from "@bino-foundry/shared/currency";
 
 import { Button } from "@/components/ui/button";
+import { BuilderSaveStatus } from "@/features/designs/BuilderSaveStatus";
+import type { DesignAutoSaveStatus } from "@/features/designs/design-autosave-controller";
 import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
 
@@ -18,11 +20,11 @@ interface BraceletSummaryPanelProps {
   className?: string;
   collapsible?: boolean;
   defaultOpen?: boolean;
-  onSave?: () => void;
   onAddToCart?: () => void;
-  saving?: boolean;
-  saveStatus?: string;
   saveDisabled?: boolean;
+  autoSaveStatus?: DesignAutoSaveStatus;
+  autoSaveVisible?: boolean;
+  signedIn?: boolean;
   /** When true, outer title bar is omitted (parent layout supplies sidebar chrome). */
   embedded?: boolean;
 }
@@ -51,11 +53,11 @@ export function BraceletSummaryPanel({
   className,
   collapsible = false,
   defaultOpen = true,
-  onSave,
   onAddToCart,
-  saving = false,
-  saveStatus = "",
   saveDisabled = false,
+  autoSaveStatus = "idle",
+  autoSaveVisible = false,
+  signedIn = false,
   embedded = false,
 }: BraceletSummaryPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -123,22 +125,11 @@ export function BraceletSummaryPanel({
       ) : null}
 
       <div className="space-y-1.5 pt-0.5">
-        {saveStatus ? (
-          <p className="text-center text-[10px] leading-snug text-foreground/80">{saveStatus}</p>
-        ) : null}
-        {onSave ? (
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            size="default"
-            disabled={saveDisabled}
-            onClick={onSave}
-          >
-            <Save className="mr-2 h-3.5 w-3.5" />
-            {saving ? BRACELET_COPY.saving : BRACELET_COPY.saveConfig}
-          </Button>
-        ) : null}
+        <BuilderSaveStatus
+          status={autoSaveStatus}
+          visible={autoSaveVisible}
+          signedIn={signedIn}
+        />
         <Button type="button" className="w-full" size="default" disabled={saveDisabled} onClick={handleAddToCart}>
           <ShoppingBag className="mr-2 h-3.5 w-3.5" />
           {BRACELET_COPY.addToCart}

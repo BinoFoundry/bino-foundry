@@ -110,4 +110,6 @@ export const BRACELET_COPY = {
   librarySearchEmpty: "No matches — try another search.",
   libraryDragHint: "Click to add quickly, or drag onto the strand for precise placement",
   fromPrice: (price: string) => `From ${price}`,
+
+  dragOnboardingInitial: "✨ Drag and drop beads onto the bracelet.",
 } as const;

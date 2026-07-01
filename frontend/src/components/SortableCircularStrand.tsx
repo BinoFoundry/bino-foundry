@@ -1028,18 +1028,7 @@ const SortableCircularStrand = ({
                 <X className="h-3 w-3" strokeWidth={2} />
               </button>
             </div>
-          ) : isStrandEmpty ? (
-            <>
-              <p className="font-medium uppercase tracking-widest text-muted-foreground/90">
-                {BRACELET_COPY.strandGuideTitle}
-              </p>
-              <p className="type-small mt-0.5 font-medium text-foreground sm:text-body">
-                {BRACELET_COPY.strandEmptyGuide}
-              </p>
-              <p className="mt-1 text-muted-foreground">{BRACELET_COPY.strandEmptyReorderNote}</p>
-              <p className="mt-1">{BRACELET_COPY.strandHint}</p>
-            </>
-          ) : (
+          ) : isStrandEmpty ? null : (
             <p className="type-small font-medium text-foreground sm:text-body">
               {placedCount} {BRACELET_COPY.piecesOnStrand} · {BRACELET_COPY.strandLength(compositionMm)}
             </p>

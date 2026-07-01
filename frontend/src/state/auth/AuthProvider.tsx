@@ -48,7 +48,10 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ needsEmailVerification: boolean }>;
   signOut: () => Promise<void>;
-  saveDesign: (request: SaveDesignRequest, options?: { designId?: string }) => Promise<SavedDesignSummary | null>;
+  saveDesign: (
+    request: SaveDesignRequest,
+    options?: { designId?: string; silent?: boolean },
+  ) => Promise<SavedDesignSummary | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -237,21 +240,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [location.pathname, navigate]);
 
   const saveDesign = useCallback(
-    async (request: SaveDesignRequest, options?: { designId?: string }) => {
+    async (
+      request: SaveDesignRequest,
+      options?: { designId?: string; silent?: boolean },
+    ) => {
       if (!session) {
-        openAuth({ mode: "sign-in", pendingSave: { request, designId: options?.designId } });
+        if (!options?.silent) {
+          storePendingDesign({ request, designId: options?.designId });
+          openAuth({ mode: "sign-in", pendingSave: { request, designId: options?.designId } });
+        }
         return null;
       }
       try {
         const saved = await designsApi.save({ ...request, designId: options?.designId });
-        toast.success("Design saved to your account.");
+        if (!options?.silent) {
+          toast.success("Design saved to your account.");
+        }
         return saved;
       } catch (err) {
         if (isApiError(err) && err.status === 401) {
-          openAuth({ mode: "sign-in", pendingSave: { request, designId: options?.designId } });
+          if (!options?.silent) {
+            storePendingDesign({ request, designId: options?.designId });
+            openAuth({ mode: "sign-in", pendingSave: { request, designId: options?.designId } });
+          }
           return null;
         }
-        toast.error(isApiError(err) ? err.message : "Could not save your design.");
+        if (!options?.silent) {
+          toast.error(isApiError(err) ? err.message : "Could not save your design.");
+        }
         throw err;
       }
     },

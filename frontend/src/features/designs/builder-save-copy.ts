@@ -1,14 +1,29 @@
-import type { DesignAutoSaveStatus } from "./use-design-auto-save";
+import type { DesignAutoSaveStatus } from "./design-autosave-controller";
 
-export const BUILDER_SAVE_COPY: Record<Exclude<DesignAutoSaveStatus, "idle">, string> = {
-  pending: "Changes pending…",
+export const BUILDER_SAVE_COPY = {
   saving: "Saving…",
-  saved: "All changes saved",
+  saved: "✓ All changes saved",
+  pending: "Changes pending…",
   offline: "Offline — changes will sync later",
-  error: "Couldn't save — will retry when you edit",
-};
+  error: "Couldn't save — will retry",
+  signInToSave: "Sign in to save your design",
+} as const;
 
-export function builderSaveStatusLabel(status: DesignAutoSaveStatus): string | null {
-  if (status === "idle") return null;
-  return BUILDER_SAVE_COPY[status];
+export function labelForAutoSaveStatus(status: DesignAutoSaveStatus): string | null {
+  switch (status) {
+    case "saving":
+      return BUILDER_SAVE_COPY.saving;
+    case "saved":
+      return BUILDER_SAVE_COPY.saved;
+    case "pending":
+      return BUILDER_SAVE_COPY.pending;
+    case "offline":
+      return BUILDER_SAVE_COPY.offline;
+    case "error":
+      return BUILDER_SAVE_COPY.error;
+    default:
+      return null;
+  }
 }
+
+export const LEAVE_PAGE_WARNING = "You have unsaved changes. Are you sure you want to leave?";
