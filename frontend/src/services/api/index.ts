@@ -9,6 +9,7 @@ export { beadsApi } from "./beads";
 export { sunglassesApi } from "./sunglasses";
 export { renderingApi, isApiFrameId } from "./rendering";
 export { uploadApi, type CloudinaryUploadResult, type StagingUploadResult } from "./upload";
+export { beadLibrarySizesApi } from "./bead-library-sizes";
 export { adminSettingsApi } from "./admin-settings";
 export { settingsApi } from "./settings";
 export { strandRenderMigrationApi } from "./strand-render-migration";
