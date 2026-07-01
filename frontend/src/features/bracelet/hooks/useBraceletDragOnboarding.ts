@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  isBraceletDragOnboardingComplete,
-  markBraceletDragOnboardingComplete,
-} from "../lib/drag-onboarding-storage";
-
-const INITIAL_DELAY_MS = 350;
-const INITIAL_VISIBLE_MS = 4000;
+const SHOW_DELAY_MS = 350;
+const VISIBLE_MS = 4000;
 const FADE_MS = 450;
 
-export type DragOnboardingHint = "initial" | null;
-
 interface UseBraceletDragOnboardingOptions {
+  /** Builder is ready (wrist confirmed, design hydration finished). */
   enabled: boolean;
   placedCount: number;
 }
@@ -21,96 +15,95 @@ function clearTimer(id: ReturnType<typeof setTimeout> | null) {
 }
 
 export function useBraceletDragOnboarding({ enabled, placedCount }: UseBraceletDragOnboardingOptions) {
-  const [completed, setCompleted] = useState(() => isBraceletDragOnboardingComplete());
-  const [activeHint, setActiveHint] = useState<DragOnboardingHint>(null);
+  const [hintActive, setHintActive] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
 
-  const initialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const libraryDropPendingRef = useRef(false);
-  const placedCountRef = useRef(placedCount);
-  placedCountRef.current = placedCount;
+  const showDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideAfterVisibleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeCompleteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevPlacedCountRef = useRef(placedCount);
+  const primedRef = useRef(false);
 
-  const clearAllTimers = useCallback(() => {
-    clearTimer(initialTimerRef.current);
-    initialTimerRef.current = null;
-    clearTimer(fadeTimerRef.current);
-    fadeTimerRef.current = null;
+  const clearTimers = useCallback(() => {
+    clearTimer(showDelayRef.current);
+    showDelayRef.current = null;
+    clearTimer(hideAfterVisibleRef.current);
+    hideAfterVisibleRef.current = null;
+    clearTimer(fadeCompleteRef.current);
+    fadeCompleteRef.current = null;
   }, []);
 
-  const markComplete = useCallback(() => {
-    markBraceletDragOnboardingComplete();
-    setCompleted(true);
-    clearAllTimers();
+  const hideImmediately = useCallback(() => {
+    clearTimers();
     setHintVisible(false);
-    setActiveHint(null);
-  }, [clearAllTimers]);
+    setHintActive(false);
+  }, [clearTimers]);
+
+  const beginShow = useCallback(() => {
+    clearTimers();
+    showDelayRef.current = setTimeout(() => {
+      showDelayRef.current = null;
+      setHintActive(true);
+      setHintVisible(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setHintVisible(true));
+      });
+
+      hideAfterVisibleRef.current = setTimeout(() => {
+        hideAfterVisibleRef.current = null;
+        setHintVisible(false);
+        fadeCompleteRef.current = setTimeout(() => {
+          fadeCompleteRef.current = null;
+          setHintActive(false);
+        }, FADE_MS);
+      }, VISIBLE_MS);
+    }, SHOW_DELAY_MS);
+  }, [clearTimers]);
 
   const dismissHint = useCallback(() => {
+    clearTimers();
     setHintVisible(false);
-    fadeTimerRef.current = setTimeout(() => {
-      setActiveHint(null);
-      fadeTimerRef.current = null;
-      markComplete();
+    fadeCompleteRef.current = setTimeout(() => {
+      fadeCompleteRef.current = null;
+      setHintActive(false);
     }, FADE_MS);
-  }, [markComplete]);
+  }, [clearTimers]);
 
-  const showHint = useCallback(() => {
-    clearTimer(fadeTimerRef.current);
-    fadeTimerRef.current = null;
-    setActiveHint("initial");
-    setHintVisible(false);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => setHintVisible(true));
-    });
-  }, []);
-
-  const notifyLibraryDropAttempt = useCallback(() => {
-    libraryDropPendingRef.current = true;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!libraryDropPendingRef.current) return;
-        if (placedCountRef.current > 0) {
-          libraryDropPendingRef.current = false;
-          markComplete();
-        } else {
-          libraryDropPendingRef.current = false;
-        }
-      });
-    });
-  }, [markComplete]);
+  const replayTips = useCallback(() => {
+    hideImmediately();
+    beginShow();
+  }, [hideImmediately, beginShow]);
 
   useEffect(() => {
-    if (placedCount <= 0) return;
+    const prevPlaced = prevPlacedCountRef.current;
+    prevPlacedCountRef.current = placedCount;
 
-    clearAllTimers();
-    setHintVisible(false);
-    setActiveHint(null);
-    markComplete();
-  }, [placedCount, clearAllTimers, markComplete]);
-
-  useEffect(() => {
-    if (!enabled || completed || placedCount > 0) {
-      clearAllTimers();
+    if (!enabled) {
+      hideImmediately();
       return;
     }
 
-    initialTimerRef.current = setTimeout(() => {
-      initialTimerRef.current = null;
-      showHint();
-      fadeTimerRef.current = setTimeout(() => {
-        dismissHint();
-        fadeTimerRef.current = null;
-      }, INITIAL_VISIBLE_MS);
-    }, INITIAL_DELAY_MS);
+    if (placedCount > 0) {
+      hideImmediately();
+      primedRef.current = true;
+      return;
+    }
 
-    return clearAllTimers;
-  }, [enabled, completed, placedCount, clearAllTimers, showHint, dismissHint]);
+    const becameEmpty = prevPlaced > 0 && placedCount === 0;
+    const initialEmpty = !primedRef.current;
+
+    if (initialEmpty || becameEmpty) {
+      primedRef.current = true;
+      beginShow();
+    }
+  }, [enabled, placedCount, hideImmediately, beginShow]);
+
+  useEffect(() => () => clearTimers(), [clearTimers]);
 
   return {
-    activeHint,
+    hintActive,
     hintVisible,
-    completed,
-    notifyLibraryDropAttempt,
+    replayTips,
+    dismissHint,
   };
 }

@@ -45,7 +45,6 @@ import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
-import type { BeadLibraryEntry } from "@/types/beads";
 
 interface BraceletBuilderProps {
   onPriceChange: (price: number) => void;
@@ -103,28 +102,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const builder = useBraceletBuilder({ onPriceChange });
 
   const dragOnboarding = useBraceletDragOnboarding({
-    enabled: builder.wristSizeConfirmed,
+    enabled: builder.wristSizeConfirmed && hydrationDone,
     placedCount: builder.pricing.placedCount,
   });
-
-  const handleStrandBeadDrop = useCallback(
-    (
-      bracelet: "A" | "B",
-      target: { mode: "insert" | "replace"; index: number; anchorAngleRad?: number },
-      data: {
-        bead?: BeadLibraryEntry;
-        variantId?: string;
-        sizeOfferKey?: string;
-        beadSizeMm?: number;
-      },
-    ) => {
-      if (libraryDragActive && builder.pricing.placedCount === 0) {
-        dragOnboarding.notifyLibraryDropAttempt();
-      }
-      builder.handleBeadDrop(bracelet, target, data);
-    },
-    [builder, dragOnboarding.notifyLibraryDropAttempt, libraryDragActive],
-  );
 
   const autoSaveEnabled =
     Boolean(user) &&
@@ -527,10 +507,15 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
         onReset={reset}
+        onShowTips={dragOnboarding.replayTips}
         className="absolute bottom-3 left-3 z-30 sm:bottom-4 sm:left-4"
       />
 
-      <BraceletDragOnboardingHint hint={dragOnboarding.activeHint} visible={dragOnboarding.hintVisible} />
+      <BraceletDragOnboardingHint
+        active={dragOnboarding.hintActive}
+        visible={dragOnboarding.hintVisible}
+        onDismiss={dragOnboarding.dismissHint}
+      />
 
       <Button
         type="button"
@@ -574,7 +559,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                 const result = builder.handleSlotClick("A", pos);
                 if (result?.openLibrary) setLibraryOpen(true);
               }}
-              onBeadDrop={(target, data) => handleStrandBeadDrop("A", target, data)}
+              onBeadDrop={(target, data) => builder.handleBeadDrop("A", target, data)}
               onBeadRemove={(pos) => builder.handleRemoveBead("A", pos)}
               label={builder.twinning ? BRACELET_COPY.wristTwinA : undefined}
               wristSize={builder.wristSizeA}
@@ -603,7 +588,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                   const result = builder.handleSlotClick("B", pos);
                   if (result?.openLibrary) setLibraryOpen(true);
                 }}
-                onBeadDrop={(target, data) => handleStrandBeadDrop("B", target, data)}
+                onBeadDrop={(target, data) => builder.handleBeadDrop("B", target, data)}
                 onBeadRemove={(pos) => builder.handleRemoveBead("B", pos)}
                 label={BRACELET_COPY.wristTwinB}
                 wristSize={builder.wristSizeB}

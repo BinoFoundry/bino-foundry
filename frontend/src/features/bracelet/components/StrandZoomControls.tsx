@@ -1,4 +1,4 @@
-import { Hand, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { Hand, HelpCircle, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ interface StrandZoomControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
+  onShowTips?: () => void;
   className?: string;
 }
 
@@ -22,6 +23,7 @@ export function StrandZoomControls({
   onZoomIn,
   onZoomOut,
   onReset,
+  onShowTips,
   className,
 }: StrandZoomControlsProps) {
   return (
@@ -86,6 +88,19 @@ export function StrandZoomControls({
       >
         <Maximize2 className="h-4 w-4" />
       </Button>
+      {onShowTips ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 sm:h-8 sm:w-8"
+          aria-label={BRACELET_COPY.dragOnboardingHelpTitle}
+          title={BRACELET_COPY.dragOnboardingHelpTitle}
+          onClick={onShowTips}
+        >
+          <HelpCircle className="h-4 w-4" />
+        </Button>
+      ) : null}
     </div>
   );
 }
