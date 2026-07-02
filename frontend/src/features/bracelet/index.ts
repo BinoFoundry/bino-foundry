@@ -43,7 +43,6 @@ export {
 export {
   computeElasticBeadLayout,
   resolveDropTargetFromLayout,
-  resolveReorderSwapTarget,
   resolveLibraryInsertTarget,
   visualArcMmFromExtent,
 } from "./strand-elastic-layout";

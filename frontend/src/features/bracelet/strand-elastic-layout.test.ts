@@ -5,7 +5,6 @@ import {
   midpointAngleRad,
   resolveDropTargetFromLayout,
   resolveLibraryInsertTarget,
-  resolveReorderSwapTarget,
 } from "./strand-elastic-layout";
 
 describe("computeElasticBeadLayout", () => {
@@ -112,18 +111,5 @@ describe("resolveDropTargetFromLayout", () => {
       elastic.insertionAngles,
     );
     expect(atGap.mode).toBe("insert");
-  });
-});
-
-describe("resolveReorderSwapTarget", () => {
-  it("always targets a bead for direct swaps", () => {
-    const elastic = computeElasticBeadLayout([10, 10, 10], 120);
-    const sectors = elastic.angles.map((angle, index) => ({
-      index,
-      angle,
-      arcSpan: elastic.arcSpans[index]!,
-    }));
-    const target = resolveReorderSwapTarget(elastic.angles[1]!, sectors);
-    expect(target).toEqual({ mode: "replace", index: 1 });
   });
 });

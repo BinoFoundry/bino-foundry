@@ -40,9 +40,9 @@ import {
 import {
   computeElasticBeadLayout,
   resolveDropTargetFromLayout,
-  resolveReorderSwapTarget,
   type LayoutAngleSector,
 } from "@/features/bracelet/strand-elastic-layout";
+import { resolveBeadIndexUnderPointer } from "@/features/bracelet/strand-reorder-hit-test";
 import {
   beadLayoutArcPx,
   computeResolvedRingRadiusPx,
@@ -220,7 +220,7 @@ function SortableBeadInner({
         ? undefined
         : "left 0.35s ease-out, top 0.35s ease-out, opacity 0.15s, transform 0.15s",
     zIndex: isEmptySlot && libraryDragActive ? 35 : zIndex,
-    pointerEvents: bead && libraryDragActive ? "none" : "auto",
+    pointerEvents: isDragging ? "none" : bead && libraryDragActive ? "none" : "auto",
     transformOrigin: `${transformOriginX}px ${transformOriginY}px`,
     transform: beadShellTransform(rotationDeg, { dragOverlay: isDragging }),
     boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.12)" : shell.boxShadow,
@@ -253,6 +253,7 @@ function SortableBeadInner({
     <div
       ref={setNodeRef}
       data-strand-slot
+      {...(bead ? { "data-bead-index": position } : {})}
       style={outerStyle}
       {...(bead && !libraryDragActive ? { ...attributes, ...listeners } : {})}
       role={isEmptySlot ? "button" : undefined}
@@ -399,6 +400,7 @@ const SortableCircularStrand = ({
   const dragRafRef = useRef<number | null>(null);
   const pendingDragPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastHoverKeyRef = useRef<string | null>(null);
+  const reorderSourceRef = useRef<{ sourceIndex: number; sourceBeadId: string } | null>(null);
 
   const publishHoverTarget = useCallback(
     (target: StrandDropTarget | null) => {
@@ -408,6 +410,27 @@ const SortableCircularStrand = ({
       onHoverDropTarget?.(target);
     },
     [onHoverDropTarget],
+  );
+
+  const publishReorderTargetIndex = useCallback(
+    (targetIndex: number | null) => {
+      const key = targetIndex === null ? null : `swap-${targetIndex}`;
+      if (key === lastHoverKeyRef.current) return;
+      lastHoverKeyRef.current = key;
+      onHoverDropTarget?.(
+        targetIndex === null ? null : { mode: "replace", index: targetIndex },
+      );
+    },
+    [onHoverDropTarget],
+  );
+
+  const resolveReorderTargetIndex = useCallback(
+    (clientX: number, clientY: number, sourceIndex: number | null): number | null =>
+      resolveBeadIndexUnderPointer(clientX, clientY, {
+        boundary: canvasRef.current,
+        excludeIndex: sourceIndex,
+      }),
+    [],
   );
 
   const scheduleDragClientPos = useCallback((pos: { x: number; y: number }) => {
@@ -702,16 +725,6 @@ const SortableCircularStrand = ({
     [placedCount, pointerAngleFromClient, layoutSectors, insertionAngles, pathStartAngle],
   );
 
-  const resolveReorderTargetFromClient = useCallback(
-    (clientX: number, clientY: number): StrandDropTarget => {
-      if (placedCount === 0) return { mode: "replace", index: 0 };
-      const angle = pointerAngleFromClient(clientX, clientY);
-      if (angle === null) return { mode: "replace", index: 0 };
-      return resolveReorderSwapTarget(angle, layoutSectors);
-    },
-    [placedCount, pointerAngleFromClient, layoutSectors],
-  );
-
   const isClientOverCanvas = useCallback((clientX: number, clientY: number) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return false;
@@ -795,7 +808,14 @@ const SortableCircularStrand = ({
 
   const handleDragStart = (event: DragStartEvent) => {
     dismissReorderHint();
-    setActiveId(event.active.id as string);
+    const id = event.active.id as string;
+    setActiveId(id);
+    const from = parseSlotId(id);
+    const sourceBead = from !== null ? normalized[from] : undefined;
+    reorderSourceRef.current =
+      from !== null && sourceBead
+        ? { sourceIndex: from, sourceBeadId: sourceBead.bead.id }
+        : null;
     const pointer = readClientPoint(event.activatorEvent);
     if (!pointer) {
       dragClientStartRef.current = null;
@@ -811,24 +831,31 @@ const SortableCircularStrand = ({
     if (!start) return;
     const pos = { x: start.x + event.delta.x, y: start.y + event.delta.y };
     scheduleDragClientPos(pos);
-    const target = resolveReorderTargetFromClient(pos.x, pos.y);
-    publishHoverTarget(target);
+    const sourceIndex = reorderSourceRef.current?.sourceIndex ?? parseSlotId(activeId);
+    const targetIndex = resolveReorderTargetIndex(pos.x, pos.y, sourceIndex);
+    publishReorderTargetIndex(targetIndex);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const from = parseSlotId(event.active.id);
+    const source = reorderSourceRef.current;
+    const sourceIndex = source?.sourceIndex ?? parseSlotId(event.active.id);
     const start = dragClientStartRef.current;
-    const toTarget = start
-      ? resolveReorderTargetFromClient(start.x + event.delta.x, start.y + event.delta.y)
+    const pointer = start
+      ? { x: start.x + event.delta.x, y: start.y + event.delta.y }
       : null;
-    if (from !== null && toTarget && from !== toTarget.index) {
-      onBeadsReorder(from, toTarget.index);
+    const targetIndex =
+      pointer && sourceIndex !== null
+        ? resolveReorderTargetIndex(pointer.x, pointer.y, sourceIndex)
+        : null;
+    if (sourceIndex !== null && targetIndex !== null && sourceIndex !== targetIndex) {
+      onBeadsReorder(sourceIndex, targetIndex);
     }
+    reorderSourceRef.current = null;
     setActiveId(null);
     dragClientStartRef.current = null;
     setDragClientPos(null);
     lastHoverKeyRef.current = null;
-    publishHoverTarget(null);
+    publishReorderTargetIndex(null);
   };
 
   const activeBead = activeId
@@ -878,8 +905,9 @@ const SortableCircularStrand = ({
         setActiveId(null);
         dragClientStartRef.current = null;
         setDragClientPos(null);
+        reorderSourceRef.current = null;
         lastHoverKeyRef.current = null;
-        publishHoverTarget(null);
+        publishReorderTargetIndex(null);
       }}
     >
       <div className="flex flex-col items-center gap-1 sm:gap-1.5">

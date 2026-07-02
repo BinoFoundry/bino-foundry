@@ -219,15 +219,6 @@ export function resolveDropTargetFromLayout(
   return { mode: "insert", index: insertIdx };
 }
 
-/** Reorder drag always targets a bead for a direct position swap. */
-export function resolveReorderSwapTarget(
-  pointerAngle: number,
-  sectors: LayoutAngleSector[],
-): { mode: "replace"; index: number } {
-  if (!sectors.length) return { mode: "replace", index: 0 };
-  return { mode: "replace", index: beadIndexFromLayoutSectors(pointerAngle, sectors) };
-}
-
 /** Convert rendered pixel extent to equivalent arc mm on the wrist circumference. */
 export function visualArcMmFromExtent(
   extentPx: number,
