@@ -32,7 +32,7 @@ import {
   findSizeOfferByKey,
 } from "../library-sizes";
 import { buildBraceletPricing } from "../pricing";
-import { movePlacedBead } from "../sequence-reorder";
+import { swapPlacedBeads } from "../sequence-reorder";
 import { STRAND_PATH_START_ANGLE } from "../strand-path";
 import { serializeBraceletConfiguration } from "../serialize";
 import { buildBraceletBuilderSummary } from "../summary";
@@ -380,10 +380,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const handleBeadsReorder = useCallback(
     (bracelet: "A" | "B", fromPosition: number, toPosition: number) => {
       const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
-      setPlaced((prev) => movePlacedBead(prev, fromPosition, toPosition));
-      bumpLayout();
+      setPlaced((prev) => swapPlacedBeads(prev, fromPosition, toPosition));
     },
-    [bumpLayout],
+    [],
   );
 
   const handleRemoveBead = useCallback(

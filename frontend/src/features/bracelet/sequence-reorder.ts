@@ -1,24 +1,28 @@
 import type { PlacedBead } from "@/lib/luxe-data";
 
-import { normalizeSequence } from "./composition";
+import { normalizeFromSlots, normalizeSequence } from "./composition";
 
 /**
- * Reorder a bead within the dense sequence.
- * `toPosition` is a display index (bead index or trailing insertion slot).
+ * Swap two beads by display index.
+ * Only the two affected positions change; the rest of the sequence stays put.
  */
-export function movePlacedBead(
+export function swapPlacedBeads(
   placed: PlacedBead[],
   fromPosition: number,
   toPosition: number,
 ): PlacedBead[] {
-  const sorted = normalizeSequence(placed);
+  const sorted = normalizeFromSlots(placed);
   if (fromPosition < 0 || fromPosition >= sorted.length) return sorted;
+  if (toPosition < 0 || toPosition >= sorted.length) return sorted;
   if (fromPosition === toPosition) return sorted;
 
   const next = [...sorted];
-  const [item] = next.splice(fromPosition, 1);
-  if (!item) return sorted;
-  const insertAt = Math.max(0, Math.min(toPosition, next.length));
-  next.splice(insertAt, 0, item);
+  const fromBead = next[fromPosition]!;
+  const toBead = next[toPosition]!;
+  next[fromPosition] = { ...toBead, position: fromPosition };
+  next[toPosition] = { ...fromBead, position: toPosition };
   return normalizeSequence(next);
 }
+
+/** @deprecated Use {@link swapPlacedBeads} — kept as alias for existing imports. */
+export const movePlacedBead = swapPlacedBeads;

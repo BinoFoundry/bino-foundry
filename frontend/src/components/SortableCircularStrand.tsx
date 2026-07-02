@@ -40,6 +40,7 @@ import {
 import {
   computeElasticBeadLayout,
   resolveDropTargetFromLayout,
+  resolveReorderSwapTarget,
   type LayoutAngleSector,
 } from "@/features/bracelet/strand-elastic-layout";
 import {
@@ -162,6 +163,7 @@ interface SortableBeadProps {
   emptyGuideMode: EmptySlotGuideMode;
   showRemoveAlways?: boolean;
   isSelected?: boolean;
+  isSwapTarget?: boolean;
   libraryDragActive?: boolean;
   ringCenterX: number;
   ringCenterY: number;
@@ -186,6 +188,7 @@ function SortableBeadInner({
   emptyGuideMode,
   showRemoveAlways = false,
   isSelected = false,
+  isSwapTarget = false,
   libraryDragActive = false,
   ringCenterX,
   ringCenterY,
@@ -265,6 +268,7 @@ function SortableBeadInner({
               "hover:scale-[1.02]",
               isDragging && "cursor-grabbing",
               isSelected && "ring-2 ring-inset ring-primary/45",
+              isSwapTarget && "ring-2 ring-inset ring-primary/60",
             )
           : "cursor-pointer state-hoverable",
       )}
@@ -353,6 +357,7 @@ const SortableBead = memo(SortableBeadInner, (prev, next) =>
   prev.emptyGuideMode === next.emptyGuideMode &&
   prev.showRemoveAlways === next.showRemoveAlways &&
   prev.isSelected === next.isSelected &&
+  prev.isSwapTarget === next.isSwapTarget &&
   prev.libraryDragActive === next.libraryDragActive &&
   prev.ringCenterX === next.ringCenterX &&
   prev.ringCenterY === next.ringCenterY &&
@@ -699,12 +704,12 @@ const SortableCircularStrand = ({
 
   const resolveReorderTargetFromClient = useCallback(
     (clientX: number, clientY: number): StrandDropTarget => {
-      if (placedCount === 0) return { mode: "insert", index: 0 };
+      if (placedCount === 0) return { mode: "replace", index: 0 };
       const angle = pointerAngleFromClient(clientX, clientY);
-      if (angle === null) return { mode: "insert", index: 0 };
-      return resolveDropTargetFromLayout(angle, layoutSectors, insertionAngles);
+      if (angle === null) return { mode: "replace", index: 0 };
+      return resolveReorderSwapTarget(angle, layoutSectors);
     },
-    [placedCount, pointerAngleFromClient, layoutSectors, insertionAngles],
+    [placedCount, pointerAngleFromClient, layoutSectors],
   );
 
   const isClientOverCanvas = useCallback((clientX: number, clientY: number) => {
@@ -807,9 +812,7 @@ const SortableCircularStrand = ({
     const pos = { x: start.x + event.delta.x, y: start.y + event.delta.y };
     scheduleDragClientPos(pos);
     const target = resolveReorderTargetFromClient(pos.x, pos.y);
-    publishHoverTarget(
-      target.mode === "insert" ? target : { mode: "replace", index: target.index },
-    );
+    publishHoverTarget(target);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -818,16 +821,8 @@ const SortableCircularStrand = ({
     const toTarget = start
       ? resolveReorderTargetFromClient(start.x + event.delta.x, start.y + event.delta.y)
       : null;
-    if (from !== null && toTarget) {
-      const to =
-        toTarget.mode === "replace"
-          ? toTarget.index
-          : toTarget.index > from
-            ? toTarget.index - 1
-            : toTarget.index;
-      if (from !== to) {
-        onBeadsReorder(from, to);
-      }
+    if (from !== null && toTarget && from !== toTarget.index) {
+      onBeadsReorder(from, toTarget.index);
     }
     setActiveId(null);
     dragClientStartRef.current = null;
@@ -855,6 +850,9 @@ const SortableCircularStrand = ({
   const libraryDropHover = externalDrag && hoverDropTarget ? hoverDropTarget : null;
   const reorderHover =
     !externalDrag && activeId !== null && hoverDropTarget ? hoverDropTarget : null;
+  const reorderSwapTargetIndex =
+    reorderHover?.mode === "replace" ? reorderHover.index : null;
+  const draggingFromIndex = activeId ? parseSlotId(activeId) : null;
 
   const clientToCanvas = useCallback(
     (clientX: number, clientY: number) => {
@@ -991,6 +989,9 @@ const SortableCircularStrand = ({
                 emptyGuideMode="none"
                 showRemoveAlways={isMobile}
                 isSelected={selectedPosition === slot.index}
+                isSwapTarget={
+                  reorderSwapTargetIndex === slot.index && draggingFromIndex !== slot.index
+                }
                 libraryDragActive={externalDrag}
                 ringCenterX={center}
                 ringCenterY={center}

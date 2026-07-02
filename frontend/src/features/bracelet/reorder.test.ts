@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PlacedBead } from "@/lib/luxe-data";
 
-import { movePlacedBead } from "./sequence-reorder";
+import { swapPlacedBeads } from "./sequence-reorder";
 
 function item(pos: number): PlacedBead {
   return {
@@ -26,16 +26,30 @@ function item(pos: number): PlacedBead {
   };
 }
 
-describe("movePlacedBead", () => {
-  it("moves bead to trailing insertion slot", () => {
-    const placed = [item(0), item(1)];
-    const next = movePlacedBead(placed, 0, 2);
-    expect(next.map((b) => b.bead.id)).toEqual(["b1", "b0"]);
+describe("swapPlacedBeads", () => {
+  it("swaps two beads without shifting the rest", () => {
+    const placed = [item(0), item(1), item(2), item(3), item(4), item(5), item(6)];
+    const next = swapPlacedBeads(placed, 2, 5);
+    expect(next.map((b) => b.bead.id)).toEqual([
+      "b0",
+      "b1",
+      "b5",
+      "b3",
+      "b4",
+      "b2",
+      "b6",
+    ]);
   });
 
-  it("reorders between occupied positions", () => {
+  it("leaves the sequence unchanged when swapping onto the same index", () => {
     const placed = [item(0), item(1), item(2)];
-    const next = movePlacedBead(placed, 0, 1);
+    const next = swapPlacedBeads(placed, 1, 1);
+    expect(next.map((b) => b.bead.id)).toEqual(["b0", "b1", "b2"]);
+  });
+
+  it("swaps adjacent beads", () => {
+    const placed = [item(0), item(1), item(2)];
+    const next = swapPlacedBeads(placed, 0, 1);
     expect(next.map((b) => b.bead.id)).toEqual(["b1", "b0", "b2"]);
   });
 });
