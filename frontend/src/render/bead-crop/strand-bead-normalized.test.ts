@@ -5,10 +5,10 @@ import { BEAD_CROP_CONFIG_V2 } from "@bino-foundry/shared/types";
 
 import { getBeadImageUrl, getStrandBeadImageStyle } from "./strand-bead";
 import { resolveBeadSlotSizing } from "./strand-bead-sizing";
+import { layoutDiameterPxForMm } from "./canonical-strand-mm-scale";
 
 const GROUP_REF = 765;
-const NORMALIZED_URL =
-  "https://example.supabase.co/storage/v1/object/public/assets/bead-normalized.webp";
+const PROCESSED_URL = "https://example.com/p.png";
 
 function placedBead(): PlacedBead {
   return {
@@ -18,9 +18,9 @@ function placedBead(): PlacedBead {
       sizeMm: 6,
       label: "6 mm",
       unitPrice: 1,
-      normalizedProcessedImageUrl: NORMALIZED_URL,
+      normalizedProcessedImageUrl: "https://example.supabase.co/storage/v1/object/public/assets/bead-normalized.webp",
       normalizedVisibleDiameterPx: GROUP_REF,
-      normalizedDeliveryUrls: { webp: NORMALIZED_URL },
+      normalizedDeliveryUrls: { webp: "https://example.supabase.co/storage/v1/object/public/assets/bead-normalized.webp" },
       groupReferenceDiameterPx: GROUP_REF,
     },
     bead: {
@@ -28,8 +28,8 @@ function placedBead(): PlacedBead {
       name: "Aquamarine",
       beadTypeId: "crystal",
       beadTypeSlug: "crystal",
-      image: "https://example.com/p.png",
-      processedImage: "https://example.com/p.png",
+      image: PROCESSED_URL,
+      processedImage: PROCESSED_URL,
       description: "",
       cropConfig: {
         version: BEAD_CROP_CONFIG_V2,
@@ -43,29 +43,35 @@ function placedBead(): PlacedBead {
   };
 }
 
-describe("strand normalized asset rendering", () => {
-  it("loads full-resolution normalized URL without Supabase render resize", () => {
+describe("strand canonical asset rendering", () => {
+  it("uses one canonical processed asset at runtime (mm scaling via layout slot)", () => {
     const url = getBeadImageUrl(placedBead(), {
       beadSizes: [{ id: "s6", sizeMm: 6, label: "6 mm", groupReferenceDiameterPx: GROUP_REF }],
       beadLibrarySizes: [],
     });
-    expect(url).toContain(NORMALIZED_URL);
+    expect(url).toContain(PROCESSED_URL);
     expect(url).not.toContain("/render/image/");
+    expect(url).not.toContain("bead-normalized.webp");
   });
 
-  it("uses passive mm slot sizing without object-fit or clip-path", () => {
+  it("sizes the mm wrapper from configured diameter and scales image uniformly", () => {
     const bead = placedBead();
     const sizing = resolveBeadSlotSizing(bead, 6, 1, {
       beadSizes: [{ id: "s6", sizeMm: 6, label: "6 mm", groupReferenceDiameterPx: GROUP_REF }],
     });
-    expect(sizing.sizingPath).toBe("normalizedVisibleDiameter");
-    expect(sizing.objectFit).toBeNull();
+    expect(sizing.configuredSizeMm).toBe(6);
+    expect(sizing.dimensions.width).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
     expect(sizing.usesClipPath).toBe(false);
 
+    const eight = resolveBeadSlotSizing(bead, 8, 1, {
+      beadSizes: [{ id: "s8", sizeMm: 8, label: "8 mm", groupReferenceDiameterPx: GROUP_REF }],
+    });
+    expect(eight.dimensions.width).toBeGreaterThan(sizing.dimensions.width);
+
     const style = getStrandBeadImageStyle(bead.bead, sizing);
-    expect(style.objectFit).toBe("fill");
-    expect(style.clipPath).toBeUndefined();
-    expect(style.width).toBe("100%");
-    expect(style.height).toBe("100%");
+    expect(style.objectFit).toBeUndefined();
+    expect(style.width).toBe(sizing.imageDimensions.width);
+    expect(style.height).toBe(sizing.imageDimensions.height);
+    expect(style.position).toBe("absolute");
   });
 });

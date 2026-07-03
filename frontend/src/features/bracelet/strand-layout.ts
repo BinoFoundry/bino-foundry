@@ -93,6 +93,7 @@ export {
   applyRingAlignOffset,
   computeBeadShellPosition,
   visualSlotDimensions,
+  strandLayoutShellDimensions,
   beadIndexFromPointerAngle,
   insertionAngleRad,
   insertionIndexFromPointerAngle,

@@ -97,7 +97,7 @@ describe("mm group normalization", () => {
     }
   });
 
-  it("uses pre-normalized per-mm exports without runtime scaling", () => {
+  it("uses canonical processed asset with uniform runtime scaling", () => {
     const base = mmToBasePx(6, 1);
     const sizing = resolveBeadSlotSizing(
       {

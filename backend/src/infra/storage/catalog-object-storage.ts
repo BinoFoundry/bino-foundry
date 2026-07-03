@@ -2,7 +2,7 @@ import type { CatalogStoredObjectDescriptor } from "@bino-foundry/shared";
 import { STORAGE_BUCKET_IDS, type StorageBucketId } from "@bino-foundry/shared";
 
 import { getEnv } from "../../config/env.js";
-import { ValidationError } from "../../lib/errors.js";
+import { PayloadTooLargeError, UnsupportedMediaError, ValidationError } from "../../lib/errors.js";
 import { getSupabaseServiceRole } from "../supabase/adminClient.js";
 
 const PUBLIC_BUCKETS = new Set<string>(["frames", "crystals", "assets"]);
@@ -21,6 +21,47 @@ function assertCatalogBucket(value: unknown, label = "bucket"): StorageBucketId 
     throw new ValidationError(`${label} must be one of: ${STORAGE_BUCKET_IDS.join(", ")}`);
   }
   return value;
+}
+
+function mapStorageApiError(error: { message?: string; statusCode?: string }): Error {
+  const message = error.message?.trim() || "Storage operation failed";
+  if (message.includes("mime type") || error.statusCode === "415") {
+    return new UnsupportedMediaError(message);
+  }
+  if (message.toLowerCase().includes("too large") || message.toLowerCase().includes("exceeded")) {
+    return new PayloadTooLargeError(message);
+  }
+  return new ValidationError(`Storage upload failed: ${message}`, error);
+}
+
+/** Parse a Supabase public object URL into bucket + object key. */
+export function parsePublicCatalogUrl(
+  publicUrl: string,
+): { bucket: StorageBucketId; objectKey: string } | null {
+  try {
+    const url = new URL(publicUrl.trim());
+    const marker = "/storage/v1/object/public/";
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    const rest = url.pathname.slice(markerIndex + marker.length);
+    const slash = rest.indexOf("/");
+    if (slash <= 0) return null;
+    const bucket = rest.slice(0, slash);
+    const objectKey = decodeURIComponent(rest.slice(slash + 1));
+    if (!isStorageBucketId(bucket) || !objectKey) return null;
+    return { bucket, objectKey };
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCatalogObject(bucket: StorageBucketId, objectKey: string): Promise<void> {
+  const key = objectKey.trim().replace(/^\/+/, "");
+  const supabase = getSupabaseServiceRole();
+  const { error } = await supabase.storage.from(bucket).remove([key]);
+  if (error) {
+    throw new ValidationError(`Storage delete failed: ${error.message}`, error);
+  }
 }
 
 /** Supabase CDN-style HTTPS URL for public catalogue buckets (`getPublicUrl`). */
@@ -53,7 +94,7 @@ export async function putCatalogObject(params: {
   });
 
   if (error) {
-    throw new ValidationError(`Storage upload failed: ${error.message}`, error);
+    throw mapStorageApiError(error);
   }
 
   return {

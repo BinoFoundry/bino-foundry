@@ -8,7 +8,7 @@ import { BeadAssetValidationPanel } from "@/features/admin/components/BeadAssetV
 import { NormalizedExportDebugPanel } from "@/features/admin/components/NormalizedExportDebugPanel";
 import { BeadLibrarySizesPanel } from "@/features/admin/components/BeadLibrarySizesPanel";
 import { StrandRenderConfigPanel } from "@/features/admin/components/StrandRenderConfigPanel";
-import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
+import { formatUploadErrorMessage, validateUploadFile } from "@/features/admin/lib/upload-pipeline";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { resolveStrandRenderConfigForBead } from "@/render/bead-crop";
@@ -157,6 +157,18 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validationError = validateUploadFile(file);
+    if (validationError) {
+      toast.error(
+        validationError.includes("mime")
+          ? "Unsupported image format. Please upload PNG, JPEG, or WebP."
+          : validationError,
+      );
+      if (e.target) e.target.value = "";
+      return;
+    }
+
     setUploading(true);
     try {
       const data = await uploadApi.uploadImage(file);
@@ -172,7 +184,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       setCropEditSession((s) => s + 1);
       setEditingCrop(true);
     } catch (err) {
-      toast.error(isApiError(err) ? err.message : "Failed to upload image.");
+      toast.error(formatUploadErrorMessage(err));
     } finally {
       setUploading(false);
       if (e.target) e.target.value = "";
@@ -366,7 +378,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
             ) : (
               <Upload className="h-5 w-5 text-muted-foreground" />
             )}
-            <input type="file" accept="image/*" className="absolute inset-0 opacity-0" onChange={handleUpload} disabled={uploading} />
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="absolute inset-0 opacity-0" onChange={handleUpload} disabled={uploading} />
           </label>
           <p className="text-xs text-muted-foreground">
             Upload a clear photo of the bead, then refine the outline in the editor below. Status:{" "}

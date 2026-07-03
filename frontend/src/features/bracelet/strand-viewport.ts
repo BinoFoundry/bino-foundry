@@ -27,8 +27,7 @@ export const STRAND_ZOOM_MIN = 0.55;
 export const STRAND_ZOOM_MAX = 3;
 
 /** Target effective scale (autoFit × userZoom) on a laptop-width builder stage. */
-const STRAND_EFFECTIVE_ZOOM_SINGLE_LAPTOP = 1.56;
-const STRAND_EFFECTIVE_ZOOM_TWIN_LAPTOP = 1.02;
+export const STRAND_EFFECTIVE_ZOOM_TARGET = 1.56;
 const LAPTOP_REF_WIDTH_PX = 1120;
 
 function clampStrandZoom(value: number): number {
@@ -43,14 +42,14 @@ export function viewportStrandZoomFactor(
   containerWidth: number,
   containerHeight: number,
   isMobile: boolean,
-  twinning: boolean,
+  _twinning = false,
 ): number {
   if (containerWidth <= 0 || containerHeight <= 0) return 1;
 
   const shortest = Math.min(containerWidth, containerHeight);
 
   if (isMobile) {
-    const floor = twinning ? 0.8 : 0.88;
+    const floor = 0.88;
     const t = Math.min(1, shortest / 400);
     return floor + (1 - floor) * t;
   }
@@ -62,7 +61,7 @@ export function viewportStrandZoomFactor(
 
   if (containerWidth < LAPTOP_REF_WIDTH_PX) {
     const t = Math.max(0, (containerWidth - 640) / (LAPTOP_REF_WIDTH_PX - 640));
-    const tabletFloor = twinning ? 0.9 : 0.94;
+    const tabletFloor = 0.94;
     factor *= tabletFloor + (1 - tabletFloor) * t;
   }
 
@@ -77,16 +76,13 @@ export function computeDefaultStrandZoom(input: {
   isMobile: boolean;
   autoFitScale: number;
 }): number {
-  const baseEffective = input.twinning
-    ? STRAND_EFFECTIVE_ZOOM_TWIN_LAPTOP
-    : STRAND_EFFECTIVE_ZOOM_SINGLE_LAPTOP;
+  void input.twinning;
   const factor = viewportStrandZoomFactor(
     input.containerWidth,
     input.containerHeight,
     input.isMobile,
-    input.twinning,
   );
-  const targetEffective = baseEffective * factor;
+  const targetEffective = STRAND_EFFECTIVE_ZOOM_TARGET * factor;
   const fit = Math.max(input.autoFitScale, 0.01);
   return clampStrandZoom(targetEffective / fit);
 }
@@ -107,17 +103,12 @@ export interface StrandViewportMeasureInput {
 }
 
 /**
- * Picks the largest square canvas that fits the builder stage while leaving room for chrome.
+ * Per-strand layout canvas — identical for single and matching pair.
+ * Twinning only affects viewport auto-fit (camera), never bead diameter.
  */
 export function measureStrandCanvasSize(input: StrandViewportMeasureInput): number {
-  const { containerWidth: w, containerHeight: h, isMobile, twinning, libraryOpen } = input;
+  const { containerWidth: w, containerHeight: h, isMobile, libraryOpen } = input;
   if (isMobile) {
-    if (twinning) {
-      const side = Math.min((w - 4) / 2, h - 24);
-      return Math.round(
-        Math.max(168, Math.min(320, side * STRAND_VIEWPORT_FILL)),
-      );
-    }
     const side = Math.min(w - 4, h - 20);
     return Math.round(
       Math.max(240, Math.min(480, side * STRAND_VIEWPORT_FILL)),
@@ -126,9 +117,7 @@ export function measureStrandCanvasSize(input: StrandViewportMeasureInput): numb
 
   const sidebarOffset = libraryOpen ? 256 : 0;
   const availableW = w - sidebarOffset - 2;
-  const strandCount = twinning ? 2 : 1;
-  const gap = twinning ? TWIN_STRAND_PREVIEW_GAP_PX : 0;
-  const maxByWidth = (availableW - gap) / strandCount;
+  const maxByWidth = availableW;
   const maxByHeight = h - 2;
   const side = Math.min(maxByWidth, maxByHeight) * STRAND_VIEWPORT_FILL;
 

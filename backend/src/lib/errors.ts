@@ -19,6 +19,27 @@ export class ValidationError extends HttpError {
   }
 }
 
+export class PayloadTooLargeError extends HttpError {
+  constructor(message = "Image file is too large") {
+    super(413, "PAYLOAD_TOO_LARGE", message);
+    this.name = "PayloadTooLargeError";
+  }
+}
+
+export class UnsupportedMediaError extends HttpError {
+  constructor(message = "Unsupported image format") {
+    super(415, "UNSUPPORTED_MEDIA", message);
+    this.name = "UnsupportedMediaError";
+  }
+}
+
+export class ProcessingError extends HttpError {
+  constructor(message: string, details?: unknown) {
+    super(422, "PROCESSING_ERROR", message, details);
+    this.name = "ProcessingError";
+  }
+}
+
 export class UnauthorizedError extends HttpError {
   constructor(message = "Unauthorized") {
     super(401, "UNAUTHORIZED", message);

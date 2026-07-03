@@ -19,6 +19,7 @@ import {
 import { pathsToMaskCanvas } from "@/render/mask/bezier-path";
 import type { LensPolygon } from "@/render/mask/mask-types";
 import { uploadApi } from "@/services/api/upload";
+import { formatUploadErrorMessage, rollbackUploadedUrls } from "@/features/admin/lib/upload-pipeline";
 import { beadSizesApi } from "@/services/api/bead-sizes";
 import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import {
@@ -240,82 +241,96 @@ export function BeadCropEditor({
     setExportStatus("");
     try {
       const blobs = await exportCroppedBeadDeliveryBlobs(config);
-      const [pngUp, webpUp] = await Promise.all([
-        uploadApi.uploadImage(new File([blobs.png], "bead-cropped.png", { type: "image/png" })),
-        uploadApi.uploadImage(new File([blobs.webp], "bead-cropped.webp", { type: "image/webp" })),
-      ]);
-      let avifUrl: string | null = null;
-      if (blobs.avif?.size) {
-        try {
-          const avifUp = await uploadApi.uploadImage(
-            new File([blobs.avif], "bead-cropped.avif", { type: "image/avif" }),
-          );
-          avifUrl = avifUp.imageUrl;
-        } catch {
-          // Storage bucket may not allow image/avif — WebP/PNG are sufficient.
+      const uploadedUrls: string[] = [];
+
+      try {
+        const pngUp = await uploadApi.uploadImage(new File([blobs.png], "bead-cropped.png", { type: "image/png" }));
+        uploadedUrls.push(pngUp.imageUrl);
+
+        const webpUp = await uploadApi.uploadImage(
+          new File([blobs.webp], "bead-cropped.webp", { type: "image/webp" }),
+        );
+        uploadedUrls.push(webpUp.imageUrl);
+
+        let avifUrl: string | null = null;
+        if (blobs.avif?.size) {
+          try {
+            const avifUp = await uploadApi.uploadImage(
+              new File([blobs.avif], "bead-cropped.avif", { type: "image/avif" }),
+            );
+            avifUrl = avifUp.imageUrl;
+            uploadedUrls.push(avifUp.imageUrl);
+          } catch {
+            // Storage bucket may not allow image/avif — WebP/PNG are sufficient.
+          }
         }
-      }
 
-      const deliveryUrls = deliveryUrlsFromUploads({
-        png: pngUp.imageUrl,
-        webp: webpUp.imageUrl,
-        avif: avifUrl,
-      });
+        const deliveryUrls = deliveryUrlsFromUploads({
+          png: pngUp.imageUrl,
+          webp: webpUp.imageUrl,
+          avif: avifUrl,
+        });
 
-      const points = getBeadCropPoints(config);
-      const physicalMetrics =
-        computeBeadPhysicalMetricsForSave(config.imageWidth, config.imageHeight, points) ??
-        config.physicalMetrics;
+        const points = getBeadCropPoints(config);
+        const physicalMetrics =
+          computeBeadPhysicalMetricsForSave(config.imageWidth, config.imageHeight, points) ??
+          config.physicalMetrics;
 
-      const next = {
-        ...config,
-        processedUrl: pngUp.imageUrl,
-        deliveryUrls,
-        physicalMetrics: physicalMetrics ?? config.physicalMetrics,
-        updatedAt: Date.now(),
-      };
-      draftRef.current = next;
-      onProcessedUpload?.(pngUp.imageUrl, next);
-      onSaveCropRef.current?.(next);
+        const next = {
+          ...config,
+          processedUrl: pngUp.imageUrl,
+          deliveryUrls,
+          physicalMetrics: physicalMetrics ?? config.physicalMetrics,
+          updatedAt: Date.now(),
+        };
+        draftRef.current = next;
+        onProcessedUpload?.(pngUp.imageUrl, next);
+        onSaveCropRef.current?.(next);
 
-      if (libraryId && enabledSizeMms.length > 0) {
-        await onBeforeNormalizedExport?.();
-        const freshBeadSizes = await beadSizesApi.list();
-        const assetVisible = assetVisibleDiameterFromConfig(next);
-        const allTargets = resolveNormalizedSizeTargets(
-          enabledSizeMms,
-          freshBeadSizes,
-          assetVisible,
-        );
-        const staleTargets = filterStaleNormalizationTargets(
-          allTargets,
-          existingOffers,
-          assetVisible,
-          next.updatedAt,
-        );
-        if (staleTargets.length > 0) {
-          await saveNormalizedExportsForLibrary(libraryId, next, staleTargets, {
-            existingOffers,
-          });
-          await onNormalizedExportsSaved?.();
-          onScheduleGroupRegen?.();
-          setExportStatus(
-            developerMode
-              ? `Processed asset saved · normalized ${staleTargets.length} size group(s)${
-                  allTargets.length - staleTargets.length > 0
-                    ? ` (${allTargets.length - staleTargets.length} unchanged)`
-                    : ""
-                }`
-              : "Image saved successfully",
+        if (libraryId && enabledSizeMms.length > 0) {
+          await onBeforeNormalizedExport?.();
+          const freshBeadSizes = await beadSizesApi.list();
+          const assetVisible = assetVisibleDiameterFromConfig(next);
+          const allTargets = resolveNormalizedSizeTargets(
+            enabledSizeMms,
+            freshBeadSizes,
+            assetVisible,
           );
+          const staleTargets = filterStaleNormalizationTargets(
+            allTargets,
+            existingOffers,
+            assetVisible,
+            next.updatedAt,
+          );
+          if (staleTargets.length > 0) {
+            await saveNormalizedExportsForLibrary(libraryId, next, staleTargets, {
+              existingOffers,
+            });
+            await onNormalizedExportsSaved?.();
+            onScheduleGroupRegen?.();
+            setExportStatus(
+              developerMode
+                ? `Processed asset saved · normalized ${staleTargets.length} size group(s)${
+                    allTargets.length - staleTargets.length > 0
+                      ? ` (${allTargets.length - staleTargets.length} unchanged)`
+                      : ""
+                  }`
+                : "Image saved successfully",
+            );
+          } else {
+            setExportStatus("Image saved successfully");
+          }
         } else {
           setExportStatus("Image saved successfully");
         }
-      } else {
-        setExportStatus("Image saved successfully");
+      } catch (uploadError) {
+        await rollbackUploadedUrls(uploadedUrls);
+        throw uploadError;
       }
     } catch (e) {
-      setExportStatus(e instanceof Error ? e.message : "Export failed");
+      const message = formatUploadErrorMessage(e);
+      setExportStatus(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }

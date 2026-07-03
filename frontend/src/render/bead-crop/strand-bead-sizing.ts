@@ -13,7 +13,14 @@ import {
   mergeSizeOfferFromCatalogue,
 } from "./apply-crop";
 import { resolveBeadCropConfig } from "./resolve-bead-crop-config";
-import { calibratedVisualDiameterPx } from "./visual-bead-scale";
+import {
+  beadExportSilhouetteFillRatio,
+  resolveBeadPhysicalMetrics,
+  resolveBeadRenderFootprintPx,
+  resolveBeadVisibleDiameterPx,
+} from "@bino-foundry/shared/types/bead-crop";
+import { layoutDiameterPxForMm } from "./canonical-strand-mm-scale";
+import { resolveBeadCropGeometryDebug } from "./crop-geometry-audit";
 import { resolveStrandRenderProfile } from "./strand-render-profile";
 
 export interface BeadSlotDimensions {
@@ -28,7 +35,22 @@ export interface BeadSlotSizingCatalogueContext extends StrandRenderCatalogueCon
 }
 
 function mmToBasePx(sizeMm: number, scaleFactor: number): number {
-  return calibratedVisualDiameterPx(sizeMm) * scaleFactor;
+  return layoutDiameterPxForMm(sizeMm, scaleFactor);
+}
+
+function canonicalVisibleDiameterPx(
+  entry: BeadLibraryEntry | null,
+): number | null {
+  if (!entry) return null;
+  const config = resolveBeadCropConfig(entry);
+  const metrics = config?.metrics;
+  if (!metrics) return null;
+  const visible = resolveBeadVisibleDiameterPx(metrics);
+  return visible > 0 ? visible : null;
+}
+
+function baseTargetDiameterPxForMm(beadSize: BeadSize, scaleFactor: number): number {
+  return mmToBasePx(beadSize, scaleFactor);
 }
 
 export type BeadRenderSizingPath =
@@ -153,7 +175,7 @@ function layoutDimensionsForMm(
   entry: BeadLibraryEntry | null,
   catalogue?: StrandRenderCatalogueContext,
 ): BeadSlotDimensions {
-  const baseTargetDiameterPx = mmToBasePx(beadSize, scaleFactor);
+  const baseTargetDiameterPx = baseTargetDiameterPxForMm(beadSize, scaleFactor);
   const typeScale = typeScaleFor(entry, catalogue);
   const maxScale = Math.max(typeScale.width, typeScale.height);
   return finalizeLayoutFootprint(
@@ -165,85 +187,172 @@ function layoutDimensionsForMm(
   );
 }
 
-function passiveCropGeometry(dimensions: BeadSlotDimensions): BeadCropGeometryDebug {
-  const bounds = { left: 0, top: 0, width: dimensions.width, height: dimensions.height };
+interface UniformStrandImageLayout {
+  imageDimensions: BeadSlotDimensions;
+  imageOffsetPx: BeadSlotOffsetPx;
+  imageRenderScale: number;
+  assetVisibleDiameterPx: number | null;
+  renderResolution: ReturnType<typeof resolveBeadPhysicalMetrics>;
+  visibleContentWidthPx: number;
+  visibleContentHeightPx: number;
+  visibleContentDiameterPx: number;
+  actualVisibleDiameterPx: number;
+  exportFillRatio: number | null;
+}
+
+/** Uniform scale for crop bitmap inside mm wrapper — scaleX always equals scaleY. */
+function resolveUniformStrandImageLayout(
+  dimensions: BeadSlotDimensions,
+  entry: BeadLibraryEntry | null,
+  options: {
+    preferProcessedCanvas: boolean;
+    scaleReferenceDiameterPx?: number | null;
+  },
+): UniformStrandImageLayout {
+  const config = entry ? resolveBeadCropConfig(entry) : null;
+  const renderResolution = config ? resolveBeadPhysicalMetrics(config) : null;
+  const wrapperDiameter = Math.max(dimensions.width, dimensions.height);
+
+  const fallback: UniformStrandImageLayout = {
+    imageDimensions: dimensions,
+    imageOffsetPx: { left: 0, top: 0 },
+    imageRenderScale: 1,
+    assetVisibleDiameterPx: canonicalVisibleDiameterPx(entry),
+    renderResolution,
+    visibleContentWidthPx: dimensions.width,
+    visibleContentHeightPx: dimensions.height,
+    visibleContentDiameterPx: wrapperDiameter,
+    actualVisibleDiameterPx: wrapperDiameter,
+    exportFillRatio: null,
+  };
+
+  if (!renderResolution?.metrics) return fallback;
+
+  const metrics = renderResolution.metrics;
+  const visibleDiameter = resolveBeadVisibleDiameterPx(metrics);
+  const scaleDenom =
+    options.scaleReferenceDiameterPx && options.scaleReferenceDiameterPx > 0
+      ? options.scaleReferenceDiameterPx
+      : visibleDiameter;
+  const uniformScale = scaleDenom > 0 ? wrapperDiameter / scaleDenom : 1;
+
+  const imageFootprint = resolveBeadRenderFootprintPx(renderResolution, {
+    targetDiameterPx: wrapperDiameter,
+    preferProcessedCanvas: options.preferProcessedCanvas,
+    scaleReferenceDiameterPx: options.scaleReferenceDiameterPx ?? undefined,
+  });
+  if (!imageFootprint) return fallback;
+
+  const visibleFootprint = resolveBeadRenderFootprintPx(renderResolution, {
+    targetDiameterPx: wrapperDiameter,
+    preferProcessedCanvas: false,
+    scaleReferenceDiameterPx: options.scaleReferenceDiameterPx ?? undefined,
+  });
+
+  const imageDimensions = imageFootprint;
+  const imageOffsetPx = {
+    left: (dimensions.width - imageDimensions.width) / 2,
+    top: (dimensions.height - imageDimensions.height) / 2,
+  };
+  const visibleW = visibleFootprint?.width ?? imageDimensions.width;
+  const visibleH = visibleFootprint?.height ?? imageDimensions.height;
+
   return {
-    clipPathActive: false,
-    renderImageSource: "processed",
-    cropPointCount: 0,
-    metricsSource: null,
-    clipPathBoundsWidthPx: null,
-    clipPathBoundsHeightPx: null,
-    clipPathBBoxFillPct: null,
-    cropPolygonAreaPct: null,
-    visiblePolygonAreaPct: null,
-    anchorVsVisibleBBoxDeltaPct: null,
-    layoutBoundsPx: bounds,
-    imageBoundsPx: bounds,
-    clipPathBoundsPx: null,
-    visibleBoundsPx: null,
-    exportVisibleBoundsPx: null,
-    cropPolygonPointsPx: null,
-    cropPolygonBBoxNorm: null,
-    visibleBoundsNorm: null,
+    imageDimensions,
+    imageOffsetPx,
+    imageRenderScale: uniformScale,
+    assetVisibleDiameterPx: visibleDiameter > 0 ? visibleDiameter : null,
+    renderResolution,
+    visibleContentWidthPx: visibleW,
+    visibleContentHeightPx: visibleH,
+    visibleContentDiameterPx: Math.max(visibleW, visibleH),
+    actualVisibleDiameterPx: Math.max(visibleW, visibleH),
+    exportFillRatio: beadExportSilhouetteFillRatio(metrics),
   };
 }
 
-/** Passive strand sizing — mm slot only; bitmap is pre-baked (no runtime scaling). */
-function resolvePassiveStrandSlotSizing(
+function buildStrandSlotSizingResult(
   beadSize: BeadSize,
   scaleFactor: number,
   entry: BeadLibraryEntry | null,
   sizingPath: BeadRenderSizingPath,
-  catalogue?: BeadSlotSizingCatalogueContext,
-  groupReferenceDiameterPx: number | null = null,
+  catalogue: BeadSlotSizingCatalogueContext | undefined,
+  options: {
+    preferProcessedCanvas: boolean;
+    usesClipPath: boolean;
+    groupReferenceDiameterPx?: number | null;
+    squareFallbackReason?: SquareFallbackReason | null;
+  },
 ): BeadSlotSizingResult {
-  const baseTargetDiameterPx = mmToBasePx(beadSize, scaleFactor);
+  const baseTargetDiameterPx = baseTargetDiameterPxForMm(beadSize, scaleFactor);
   const dimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry, catalogue);
-  const bounds = { left: 0, top: 0, width: dimensions.width, height: dimensions.height };
+  const wrapperDiameterPx = Math.max(dimensions.width, dimensions.height);
+
+  const imageLayout = resolveUniformStrandImageLayout(dimensions, entry, {
+    preferProcessedCanvas: options.preferProcessedCanvas,
+  });
+
+  const config = entry ? resolveBeadCropConfig(entry) : null;
+  const cropGeometry = resolveBeadCropGeometryDebug(
+    config,
+    {
+      layoutWidthPx: dimensions.width,
+      layoutHeightPx: dimensions.height,
+      imageOffsetPx: imageLayout.imageOffsetPx,
+      imageWidthPx: imageLayout.imageDimensions.width,
+      imageHeightPx: imageLayout.imageDimensions.height,
+      usesProcessedCanvas: options.preferProcessedCanvas,
+      usesClipPath: options.usesClipPath,
+      uniformScale: imageLayout.imageRenderScale,
+    },
+    imageLayout.renderResolution,
+  );
 
   return {
     dimensions,
-    imageDimensions: dimensions,
-    imageOffsetPx: { left: 0, top: 0 },
+    imageDimensions: imageLayout.imageDimensions,
+    imageOffsetPx: imageLayout.imageOffsetPx,
     sizingPath,
     configuredSizeMm: beadSize,
     baseTargetDiameterPx,
-    assetVisibleDiameterPx: null,
-    groupReferenceDiameterPx,
+    assetVisibleDiameterPx: imageLayout.assetVisibleDiameterPx,
+    groupReferenceDiameterPx: options.groupReferenceDiameterPx ?? null,
     mmGroupNormalizationFactor: 1,
     mmGroupActive: false,
     targetDiameterPx: baseTargetDiameterPx,
-    appliedScale: 1,
-    finalAppliedScale: 1,
-    normalizationActive: true,
-    normalizationSource: "processedImage",
-    normalizationScale: 1,
-    squareFallbackReason: null,
-    cropConfigPresent: Boolean(entry?.cropConfig),
-    renderResolution: null,
-    usesProcessedCanvas: true,
+    appliedScale: imageLayout.imageRenderScale,
+    finalAppliedScale: imageLayout.imageRenderScale,
+    normalizationActive: options.preferProcessedCanvas || options.usesClipPath,
+    normalizationSource: options.preferProcessedCanvas ? "processedImage" : "none",
+    normalizationScale: imageLayout.imageRenderScale,
+    squareFallbackReason: options.squareFallbackReason ?? null,
+    cropConfigPresent: Boolean(config?.imageWidth && config?.imageHeight),
+    renderResolution: imageLayout.renderResolution,
+    usesProcessedCanvas: options.preferProcessedCanvas,
     isRoundVisualBead: isRoundVisualBeadType(entry?.beadTypeSlug, catalogue, entry),
     objectFit: null,
-    usesClipPath: false,
-    wrapperDiameterPx: Math.max(dimensions.width, dimensions.height),
-    visibleContentWidthPx: dimensions.width,
-    visibleContentHeightPx: dimensions.height,
-    visibleContentDiameterPx: Math.max(dimensions.width, dimensions.height),
-    actualVisibleDiameterPx: Math.max(dimensions.width, dimensions.height),
+    usesClipPath: options.usesClipPath,
+    wrapperDiameterPx,
+    visibleContentWidthPx: imageLayout.visibleContentWidthPx,
+    visibleContentHeightPx: imageLayout.visibleContentHeightPx,
+    visibleContentDiameterPx: imageLayout.visibleContentDiameterPx,
+    actualVisibleDiameterPx: imageLayout.actualVisibleDiameterPx,
     layoutAspectRatio: dimensions.height > 0 ? dimensions.width / dimensions.height : 1,
     finalRenderWidthPx: dimensions.width,
     finalRenderHeightPx: dimensions.height,
-    imageRenderWidthPx: dimensions.width,
-    imageRenderHeightPx: dimensions.height,
-    clipPathBoundsPx: null,
-    exportFillRatio: null,
+    imageRenderWidthPx: imageLayout.imageDimensions.width,
+    imageRenderHeightPx: imageLayout.imageDimensions.height,
+    clipPathBoundsPx: cropGeometry.clipPathBoundsPx,
+    exportFillRatio: imageLayout.exportFillRatio,
     occupancyRatio: 1,
-    polygonBoundingWidthPx: null,
-    polygonBoundingHeightPx: null,
-    polygonDiameterPx: null,
-    imageRenderScale: 1,
-    cropGeometry: passiveCropGeometry(dimensions),
+    polygonBoundingWidthPx: cropGeometry.clipPathBoundsWidthPx,
+    polygonBoundingHeightPx: cropGeometry.clipPathBoundsHeightPx,
+    polygonDiameterPx:
+      cropGeometry.clipPathBoundsWidthPx && cropGeometry.clipPathBoundsHeightPx
+        ? Math.max(cropGeometry.clipPathBoundsWidthPx, cropGeometry.clipPathBoundsHeightPx)
+        : null,
+    imageRenderScale: imageLayout.imageRenderScale,
+    cropGeometry,
   };
 }
 
@@ -264,30 +373,22 @@ export function resolveBeadSlotSizing(
   );
 
   if (hasPreNormalizedStrandAsset(sizeOffer, catalogue)) {
-    return resolvePassiveStrandSlotSizing(
-      beadSize,
-      scaleFactor,
-      entry,
-      "normalizedVisibleDiameter",
-      catalogue,
-      sizeOffer?.groupReferenceDiameterPx ?? null,
-    );
+    return buildStrandSlotSizingResult(beadSize, scaleFactor, entry, "normalizedVisibleDiameter", catalogue, {
+      preferProcessedCanvas: true,
+      usesClipPath: false,
+      groupReferenceDiameterPx: sizeOffer?.groupReferenceDiameterPx ?? null,
+    });
   }
 
   if (hasDistinctProcessedAsset(entry)) {
-    return resolvePassiveStrandSlotSizing(
-      beadSize,
-      scaleFactor,
-      entry,
-      "processedImageNormalized",
-      catalogue,
-    );
+    return buildStrandSlotSizingResult(beadSize, scaleFactor, entry, "processedImageNormalized", catalogue, {
+      preferProcessedCanvas: true,
+      usesClipPath: false,
+    });
   }
 
   const config = entry ? resolveBeadCropConfig(entry) : null;
   const usesClipPath = Boolean(config && beadCropClipPathStyles(config));
-  const dimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry, catalogue);
-  const baseTargetDiameterPx = mmToBasePx(beadSize, scaleFactor);
 
   let sizingPath: BeadRenderSizingPath = "squareTargetFallback";
   let squareFallbackReason: SquareFallbackReason | null = null;
@@ -300,47 +401,9 @@ export function resolveBeadSlotSizing(
     squareFallbackReason = "noCropConfig";
   }
 
-  return {
-    dimensions,
-    imageDimensions: dimensions,
-    imageOffsetPx: { left: 0, top: 0 },
-    sizingPath,
-    configuredSizeMm: beadSize,
-    baseTargetDiameterPx,
-    assetVisibleDiameterPx: null,
-    groupReferenceDiameterPx: null,
-    mmGroupNormalizationFactor: 1,
-    mmGroupActive: false,
-    targetDiameterPx: baseTargetDiameterPx,
-    appliedScale: 1,
-    finalAppliedScale: 1,
-    normalizationActive: usesClipPath,
-    normalizationSource: "none",
-    normalizationScale: 1,
-    squareFallbackReason,
-    cropConfigPresent: Boolean(config?.imageWidth && config?.imageHeight),
-    renderResolution: null,
-    usesProcessedCanvas: false,
-    isRoundVisualBead: isRoundVisualBeadType(entry?.beadTypeSlug, catalogue, entry),
-    objectFit: null,
+  return buildStrandSlotSizingResult(beadSize, scaleFactor, entry, sizingPath, catalogue, {
+    preferProcessedCanvas: false,
     usesClipPath,
-    wrapperDiameterPx: Math.max(dimensions.width, dimensions.height),
-    visibleContentWidthPx: dimensions.width,
-    visibleContentHeightPx: dimensions.height,
-    visibleContentDiameterPx: Math.max(dimensions.width, dimensions.height),
-    actualVisibleDiameterPx: Math.max(dimensions.width, dimensions.height),
-    layoutAspectRatio: dimensions.height > 0 ? dimensions.width / dimensions.height : 1,
-    finalRenderWidthPx: dimensions.width,
-    finalRenderHeightPx: dimensions.height,
-    imageRenderWidthPx: dimensions.width,
-    imageRenderHeightPx: dimensions.height,
-    clipPathBoundsPx: null,
-    exportFillRatio: null,
-    occupancyRatio: 1,
-    polygonBoundingWidthPx: null,
-    polygonBoundingHeightPx: null,
-    polygonDiameterPx: null,
-    imageRenderScale: 1,
-    cropGeometry: passiveCropGeometry(dimensions),
-  };
+    squareFallbackReason,
+  });
 }

@@ -150,7 +150,7 @@ export function computeBeadShellPosition(
   dim: BeadSlotDimensions,
   profile: StrandRenderProfile,
 ): BeadShellPlacement {
-  const renderDim = visualSlotDimensions(dim, profile);
+  const renderDim = strandLayoutShellDimensions(dim, profile);
   const radial = profile.verticalOffset * renderDim.height;
   const anchorX = ringX + radial * Math.cos(angle);
   const anchorY = ringY + radial * Math.sin(angle);
@@ -162,6 +162,17 @@ export function computeBeadShellPosition(
     transformOriginX: originX,
     transformOriginY: originY,
   };
+}
+
+/** Visual shell size — mm-sized round beads ignore visualScale so ordering stays strict. */
+export function strandLayoutShellDimensions(
+  dim: BeadSlotDimensions,
+  profile: Pick<StrandRenderProfile, "visualScale" | "forceRoundFootprint" | "attachmentStyle">,
+): BeadSlotDimensions {
+  if (profile.forceRoundFootprint && profile.attachmentStyle === "inline") {
+    return dim;
+  }
+  return visualSlotDimensions(dim, profile);
 }
 
 /** Visual slot size after visualScale — does not affect strand occupancy. */

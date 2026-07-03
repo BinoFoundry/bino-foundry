@@ -1,3 +1,4 @@
+import { isApiError } from "@/services/api";
 import { uploadApi } from "@/services/api/upload";
 
 /** MIME types allowed by the Supabase `assets` bucket and upload route. */
@@ -87,6 +88,37 @@ export async function uploadValidatedImage(
     throw new Error("Upload succeeded but returned no image URL");
   }
   return url;
+}
+
+/** Build a user-facing upload error message. */
+export function formatUploadErrorMessage(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.status === 413) {
+      return "Image is too large. Please use a file under 50 MB.";
+    }
+    if (error.status === 415) {
+      return "Unsupported image format. Please upload PNG, JPEG, or WebP.";
+    }
+    if (error.status === 502 || error.status === 503 || error.status === 504) {
+      return "Unable to upload image. Please try again.";
+    }
+    return error.message;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return "Unable to upload image. Please try again.";
+}
+
+/** Best-effort rollback after a partial multi-file upload. */
+export async function rollbackUploadedUrls(urls: string[]): Promise<void> {
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        await uploadApi.deleteUploadedAsset(url);
+      } catch {
+        // Rollback is best-effort.
+      }
+    }),
+  );
 }
 
 /** Reset throttle clock (tests). */

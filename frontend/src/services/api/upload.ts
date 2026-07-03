@@ -23,6 +23,14 @@ export const uploadApi = {
     });
   },
 
+  /** Roll back a failed multi-step upload (admin assets bucket only). */
+  deleteUploadedAsset(url: string): Promise<void> {
+    return apiRequest<void>("/upload/asset", {
+      method: "DELETE",
+      body: { url },
+    });
+  },
+
   /** Supabase staging bucket (`POST /upload/staging`). */
   uploadStaging(file: File, batch = "default"): Promise<StagingUploadResult> {
     const form = new FormData();

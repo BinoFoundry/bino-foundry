@@ -26,28 +26,24 @@ import {
 } from "./strand-viewport";
 
 describe("computeDefaultStrandZoom", () => {
-  it("targets larger single-bracelet zoom on laptop widths", () => {
-    const zoom = computeDefaultStrandZoom({
+  it("targets the same effective zoom for single and matching pair", () => {
+    const single = computeDefaultStrandZoom({
       twinning: false,
       containerWidth: 1200,
       containerHeight: 800,
       isMobile: false,
       autoFitScale: 1,
     });
-    expect(zoom).toBeGreaterThan(1.4);
-    expect(zoom).toBeLessThan(1.75);
-  });
-
-  it("targets ~102% effective twin zoom on laptop when auto-fit is 1", () => {
-    const zoom = computeDefaultStrandZoom({
+    const twin = computeDefaultStrandZoom({
       twinning: true,
       containerWidth: 1200,
       containerHeight: 800,
       isMobile: false,
       autoFitScale: 1,
     });
-    expect(zoom).toBeGreaterThan(0.95);
-    expect(zoom).toBeLessThan(1.15);
+    expect(single).toBeCloseTo(twin, 5);
+    expect(single).toBeGreaterThan(1.4);
+    expect(single).toBeLessThan(1.75);
   });
 
   it("eases zoom down on mobile", () => {
@@ -89,16 +85,16 @@ describe("viewportStrandZoomFactor", () => {
 });
 
 describe("measureStrandCanvasSize", () => {
-  it("uses more of a large desktop viewport than the old 440px cap", () => {
-    const size = measureStrandCanvasSize({
-      containerWidth: 1400,
-      containerHeight: 900,
+  it("uses the same per-strand canvas for single and matching pair", () => {
+    const input = {
+      containerWidth: 1200,
+      containerHeight: 800,
       isMobile: false,
-      twinning: false,
-      libraryOpen: true,
-    });
-    expect(size).toBeGreaterThan(440);
-    expect(size).toBeLessThanOrEqual(920);
+      libraryOpen: false,
+    };
+    expect(measureStrandCanvasSize({ ...input, twinning: false })).toBe(
+      measureStrandCanvasSize({ ...input, twinning: true }),
+    );
   });
 });
 

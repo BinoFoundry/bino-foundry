@@ -7,5 +7,6 @@ export function createUploadRoutes(): Router {
   const router = Router();
   router.post("/staging", multerSingleImageField, uploadHandlers.uploadStaging);
   router.post("/", multerSingleImageField, uploadHandlers.uploadImage);
+  router.delete("/asset", uploadHandlers.deleteUploadedAsset);
   return router;
 }

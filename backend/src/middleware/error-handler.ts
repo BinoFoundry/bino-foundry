@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler } from "express";
+import { MulterError } from "multer";
 
-import { HttpError, wrapUnknownError } from "../lib/errors.js";
+import { HttpError, PayloadTooLargeError, UnsupportedMediaError, wrapUnknownError } from "../lib/errors.js";
 
 type Logger = Pick<Console, "error">;
 
@@ -10,11 +11,21 @@ export function createErrorHandler(logger: Logger = console): ErrorRequestHandle
       return;
     }
 
-    const httpErr = wrapUnknownError(error);
+    let httpErr = wrapUnknownError(error);
     let statusCode = httpErr.statusCode ?? 500;
 
+    if (error instanceof MulterError) {
+      httpErr =
+        error.code === "LIMIT_FILE_SIZE"
+          ? new PayloadTooLargeError(
+              `Image file is too large (max ${Math.round((50 * 1024 * 1024) / (1024 * 1024))} MB)`,
+            )
+          : new UnsupportedMediaError(error.message);
+      statusCode = httpErr.statusCode;
+    }
+
     const maybeLegacy = error as Error & { status?: number };
-    if (!(error instanceof HttpError) && typeof maybeLegacy.status === "number") {
+    if (!(error instanceof HttpError) && !(error instanceof MulterError) && typeof maybeLegacy.status === "number") {
       statusCode = maybeLegacy.status;
     }
 

@@ -60,6 +60,17 @@ function resolveBody(init?: ApiRequestOptions): BodyInit | undefined {
 }
 
 async function parseErrorPayload(res: Response): Promise<{ message: string; code?: string; details?: unknown }> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      return {
+        message: "Unable to upload image. The server is temporarily unavailable — please try again.",
+        code: "GATEWAY_ERROR",
+      };
+    }
+    return { message: res.statusText || `HTTP ${res.status}` };
+  }
+
   try {
     const json = (await res.json()) as {
       message?: string;
@@ -77,11 +88,16 @@ export async function apiRequest<T>(path: string, init?: ApiRequestOptions): Pro
   const url = resolveApiUrl(path);
   const { body: _body, rawBody: _raw, ...rest } = init ?? {};
 
-  const res = await fetch(url, {
-    ...rest,
-    headers: buildHeaders(init),
-    body: resolveBody(init),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...rest,
+      headers: buildHeaders(init),
+      body: resolveBody(init),
+    });
+  } catch {
+    throw new ApiError(503, "Unable to reach the server. Please try again.", { code: "NETWORK_ERROR" });
+  }
 
   if (!res.ok) {
     const err = await parseErrorPayload(res);
