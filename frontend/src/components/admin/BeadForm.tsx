@@ -8,6 +8,7 @@ import { BeadAssetValidationPanel } from "@/features/admin/components/BeadAssetV
 import { NormalizedExportDebugPanel } from "@/features/admin/components/NormalizedExportDebugPanel";
 import { BeadLibrarySizesPanel } from "@/features/admin/components/BeadLibrarySizesPanel";
 import { StrandRenderConfigPanel } from "@/features/admin/components/StrandRenderConfigPanel";
+import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import { formatUploadErrorMessage, validateUploadFile } from "@/features/admin/lib/upload-pipeline";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
