@@ -121,7 +121,7 @@ describe("uniform strand image scaling", () => {
     const sizing = resolveBeadSlotSizing(bead, 6, 1);
     const style = getStrandBeadImageStyle(bead.bead, sizing);
 
-    expect(style.objectFit).toBeUndefined();
+    expect(style.objectFit).toBe("contain");
     expect(style.width).toBe(sizing.imageDimensions.width);
     expect(style.height).toBe(sizing.imageDimensions.height);
     expect(style.position).toBe("absolute");

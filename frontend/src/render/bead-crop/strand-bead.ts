@@ -1,12 +1,12 @@
 import type { CSSProperties } from "react";
 import type { BeadSize, PlacedBead } from "@/lib/luxe-data";
 import type { BeadLibraryEntry } from "@/types/beads";
-import { resolveAssetImageUrl, withAssetCacheBuster } from "@/lib/asset-image-url";
-
+import { withAssetCacheBuster } from "@/lib/asset-image-url";
 import {
   beadDisplayImageStyles,
+  beadImageCacheToken,
   hasDistinctProcessedAsset,
-  resolveBeadDeliveryUrl,
+  resolveStrandDeliveryUrl,
 } from "./apply-crop";
 import { resolveBeadVisualBoundsNorm } from "./crop-visual-bounds";
 import {
@@ -55,8 +55,8 @@ export function getBeadTangentArcPx(dim: BeadSlotDimensions): number {
 function resolveStrandImageUrl(bead: BeadLibraryEntry): string | null {
   const meta = bead.metadata as { strandImageUrl?: string; strandImage?: string } | undefined;
   const strand = meta?.strandImageUrl?.trim() || meta?.strandImage?.trim();
-  if (strand) return resolveAssetImageUrl(strand, "full") ?? strand;
-  return resolveBeadDeliveryUrl(bead, "full");
+  if (strand) return strand;
+  return resolveStrandDeliveryUrl(bead);
 }
 
 export function getBeadImageUrl(
@@ -66,16 +66,37 @@ export function getBeadImageUrl(
   if (!bead) return null;
   const profile = resolveStrandRenderProfile(bead.bead, catalogue);
 
-  // Runtime: one canonical processed asset — use full delivery URL to preserve alpha and crop pixels.
+  // Runtime: one canonical processed asset per bead — mm scaling is via wrapper only.
   const url = profile.preferStrandImageUrl
     ? resolveStrandImageUrl(bead.bead)
-    : resolveBeadDeliveryUrl(bead.bead, "full");
+    : resolveStrandDeliveryUrl(bead.bead);
   if (!url) return null;
 
-  const cacheToken = bead.bead.cropConfig?.updatedAt
-    ? String(bead.bead.cropConfig.updatedAt)
-    : "2";
-  return url.startsWith("data:") ? url : withAssetCacheBuster(url, cacheToken);
+  return url.startsWith("data:") ? url : withAssetCacheBuster(url, beadImageCacheToken(bead.bead));
+}
+
+/** Library sidebar — proportional fit of the same processed asset as the strand builder. */
+export function getBeadLibraryThumbnailStyle(
+  bead: BeadLibraryEntry | null | undefined,
+): CSSProperties {
+  if (!bead) {
+    return { objectFit: "contain", background: "transparent" };
+  }
+
+  const base: CSSProperties = {
+    display: "block",
+    maxWidth: "100%",
+    maxHeight: "100%",
+    width: "auto",
+    height: "auto",
+    objectFit: "contain",
+    objectPosition: "center center",
+    background: "transparent",
+  };
+
+  if (hasDistinctProcessedAsset(bead)) return base;
+
+  return { ...base, ...beadDisplayImageStyles(bead) };
 }
 
 /** Strand bead image — uniform scale inside mm wrapper; never stretch or squash. */
@@ -96,27 +117,30 @@ export function getStrandBeadImageStyle(
     const usesProcessedLayer =
       sizing.usesProcessedCanvas ?? hasDistinctProcessedAsset(bead);
 
-    const base: CSSProperties = {
+    if (usesProcessedLayer || sizing.sizingPath === "normalizedVisibleDiameter") {
+      return {
+        position: "absolute",
+        left: off.left,
+        top: off.top,
+        width: img.width,
+        height: img.height,
+        display: "block",
+        objectFit: "contain",
+        objectPosition: "center center",
+        background: "transparent",
+      };
+    }
+
+    const visual = resolveBeadVisualBoundsNorm(bead);
+    return {
       position: "absolute",
       left: off.left,
       top: off.top,
       width: img.width,
       height: img.height,
-      maxWidth: "none",
-      maxHeight: "none",
       display: "block",
+      objectFit: "contain",
       background: "transparent",
-      pointerEvents: "none",
-      userSelect: "none",
-    };
-
-    if (usesProcessedLayer || sizing.sizingPath === "normalizedVisibleDiameter") {
-      return base;
-    }
-
-    const visual = resolveBeadVisualBoundsNorm(bead);
-    return {
-      ...base,
       objectPosition: `${(visual.centerX * 100).toFixed(2)}% ${(visual.centerY * 100).toFixed(2)}%`,
       ...beadDisplayImageStyles(bead ?? undefined),
     };
@@ -205,13 +229,9 @@ export function getPlacedBeadImageFilter(): CSSProperties["filter"] {
   return undefined;
 }
 
+/** Layout is CSS-only — avoid HTML width/height attrs that default to object-fit: fill. */
 export function getStrandBeadRasterSize(
-  dim: BeadSlotDimensions,
-  dpr = typeof globalThis !== "undefined" ? globalThis.devicePixelRatio || 1 : 1,
-): { width: number; height: number } {
-  const scale = Math.min(3, Math.max(1, dpr));
-  return {
-    width: Math.ceil(dim.width * scale),
-    height: Math.ceil(dim.height * scale),
-  };
+  _dim: BeadSlotDimensions,
+): Record<string, never> {
+  return {};
 }

@@ -8,7 +8,7 @@ import {
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
-import { resolveAssetImageUrl, type AssetImageVariant } from "@/lib/asset-image-url";
+import { resolveAssetImageUrl, withAssetCacheBuster, type AssetImageVariant } from "@/lib/asset-image-url";
 
 function cropConfigProcessedUrl(config: BeadCropConfig | null | undefined): string {
   if (!config || typeof config !== "object") return "";
@@ -175,14 +175,43 @@ export function getBeadDisplayImageUrl(
   return null;
 }
 
-/** Library grid / admin list thumbnail. */
+/** Cache-bust token for bead imagery — refreshes sidebar/strand after admin crop save. */
+export function beadImageCacheToken(bead: BeadLibraryEntry | null | undefined): string {
+  if (bead?.cropConfig?.updatedAt) return String(bead.cropConfig.updatedAt);
+  if (bead?.processedImage?.trim()) return bead.processedImage.trim();
+  return "2";
+}
+
+/** Library sidebar thumbnail — same processed asset as strand builder (no separate resize). */
 export function getBeadLibraryImageUrl(bead: BeadLibraryEntry | null | undefined): string | null {
-  return resolveAssetImageUrl(getBeadDisplayImageUrl(bead, "full"), "thumbnail");
+  const url = resolveStrandDeliveryUrl(bead);
+  if (!url) return null;
+  return url.startsWith("data:") ? url : withAssetCacheBuster(url, beadImageCacheToken(bead));
 }
 
 /** Builder strand display — optimized delivery when available. */
 export function getBeadStrandImageUrl(bead: BeadLibraryEntry | null | undefined): string | null {
-  return resolveBeadDeliveryUrl(bead, "medium");
+  return resolveStrandDeliveryUrl(bead);
+}
+
+/**
+ * Strand builder — exact crop export at full resolution.
+ * Avoids Supabase `/render/image/` transforms that can flatten alpha to white.
+ * Prefers WebP/PNG (reliable alpha) over AVIF.
+ */
+export function resolveStrandDeliveryUrl(bead: BeadLibraryEntry | null | undefined): string | null {
+  if (!bead) return null;
+
+  const delivery = deliveryUrlsFromConfig(bead.cropConfig);
+  const pick =
+    delivery?.webp?.trim() ||
+    delivery?.png?.trim() ||
+    delivery?.avif?.trim() ||
+    (hasDistinctProcessedAsset(bead) ? resolveProcessedPngUrl(bead) : null);
+
+  if (pick) return pick;
+
+  return getBeadDisplayImageUrl(bead, "full");
 }
 
 /** Variant-aware catalogue image URL. */

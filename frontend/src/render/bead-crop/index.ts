@@ -38,6 +38,13 @@ export { useStrandRenderConfigCache } from "./use-strand-render-config-cache";
 export { resolveBeadCropConfig } from "./resolve-bead-crop-config";
 export { loadImage, loadImageForProcessing } from "./image-loader";
 export {
+  assertMmDiameterOrdering,
+  CANONICAL_STRAND_REFERENCE_MM,
+  GLOBAL_BEAD_RENDER_SCALE,
+  layoutDiameterFromCanonicalAsset,
+  layoutDiameterPxForMm,
+} from "./canonical-strand-mm-scale";
+export {
   calibratedVisualDiameterPx,
   VISUAL_BEAD_BASE_PX,
   VISUAL_BEAD_MAX_PX,
@@ -84,6 +91,8 @@ export {
   getBeadStrandImageUrl,
   getBeadImageUrlForVariant,
   resolveBeadDeliveryUrl,
+  resolveStrandDeliveryUrl,
+  beadImageCacheToken,
   hasDistinctProcessedAsset,
   hasPreNormalizedStrandAsset,
   mergeSizeOfferFromCatalogue,
@@ -104,6 +113,7 @@ export {
   getPlacedBeadImageFilter,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
+  getBeadLibraryThumbnailStyle,
   getStrandBeadRasterSize,
   STRAND_CORD,
   mmToBasePx,

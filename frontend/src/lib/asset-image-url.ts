@@ -45,8 +45,7 @@ function supabaseRenderUrl(url: string, maxWidth: number): string | null {
   const match = url.match(/^(https:\/\/[^/]+)\/storage\/v1\/object\/public\/(.+)$/);
   if (!match) return null;
   const [, origin, objectPath] = match;
-  // format=origin preserves PNG/WebP alpha — default transform may flatten to JPEG (white background).
-  return `${origin}/storage/v1/render/image/public/${objectPath}?width=${maxWidth}&quality=85&format=origin`;
+  return `${origin}/storage/v1/render/image/public/${objectPath}?width=${maxWidth}&quality=85`;
 }
 
 /**

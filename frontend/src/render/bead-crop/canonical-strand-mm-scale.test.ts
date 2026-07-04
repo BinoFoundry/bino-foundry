@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertMmDiameterOrdering,
   CANONICAL_STRAND_REFERENCE_MM,
+  GLOBAL_BEAD_RENDER_SCALE,
   layoutDiameterFromCanonicalAsset,
   layoutDiameterPxForMm,
 } from "./canonical-strand-mm-scale";
@@ -27,5 +28,18 @@ describe("canonical-strand-mm-scale", () => {
     const six = layoutDiameterFromCanonicalAsset(6, visibleAtRef, referenceMm, 1);
     const eight = layoutDiameterFromCanonicalAsset(8, visibleAtRef, referenceMm, 1);
     expect(six).toBeLessThan(eight);
+  });
+
+  it("applies global render scale uniformly without changing mm ratios", () => {
+    const six = layoutDiameterPxForMm(6, 1);
+    const eight = layoutDiameterPxForMm(8, 1);
+    const ten = layoutDiameterPxForMm(10, 1);
+
+    expect(six).toBeCloseTo(calibratedVisualDiameterPx(6) * GLOBAL_BEAD_RENDER_SCALE, 5);
+    expect(eight).toBeCloseTo(calibratedVisualDiameterPx(8) * GLOBAL_BEAD_RENDER_SCALE, 5);
+    expect(ten).toBeCloseTo(calibratedVisualDiameterPx(10) * GLOBAL_BEAD_RENDER_SCALE, 5);
+
+    const ratioBefore = calibratedVisualDiameterPx(8) / calibratedVisualDiameterPx(6);
+    expect(eight / six).toBeCloseTo(ratioBefore, 8);
   });
 });

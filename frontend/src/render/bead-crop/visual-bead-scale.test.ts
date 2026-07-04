@@ -7,6 +7,7 @@ import {
   VISUAL_PX_PER_MM,
 } from "./visual-bead-scale";
 import { mmToBasePx, STRAND_BEAD_VISUAL_SCALE } from "./strand-bead";
+import { GLOBAL_BEAD_RENDER_SCALE } from "./canonical-strand-mm-scale";
 
 const CATALOG_SIZES_MM = [0.1, 0.25, 0.5, 1, 2.5, 4, 6, 8, 10, 12, 15, 20] as const;
 
@@ -52,7 +53,7 @@ describe("mmToBasePx", () => {
 
   it("applies the global visual density multiplier", () => {
     expect(mmToBasePx(8, 1)).toBeCloseTo(
-      (VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8) * STRAND_BEAD_VISUAL_SCALE,
+      (VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8) * STRAND_BEAD_VISUAL_SCALE * GLOBAL_BEAD_RENDER_SCALE,
       5,
     );
   });

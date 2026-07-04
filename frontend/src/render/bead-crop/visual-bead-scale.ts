@@ -12,7 +12,7 @@ export const VISUAL_BEAD_BASE_PX = 2;
 export const VISUAL_BEAD_MAX_PX = 55;
 
 /**
- * Pixels per millimetre at layout scale factor 1 (before STRAND_BEAD_VISUAL_SCALE).
+ * Pixels per millimetre at layout scale factor 1 (before global render scale).
  * Calibrated so 8 mm ≈ 29 px (2 + 3.375 × 8).
  */
 export const VISUAL_PX_PER_MM = 3.375;

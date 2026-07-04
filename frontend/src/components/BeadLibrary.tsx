@@ -24,7 +24,7 @@ import {
 } from "@/features/bracelet/library-sizes";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
-import { getBeadLibraryImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
+import { getBeadLibraryImageUrl, getBeadLibraryThumbnailStyle } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
@@ -108,15 +108,19 @@ const BeadLibraryCard = memo(function BeadLibraryCard({
           compact ? "gap-1 p-1.5" : "gap-1.5 p-2",
         )}
       >
-        <div className={cn("flex shrink-0 items-center justify-center", compact ? "h-11 w-11" : "h-12 w-12")}>
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center bg-transparent",
+            compact ? "h-11 w-11" : "h-12 w-12",
+          )}
+        >
           {img ? (
             <img
               src={img}
               alt=""
               loading="lazy"
               decoding="async"
-              className="max-h-full max-w-full"
-              style={getStrandBeadImageStyle(bead)}
+              style={getBeadLibraryThumbnailStyle(bead)}
             />
           ) : (
             <Gem className="h-5 w-5 text-muted-foreground" />

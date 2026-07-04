@@ -2,7 +2,8 @@
  * Single source of truth: configured mm → layout pixel diameter.
  *
  * Wrist fit, capacity, and pricing use database mm values.
- * Visual footprint uses this continuous mapping at runtime.
+ * Visual footprint uses this continuous mapping at runtime, scaled by
+ * {@link GLOBAL_BEAD_RENDER_SCALE} for bracelet realism.
  */
 
 import { calibratedVisualDiameterPx } from "./visual-bead-scale";
@@ -11,11 +12,17 @@ import { calibratedVisualDiameterPx } from "./visual-bead-scale";
 export const CANONICAL_STRAND_REFERENCE_MM = 8;
 
 /**
+ * Global render scale — reduces all mm wrapper diameters proportionally.
+ * Applied once in {@link layoutDiameterPxForMm} so every consumer inherits it.
+ */
+export const GLOBAL_BEAD_RENDER_SCALE = 0.94;
+
+/**
  * Layout pixel diameter for a configured bead size.
- * renderDiameterPx = calibratedCurve(configuredMm) × layoutScale
+ * renderDiameterPx = calibratedCurve(configuredMm) × layoutScale × globalRenderScale
  */
 export function layoutDiameterPxForMm(configuredMm: number, layoutScale: number): number {
-  return calibratedVisualDiameterPx(configuredMm) * layoutScale;
+  return calibratedVisualDiameterPx(configuredMm) * layoutScale * GLOBAL_BEAD_RENDER_SCALE;
 }
 
 /**
@@ -36,7 +43,7 @@ export function layoutDiameterFromCanonicalAsset(
   ) {
     return layoutDiameterPxForMm(configuredMm, layoutScale);
   }
-  return visibleDiameterPx * (configuredMm / referenceMm) * layoutScale;
+  return visibleDiameterPx * (configuredMm / referenceMm) * layoutScale * GLOBAL_BEAD_RENDER_SCALE;
 }
 
 /** Strict mm ordering at a fixed layout scale (for tests and verification). */
