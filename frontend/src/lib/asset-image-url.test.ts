@@ -21,11 +21,11 @@ describe("resolveAssetImageUrl", () => {
     expect(result).toContain("w_500,c_limit,f_auto,q_auto");
   });
 
-  it("uses Supabase render endpoint when available", () => {
+  it("uses Supabase render endpoint with origin format to preserve alpha", () => {
     const url = "https://abc.supabase.co/storage/v1/object/public/assets/beads/x.png";
     const result = resolveAssetImageUrl(url, "medium");
     expect(result).toBe(
-      "https://abc.supabase.co/storage/v1/render/image/public/assets/beads/x.png?width=500&quality=85",
+      "https://abc.supabase.co/storage/v1/render/image/public/assets/beads/x.png?width=500&quality=85&format=origin",
     );
   });
 

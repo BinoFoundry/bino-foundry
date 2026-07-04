@@ -55,8 +55,8 @@ export function getBeadTangentArcPx(dim: BeadSlotDimensions): number {
 function resolveStrandImageUrl(bead: BeadLibraryEntry): string | null {
   const meta = bead.metadata as { strandImageUrl?: string; strandImage?: string } | undefined;
   const strand = meta?.strandImageUrl?.trim() || meta?.strandImage?.trim();
-  if (strand) return resolveAssetImageUrl(strand, "medium") ?? strand;
-  return resolveBeadDeliveryUrl(bead, "medium");
+  if (strand) return resolveAssetImageUrl(strand, "full") ?? strand;
+  return resolveBeadDeliveryUrl(bead, "full");
 }
 
 export function getBeadImageUrl(
@@ -66,10 +66,10 @@ export function getBeadImageUrl(
   if (!bead) return null;
   const profile = resolveStrandRenderProfile(bead.bead, catalogue);
 
-  // Runtime: one canonical processed asset per bead — mm scaling is via layout slot only.
+  // Runtime: one canonical processed asset — use full delivery URL to preserve alpha and crop pixels.
   const url = profile.preferStrandImageUrl
     ? resolveStrandImageUrl(bead.bead)
-    : resolveBeadDeliveryUrl(bead.bead, "medium");
+    : resolveBeadDeliveryUrl(bead.bead, "full");
   if (!url) return null;
 
   const cacheToken = bead.bead.cropConfig?.updatedAt
@@ -96,27 +96,27 @@ export function getStrandBeadImageStyle(
     const usesProcessedLayer =
       sizing.usesProcessedCanvas ?? hasDistinctProcessedAsset(bead);
 
-    if (usesProcessedLayer || sizing.sizingPath === "normalizedVisibleDiameter") {
-      return {
-        position: "absolute",
-        left: off.left,
-        top: off.top,
-        width: img.width,
-        height: img.height,
-        display: "block",
-        background: "transparent",
-      };
-    }
-
-    const visual = resolveBeadVisualBoundsNorm(bead);
-    return {
+    const base: CSSProperties = {
       position: "absolute",
       left: off.left,
       top: off.top,
       width: img.width,
       height: img.height,
+      maxWidth: "none",
+      maxHeight: "none",
       display: "block",
       background: "transparent",
+      pointerEvents: "none",
+      userSelect: "none",
+    };
+
+    if (usesProcessedLayer || sizing.sizingPath === "normalizedVisibleDiameter") {
+      return base;
+    }
+
+    const visual = resolveBeadVisualBoundsNorm(bead);
+    return {
+      ...base,
       objectPosition: `${(visual.centerX * 100).toFixed(2)}% ${(visual.centerY * 100).toFixed(2)}%`,
       ...beadDisplayImageStyles(bead ?? undefined),
     };

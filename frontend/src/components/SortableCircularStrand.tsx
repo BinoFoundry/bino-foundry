@@ -25,7 +25,6 @@ import {
   getMaxSlotExtent,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
-  getStrandBeadRasterSize,
   resolveBeadSlotSizing,
   useStrandRenderConfigCache,
   STRAND_CORD,
@@ -248,6 +247,7 @@ function SortableBeadInner({
   const sizing = bead
     ? resolveBeadSlotSizing(bead, placedBeadSizeMm(bead), scaleFactor, sizingCatalogue)
     : null;
+  const wrapperDim = sizing?.dimensions ?? renderDim;
 
   return (
     <div
@@ -278,19 +278,29 @@ function SortableBeadInner({
     >
       {hasImage && bead ? (
         <div
-          className="relative h-full w-full overflow-visible"
+          className="relative overflow-visible"
           style={{ width: renderDim.width, height: renderDim.height }}
         >
-          <img
-            src={imgSrc}
-            alt=""
-            draggable={false}
-            loading="lazy"
-            decoding="async"
-            {...getStrandBeadRasterSize(sizing?.imageDimensions ?? renderDim)}
-            className="pointer-events-none select-none"
-            style={getStrandBeadImageStyle(bead.bead, sizing)}
-          />
+          <div
+            className="relative overflow-visible"
+            style={{
+              position: "absolute",
+              left: (renderDim.width - wrapperDim.width) / 2,
+              top: (renderDim.height - wrapperDim.height) / 2,
+              width: wrapperDim.width,
+              height: wrapperDim.height,
+            }}
+          >
+            <img
+              src={imgSrc}
+              alt=""
+              draggable={false}
+              loading="lazy"
+              decoding="async"
+              className="pointer-events-none select-none"
+              style={getStrandBeadImageStyle(bead.bead, sizing)}
+            />
+          </div>
         </div>
       ) : null}
       {bead && (
@@ -957,7 +967,6 @@ const SortableCircularStrand = ({
                       alt=""
                       draggable={false}
                       decoding="async"
-                      {...getStrandBeadRasterSize(activeSizing?.imageDimensions ?? activeSlotDim)}
                       className="pointer-events-none"
                       style={getStrandBeadImageStyle(activeBead.bead, activeSizing)}
                     />
