@@ -11,7 +11,23 @@ export function notifyAdminCreated(resourceLabel: string): void {
 }
 
 export function notifyAdminSaveFailed(err: unknown, fallback = "Could not save changes."): void {
-  toast.error(isApiError(err) ? err.message : formatApiErrorMessage(err) || fallback);
+  if (isApiError(err)) {
+    if (err.status === 401) {
+      toast.error(err.message || "Your session has expired. Please sign in again.");
+      return;
+    }
+    if (err.status === 403) {
+      toast.error(err.message || "You do not have permission to perform this action.");
+      return;
+    }
+    if (err.status >= 500) {
+      toast.error(err.message || "Server error. Please try again.");
+      return;
+    }
+    toast.error(err.message || formatApiErrorMessage(err) || fallback);
+    return;
+  }
+  toast.error(formatApiErrorMessage(err) || fallback);
 }
 
 export type AdminEditorModalState<T> = { type: "add" } | { type: "edit"; entry: T } | null;

@@ -52,11 +52,17 @@ export async function requireMutationAuth(req: Request, _res: Response, next: Ne
   const bearer = normalizeBearer(req);
   if (bearer) {
     const principal = await jwtPrincipalFromBearer(bearer);
-    if (principal && hasPermission(principal.permissions, "catalogue.write")) {
-      req.auth = principal;
-      next();
+    if (!principal) {
+      next(new UnauthorizedError("Your session has expired. Please sign in again.", "SESSION_EXPIRED"));
       return;
     }
+    if (!hasPermission(principal.permissions, "catalogue.write")) {
+      next(new ForbiddenError("You do not have permission to modify the catalogue"));
+      return;
+    }
+    req.auth = principal;
+    next();
+    return;
   }
 
   if (!adminKey && !isProductionLike()) {

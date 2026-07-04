@@ -17,6 +17,10 @@ import { authApi } from "@/services/api/auth";
 import { designsApi } from "@/services/api/designs";
 import { isApiError } from "@/services/api/errors";
 import {
+  AUTH_SESSION_CLEARED_EVENT,
+  AUTH_SESSION_UPDATED_EVENT,
+} from "@/services/auth/access-token";
+import {
   clearAuthSession,
   loadAuthSession,
   saveAuthSession,
@@ -163,6 +167,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [flushPendingSave, refreshUser]);
+
+  // Keep React session state in sync when the API client refreshes or clears tokens.
+  useEffect(() => {
+    const onUpdated = () => {
+      const latest = loadAuthSession();
+      if (latest) setSession(latest);
+    };
+    const onCleared = () => setSession(null);
+    window.addEventListener(AUTH_SESSION_UPDATED_EVENT, onUpdated);
+    window.addEventListener(AUTH_SESSION_CLEARED_EVENT, onCleared);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_UPDATED_EVENT, onUpdated);
+      window.removeEventListener(AUTH_SESSION_CLEARED_EVENT, onCleared);
+    };
+  }, []);
 
   const openAuth = useCallback(
     (options?: { mode?: "sign-in" | "sign-up"; pendingSave?: PendingDesignSave }) => {

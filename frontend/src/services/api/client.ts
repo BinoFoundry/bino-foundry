@@ -1,4 +1,9 @@
 import { getAdminApiKey, resolveApiUrl } from "@/config/env";
+import {
+  clearSessionAfterAuthFailure,
+  ensureFreshAccessToken,
+  forceRefreshAccessToken,
+} from "@/services/auth/access-token";
 import { getAccessToken } from "@/services/auth/session";
 
 import { ApiError } from "./errors";
@@ -7,9 +12,25 @@ export type ApiRequestOptions = Omit<RequestInit, "body"> & {
   body?: BodyInit | Record<string, unknown> | null;
   /** Skip JSON serialization for `body` (e.g. FormData). */
   rawBody?: boolean;
+  /** Internal: request already retried after a token refresh. */
+  _authRetried?: boolean;
 };
 
-function buildHeaders(init?: ApiRequestOptions): Headers {
+/** Auth routes that must not trigger access-token refresh or 401 retry loops. */
+function isAuthBootstrapPath(path: string): boolean {
+  return (
+    path.startsWith("/auth/login") ||
+    path.startsWith("/auth/register") ||
+    path.startsWith("/auth/refresh") ||
+    path.startsWith("/auth/forgot-password") ||
+    path.startsWith("/auth/reset-password") ||
+    path.startsWith("/auth/resend-verification") ||
+    path.startsWith("/auth/confirm-email") ||
+    path.startsWith("/auth/logout")
+  );
+}
+
+function buildHeaders(init: ApiRequestOptions | undefined, accessToken: string | null): Headers {
   const headers = new Headers(init?.headers);
 
   if (!headers.has("Accept")) {
@@ -21,7 +42,6 @@ function buildHeaders(init?: ApiRequestOptions): Headers {
     headers.set("x-api-key", adminKey);
   }
 
-  const accessToken = getAccessToken();
   if (accessToken && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
@@ -64,7 +84,7 @@ async function parseErrorPayload(res: Response): Promise<{ message: string; code
   if (!contentType.includes("application/json")) {
     if (res.status === 502 || res.status === 503 || res.status === 504) {
       return {
-        message: "Unable to upload image. The server is temporarily unavailable — please try again.",
+        message: "Unable to reach the server. Please try again.",
         code: "GATEWAY_ERROR",
       };
     }
@@ -83,25 +103,50 @@ async function parseErrorPayload(res: Response): Promise<{ message: string; code
   }
 }
 
+function mapAuthErrorMessage(status: number, code: string | undefined, message: string): string {
+  if (status === 401) {
+    if (code === "SESSION_EXPIRED") {
+      return "Your session has expired. Please sign in again.";
+    }
+    return message || "Authentication required";
+  }
+  if (status === 403) {
+    return message || "You do not have permission to perform this action.";
+  }
+  return message;
+}
+
 /** Low-level catalogue HTTP call; path is relative to `/api` prefix. */
 export async function apiRequest<T>(path: string, init?: ApiRequestOptions): Promise<T> {
   const url = resolveApiUrl(path);
-  const { body: _body, rawBody: _raw, ...rest } = init ?? {};
+  const { body: _body, rawBody: _raw, _authRetried, ...rest } = init ?? {};
+  const bootstrap = isAuthBootstrapPath(path);
+
+  const accessToken = bootstrap ? getAccessToken() : await ensureFreshAccessToken();
 
   let res: Response;
   try {
     res = await fetch(url, {
       ...rest,
-      headers: buildHeaders(init),
+      headers: buildHeaders(init, accessToken),
       body: resolveBody(init),
     });
   } catch {
     throw new ApiError(503, "Unable to reach the server. Please try again.", { code: "NETWORK_ERROR" });
   }
 
+  if (res.status === 401 && !bootstrap && !_authRetried) {
+    const renewed = await forceRefreshAccessToken();
+    if (renewed) {
+      return apiRequest<T>(path, { ...init, _authRetried: true });
+    }
+    clearSessionAfterAuthFailure();
+  }
+
   if (!res.ok) {
     const err = await parseErrorPayload(res);
-    throw new ApiError(res.status, err.message, { code: err.code, details: err.details });
+    const message = mapAuthErrorMessage(res.status, err.code, err.message);
+    throw new ApiError(res.status, message, { code: err.code, details: err.details });
   }
 
   if (res.status === 204) {
@@ -131,8 +176,13 @@ export function cataloguePath(pathSegment: string): string {
 /** @deprecated Prefer `apiRequest` */
 export async function catalogueFetch(resourcePath: string, init?: RequestInit): Promise<Response> {
   const url = resolveApiUrl(resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`);
+  await ensureFreshAccessToken();
   const headers = new Headers(init?.headers);
   const adminKey = getAdminApiKey();
   if (adminKey && !headers.has("x-api-key")) headers.set("x-api-key", adminKey);
+  const accessToken = getAccessToken();
+  if (accessToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
   return fetch(url, { ...init, headers });
 }

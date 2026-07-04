@@ -32,6 +32,19 @@ describe("admin-save-feedback", () => {
     expect(toast.error).toHaveBeenCalledWith("Network error");
   });
 
+  it("shows session-expired message for 401", async () => {
+    const { ApiError } = await import("@/services/api/errors");
+    notifyAdminSaveFailed(new ApiError(401, "Your session has expired. Please sign in again.", { code: "SESSION_EXPIRED" }));
+    expect(toast.error).toHaveBeenCalledWith("Your session has expired. Please sign in again.");
+  });
+
+  it("shows permission message for 403", async () => {
+    const { ApiError } = await import("@/services/api/errors");
+    notifyAdminSaveFailed(new ApiError(403, "You do not have permission to modify the catalogue"));
+    expect(toast.error).toHaveBeenCalledWith("You do not have permission to modify the catalogue");
+  });
+
+
   it("stays on edit after update and opens edit after create", () => {
     const setModal = vi.fn();
     const saved = { id: "bead-1", name: "Amethyst" };

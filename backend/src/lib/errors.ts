@@ -41,8 +41,8 @@ export class ProcessingError extends HttpError {
 }
 
 export class UnauthorizedError extends HttpError {
-  constructor(message = "Unauthorized") {
-    super(401, "UNAUTHORIZED", message);
+  constructor(message = "Unauthorized", code = "UNAUTHORIZED") {
+    super(401, code, message);
     this.name = "UnauthorizedError";
   }
 }
