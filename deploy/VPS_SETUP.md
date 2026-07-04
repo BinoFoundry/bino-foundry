@@ -174,10 +174,28 @@ APP_ENV=production npm run env:check
 
 ## 6. Build the app
 
+Small VPS hosts (1–2 GB RAM) often OOM-kill Vite during `rendering chunks` (**exit 137**). Add swap once, then build with the API stopped:
+
 ```bash
+# One-time: 2G swap (as root)
+sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
 cd /opt/bino-foundry
 npm ci
+pm2 stop bino-foundry-api   # free RAM while building
 npm run build:all
+pm2 start bino-foundry-api
+```
+
+Or use the helper (stops/restarts PM2 and creates swap when run as root):
+
+```bash
+cd /opt/bino-foundry
+npm run deploy:build
 ```
 
 This produces:
@@ -186,6 +204,8 @@ This produces:
 - `frontend/dist/` — build output (not served directly by nginx)
 
 If `env:check` fails, fix `.env.production` and run again.
+
+**Do not put `NODE_ENV=production` in a Vite-loaded `.env` file** (repo-root `.env` / `.env.production`). Vite only accepts `NODE_ENV=development` there; production mode is already set by `vite build --mode production`. Keep `NODE_ENV` in backend/PM2 env only.
 
 ---
 
@@ -382,6 +402,7 @@ No nginx reload needed unless you change nginx config or static paths.
 | Problem | What to do |
 |---------|------------|
 | `502 Bad Gateway` on `/api` | API not listening — see [502 Bad Gateway](#502-bad-gateway-api) below |
+| `npm run build` exit **137** / `Killed` at `rendering chunks` | Linux OOM — add 2G swap, `pm2 stop bino-foundry-api`, re-run `npm run build:all` (see [§6 Build](#6-build-the-app)) |
 | Site 404 / blank | `ls /var/www/bino-foundry/index.html`; re-run `npm run build:all` then `sudo npm run deploy:web` |
 | CORS errors in browser | `CORS_ORIGINS` must be `https://binofoundry.temukreatif.id`; restart API: `pm2 restart bino-foundry-api` |
 | Admin save 401 | `ADMIN_API_KEY` (server) must match `VITE_ADMIN_API_KEY` (rebuild frontend after changing) |

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --mode production",
-    "build:staging": "vite build --mode staging",
-    "build:dev": "vite build --mode development",
+    "build": "NODE_OPTIONS=--max-old-space-size=1536 vite build --mode production",
+    "build:staging": "NODE_OPTIONS=--max-old-space-size=1536 vite build --mode staging",
+    "build:dev": "NODE_OPTIONS=--max-old-space-size=1536 vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
