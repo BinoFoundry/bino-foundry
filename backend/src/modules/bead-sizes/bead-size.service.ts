@@ -84,7 +84,21 @@ export class BeadSizeService {
   }
 
   async remove(id: string) {
+    const entry = await this.get(id);
+
     const supabase = getSupabaseServiceRole();
+
+    const { count: offerCount, error: offerRefErr } = await supabase
+      .from("bead_library_sizes")
+      .select("id", { count: "exact", head: true })
+      .eq("bead_size_id", id);
+    assertNoDbError(offerRefErr);
+    if ((offerCount ?? 0) > 0) {
+      throw new ConflictError(
+        `Cannot delete ${entry.label} — it is still offered by beads in the library. Remove those size offers first.`,
+      );
+    }
+
     const { error } = await supabase.from("bead_sizes").delete().eq("id", id);
     assertNoDbError(error);
     return { message: "Bead size deleted" };

@@ -8,6 +8,8 @@ import { useCatalogue } from "@/state/catalogue";
 import type { BeadTypeEntry } from "@/types/beads";
 import {
   applyAdminSaveModalState,
+  notifyAdminDeleteFailed,
+  notifyAdminDeleted,
   notifyAdminSaveFailed,
   type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
@@ -82,8 +84,13 @@ export function BeadTypesAdminPage() {
                     <AdminDeleteConfirm
                       onCancel={list.cancelDelete}
                       onConfirm={async () => {
-                        await cat.deleteBeadType(t.id);
-                        list.cancelDelete();
+                        try {
+                          await cat.deleteBeadType(t.id);
+                          list.cancelDelete();
+                          notifyAdminDeleted("Bead type");
+                        } catch (err) {
+                          notifyAdminDeleteFailed(err);
+                        }
                       }}
                     />
                   ) : (

@@ -1,5 +1,4 @@
 import { STRAND_PATH_START_ANGLE } from "./strand-path";
-import { balancedFractionsForSequence } from "./balanced-strand-layout";
 
 export interface ElasticBeadLayout {
   angles: number[];
@@ -23,6 +22,66 @@ export function midpointAngleRad(a: number, b: number): number {
   if (delta > Math.PI) delta -= 2 * Math.PI;
   if (delta < -Math.PI) delta += 2 * Math.PI;
   return normalizeAngleRad(na + delta / 2);
+}
+
+/** Angular distance between consecutive strand indices on a closed loop. */
+export function adjacentIndexAngleDeltaRad(angles: number[], index: number): number {
+  const n = angles.length;
+  if (n < 2) return 0;
+  const curr = normalizeAngleRad(angles[index]!);
+  const next = normalizeAngleRad(angles[(index + 1) % n]!);
+  let delta = next - curr;
+  if (delta <= 0) delta += 2 * Math.PI;
+  return delta;
+}
+
+/**
+ * Sequential arc-length packing — bead i+1 follows bead i around the ring.
+ * Distributes any slack evenly between adjacent pairs for a continuous strand.
+ */
+function packSequentialArcLayout(
+  beadArcMm: number[],
+  layoutCircumferenceMm: number,
+  startAngle: number,
+  minGapPx: number,
+): { angles: number[]; arcSpans: number[] } {
+  const n = beadArcMm.length;
+  const totalBeadMm = beadArcMm.reduce((sum, mm) => sum + mm, 0);
+  const minTotalGap = n * minGapPx;
+  const slack = Math.max(0, layoutCircumferenceMm - totalBeadMm - minTotalGap);
+  const slackPerGap = n > 0 ? slack / n : 0;
+
+  let cursorMm = 0;
+  const angles: number[] = [];
+  const arcSpans: number[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const mm = beadArcMm[i]!;
+    const centerMm = cursorMm + mm / 2;
+    angles.push(
+      normalizeAngleRad(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI),
+    );
+    arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
+    cursorMm += mm + minGapPx + slackPerGap;
+  }
+
+  return { angles, arcSpans };
+}
+
+/** True when any adjacent pair overlaps beyond tolerance (radians). */
+export function adjacentArcSectorsOverlap(
+  angles: number[],
+  arcSpans: number[],
+  tolerance = 1,
+): boolean {
+  if (angles.length < 2) return false;
+  for (let i = 0; i < angles.length; i++) {
+    const j = (i + 1) % angles.length;
+    const delta = adjacentIndexAngleDeltaRad(angles, i);
+    const minSep = (arcSpans[i]! + arcSpans[j]!) / 2;
+    if (delta + 1e-6 < minSep * tolerance) return true;
+  }
+  return false;
 }
 
 /**
@@ -70,13 +129,9 @@ export function computeElasticBeadLayout(
     angles.push(normalizeAngleRad(startAngle));
     arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
   } else {
-    // Balanced distribution — fill largest arc gaps as items are added.
-    const fractions = balancedFractionsForSequence(n);
-    for (let i = 0; i < n; i++) {
-      const mm = beadArcMm[i]!;
-      angles.push(normalizeAngleRad(startAngle + fractions[i]! * 2 * Math.PI));
-      arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
-    }
+    const packed = packSequentialArcLayout(beadArcMm, layoutCircumferenceMm, startAngle, minGapPx);
+    angles.push(...packed.angles);
+    arcSpans.push(...packed.arcSpans);
   }
 
   const insertionAngles: number[] = [];

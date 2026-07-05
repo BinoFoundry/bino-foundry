@@ -44,7 +44,7 @@ import {
 } from "@/features/bracelet/strand-elastic-layout";
 import { resolveBeadIndexUnderPointer } from "@/features/bracelet/strand-reorder-hit-test";
 import {
-  beadLayoutArcPx,
+  beadLayoutArcPxFromSizing,
   computeResolvedRingRadiusPx,
 } from "@/features/bracelet/strand-ring-geometry";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
@@ -535,12 +535,13 @@ const SortableCircularStrand = ({
       let slotsWithPosition: StrandSlot[] = [];
       let maxExtent = Math.max(guideSlotDim.width, guideSlotDim.height);
       let prelimDims: BeadSlotDimensions[] = [];
+      let sizingResults: ReturnType<typeof resolveBeadSlotSizing>[] = [];
 
       if (!isStrandEmpty) {
-        prelimDims = normalized.map((placed) => {
-          const beadSize = placedBeadSizeMm(placed);
-          return getBeadSlotDimensions(placed, beadSize, scaleFactor, sizingCatalogue);
-        });
+        sizingResults = normalized.map((placed) =>
+          resolveBeadSlotSizing(placed, placedBeadSizeMm(placed), scaleFactor, sizingCatalogue),
+        );
+        prelimDims = sizingResults.map((s) => s.dimensions);
         maxExtent = getMaxSlotExtent(prelimDims);
       }
 
@@ -558,8 +559,8 @@ const SortableCircularStrand = ({
       let insertionAngles: number[] = [];
 
       if (!isStrandEmpty) {
-        const beadLayoutArcsPx = prelimDims.map((dim, i) =>
-          beadLayoutArcPx(dim, scaleFactor, renderProfiles[i]),
+        const beadLayoutArcsPx = sizingResults.map((sizing, i) =>
+          beadLayoutArcPxFromSizing(sizing, renderProfiles[i], scaleFactor),
         );
 
         const resolved = computeResolvedRingRadiusPx({
@@ -570,13 +571,13 @@ const SortableCircularStrand = ({
           pairGapPx: 0,
         });
 
-        radius = wristRadius;
+        radius = resolved.radiusPx;
         const ringCircumferencePx = 2 * Math.PI * radius;
         const elastic = computeElasticBeadLayout(
           resolved.beadArcPx,
           ringCircumferencePx,
           pathStartAngle,
-          0,
+          resolved.pairGapPx,
         );
         insertionAngles = elastic.insertionAngles;
 
@@ -587,7 +588,7 @@ const SortableCircularStrand = ({
           centerY: center,
           radius,
           startAngle: pathStartAngle,
-          minGapPx: 0,
+          minGapPx: resolved.pairGapPx,
         });
 
         layoutSectors = pathLayout.map((path) => ({

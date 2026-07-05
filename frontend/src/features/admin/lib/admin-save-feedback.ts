@@ -10,6 +10,10 @@ export function notifyAdminCreated(resourceLabel: string): void {
   toast.success(`${resourceLabel} created — continue configuring.`);
 }
 
+export function notifyAdminDeleted(resourceLabel = "Item"): void {
+  toast.success(`${resourceLabel} deleted successfully.`);
+}
+
 export function notifyAdminSaveFailed(err: unknown, fallback = "Could not save changes."): void {
   if (isApiError(err)) {
     if (err.status === 401) {
@@ -28,6 +32,10 @@ export function notifyAdminSaveFailed(err: unknown, fallback = "Could not save c
     return;
   }
   toast.error(formatApiErrorMessage(err) || fallback);
+}
+
+export function notifyAdminDeleteFailed(err: unknown, fallback = "Could not delete."): void {
+  notifyAdminSaveFailed(err, fallback);
 }
 
 export type AdminEditorModalState<T> = { type: "add" } | { type: "edit"; entry: T } | null;

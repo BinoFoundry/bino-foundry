@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adjacentArcSectorsOverlap,
+  adjacentIndexAngleDeltaRad,
   computeElasticBeadLayout,
   midpointAngleRad,
   resolveDropTargetFromLayout,
@@ -21,15 +23,14 @@ describe("computeElasticBeadLayout", () => {
     expect(dense.gapMm).toBe(0);
   });
 
-  it("keeps bead sectors from overlapping on a mixed-size strand", () => {
+  it("keeps adjacent strand beads from overlapping on a mixed-size strand", () => {
     const layout = computeElasticBeadLayout([6, 10, 8, 12, 6], 160);
+    expect(adjacentArcSectorsOverlap(layout.angles, layout.arcSpans)).toBe(false);
     for (let i = 0; i < layout.angles.length; i++) {
-      for (let j = i + 1; j < layout.angles.length; j++) {
-        const minSep = (layout.arcSpans[i]! + layout.arcSpans[j]!) / 2;
-        let delta = Math.abs(layout.angles[i]! - layout.angles[j]!);
-        if (delta > Math.PI) delta = 2 * Math.PI - delta;
-        expect(delta).toBeGreaterThanOrEqual(minSep * 0.98);
-      }
+      const j = (i + 1) % layout.angles.length;
+      const delta = adjacentIndexAngleDeltaRad(layout.angles, i);
+      const minSep = (layout.arcSpans[i]! + layout.arcSpans[j]!) / 2;
+      expect(delta).toBeGreaterThanOrEqual(minSep * 0.98);
     }
   });
 

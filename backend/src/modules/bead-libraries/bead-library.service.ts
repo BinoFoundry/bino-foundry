@@ -11,6 +11,10 @@ import {
 } from "@bino-foundry/shared/types";
 import { beadLibrarySizeService } from "../bead-library-sizes/bead-library-size.service.js";
 import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
+import {
+  collectBeadLibraryAssetUrls,
+  deleteBeadLibraryAssetUrls,
+} from "./bead-library-assets.js";
 import type {
   BeadLibraryCreateDTO,
   BeadLibraryCropDTO,
@@ -266,13 +270,64 @@ export class BeadLibraryService {
   }
 
   async remove(clientId: string): Promise<{ message: string }> {
-    await this.getByClientId(clientId);
-
     const supabase = getSupabaseServiceRole();
-    const { error } = await supabase.from("bead_libraries").delete().eq("public_id", clientId);
 
-    assertNoDbError(error);
-    return { message: "Bead removed" };
+    const { data: existing, error: loadErr } = await supabase
+      .from("bead_libraries")
+      .select("id, public_id, name, original_image_url, processed_image_url, crop_config, specs")
+      .eq("public_id", clientId)
+      .maybeSingle();
+
+    assertNoDbError(loadErr);
+    if (!existing) throw new NotFoundError("Bead not found");
+
+    const libraryUuid = String((existing as { id: string }).id);
+    const beadName = String((existing as { name?: string }).name ?? "This bead").trim() || "This bead";
+
+    const { count: libraryRefCount, error: libraryRefErr } = await supabase
+      .from("bracelet_configuration_items")
+      .select("id", { count: "exact", head: true })
+      .eq("bead_library_id", libraryUuid);
+    assertNoDbError(libraryRefErr);
+
+    const { data: sizeRows, error: sizesErr } = await supabase
+      .from("bead_library_sizes")
+      .select("id, normalized_processed_image_url, normalized_delivery_urls")
+      .eq("bead_library_id", libraryUuid);
+    assertNoDbError(sizesErr);
+
+    const sizeIds = (sizeRows ?? []).map((row) => String((row as { id: string }).id));
+    let sizeRefCount = 0;
+    if (sizeIds.length) {
+      const { count, error: sizeRefErr } = await supabase
+        .from("bracelet_configuration_items")
+        .select("id", { count: "exact", head: true })
+        .in("bead_library_size_id", sizeIds);
+      assertNoDbError(sizeRefErr);
+      sizeRefCount = count ?? 0;
+    }
+
+    if ((libraryRefCount ?? 0) > 0 || sizeRefCount > 0) {
+      throw new ConflictError(
+        `Cannot delete "${beadName}" — it is used in saved bracelet designs. Remove it from those designs first, or deactivate the bead instead.`,
+      );
+    }
+
+    const assetUrls = collectBeadLibraryAssetUrls(
+      existing as Record<string, unknown>,
+      (sizeRows ?? []) as Record<string, unknown>[],
+    );
+
+    const { error: delErr } = await supabase.from("bead_libraries").delete().eq("public_id", clientId);
+    assertNoDbError(delErr);
+
+    if (assetUrls.length) {
+      runBackgroundTask("bead-library-asset-cleanup", async () => {
+        await deleteBeadLibraryAssetUrls(assetUrls);
+      });
+    }
+
+    return { message: "Bead deleted successfully" };
   }
 
   /**

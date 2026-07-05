@@ -263,10 +263,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
 
   const deleteBeadLibrary = useCallback(
     async (id: string) => {
-      const [_, librarySizes] = await Promise.all([
-        beadsApi.deleteLibrary(id),
-        beadLibrarySizesApi.list(),
-      ]);
+      await beadsApi.deleteLibrary(id);
+      const librarySizes = await beadLibrarySizesApi.list();
       mergeStore((prev) => ({
         ...prev,
         beadLibraries: removeById(prev.beadLibraries, id),

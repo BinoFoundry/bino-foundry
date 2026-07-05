@@ -8,6 +8,8 @@ import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { BeadSavePerf } from "@/features/admin/lib/bead-save-pipeline";
 import {
   applyAdminSaveModalState,
+  notifyAdminDeleteFailed,
+  notifyAdminDeleted,
   notifyAdminSaveFailed,
   type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
@@ -125,8 +127,16 @@ export function BeadsAdminPage() {
                     <AdminDeleteConfirm
                       onCancel={list.cancelDelete}
                       onConfirm={async () => {
-                        await cat.deleteBeadLibrary(b.id);
-                        list.cancelDelete();
+                        try {
+                          await cat.deleteBeadLibrary(b.id);
+                          list.cancelDelete();
+                          if (modal?.type === "edit" && modal.entry.id === b.id) {
+                            setModal(null);
+                          }
+                          notifyAdminDeleted("Bead");
+                        } catch (err) {
+                          notifyAdminDeleteFailed(err);
+                        }
                       }}
                     />
                   ) : (

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
-import { NotFoundError } from "../../lib/errors.js";
+import { ConflictError, NotFoundError } from "../../lib/errors.js";
 import { slugifyKebab } from "../../lib/slug.js";
 import type { BeadTypeCreateDTO, BeadTypeUpdateDTO } from "./bead-type.validation.js";
 import { metadataWithStrandRenderDefaults } from "../strand-render/strand-render-migration.service.js";
@@ -101,6 +101,17 @@ export class BeadTypeService {
     await this.get(recordId);
 
     const supabase = getSupabaseServiceRole();
+    const { count, error: refErr } = await supabase
+      .from("bead_libraries")
+      .select("id", { count: "exact", head: true })
+      .eq("bead_type_id", recordId);
+    assertNoDbError(refErr);
+    if ((count ?? 0) > 0) {
+      throw new ConflictError(
+        "Cannot delete this bead type — beads in the library still use it. Reassign or delete those beads first.",
+      );
+    }
+
     const { error } = await supabase.from("bead_types").delete().eq("id", recordId);
 
     assertNoDbError(error);

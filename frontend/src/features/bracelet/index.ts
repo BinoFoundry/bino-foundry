@@ -50,6 +50,8 @@ export {
   computeResolvedRingRadiusPx,
   beadArcPxOnRing,
   beadLayoutArcPx,
+  beadLayoutArcPxFromSizing,
+  beadStrandFootprintPx,
   resolveStrandRingLayout,
   scaledBeadSpacingPx,
   BEAD_PAIR_GAP_BASE_PX,

@@ -6,6 +6,8 @@ import { NormalizedRegenProgressPanel } from "@/features/admin/components/Normal
 import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import {
   applyAdminSaveModalState,
+  notifyAdminDeleteFailed,
+  notifyAdminDeleted,
   notifyAdminSaveFailed,
   type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
@@ -287,8 +289,16 @@ export function BeadSizesAdminPage() {
                     <AdminDeleteConfirm
                       onCancel={list.cancelDelete}
                       onConfirm={async () => {
-                        await cat.deleteBeadSize(s.id);
-                        list.cancelDelete();
+                        try {
+                          await cat.deleteBeadSize(s.id);
+                          list.cancelDelete();
+                          if (modal?.type === "edit" && modal.entry.id === s.id) {
+                            setModal(null);
+                          }
+                          notifyAdminDeleted("Bead size");
+                        } catch (err) {
+                          notifyAdminDeleteFailed(err);
+                        }
                       }}
                     />
                   ) : (

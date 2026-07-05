@@ -7,5 +7,8 @@ export function assertNoDbError(error: PostgrestError | null): asserts error is 
   if (error.code === "23505") {
     throw new ConflictError("Record violates a unique constraint");
   }
+  if (error.code === "23503") {
+    throw new ConflictError("This record is referenced by other data and cannot be deleted.");
+  }
   throw new ValidationError(error.message, error);
 }

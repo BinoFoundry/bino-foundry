@@ -3,8 +3,11 @@ import {
   getBeadSlotDimensions,
   getBeadTangentArcPx,
   getMaxSlotExtent,
+  resolveBeadSlotSizing,
   resolveStrandRenderConfigForBead,
   type BeadSlotDimensions,
+  type BeadSlotSizingCatalogueContext,
+  type BeadSlotSizingResult,
   type StrandRenderCatalogueContext,
 } from "@/render/bead-crop";
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
@@ -35,19 +38,68 @@ export function scaledBeadSpacingPx(scaleFactor: number): BeadSpacingPx {
 }
 
 /**
- * Strand arc occupancy from render profile and slot dimensions.
- * Tangential width × strandOccupancy — adjacent centres are (arcᵢ + arcⱼ) / 2 apart (edge-to-edge).
+ * Tangential footprint used for strand spacing — rendered visible width, not bitmap canvas size.
+ * Charms/spacers use attachment occupancy only (dangling art excluded).
+ */
+export function beadStrandFootprintPx(
+  sizing: Pick<
+    BeadSlotSizingResult,
+    "dimensions" | "visibleContentWidthPx" | "visibleContentDiameterPx" | "imageRenderWidthPx"
+  >,
+  profile?: Pick<
+    StrandRenderProfile,
+    "strandOccupancy" | "forceRoundFootprint" | "collisionPadding"
+  >,
+): number {
+  const occupancy = profile?.strandOccupancy ?? 1;
+  const wrapperTangent = getBeadTangentArcPx(sizing.dimensions);
+
+  if (profile?.forceRoundFootprint === false || occupancy < 0.99) {
+    return wrapperTangent * occupancy;
+  }
+
+  const visibleTangent =
+    sizing.visibleContentWidthPx ??
+    sizing.imageRenderWidthPx ??
+    sizing.visibleContentDiameterPx ??
+    wrapperTangent;
+
+  return Math.max(wrapperTangent, visibleTangent);
+}
+
+/**
+ * Strand arc occupancy from rendered footprint and render profile.
+ * Adjacent centres are (arcᵢ + arcⱼ) / 2 apart along the ring (edge-to-edge).
  */
 export function beadLayoutArcPx(
   dim: BeadSlotDimensions,
   scaleFactor: number,
-  profile?: Pick<StrandRenderProfile, "strandOccupancy" | "collisionPadding">,
+  profile?: Pick<StrandRenderProfile, "strandOccupancy" | "collisionPadding" | "forceRoundFootprint">,
 ): number {
-  const occupancy = profile?.strandOccupancy ?? 1;
-  const arc = getBeadTangentArcPx(dim) * occupancy;
+  const sizing = {
+    dimensions: dim,
+    visibleContentWidthPx: dim.width,
+    visibleContentDiameterPx: Math.max(dim.width, dim.height),
+    imageRenderWidthPx: dim.width,
+  };
+  return beadLayoutArcPxFromSizing(sizing, profile, scaleFactor);
+}
+
+export function beadLayoutArcPxFromSizing(
+  sizing: Pick<
+    BeadSlotSizingResult,
+    "dimensions" | "visibleContentWidthPx" | "visibleContentDiameterPx" | "imageRenderWidthPx"
+  >,
+  profile?: Pick<
+    StrandRenderProfile,
+    "strandOccupancy" | "collisionPadding" | "forceRoundFootprint"
+  >,
+  scaleFactor = 1,
+): number {
+  const footprint = beadStrandFootprintPx(sizing, profile);
   const padding = (profile?.collisionPadding ?? 0) * Math.max(0.5, scaleFactor);
   const { bleedPx } = scaledBeadSpacingPx(scaleFactor);
-  return arc + bleedPx * 2 + padding;
+  return footprint + bleedPx * 2 + padding;
 }
 
 /**
@@ -165,6 +217,9 @@ export function resolveStrandRingLayout(params: {
   const prelimDims = normalized.map((p) =>
     getBeadSlotDimensions(p, placedBeadSizeMm(p), scaleFactor),
   );
+  const sizingResults = normalized.map((p) =>
+    resolveBeadSlotSizing(p, placedBeadSizeMm(p), scaleFactor, renderCatalogue),
+  );
   const maxExtent = getMaxSlotExtent(prelimDims);
   const bounds =
     wristSizeBounds.minCm > 0 && wristSizeBounds.maxCm > 0
@@ -179,11 +234,11 @@ export function resolveStrandRingLayout(params: {
     bounds,
   );
   const maxRadiusPx = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
-  const beadLayoutArcsPx = prelimDims.map((dim, i) =>
-    beadLayoutArcPx(
-      dim,
-      scaleFactor,
+  const beadLayoutArcsPx = sizingResults.map((sizing, i) =>
+    beadLayoutArcPxFromSizing(
+      sizing,
       resolveStrandRenderConfigForBead(normalized[i]?.bead, renderCatalogue),
+      scaleFactor,
     ),
   );
   const resolved = computeResolvedRingRadiusPx({
