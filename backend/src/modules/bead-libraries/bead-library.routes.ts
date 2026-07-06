@@ -6,6 +6,7 @@ export function createBeadLibraryRoutes(): Router {
   const router = Router();
   router.get("/", beadLibraryHandlers.list);
   router.post("/recalculate-bounds-metadata", beadLibraryHandlers.recalculateBoundsMetadata);
+  router.get("/:id/references", beadLibraryHandlers.references);
   router.get("/:id", beadLibraryHandlers.retrieve);
   router.post("/", beadLibraryHandlers.create);
   router.put("/:id/save", beadLibraryHandlers.saveComplete);

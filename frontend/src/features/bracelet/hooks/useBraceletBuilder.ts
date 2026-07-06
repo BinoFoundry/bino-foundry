@@ -37,6 +37,7 @@ import { STRAND_PATH_START_ANGLE } from "../strand-path";
 import { serializeBraceletConfiguration } from "../serialize";
 import { buildBraceletBuilderSummary } from "../summary";
 import { buildPlacedFromSavedBracelet, type SavedBraceletLoadInput } from "../load-saved-bracelet";
+import { strandHasUnavailableBeads } from "../unavailable-bead";
 import {
   activeWristSizes,
   catalogueWristSizeBounds,
@@ -64,7 +65,8 @@ export interface UseBraceletBuilderOptions {
 export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const { onPriceChange } = options;
   const isMobile = useIsMobile();
-  const { beadTypes, beadLibrarySizes, beadLibraries, wristSizes } = useCatalogue();
+  const { beadTypes, beadLibrarySizes, beadLibraries, beadAvailabilityStatuses, wristSizes } =
+    useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currencyCode = siteSettings.currencyCode;
 
@@ -607,6 +609,11 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, pricing],
   );
 
+  const hasUnavailableBeads = useMemo(
+    () => strandHasUnavailableBeads(placedBeadsA, placedBeadsB),
+    [placedBeadsA, placedBeadsB],
+  );
+
   const loadFromSaved = useCallback(
     (input: SavedBraceletLoadInput) => {
       const loaded = buildPlacedFromSavedBracelet(
@@ -614,6 +621,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         beadLibraries,
         beadLibrarySizes,
         wristSizes,
+        beadAvailabilityStatuses,
       );
       setTwinning(loaded.twinning);
       setWristSizeIdA(loaded.wristSizeIdA);
@@ -628,7 +636,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       setCapacityNotice(null);
       bumpLayout();
     },
-    [beadLibraries, beadLibrarySizes, wristSizes, bumpLayout],
+    [beadLibraries, beadLibrarySizes, wristSizes, beadAvailabilityStatuses, bumpLayout],
   );
 
   return {
@@ -647,6 +655,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     setWristA,
     setWristB,
     isOverCapacity,
+    hasUnavailableBeads,
     isStrandFullA,
     isStrandFullB,
     canDuplicateToB,

@@ -113,4 +113,13 @@ export const BRACELET_COPY = {
 
   dragOnboardingInitial: "✨ Drag and drop beads onto the bracelet to begin.",
   dragOnboardingHelpTitle: "Show drag-and-drop tips",
+
+  unavailableBeadName: "Unavailable Bead",
+  unavailableBeadDeleted: "Deleted",
+  unavailableBeadStatus: "Unavailable",
+  unavailableBeadPrompt: "Replace this bead",
+  unavailableBeadsNotice:
+    "Some beads used in this design are no longer available and need to be replaced before ordering.",
+  checkoutBlockedUnavailable:
+    "Replace all unavailable beads before adding this design to your cart.",
 } as const;

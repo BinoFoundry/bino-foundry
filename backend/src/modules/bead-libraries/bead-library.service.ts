@@ -9,6 +9,7 @@ import {
   refreshBeadCropStoredMetrics,
   type BeadCropConfig,
 } from "@bino-foundry/shared/types";
+import { beadAvailabilityStatusService } from "../bead-availability-statuses/bead-availability-status.service.js";
 import { beadLibrarySizeService } from "../bead-library-sizes/bead-library-size.service.js";
 import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
 import {
@@ -64,6 +65,7 @@ function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown
     cropConfig: row.crop_config ?? null,
     cropStatus: row.crop_status ?? "draft",
     isActive: row.is_active !== false,
+    availabilityStatusCode: String(row.availability_status_code ?? "ACTIVE"),
     displayOrder: Number(row.display_order ?? 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -113,6 +115,10 @@ export class BeadLibraryService {
       cropStatus = payload.cropStatus ?? "ready";
     }
 
+    const availabilityStatusCode =
+      payload.availabilityStatusCode ?? (payload.isActive === false ? "INACTIVE" : "ACTIVE");
+    await beadAvailabilityStatusService.getByCode(availabilityStatusCode);
+
     const insertRow = {
       public_id: payload.id.trim(),
       name: payload.name.trim(),
@@ -126,6 +132,7 @@ export class BeadLibraryService {
       metadata: payload.metadata ?? {},
       specs: original ? { legacy_image_url: original } : {},
       display_order: payload.displayOrder ?? 0,
+      availability_status_code: availabilityStatusCode,
       is_active: payload.isActive ?? true,
     };
 
@@ -163,9 +170,15 @@ export class BeadLibraryService {
       ...(payload.description !== undefined && { description: payload.description.trim() }),
       ...(payload.beadTypeId !== undefined && { bead_type_id: payload.beadTypeId }),
       ...(payload.metadata !== undefined && { metadata: payload.metadata }),
-      ...(payload.isActive !== undefined && { is_active: payload.isActive }),
       ...(payload.displayOrder !== undefined && { display_order: payload.displayOrder }),
     };
+
+    if (payload.availabilityStatusCode !== undefined) {
+      await beadAvailabilityStatusService.getByCode(payload.availabilityStatusCode);
+      updates.availability_status_code = payload.availabilityStatusCode;
+    } else if (payload.isActive !== undefined) {
+      updates.availability_status_code = payload.isActive ? "ACTIVE" : "INACTIVE";
+    }
 
     if (payload.originalImage !== undefined) {
       updates.original_image_url = payload.originalImage.trim();
@@ -269,7 +282,56 @@ export class BeadLibraryService {
     return { library, sizes, sizesChanged, cropChanged };
   }
 
-  async remove(clientId: string): Promise<{ message: string }> {
+  async countDesignReferences(clientId: string): Promise<{ designCount: number; itemCount: number }> {
+    const supabase = getSupabaseServiceRole();
+
+    const { data: existing, error: loadErr } = await supabase
+      .from("bead_libraries")
+      .select("id")
+      .eq("public_id", clientId)
+      .maybeSingle();
+
+    assertNoDbError(loadErr);
+    if (!existing) throw new NotFoundError("Bead not found");
+
+    const libraryUuid = String((existing as { id: string }).id);
+
+    const { data: sizeRows, error: sizesErr } = await supabase
+      .from("bead_library_sizes")
+      .select("id")
+      .eq("bead_library_id", libraryUuid);
+    assertNoDbError(sizesErr);
+
+    const sizeIds = (sizeRows ?? []).map((row) => String((row as { id: string }).id));
+
+    const { data: libRefs, error: libRefErr } = await supabase
+      .from("bracelet_configuration_items")
+      .select("configuration_id")
+      .eq("bead_library_id", libraryUuid);
+    assertNoDbError(libRefErr);
+
+    let sizeRefs: { configuration_id: string }[] = [];
+    if (sizeIds.length) {
+      const { data, error: sizeRefErr } = await supabase
+        .from("bracelet_configuration_items")
+        .select("configuration_id")
+        .in("bead_library_size_id", sizeIds);
+      assertNoDbError(sizeRefErr);
+      sizeRefs = (data ?? []) as { configuration_id: string }[];
+    }
+
+    const allRefs = [...(libRefs ?? []), ...sizeRefs];
+    const configurationIds = new Set(
+      allRefs.map((row) => String((row as { configuration_id: string }).configuration_id)),
+    );
+
+    return {
+      designCount: configurationIds.size,
+      itemCount: allRefs.length,
+    };
+  }
+
+  async remove(clientId: string, options?: { force?: boolean }): Promise<{ message: string }> {
     const supabase = getSupabaseServiceRole();
 
     const { data: existing, error: loadErr } = await supabase
@@ -307,10 +369,18 @@ export class BeadLibraryService {
       sizeRefCount = count ?? 0;
     }
 
-    if ((libraryRefCount ?? 0) > 0 || sizeRefCount > 0) {
+    if (!options?.force && ((libraryRefCount ?? 0) > 0 || sizeRefCount > 0)) {
       throw new ConflictError(
-        `Cannot delete "${beadName}" — it is used in saved bracelet designs. Remove it from those designs first, or deactivate the bead instead.`,
+        `Cannot delete "${beadName}" — it is used in saved bracelet designs. Use force delete to remove it from the catalogue while preserving saved designs as replaceable placeholders.`,
       );
+    }
+
+    if (options?.force) {
+      const { error: snapshotErr } = await supabase
+        .from("bracelet_configuration_items")
+        .update({ bead_library_public_id_snapshot: clientId })
+        .eq("bead_library_id", libraryUuid);
+      assertNoDbError(snapshotErr);
     }
 
     const assetUrls = collectBeadLibraryAssetUrls(

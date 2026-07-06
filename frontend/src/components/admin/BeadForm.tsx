@@ -104,6 +104,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       beadTypeId: defaultType,
       description: "",
       isActive: true,
+      availabilityStatusCode: "ACTIVE",
       displayOrder: 0,
       cropStatus: "draft",
       cropConfig: null,
@@ -351,13 +352,29 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
               className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-body focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
-          <label className="flex items-end gap-2 pb-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.isActive !== false}
-              onChange={(e) => set("isActive", e.target.checked)}
-            />
-            Active in builder
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Availability status</span>
+            <select
+              value={form.availabilityStatusCode ?? (form.isActive === false ? "INACTIVE" : "ACTIVE")}
+              onChange={(e) => {
+                const code = e.target.value;
+                set("availabilityStatusCode", code);
+                const status = cat.beadAvailabilityStatuses.find((s) => s.code === code);
+                if (status) set("isActive", status.showInBuilder);
+              }}
+              className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-body focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              {cat.beadAvailabilityStatuses.map((status) => (
+                <option key={status.code} value={status.code}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-muted-foreground">
+              {cat.beadAvailabilityStatuses.find(
+                (s) => s.code === (form.availabilityStatusCode ?? (form.isActive === false ? "INACTIVE" : "ACTIVE")),
+              )?.description ?? ""}
+            </span>
           </label>
           <div className="col-span-2">
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Description</label>

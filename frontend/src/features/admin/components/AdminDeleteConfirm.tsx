@@ -6,6 +6,8 @@ interface AdminDeleteConfirmProps {
   onCancel: () => void;
   onConfirm: () => void | Promise<void>;
   label?: string;
+  confirmLabel?: string;
+  message?: string;
 }
 
 export function AdminDeleteConfirm({
@@ -13,18 +15,25 @@ export function AdminDeleteConfirm({
   onCancel,
   onConfirm,
   label = "Delete?",
+  confirmLabel = "Confirm",
+  message,
 }: AdminDeleteConfirmProps) {
   if (!open) return null;
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-destructive">{label}</span>
-      <Button variant="ghost" size="sm" onClick={onCancel}>
-        Cancel
-      </Button>
-      <Button variant="destructive" size="sm" onClick={onConfirm}>
-        Confirm
-      </Button>
+    <div className="flex max-w-md flex-col items-end gap-2 sm:flex-row sm:items-center">
+      <div className="text-right sm:text-left">
+        <span className="text-xs font-medium text-destructive">{label}</span>
+        {message ? <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{message}</p> : null}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="destructive" size="sm" onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </div>
     </div>
   );
 }

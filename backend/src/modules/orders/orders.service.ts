@@ -63,6 +63,14 @@ export class OrdersService {
     if (!data) throw new ValidationError("Failed to create order");
 
     if (design.productType === "bracelet") {
+      const config = await braceletService.getConfiguration(design.productConfigId, {
+        validateCatalog: true,
+      });
+      if (config.hasCatalogIssues) {
+        throw new ValidationError(
+          "This design contains beads that are no longer available. Replace them before ordering.",
+        );
+      }
       await braceletService.updateStatus(design.productConfigId, "ordered", orderPublicId);
     } else {
       await sunglassesConfigService.markOrdered(design.productConfigId, userId, orderPublicId);

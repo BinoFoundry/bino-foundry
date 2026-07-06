@@ -111,7 +111,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     Boolean(user) &&
     builder.wristSizeConfirmed &&
     builder.pricing.placedCount > 0 &&
-    !builder.isOverCapacity;
+    !builder.isOverCapacity &&
+    !builder.hasUnavailableBeads;
 
   const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
 
@@ -225,7 +226,15 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           twinning: detail.bracelet.twinning,
           wristSizeCmA: detail.bracelet.wristSizeCmA,
           wristSizeCmB: detail.bracelet.wristSizeCmB,
-          items: detail.bracelet.items,
+          items: detail.bracelet.items.map((item) => ({
+            strandIndex: item.strandIndex,
+            slotPosition: item.slotPosition,
+            beadLibraryId: item.beadLibraryId,
+            beadSizeMm: item.beadSizeMm,
+            offerKey: item.offerKey,
+            catalogIssue: item.catalogIssue ?? null,
+            unitPrice: item.unitPrice,
+          })),
         });
         setBraceletName(detail.title?.trim() ?? "");
         setSavedDesignId(detail.id);
@@ -367,6 +376,10 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       toast.error(BRACELET_COPY.saveBlockedOverCapacity);
       return;
     }
+    if (builder.hasUnavailableBeads) {
+      toast.error(BRACELET_COPY.checkoutBlockedUnavailable);
+      return;
+    }
 
     let designId = savedDesignId;
     if (!designId || hasPendingChanges()) {
@@ -380,12 +393,14 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     openAuth,
     builder.pricing.placedCount,
     builder.isOverCapacity,
+    builder.hasUnavailableBeads,
     savedDesignId,
     flush,
     hasPendingChanges,
   ]);
 
-  const saveDisabled = builder.pricing.placedCount === 0 || builder.isOverCapacity;
+  const saveDisabled =
+    builder.pricing.placedCount === 0 || builder.isOverCapacity || builder.hasUnavailableBeads;
 
   const summaryPanelProps = {
     summary: builder.summary,
@@ -490,6 +505,13 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       </div>
 
       <div className="pointer-events-none absolute left-3 right-3 top-2 z-30 flex flex-col gap-2 sm:left-auto sm:right-4 sm:max-w-sm sm:top-12">
+        {builder.hasUnavailableBeads ? (
+          <CapacityAlertBanner
+            variant="over"
+            message={BRACELET_COPY.unavailableBeadsNotice}
+            className="pointer-events-auto"
+          />
+        ) : null}
         {builder.isOverCapacity ? (
           <CapacityAlertBanner
             variant="over"

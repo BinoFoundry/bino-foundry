@@ -160,7 +160,7 @@ export class DesignsService {
 
     if (summary.productType === "bracelet") {
       const bracelet = await braceletService.getConfiguration(summary.productConfigId, {
-        validateCatalog: true,
+        validateCatalog: false,
       });
       return { ...summary, bracelet };
     }

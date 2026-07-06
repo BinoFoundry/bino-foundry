@@ -16,9 +16,17 @@ export interface SavedDesignDetail extends SavedDesignSummary {
       beadSizeMm: number;
       offerKey?: string;
       beadName?: string;
+      catalogIssue?: "deleted" | "unavailable" | null;
+      unitPrice?: number;
     }[];
     subtotal: number;
     currencyCode: string;
+    catalogWarnings?: {
+      missingBeadIds?: string[];
+      unavailableBeadIds?: string[];
+      inactiveBeadIds?: string[];
+    };
+    hasCatalogIssues?: boolean;
   };
   sunglasses?: {
     id: string;

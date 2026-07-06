@@ -61,6 +61,7 @@ export const beadLibraryCreateSchema = z.object({
   sizes: z.array(librarySizeInputSchema).min(1, "At least one size with price is required"),
   beadTypeId: z.string().uuid(),
   isActive: z.boolean().optional(),
+  availabilityStatusCode: z.string().min(1).max(64).optional(),
   displayOrder: z.coerce.number().int().min(0).optional(),
   description: z.string().max(5000).optional(),
   originalImage: z.string().optional(),

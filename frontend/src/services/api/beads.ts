@@ -54,6 +54,7 @@ export const beadsApi = {
         cropConfig: payload.cropConfig,
         cropStatus: payload.cropStatus,
         isActive: payload.isActive,
+        availabilityStatusCode: payload.availabilityStatusCode,
         displayOrder: payload.displayOrder,
       },
     });
@@ -94,6 +95,7 @@ export const beadsApi = {
         cropConfig: payload.cropConfig,
         cropStatus: payload.cropStatus,
         isActive: payload.isActive,
+        availabilityStatusCode: payload.availabilityStatusCode,
         displayOrder: payload.displayOrder,
       },
     });
@@ -109,10 +111,17 @@ export const beadsApi = {
     });
   },
 
-  deleteLibrary(publicId: string): Promise<{ message: string }> {
-    return apiRequest<{ message: string }>(`/bead-libraries/${encodeURIComponent(publicId)}`, {
+  deleteLibrary(publicId: string, options?: { force?: boolean }): Promise<{ message: string }> {
+    const query = options?.force ? "?force=1" : "";
+    return apiRequest<{ message: string }>(`/bead-libraries/${encodeURIComponent(publicId)}${query}`, {
       method: "DELETE",
     });
+  },
+
+  getLibraryReferences(publicId: string): Promise<{ designCount: number; itemCount: number }> {
+    return apiRequest<{ designCount: number; itemCount: number }>(
+      `/bead-libraries/${encodeURIComponent(publicId)}/references`,
+    );
   },
 
   recalculateBoundsMetadata(): Promise<{ updated: number; skipped: number }> {

@@ -11,14 +11,24 @@ function newPublicId(): string {
   return `brc_${randomBytes(8).toString("hex")}`;
 }
 
-type BeadRow = { id: string; slug: string; name: string; isActive: boolean };
+type BeadRow = {
+  id: string;
+  slug: string;
+  name: string;
+  isActive: boolean;
+  availabilityStatusCode: string;
+  showInBuilder: boolean;
+  allowNewDesigns: boolean;
+};
 
 export class BraceletService {
   private async resolveBeads(publicIds: string[]): Promise<Map<string, BeadRow>> {
+    if (!publicIds.length) return new Map();
+
     const supabase = getSupabaseServiceRole();
     const { data: beads, error } = await supabase
       .from("bead_libraries")
-      .select("id, public_id, name, is_active, bead_types(slug)")
+      .select("id, public_id, name, is_active, availability_status_code, bead_types(slug), bead_availability_statuses(show_in_builder, allow_new_designs)")
       .in("public_id", publicIds);
 
     assertNoDbError(error);
@@ -27,11 +37,18 @@ export class BraceletService {
     for (const row of beads ?? []) {
       const r = row as Record<string, unknown>;
       const type = r.bead_types as { slug?: string } | null;
+      const status = r.bead_availability_statuses as {
+        show_in_builder?: boolean;
+        allow_new_designs?: boolean;
+      } | null;
       map.set(String(r.public_id), {
         id: String(r.id),
         slug: type?.slug ?? "crystal",
         name: String(r.name),
         isActive: r.is_active !== false,
+        availabilityStatusCode: String(r.availability_status_code ?? "ACTIVE"),
+        showInBuilder: status?.show_in_builder === true,
+        allowNewDesigns: status?.allow_new_designs === true,
       });
     }
     return map;
@@ -42,17 +59,17 @@ export class BraceletService {
     beadByPublicId: Map<string, BeadRow>,
   ): void {
     const missing: string[] = [];
-    const inactive: string[] = [];
+    const unavailable: string[] = [];
     for (const id of publicIds) {
       const bead = beadByPublicId.get(id);
       if (!bead) missing.push(id);
-      else if (!bead.isActive) inactive.push(id);
+      else if (!bead.allowNewDesigns) unavailable.push(id);
     }
     if (missing.length) {
       throw new ValidationError(`Unknown or removed beads: ${missing.join(", ")}`);
     }
-    if (inactive.length) {
-      throw new ValidationError(`Inactive beads in configuration: ${inactive.join(", ")}`);
+    if (unavailable.length) {
+      throw new ValidationError(`Unavailable beads in configuration: ${unavailable.join(", ")}`);
     }
   }
 
@@ -94,6 +111,7 @@ export class BraceletService {
         bead_library_size_id: offer.id,
         bead_size_mm: offer.sizeMm,
         unit_price_snapshot: unit,
+        bead_library_public_id_snapshot: item.beadLibraryId,
       };
     });
 
@@ -181,6 +199,7 @@ export class BraceletService {
         bead_library_size_id: offer.id,
         bead_size_mm: offer.sizeMm,
         unit_price_snapshot: unit,
+        bead_library_public_id_snapshot: item.beadLibraryId,
       };
     });
 
@@ -237,7 +256,7 @@ export class BraceletService {
     const { data: items, error: itemsErr } = await supabase
       .from("bracelet_configuration_items")
       .select(
-        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_size_id, bead_library_sizes(unit_price, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, bead_types(slug))",
+        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, bead_library_sizes(unit_price, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, availability_status_code, bead_types(slug), bead_availability_statuses(show_in_builder, allow_new_designs, label))",
       )
       .eq("configuration_id", configId)
       .order("strand_index")
@@ -249,10 +268,19 @@ export class BraceletService {
       const r = row as Record<string, unknown>;
       const lib = r.bead_libraries as Record<string, unknown> | null;
       const type = lib?.bead_types as { slug?: string } | null;
+      const status = lib?.bead_availability_statuses as {
+        show_in_builder?: boolean;
+        allow_new_designs?: boolean;
+        label?: string;
+      } | null;
       const offer = r.bead_library_sizes as Record<string, unknown> | null;
       const sizeRow = offer?.bead_sizes as { size_mm?: number; label?: string } | null;
       const sizeMm = Number(r.bead_size_mm ?? sizeRow?.size_mm ?? 0);
-      const libraryPublicId = String(lib?.public_id ?? "");
+      const snapshotId = String(r.bead_library_public_id_snapshot ?? "").trim();
+      const libraryPublicId = String(lib?.public_id ?? snapshotId ?? "");
+      const isMissing = !lib;
+      const allowNewDesigns = status?.allow_new_designs === true;
+      const catalogIssue = isMissing ? "deleted" : !allowNewDesigns ? "unavailable" : null;
       return {
         strandIndex: r.strand_index,
         slotPosition: r.slot_position,
@@ -263,21 +291,31 @@ export class BraceletService {
         sizeLabel: sizeRow?.label ?? `${sizeMm} mm`,
         beadTypeSlug: type?.slug,
         unitPrice: Number(r.unit_price_snapshot),
-        beadActive: lib?.is_active !== false,
+        beadActive: lib ? allowNewDesigns : false,
+        catalogIssue,
+        availabilityStatusCode: lib ? String(lib.availability_status_code ?? "ACTIVE") : null,
+        availabilityStatusLabel: status?.label ?? null,
       };
     });
 
     if (options?.validateCatalog) {
       const ids = mappedItems
         .map((i) => i.beadLibraryId)
-        .filter((id): id is string => typeof id === "string");
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
       if (ids.length) {
         const beadMap = await this.resolveBeads([...new Set(ids)]);
         this.validateItemsAgainstCatalog([...new Set(ids)], beadMap);
       }
     }
 
-    const staleBeads = mappedItems.filter((i) => i.beadActive === false).map((i) => i.beadLibraryId);
+    const missingBeadIds = mappedItems
+      .filter((i) => i.catalogIssue === "deleted")
+      .map((i) => i.beadLibraryId)
+      .filter(Boolean) as string[];
+    const unavailableBeadIds = mappedItems
+      .filter((i) => i.catalogIssue === "unavailable")
+      .map((i) => i.beadLibraryId)
+      .filter(Boolean) as string[];
 
     const c = config as Record<string, unknown>;
     return {
@@ -293,9 +331,15 @@ export class BraceletService {
       ownerUserId: c.owner_user_id ?? null,
       orderReference: c.order_reference ?? null,
       items: mappedItems,
-      catalogWarnings: staleBeads.length
-        ? { inactiveBeadIds: staleBeads.filter(Boolean) as string[] }
-        : undefined,
+      catalogWarnings:
+        missingBeadIds.length || unavailableBeadIds.length
+          ? {
+              missingBeadIds: [...new Set(missingBeadIds)],
+              unavailableBeadIds: [...new Set(unavailableBeadIds)],
+              inactiveBeadIds: [...new Set(unavailableBeadIds)],
+            }
+          : undefined,
+      hasCatalogIssues: missingBeadIds.length > 0 || unavailableBeadIds.length > 0,
       createdAt: c.created_at,
       updatedAt: c.updated_at,
     };

@@ -46,7 +46,13 @@ async function saveComplete(req: Request, res: Response): Promise<void> {
 
 async function remove(req: Request, res: Response): Promise<void> {
   const { id } = beadLibraryIdParam.parse(req.params);
-  sendJson(res, await beadLibraryService.remove(id));
+  const force = req.query.force === "1" || req.query.force === "true";
+  sendJson(res, await beadLibraryService.remove(id, { force }));
+}
+
+async function references(req: Request, res: Response): Promise<void> {
+  const { id } = beadLibraryIdParam.parse(req.params);
+  sendJson(res, await beadLibraryService.countDesignReferences(id));
 }
 
 async function recalculateBoundsMetadata(_req: Request, res: Response): Promise<void> {
@@ -61,5 +67,6 @@ export const beadLibraryHandlers = {
   saveComplete: asyncHandler(saveComplete),
   updateCrop: asyncHandler(updateCrop),
   remove: asyncHandler(remove),
+  references: asyncHandler(references),
   recalculateBoundsMetadata: asyncHandler(recalculateBoundsMetadata),
 };

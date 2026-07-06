@@ -8,13 +8,17 @@ import {
 
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 
+import { isUnavailablePlacedBead } from "./unavailable-bead";
+
 function strandItems(placed: PlacedBead[], strandIndex: 0 | 1): BraceletConfigurationItemRef[] {
-  return placed.map((b) => ({
-    strandIndex,
-    slotPosition: b.position,
-    beadLibraryId: b.bead.id,
-    beadSizeMm: placedBeadSizeMm(b),
-  }));
+  return placed
+    .filter((b) => !isUnavailablePlacedBead(b))
+    .map((b) => ({
+      strandIndex,
+      slotPosition: b.position,
+      beadLibraryId: b.bead.id,
+      beadSizeMm: placedBeadSizeMm(b),
+    }));
 }
 
 export function serializeBraceletConfiguration(

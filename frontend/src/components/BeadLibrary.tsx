@@ -14,6 +14,7 @@ import {
 import { BeadCategoryScroller } from "@/features/bracelet/components/BeadCategoryScroller";
 import { BeadInfoButton } from "@/features/bracelet/components/BeadInfoButton";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
+import { isBeadVisibleInBuilder } from "@/features/bracelet/unavailable-bead";
 import { useLibraryPanelWheelScroll } from "@/features/bracelet/hooks/use-library-panel-wheel-scroll";
 import { cn } from "@/lib/utils";
 import { BEAD_LIBRARY_DRAG_TYPE } from "@/features/bracelet/interaction";
@@ -233,13 +234,18 @@ const BeadLibrary = ({
   const currentBeadTypeId = activeBeadTypeId || activeTypes[0]?.id || "";
   const currentType = activeTypes.find((t) => t.id === currentBeadTypeId);
 
+  const builderStatusByCode = useMemo(
+    () => new Map(cat.beadAvailabilityStatuses.map((s) => [s.code, { showInBuilder: s.showInBuilder }])),
+    [cat.beadAvailabilityStatuses],
+  );
+
   const filtered = useMemo(() => {
     return cat.beadLibraries.filter((b) => {
-      if (b.isActive === false) return false;
+      if (!isBeadVisibleInBuilder(b, builderStatusByCode)) return false;
       if (b.beadTypeId !== currentBeadTypeId) return false;
       return b.name.toLowerCase().includes(search.toLowerCase());
     });
-  }, [cat.beadLibraries, currentBeadTypeId, search]);
+  }, [cat.beadLibraries, builderStatusByCode, currentBeadTypeId, search]);
 
   const gridColumns = compact ? 2 : isMobile ? 1 : 2;
   const rowCount = Math.ceil(filtered.length / gridColumns);

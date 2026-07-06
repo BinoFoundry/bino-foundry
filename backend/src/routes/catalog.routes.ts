@@ -3,6 +3,7 @@ import { Router } from "express";
 import { asyncHandler } from "../lib/async-handler.js";
 import { attachJwtAuth } from "../middleware/auth-jwt.js";
 import { requireMutationAuth } from "../middleware/auth-mutations.js";
+import { createBeadAvailabilityStatusRoutes } from "../modules/bead-availability-statuses/bead-availability-status.routes.js";
 import { createBeadLibraryRoutes } from "../modules/bead-libraries/bead-library.routes.js";
 import { createBeadTypeRoutes } from "../modules/bead-types/bead-type.routes.js";
 import { createStrandRenderMigrationRoutes } from "../modules/strand-render/strand-render-migration.routes.js";
@@ -29,6 +30,7 @@ export function createCatalogRoutes(): Router {
   router.use("/designs", createDesignsRoutes());
   router.use("/orders", createOrdersRoutes());
   router.get("/bead-library-sizes", asyncHandler(beadLibrarySizeHandlers.list));
+  router.use("/bead-availability-statuses", createBeadAvailabilityStatusRoutes());
 
   router.use("/admin/settings", createAdminSettingsRoutes());
 

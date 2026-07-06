@@ -28,12 +28,25 @@ import { AdminToolbar } from "../../components/AdminToolbar";
 import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
+type DeleteState = {
+  beadId: string;
+  designCount: number;
+  itemCount: number;
+};
+
 export function BeadsAdminPage() {
   const { currencyCode } = useFormatCurrency();
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [modal, setModal] = useState<AdminEditorModalState<BeadLibraryEntry>>(null);
+  const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const statusLabelByCode = useMemo(
+    () => new Map(cat.beadAvailabilityStatuses.map((s) => [s.code, s.label])),
+    [cat.beadAvailabilityStatuses],
+  );
 
   const filtered = useMemo(() => {
     if (typeFilter === "all") return cat.beadLibraries;
@@ -46,6 +59,37 @@ export function BeadsAdminPage() {
 
   const typeName = (beadTypeId: string) => cat.beadTypes.find((t) => t.id === beadTypeId)?.name ?? "—";
   const defaultTypeId = typeFilter !== "all" ? typeFilter : undefined;
+
+  const availabilityLabel = (bead: BeadLibraryEntry) => {
+    const code = bead.availabilityStatusCode ?? (bead.isActive === false ? "INACTIVE" : "ACTIVE");
+    return statusLabelByCode.get(code) ?? code;
+  };
+
+  const requestDelete = async (beadId: string) => {
+    try {
+      const refs = await cat.getBeadLibraryReferences(beadId);
+      setDeleteState({ beadId, designCount: refs.designCount, itemCount: refs.itemCount });
+    } catch (err) {
+      notifyAdminDeleteFailed(err);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteState) return;
+    setDeleteLoading(true);
+    try {
+      await cat.deleteBeadLibrary(deleteState.beadId, { force: true });
+      if (modal?.type === "edit" && modal.entry.id === deleteState.beadId) {
+        setModal(null);
+      }
+      setDeleteState(null);
+      notifyAdminDeleted("Bead");
+    } catch (err) {
+      notifyAdminDeleteFailed(err);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -123,28 +167,27 @@ export function BeadsAdminPage() {
                 key={b.id}
                 onClick={() => setModal({ type: "edit", entry: b })}
                 actions={
-                  list.isDeleting(b.id) ? (
+                  deleteState?.beadId === b.id ? (
                     <AdminDeleteConfirm
-                      onCancel={list.cancelDelete}
-                      onConfirm={async () => {
-                        try {
-                          await cat.deleteBeadLibrary(b.id);
-                          list.cancelDelete();
-                          if (modal?.type === "edit" && modal.entry.id === b.id) {
-                            setModal(null);
-                          }
-                          notifyAdminDeleted("Bead");
-                        } catch (err) {
-                          notifyAdminDeleteFailed(err);
-                        }
-                      }}
+                      label="Force delete this bead?"
+                      confirmLabel={deleteLoading ? "Deleting…" : "Force Delete"}
+                      message={
+                        deleteState.designCount > 0
+                          ? `This bead is currently used in ${deleteState.designCount} saved design${deleteState.designCount === 1 ? "" : "s"}. Force deleting it will remove it from the catalogue. Users opening those designs will be prompted to replace the missing bead.`
+                          : "This will permanently delete the bead and all associated assets."
+                      }
+                      onCancel={() => setDeleteState(null)}
+                      onConfirm={confirmDelete}
                     />
                   ) : (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive"
-                      onClick={() => list.requestDelete(b.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void requestDelete(b.id);
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -164,10 +207,12 @@ export function BeadsAdminPage() {
                   <p className="truncate text-sm font-medium">{b.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {typeName(b.beadTypeId)} · {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)}
-                    {b.isActive === false ? null : b.cropStatus === "ready" ? " · Ready" : " · Draft"}
+                    {b.cropStatus === "ready" ? " · Ready" : " · Draft"}
                   </p>
                 </div>
-                {b.isActive === false ? <AdminStatusBadge label="Inactive" variant="danger" /> : null}
+                {(b.availabilityStatusCode ?? "ACTIVE") !== "ACTIVE" ? (
+                  <AdminStatusBadge label={availabilityLabel(b)} variant="danger" />
+                ) : null}
               </AdminListRow>
             ))}
           </ul>

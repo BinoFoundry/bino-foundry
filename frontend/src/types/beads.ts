@@ -29,6 +29,8 @@ export interface BeadLibraryEntry {
   metadata?: Record<string, unknown>;
   cropConfig?: BeadCropConfig | null;
   cropStatus?: BeadCropStatus;
+  /** Database-driven lifecycle code (e.g. ACTIVE, INACTIVE). */
+  availabilityStatusCode?: string;
   isActive?: boolean;
   displayOrder?: number;
   createdAt?: string;

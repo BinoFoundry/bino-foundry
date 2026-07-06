@@ -1,3 +1,4 @@
+import type { BeadAvailabilityStatus } from "@/types/bead-availability";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
@@ -13,6 +14,7 @@ export interface CatalogueStore {
   wristSizes: WristSizeEntry[];
   beadLibrarySizes: BeadLibrarySizeOffer[];
   beadLibraries: BeadLibraryEntry[];
+  beadAvailabilityStatuses: BeadAvailabilityStatus[];
   frames: FrameEntry[];
   strandRenderDefaults: StrandRenderProfile | null;
 }
@@ -32,6 +34,7 @@ export function createInitialCatalogueStore(): CatalogueStore {
     wristSizes: [],
     beadLibrarySizes: [],
     beadLibraries: [],
+    beadAvailabilityStatuses: [],
     frames: [],
     strandRenderDefaults: null,
   };

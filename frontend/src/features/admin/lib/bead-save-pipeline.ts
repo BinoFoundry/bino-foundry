@@ -63,6 +63,9 @@ export function buildBeadSaveDiff(
   if (!initial || initial.beadTypeId !== next.beadTypeId) libraryPayload.beadTypeId = next.beadTypeId;
   if (!initial || initial.description !== next.description) libraryPayload.description = next.description;
   if (!initial || initial.isActive !== next.isActive) libraryPayload.isActive = next.isActive;
+  if (!initial || initial.availabilityStatusCode !== next.availabilityStatusCode) {
+    libraryPayload.availabilityStatusCode = next.availabilityStatusCode;
+  }
   if (!initial || initial.displayOrder !== next.displayOrder) libraryPayload.displayOrder = next.displayOrder;
 
   if (metadataChanged) {

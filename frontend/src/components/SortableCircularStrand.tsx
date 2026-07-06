@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect, memo, type KeyboardEvent } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { X } from "lucide-react";
+import { X, AlertTriangle } from "lucide-react";
 import {
   DndContext,
   KeyboardSensor,
@@ -18,6 +18,8 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
+import { BRACELET_COPY } from "@/features/bracelet/copy";
+import { isUnavailablePlacedBead, unavailableIssueForPlaced } from "@/features/bracelet/unavailable-bead";
 import {
   getBeadImageUrl,
   getBeadSlotDimensions,
@@ -48,7 +50,6 @@ import {
   computeResolvedRingRadiusPx,
 } from "@/features/bracelet/strand-ring-geometry";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
-import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { BEAD_LIBRARY_DRAG_TYPE, isLibraryDragEvent } from "@/features/bracelet/interaction";
 import {
   computeBeadShellPosition,
@@ -197,10 +198,13 @@ function SortableBeadInner({
 }: SortableBeadProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({
     id: `bead-${position}`,
-    disabled: !bead || libraryDragActive,
+    disabled: !bead || libraryDragActive || (bead ? isUnavailablePlacedBead(bead) : false),
   });
 
-  const imgSrc = getBeadImageUrl(bead, sizingCatalogue);
+  const unavailable = bead ? isUnavailablePlacedBead(bead) : false;
+  const unavailableIssue = bead ? unavailableIssueForPlaced(bead) : null;
+
+  const imgSrc = unavailable ? "" : getBeadImageUrl(bead, sizingCatalogue);
   const hasImage = !!imgSrc;
   const mm = bead ? placedBeadSizeMm(bead) : 0;
   const shell = hasImage
@@ -232,10 +236,12 @@ function SortableBeadInner({
   const outward = computeBeadOutwardOffset(ringAnchorX, ringAnchorY, ringCenterX, ringCenterY, rotationDeg, slotExtent);
   const removeBtnSize = Math.max(18, Math.min(22, slotExtent * 0.4));
 
-  const label = bead?.bead.name ?? "";
-  const title = bead
-    ? `${label} · ${bead.size.label} — ${BRACELET_COPY.dragToReorder}`
-    : BRACELET_COPY.emptySlotHint;
+  const label = unavailable ? BRACELET_COPY.unavailableBeadName : (bead?.bead.name ?? "");
+  const title = unavailable
+    ? `${BRACELET_COPY.unavailableBeadName} · ${BRACELET_COPY.unavailableBeadPrompt}`
+    : bead
+      ? `${label} · ${bead.size.label} — ${BRACELET_COPY.dragToReorder}`
+      : BRACELET_COPY.emptySlotHint;
 
   const handleEmptySlotKeyDown = (e: KeyboardEvent) => {
     if (bead || libraryDragActive) return;
@@ -258,18 +264,24 @@ function SortableBeadInner({
       {...(bead && !libraryDragActive ? { ...attributes, ...listeners } : {})}
       role={isEmptySlot ? "button" : undefined}
       tabIndex={isEmptySlot && !libraryDragActive ? 0 : undefined}
-      onClick={() => !bead && !libraryDragActive && onSlotClick(position)}
+      onClick={() => {
+        if (libraryDragActive) return;
+        if (!bead || unavailable) onSlotClick(position);
+      }}
       onKeyDown={handleEmptySlotKeyDown}
       className={cn(
         "absolute group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
         bead
           ? cn(
-              "cursor-grab bg-transparent active:cursor-grabbing",
-              "transition-transform duration-200 ease-out",
-              "hover:scale-[1.02]",
+              unavailable
+                ? "cursor-pointer border-2 border-dashed border-destructive/50 bg-destructive/5"
+                : "cursor-grab bg-transparent active:cursor-grabbing",
+              !unavailable && "transition-transform duration-200 ease-out",
+              !unavailable && "hover:scale-[1.02]",
               isDragging && "cursor-grabbing",
               isSelected && "ring-2 ring-inset ring-primary/45",
               isSwapTarget && "ring-2 ring-inset ring-primary/60",
+              unavailable && "ring-2 ring-inset ring-destructive/40",
             )
           : "cursor-pointer state-hoverable",
       )}
@@ -291,6 +303,22 @@ function SortableBeadInner({
             className="pointer-events-none select-none"
             style={getStrandBeadImageStyle(bead.bead, sizing)}
           />
+        </div>
+      ) : null}
+      {unavailable && bead ? (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center">
+          <AlertTriangle className="h-4 w-4 text-destructive" aria-hidden />
+          <span className="text-[9px] font-medium leading-tight text-destructive">
+            {BRACELET_COPY.unavailableBeadName}
+          </span>
+          <span className="text-[8px] leading-tight text-muted-foreground">
+            {unavailableIssue === "deleted"
+              ? BRACELET_COPY.unavailableBeadDeleted
+              : BRACELET_COPY.unavailableBeadStatus}
+          </span>
+          <span className="text-[8px] font-medium leading-tight text-primary">
+            {BRACELET_COPY.unavailableBeadPrompt}
+          </span>
         </div>
       ) : null}
       {bead && (
