@@ -51,7 +51,7 @@ interface BraceletBuilderProps {
   onPriceChange: (price: number) => void;
 }
 
-function useCanvasSize(isMobile: boolean, twinning: boolean) {
+function useCanvasSize(isMobile: boolean) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [strandSize, setStrandSize] = useState(400);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -66,7 +66,7 @@ function useCanvasSize(isMobile: boolean, twinning: boolean) {
           containerWidth: rect.width,
           containerHeight: rect.height,
           isMobile,
-          twinning,
+          twinning: false,
           libraryOpen: false,
         }),
       );
@@ -76,7 +76,7 @@ function useCanvasSize(isMobile: boolean, twinning: boolean) {
     const observer = new ResizeObserver(measure);
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [isMobile, twinning]);
+  }, [isMobile]);
 
   return { containerRef, strandSize, containerSize };
 }
@@ -260,7 +260,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   ]);
 
   const wristConfirmed = builder.wristSizeConfirmed;
-  const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile, builder.twinning);
+  const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile);
   const canvasZoomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -283,7 +283,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   );
 
   const twinPreviewScale = useMemo(() => {
-    if (!builder.twinning) return 1;
+    if (!builder.twinning || containerSize.width <= 0) return 1;
     const twinAutoFit = computeStrandAutoFitScale(strandSize, layoutCanvasSize, {
       twinning: true,
       viewportWidthPx: containerSize.width,
@@ -322,6 +322,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const {
     zoom,
+    displayZoom,
     viewScale,
     pan,
     isPanning,
@@ -530,7 +531,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       </div>
 
       <StrandZoomControls
-        zoom={zoom}
+        zoom={displayZoom}
         panMode={panMode}
         onTogglePan={() => setPanMode((on) => !on)}
         onZoomIn={zoomIn}

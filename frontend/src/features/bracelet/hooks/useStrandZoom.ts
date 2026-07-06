@@ -9,7 +9,11 @@ import {
 } from "react";
 
 import { shouldApplyCanvasWheelZoom, shouldStartCanvasPan } from "../interaction";
-import { computeStrandViewScale, TWIN_STRAND_PREVIEW_GAP_PX } from "../strand-viewport";
+import {
+  computeLayoutFitScale,
+  computeStrandViewScale,
+  TWIN_STRAND_PREVIEW_GAP_PX,
+} from "../strand-viewport";
 
 export interface StrandZoomOptions {
   /** When true, pan gestures are ignored (e.g. library HTML5 drag in progress). */
@@ -72,6 +76,13 @@ function panNeedsUpdate(prev: StrandPan, next: StrandPan): boolean {
 
 function layoutSignature(layout: StrandZoomLayout): string {
   return `${layout.viewportSize}|${layout.layoutCanvasSize}|${layout.autoFitScale}|${layout.twinPreviewScale ?? 1}|${layout.twinning}`;
+}
+
+function fitScaleForLayout(layout: StrandZoomLayout): number {
+  return computeLayoutFitScale({
+    autoFitScale: layout.autoFitScale,
+    twinPreviewScale: layout.twinPreviewScale,
+  });
 }
 
 function viewScaleForLayout(layout: StrandZoomLayout, userZoom: number): number {
@@ -230,22 +241,27 @@ export function useStrandZoom(
   const applyZoomAtPoint = useCallback(
     (factor: number, clientX: number, clientY: number) => {
       const viewport = viewportRef?.current ?? containerRef?.current;
+      const layout = layoutRef.current;
+      const oldUserZoom = zoomSmoothRef.current;
+      const newUserZoom = clampZoom(oldUserZoom * factor);
+      const oldViewScale = viewScaleForLayout(layout, oldUserZoom);
+      const newViewScale = viewScaleForLayout(layout, newUserZoom);
+      if (Math.abs(newViewScale - oldViewScale) < ZOOM_SNAP_EPSILON) return;
+
       if (!viewport) {
-        setZoomTarget((z) => clampZoom(z * factor));
+        setZoomTarget(newUserZoom);
         return;
       }
+
       const rect = viewport.getBoundingClientRect();
       const focalX = clientX - rect.left - rect.width / 2;
       const focalY = clientY - rect.top - rect.height / 2;
-      const oldZoom = zoomSmoothRef.current;
-      const newZoom = clampZoom(oldZoom * factor);
-      if (Math.abs(newZoom - oldZoom) < ZOOM_SNAP_EPSILON) return;
-      const ratio = newZoom / oldZoom;
+      const ratio = newViewScale / oldViewScale;
       setPanClamped({
         x: panRef.current.x - focalX * (ratio - 1),
         y: panRef.current.y - focalY * (ratio - 1),
       });
-      setZoomTarget(newZoom);
+      setZoomTarget(newUserZoom);
     },
     [containerRef, viewportRef, setPanClamped],
   );
@@ -273,31 +289,38 @@ export function useStrandZoom(
   }, [clearPan, applyContentTransform]);
 
   const prevTwinningRef = useRef(layout.twinning);
-  const savedCameraRef = useRef<{ zoom: number; pan: StrandPan } | null>(null);
+  const savedCameraRef = useRef<{ userZoom: number; pan: StrandPan; viewScale: number } | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wasTwinning = prevTwinningRef.current;
     const isTwinning = layout.twinning;
 
     if (!wasTwinning && isTwinning) {
       savedCameraRef.current = {
-        zoom: zoomSmoothRef.current,
+        userZoom: zoomSmoothRef.current,
         pan: { ...panRef.current },
+        viewScale: viewScaleForLayout(layoutRef.current, zoomSmoothRef.current),
       };
     } else if (wasTwinning && !isTwinning) {
       const saved = savedCameraRef.current;
       if (saved) {
-        setZoomTarget(saved.zoom);
-        zoomSmoothRef.current = saved.zoom;
-        setZoomSmooth(saved.zoom);
+        const fitScale = fitScaleForLayout({
+          ...layoutRef.current,
+          twinPreviewScale: 1,
+          twinning: false,
+        });
+        const restoredUserZoom = clampZoom(saved.viewScale / Math.max(fitScale, 0.001));
+        setZoomTarget(restoredUserZoom);
+        zoomSmoothRef.current = restoredUserZoom;
+        setZoomSmooth(restoredUserZoom);
         panRef.current = saved.pan;
         setPan(saved.pan);
         savedCameraRef.current = null;
-        applyContentTransform();
       }
     }
 
     prevTwinningRef.current = isTwinning;
+    applyContentTransform();
   }, [layout.twinning, applyContentTransform]);
 
   useEffect(() => {
@@ -486,10 +509,13 @@ export function useStrandZoom(
       if (e.touches.length !== 2 || pinchDistance <= 0) return;
       e.preventDefault();
       const dist = touchDistance(e.touches);
-      const targetZoom = clampZoom(pinchStartZoom * (dist / pinchDistance));
-      const currentZoom = zoomSmoothRef.current;
-      if (Math.abs(targetZoom - currentZoom) < ZOOM_SNAP_EPSILON) return;
-      const scale = targetZoom / currentZoom;
+      const layout = layoutRef.current;
+      const oldUserZoom = zoomSmoothRef.current;
+      const targetUserZoom = clampZoom(pinchStartZoom * (dist / pinchDistance));
+      const oldViewScale = viewScaleForLayout(layout, oldUserZoom);
+      const targetViewScale = viewScaleForLayout(layout, targetUserZoom);
+      if (Math.abs(targetViewScale - oldViewScale) < ZOOM_SNAP_EPSILON) return;
+      const scale = targetViewScale / oldViewScale;
       const viewport = viewportRef?.current ?? containerRef?.current;
       if (viewport) {
         const rect = viewport.getBoundingClientRect();
@@ -500,7 +526,7 @@ export function useStrandZoom(
           y: panRef.current.y - focalY * (scale - 1),
         });
       }
-      setZoomTarget(targetZoom);
+      setZoomTarget(targetUserZoom);
     };
 
     const onTouchEnd = () => {
@@ -549,11 +575,15 @@ export function useStrandZoom(
   );
 
   const viewScale = viewScaleForLayout(layout, zoomSmooth);
+  const fitScale = fitScaleForLayout(layout);
+  const displayZoom = fitScale > 0 ? viewScale / fitScale : zoomSmooth;
 
   return {
     zoom: zoomTarget,
     zoomSmooth,
     viewScale,
+    fitScale,
+    displayZoom,
     pan,
     isPanning,
     panMode,

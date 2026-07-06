@@ -367,10 +367,7 @@
     max-width: var(--builder-preview-fit, 100%);
   }
 
-  .builder-preview-fit [data-strand-viewport-content] {
-    max-height: 100%;
-    max-width: var(--builder-preview-fit, 100%);
-  }
+  /* Strand zoom uses CSS transform on [data-strand-viewport-content] — do not clamp max-width here. */
 
   /* Builder / card selection — blush warmth, not olive blocks */
   .state-selected {

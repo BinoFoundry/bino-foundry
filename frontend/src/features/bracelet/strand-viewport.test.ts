@@ -18,6 +18,7 @@ import {
   computeStrandCanvasFitBoost,
   computeStrandContentBounds,
   computeStrandViewScale,
+  computeLayoutFitScale,
   computeTwinPreviewScale,
   measureStrandCanvasSize,
   shiftStrandLayoutToCanvasCenter,
@@ -144,6 +145,29 @@ describe("computeTwinPreviewScale", () => {
 
   it("derives a temporary twin fit multiplier from auto-fit values", () => {
     expect(computeTwinPreviewScale(1, 0.74)).toBeCloseTo(0.74, 5);
+  });
+});
+
+describe("computeLayoutFitScale", () => {
+  it("separates layout fit from user zoom", () => {
+    expect(
+      computeLayoutFitScale({ autoFitScale: 1, twinPreviewScale: 0.74 }),
+    ).toBeCloseTo(0.74, 5);
+    expect(computeStrandViewScale({ autoFitScale: 1, userZoom: 1.56, twinPreviewScale: 0.74 })).toBeCloseTo(
+      0.74 * 1.56,
+      5,
+    );
+  });
+});
+
+describe("computeStrandAutoFitScale twin guard", () => {
+  it("never returns a negative twin width fit when viewport width is zero", () => {
+    const scale = computeStrandAutoFitScale(500, 500, {
+      twinning: true,
+      viewportWidthPx: 0,
+    });
+    expect(scale).toBeGreaterThanOrEqual(0);
+    expect(scale).toBeLessThanOrEqual(1);
   });
 });
 

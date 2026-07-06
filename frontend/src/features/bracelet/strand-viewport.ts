@@ -229,7 +229,7 @@ export function computeStrandAutoFitScale(
 
   const gap = options.gapPx ?? TWIN_STRAND_PREVIEW_GAP_PX;
   const viewportWidth = options.viewportWidthPx ?? viewportBudgetPx * 2 + gap;
-  const byWidth = (viewportWidth - gap) / (2 * layoutCanvasPx);
+  const byWidth = Math.max(0, (viewportWidth - gap) / (2 * layoutCanvasPx));
   return Math.min(1, single, byWidth);
 }
 
@@ -245,12 +245,20 @@ export function computeTwinPreviewScale(
   return twinAutoFitScale / baseAutoFitScale;
 }
 
-/** Effective viewport scale — single source of truth for transform + display sync. */
+/** Layout-only fit scale (auto-fit × optional twin layout adjustment). */
+export function computeLayoutFitScale(params: {
+  autoFitScale: number;
+  twinPreviewScale?: number;
+}): number {
+  const twin = params.twinPreviewScale ?? 1;
+  return params.autoFitScale * twin;
+}
+
+/** Effective viewport scale — transform scale applied to the strand content layer. */
 export function computeStrandViewScale(params: {
   autoFitScale: number;
   userZoom: number;
   twinPreviewScale?: number;
 }): number {
-  const twin = params.twinPreviewScale ?? 1;
-  return params.autoFitScale * twin * params.userZoom;
+  return computeLayoutFitScale(params) * params.userZoom;
 }
