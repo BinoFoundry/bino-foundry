@@ -17,6 +17,8 @@ import {
   computeStrandAutoFitScale,
   computeStrandCanvasFitBoost,
   computeStrandContentBounds,
+  computeStrandViewScale,
+  computeTwinPreviewScale,
   measureStrandCanvasSize,
   shiftStrandLayoutToCanvasCenter,
   slotCentersOnRing,
@@ -131,6 +133,91 @@ describe("computeStrandAutoFitScale", () => {
     });
     expect(scale * 320 * 2 + 12).toBeLessThanOrEqual(600);
     expect(scale).toBeLessThan(1);
+  });
+});
+
+describe("computeTwinPreviewScale", () => {
+  it("returns 1 when twin auto-fit matches the single-strand base", () => {
+    expect(computeTwinPreviewScale(1, 1)).toBe(1);
+    expect(computeTwinPreviewScale(0.8, 0.8)).toBe(1);
+  });
+
+  it("derives a temporary twin fit multiplier from auto-fit values", () => {
+    expect(computeTwinPreviewScale(1, 0.74)).toBeCloseTo(0.74, 5);
+  });
+});
+
+describe("computeStrandViewScale", () => {
+  const userZoom = 1.55;
+  const baseAutoFit = 1;
+
+  it("preserves single-strand framing after a matching-pair toggle cycle", () => {
+    const singleViewScale = computeStrandViewScale({
+      autoFitScale: baseAutoFit,
+      userZoom,
+    });
+
+    const twinPreview = computeTwinPreviewScale(
+      baseAutoFit,
+      computeStrandAutoFitScale(600, 600, {
+        twinning: true,
+        viewportWidthPx: 900,
+      }),
+    );
+
+    const twinViewScale = computeStrandViewScale({
+      autoFitScale: baseAutoFit,
+      userZoom,
+      twinPreviewScale: twinPreview,
+    });
+
+    expect(twinViewScale).toBeLessThan(singleViewScale);
+
+    const restoredViewScale = computeStrandViewScale({
+      autoFitScale: baseAutoFit,
+      userZoom,
+      twinPreviewScale: 1,
+    });
+
+    expect(restoredViewScale).toBe(singleViewScale);
+  });
+
+  it("does not drift after repeated matching-pair toggles", () => {
+    const singleViewScale = computeStrandViewScale({
+      autoFitScale: baseAutoFit,
+      userZoom: 1.8,
+    });
+
+    let zoom = 1.8;
+    let pan = { x: 12, y: -8 };
+
+    for (let i = 0; i < 20; i += 1) {
+      const twinPreview = computeTwinPreviewScale(
+        baseAutoFit,
+        computeStrandAutoFitScale(600, 600, {
+          twinning: true,
+          viewportWidthPx: 900,
+        }),
+      );
+
+      computeStrandViewScale({
+        autoFitScale: baseAutoFit,
+        userZoom: zoom,
+        twinPreviewScale: twinPreview,
+      });
+
+      zoom = 1.8;
+      pan = { x: 12, y: -8 };
+
+      const restored = computeStrandViewScale({
+        autoFitScale: baseAutoFit,
+        userZoom: zoom,
+        twinPreviewScale: 1,
+      });
+
+      expect(restored).toBe(singleViewScale);
+      expect(pan).toEqual({ x: 12, y: -8 });
+    }
   });
 });
 

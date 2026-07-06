@@ -31,6 +31,7 @@ import {
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import {
   computeStrandAutoFitScale,
+  computeTwinPreviewScale,
   measureStrandCanvasSize,
 } from "@/features/bracelet/strand-viewport";
 import { BraceletBuilderLayout } from "@/layouts/BraceletBuilderLayout";
@@ -267,23 +268,29 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   /** Fixed workspace — sized from container only, never from bead count or ring expansion. */
   const layoutCanvasSize = strandSize;
 
-  const autoFitScale = useMemo(
-    () =>
-      computeStrandAutoFitScale(strandSize, layoutCanvasSize, {
-        twinning: builder.twinning,
-        viewportWidthPx: containerSize.width,
-      }),
-    [strandSize, layoutCanvasSize, builder.twinning, containerSize.width],
+  const baseAutoFitScale = useMemo(
+    () => computeStrandAutoFitScale(strandSize, layoutCanvasSize),
+    [strandSize, layoutCanvasSize],
   );
+
+  const twinPreviewScale = useMemo(() => {
+    if (!builder.twinning) return 1;
+    const twinAutoFit = computeStrandAutoFitScale(strandSize, layoutCanvasSize, {
+      twinning: true,
+      viewportWidthPx: containerSize.width,
+    });
+    return computeTwinPreviewScale(baseAutoFitScale, twinAutoFit);
+  }, [builder.twinning, strandSize, layoutCanvasSize, containerSize.width, baseAutoFitScale]);
 
   const strandZoomLayout = useMemo(
     () => ({
       viewportSize: strandSize,
       layoutCanvasSize,
-      autoFitScale,
+      autoFitScale: baseAutoFitScale,
+      twinPreviewScale,
       twinning: builder.twinning,
     }),
-    [strandSize, layoutCanvasSize, autoFitScale, builder.twinning],
+    [strandSize, layoutCanvasSize, baseAutoFitScale, twinPreviewScale, builder.twinning],
   );
 
   const defaultStrandZoom = useMemo(
@@ -293,14 +300,14 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         containerWidth: containerSize.width,
         containerHeight: containerSize.height,
         isMobile,
-        autoFitScale,
+        autoFitScale: baseAutoFitScale,
       }),
     [
       builder.twinning,
       containerSize.width,
       containerSize.height,
       isMobile,
-      autoFitScale,
+      baseAutoFitScale,
     ],
   );
 

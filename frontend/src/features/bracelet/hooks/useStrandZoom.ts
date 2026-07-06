@@ -9,14 +9,14 @@ import {
 } from "react";
 
 import { shouldApplyCanvasWheelZoom, shouldStartCanvasPan } from "../interaction";
-import { TWIN_STRAND_PREVIEW_GAP_PX } from "../strand-viewport";
+import { computeStrandViewScale, TWIN_STRAND_PREVIEW_GAP_PX } from "../strand-viewport";
 
 export interface StrandZoomOptions {
   /** When true, pan gestures are ignored (e.g. library HTML5 drag in progress). */
   suspendPan?: boolean;
   /** When false, canvas pan is disabled — editing interactions take priority. */
   panMode?: boolean;
-  /** Zoom level for reset and when twinning toggles (defaults to `initial`). */
+  /** Zoom level for reset (defaults to `initial`). */
   defaultZoom?: number;
 }
 
@@ -41,8 +41,10 @@ export interface StrandZoomLayout {
   viewportSize: number;
   /** Layout canvas side length (may exceed viewport when beads need room). */
   layoutCanvasSize: number;
-  /** Fits layout canvas into viewport at zoom 1 (≤ 1). */
+  /** Single-strand auto-fit (≤ 1) — stable when twinning toggles. */
   autoFitScale: number;
+  /** Temporary twin fit multiplier (≤ 1 when twinning). */
+  twinPreviewScale?: number;
   twinning: boolean;
 }
 
@@ -69,7 +71,15 @@ function panNeedsUpdate(prev: StrandPan, next: StrandPan): boolean {
 }
 
 function layoutSignature(layout: StrandZoomLayout): string {
-  return `${layout.viewportSize}|${layout.layoutCanvasSize}|${layout.autoFitScale}|${layout.twinning}`;
+  return `${layout.viewportSize}|${layout.layoutCanvasSize}|${layout.autoFitScale}|${layout.twinPreviewScale ?? 1}|${layout.twinning}`;
+}
+
+function viewScaleForLayout(layout: StrandZoomLayout, userZoom: number): number {
+  return computeStrandViewScale({
+    autoFitScale: layout.autoFitScale,
+    userZoom,
+    twinPreviewScale: layout.twinPreviewScale,
+  });
 }
 
 function measureContentExtent(content: HTMLElement) {
@@ -87,7 +97,8 @@ function measureContentExtent(content: HTMLElement) {
 }
 
 function expectedContentSize(layout: StrandZoomLayout, userZoom: number) {
-  const scaled = layout.layoutCanvasSize * layout.autoFitScale * userZoom;
+  const viewScale = viewScaleForLayout(layout, userZoom);
+  const scaled = layout.layoutCanvasSize * viewScale;
   return {
     width: layout.twinning ? scaled * 2 + TWIN_STRAND_PREVIEW_GAP_PX : scaled,
     height: scaled + STRAND_CHROME_Y_PX,
@@ -103,7 +114,7 @@ function computePanBounds(
   const cw = container.clientWidth;
   const ch = container.clientHeight;
   const extent = measureContentExtent(content);
-  const viewScale = layout.autoFitScale * userZoom;
+  const viewScale = viewScaleForLayout(layout, userZoom);
   const expected = expectedContentSize(layout, userZoom);
   const contentW = Math.max(extent.width, expected.width);
   const contentH = Math.max(extent.height, expected.height);
@@ -153,7 +164,7 @@ export function useStrandZoom(
   const applyContentTransform = useCallback(() => {
     const el = contentRef?.current;
     if (!el) return;
-    const viewScale = layoutRef.current.autoFitScale * zoomSmoothRef.current;
+    const viewScale = viewScaleForLayout(layoutRef.current, zoomSmoothRef.current);
     const { x, y } = panRef.current;
     el.style.transform = `translate(${x}px, ${y}px) scale(${viewScale})`;
   }, [contentRef]);
@@ -261,15 +272,33 @@ export function useStrandZoom(
     applyContentTransform();
   }, [clearPan, applyContentTransform]);
 
+  const prevTwinningRef = useRef(layout.twinning);
+  const savedCameraRef = useRef<{ zoom: number; pan: StrandPan } | null>(null);
+
   useEffect(() => {
-    const dz = defaultZoomRef.current;
-    setZoomTarget(dz);
-    zoomSmoothRef.current = dz;
-    setZoomSmooth(dz);
-    panRef.current = { x: 0, y: 0 };
-    setPan({ x: 0, y: 0 });
-    applyContentTransform();
-  }, [layout.twinning, defaultZoomOption, applyContentTransform]);
+    const wasTwinning = prevTwinningRef.current;
+    const isTwinning = layout.twinning;
+
+    if (!wasTwinning && isTwinning) {
+      savedCameraRef.current = {
+        zoom: zoomSmoothRef.current,
+        pan: { ...panRef.current },
+      };
+    } else if (wasTwinning && !isTwinning) {
+      const saved = savedCameraRef.current;
+      if (saved) {
+        setZoomTarget(saved.zoom);
+        zoomSmoothRef.current = saved.zoom;
+        setZoomSmooth(saved.zoom);
+        panRef.current = saved.pan;
+        setPan(saved.pan);
+        savedCameraRef.current = null;
+        applyContentTransform();
+      }
+    }
+
+    prevTwinningRef.current = isTwinning;
+  }, [layout.twinning, applyContentTransform]);
 
   useEffect(() => {
     let frame = 0;
@@ -296,7 +325,7 @@ export function useStrandZoom(
 
   useLayoutEffect(() => {
     applyContentTransform();
-  }, [pan, layout.autoFitScale, applyContentTransform]);
+  }, [pan, layout.autoFitScale, layout.twinPreviewScale, applyContentTransform]);
 
   const layoutSig = layoutSignature(layout);
 
@@ -519,7 +548,7 @@ export function useStrandZoom(
     [finishPanDrag],
   );
 
-  const viewScale = layout.autoFitScale * zoomSmooth;
+  const viewScale = viewScaleForLayout(layout, zoomSmooth);
 
   return {
     zoom: zoomTarget,

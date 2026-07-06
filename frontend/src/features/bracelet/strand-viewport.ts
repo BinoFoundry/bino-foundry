@@ -232,3 +232,25 @@ export function computeStrandAutoFitScale(
   const byWidth = (viewportWidth - gap) / (2 * layoutCanvasPx);
   return Math.min(1, single, byWidth);
 }
+
+/**
+ * Temporary twin-mode fit multiplier layered on top of user zoom.
+ * Keeps `autoFitScale` (single-strand) stable so user zoom % matches rendered framing after exit.
+ */
+export function computeTwinPreviewScale(
+  baseAutoFitScale: number,
+  twinAutoFitScale: number,
+): number {
+  if (baseAutoFitScale <= 0) return 1;
+  return twinAutoFitScale / baseAutoFitScale;
+}
+
+/** Effective viewport scale — single source of truth for transform + display sync. */
+export function computeStrandViewScale(params: {
+  autoFitScale: number;
+  userZoom: number;
+  twinPreviewScale?: number;
+}): number {
+  const twin = params.twinPreviewScale ?? 1;
+  return params.autoFitScale * twin * params.userZoom;
+}
