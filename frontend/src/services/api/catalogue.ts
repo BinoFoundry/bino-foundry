@@ -105,8 +105,15 @@ export const catalogueApi = {
     });
   },
 
-  deleteFrame(id: string): Promise<{ message: string }> {
-    return apiRequest<{ message: string }>(`/frames/${encodeURIComponent(id)}`, { method: "DELETE" });
+  deleteFrame(id: string, options?: { force?: boolean }): Promise<{ message: string }> {
+    const query = options?.force ? "?force=1" : "";
+    return apiRequest<{ message: string }>(`/frames/${encodeURIComponent(id)}${query}`, { method: "DELETE" });
+  },
+
+  getFrameReferences(id: string): Promise<{ designCount: number; itemCount: number }> {
+    return apiRequest<{ designCount: number; itemCount: number }>(
+      `/frames/${encodeURIComponent(id)}/references`,
+    );
   },
 
   listTypes(): Promise<TypeEntry[]> {

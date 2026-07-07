@@ -31,11 +31,18 @@ export interface SavedDesignDetail extends SavedDesignSummary {
   sunglasses?: {
     id: string;
     frameId: string;
+    frameName?: string;
     lensTintId: string;
     selectedOptions: Record<string, boolean>;
     builderStep: string;
     subtotal: number;
     currencyCode: string;
+    catalogIssue?: "deleted" | "unavailable" | null;
+    catalogWarnings?: {
+      missingFrameIds?: string[];
+      unavailableFrameIds?: string[];
+    };
+    hasCatalogIssues?: boolean;
   };
 }
 

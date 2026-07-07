@@ -32,6 +32,7 @@ interface SunglassesConfigurationSummaryProps {
   autoSaveStatus?: DesignAutoSaveStatus;
   autoSaveVisible?: boolean;
   signedIn?: boolean;
+  checkoutDisabled?: boolean;
   className?: string;
 }
 
@@ -95,6 +96,7 @@ export function SunglassesConfigurationSummary({
   autoSaveStatus = "idle",
   autoSaveVisible = false,
   signedIn = false,
+  checkoutDisabled = false,
   className,
 }: SunglassesConfigurationSummaryProps) {
   const handleAddToCart = () => {
@@ -122,7 +124,13 @@ export function SunglassesConfigurationSummary({
           visible={autoSaveVisible}
           signedIn={signedIn}
         />
-        <Button type="button" className="w-full" size="lg" onClick={handleAddToCart}>
+        <Button
+          type="button"
+          className="w-full"
+          size="lg"
+          onClick={handleAddToCart}
+          disabled={checkoutDisabled}
+        >
           <ShoppingBag className="mr-2 h-4 w-4" />
           {BUILDER_COPY.addToCart}
         </Button>

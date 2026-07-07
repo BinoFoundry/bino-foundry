@@ -22,6 +22,9 @@ import { SunglassesPreviewPanel } from "./components/SunglassesPreviewPanel";
 import { useCustomiserFlow } from "./hooks/useCustomiserFlow";
 import { useSunglassesCustomiserState } from "./hooks/useSunglassesCustomiserState";
 import { SunglassesBuilderLayout } from "./layout/SunglassesBuilderLayout";
+import { CapacityAlertBanner } from "@/features/bracelet/components/CapacityAlertBanner";
+import { isUnavailableFrame } from "./unavailable-frame";
+import { SUNGLASSES_COPY } from "./copy";
 
 interface SunglassesCustomiserProps {
   onPriceChange: (price: number) => void;
@@ -43,7 +46,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
   const hydratedDesignRef = useRef<string | null>(null);
 
   const tintId = state.selectedTintEntry?.id;
-  const autoSaveEnabled = Boolean(user && tintId);
+  const autoSaveEnabled = Boolean(user && tintId && !state.hasUnavailableFrame);
 
   const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
 
@@ -81,7 +84,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
 
   const buildSunglassesRequest = useCallback(
     async (ctx: { includeThumbnail: boolean }) => {
-      if (!tintId) return null;
+      if (!tintId || state.hasUnavailableFrame || isUnavailableFrame(state.frameSku)) return null;
       let previewThumbnailDataUrl: string | undefined;
       if (ctx.includeThumbnail) {
         previewThumbnailDataUrl =
@@ -111,6 +114,8 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
       flow.step,
       state.totalPrice,
       currencyCode,
+      state.hasUnavailableFrame,
+      state.frameSku,
     ],
   );
 
@@ -179,9 +184,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
         if (cancelled || detail.productType !== "sunglasses" || !detail.sunglasses) return;
 
         const saved = detail.sunglasses;
-        if (state.frames.some((f) => f.id === saved.frameId)) {
-          state.selectFrameSku(saved.frameId);
-        }
+        state.applyLoadedFrame(saved.frameId, saved.catalogIssue ?? undefined);
         if (sunglassesCatalog.getTintById(saved.lensTintId)) {
           state.selectTintById(saved.lensTintId);
         }
@@ -209,8 +212,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
     sunglassesCatalog.isHydrating,
     sunglassesCatalog.lensTints.length,
     sunglassesCatalog,
-    state.frames,
-    state.selectFrameSku,
+    state.applyLoadedFrame,
     state.selectTintById,
     state.dispatch,
     flow.goTo,
@@ -219,6 +221,11 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
   const handleAddToCart = useCallback(async () => {
     if (!user) {
       openAuth({ mode: "sign-in" });
+      return;
+    }
+    if (state.hasUnavailableFrame) {
+      toast.message(SUNGLASSES_COPY.checkoutBlockedUnavailableFrame);
+      flow.goTo("frame");
       return;
     }
     if (flow.step !== "preview") {
@@ -234,7 +241,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
     }
     if (!designId) return;
     setCheckoutOpen(true);
-  }, [user, openAuth, flow, savedDesignId, flush, hasPendingChanges]);
+  }, [user, openAuth, flow, savedDesignId, flush, hasPendingChanges, state.hasUnavailableFrame]);
 
   if (sunglassesCatalog.isHydrating && sunglassesCatalog.lensTints.length === 0) {
     return <LoadingState label="Loading sunglasses options…" className="h-full" />;
@@ -259,7 +266,23 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
             <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
           </div>
         }
-        preview={<SunglassesPreviewPanel config={state.compositorConfig} />}
+        preview={
+          <div className="relative h-full min-h-0">
+            {state.hasUnavailableFrame ? (
+              <div className="pointer-events-none absolute left-3 right-3 top-2 z-30 sm:left-auto sm:right-4 sm:max-w-sm sm:top-3">
+                <CapacityAlertBanner
+                  variant="over"
+                  message={SUNGLASSES_COPY.unavailableFrameNotice}
+                  className="pointer-events-auto"
+                />
+              </div>
+            ) : null}
+            <SunglassesPreviewPanel
+              config={state.compositorConfig}
+              unavailableFrame={isUnavailableFrame(state.frameSku)}
+            />
+          </div>
+        }
         configuration={
           <SunglassesConfigColumn
             flow={flow}
@@ -269,6 +292,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
             autoSaveStatus={autoSaveStatus}
             autoSaveVisible
             signedIn={Boolean(user)}
+            checkoutDisabled={state.hasUnavailableFrame}
           />
         }
       />

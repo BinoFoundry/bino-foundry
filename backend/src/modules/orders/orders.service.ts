@@ -73,6 +73,14 @@ export class OrdersService {
       }
       await braceletService.updateStatus(design.productConfigId, "ordered", orderPublicId);
     } else {
+      const config = await sunglassesConfigService.getConfiguration(design.productConfigId, {
+        validateCatalog: true,
+      });
+      if (config.hasCatalogIssues) {
+        throw new ValidationError(
+          "This design contains a frame that is no longer available. Replace it before ordering.",
+        );
+      }
       await sunglassesConfigService.markOrdered(design.productConfigId, userId, orderPublicId);
     }
 

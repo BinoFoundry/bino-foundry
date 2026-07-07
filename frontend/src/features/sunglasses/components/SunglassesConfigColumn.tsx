@@ -24,6 +24,7 @@ interface SunglassesConfigColumnProps {
   autoSaveStatus?: DesignAutoSaveStatus;
   autoSaveVisible?: boolean;
   signedIn?: boolean;
+  checkoutDisabled?: boolean;
   className?: string;
 }
 
@@ -41,6 +42,7 @@ export function SunglassesConfigColumn({
   autoSaveStatus = "idle",
   autoSaveVisible = false,
   signedIn = false,
+  checkoutDisabled = false,
   className,
 }: SunglassesConfigColumnProps) {
   const { totalPrice } = state;
@@ -106,6 +108,7 @@ export function SunglassesConfigColumn({
                     autoSaveStatus={autoSaveStatus}
                     autoSaveVisible={autoSaveVisible}
                     signedIn={signedIn}
+                    checkoutDisabled={checkoutDisabled}
                   />
                 )}
               </div>

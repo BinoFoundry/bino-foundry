@@ -14,6 +14,14 @@ export const SUNGLASSES_COPY = {
   reviewStepTitle: "Review",
   reviewStepIntro: "Confirm your selections below.",
   yourConfiguration: "Your Configuration",
+  unavailableFrameNotice:
+    "Some items used in this design are no longer available and must be replaced before ordering.",
+  unavailableFrameName: "Unavailable Frame",
+  unavailableFrameDeleted: "Deleted",
+  unavailableFrameStatus: "Unavailable",
+  unavailableFramePrompt: "Please choose another frame.",
+  checkoutBlockedUnavailableFrame:
+    "Replace the unavailable frame before adding this design to your cart.",
   addOnsSectionTitle: "Add-Ons",
   summaryTint: "Tint",
   summaryPolarized: "Polarised",

@@ -6,6 +6,7 @@ export function createFrameRoutes(): Router {
   const router = Router();
 
   router.get("/", frameHandlers.list);
+  router.get("/:id/references", frameHandlers.references);
   router.get("/:id", frameHandlers.retrieve);
   router.post("/", frameHandlers.create);
   router.put("/:id", frameHandlers.update);

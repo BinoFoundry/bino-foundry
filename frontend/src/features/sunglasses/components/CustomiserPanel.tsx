@@ -99,6 +99,7 @@ export function CustomiserPanel({
     frame: (
       <FrameStepPanel
         frames={frames}
+        selectedFrame={frameSku}
         selectedFrameId={frameSku.id}
         currencyCode={currencyCode}
         onSelectFrame={selectFrameSku}

@@ -28,7 +28,7 @@ export class BraceletService {
     const supabase = getSupabaseServiceRole();
     const { data: beads, error } = await supabase
       .from("bead_libraries")
-      .select("id, public_id, name, is_active, availability_status_code, bead_types(slug), bead_availability_statuses(show_in_builder, allow_new_designs)")
+      .select("id, public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs)")
       .in("public_id", publicIds);
 
     assertNoDbError(error);
@@ -37,7 +37,7 @@ export class BraceletService {
     for (const row of beads ?? []) {
       const r = row as Record<string, unknown>;
       const type = r.bead_types as { slug?: string } | null;
-      const status = r.bead_availability_statuses as {
+      const status = r.catalog_availability_statuses as {
         show_in_builder?: boolean;
         allow_new_designs?: boolean;
       } | null;
@@ -256,7 +256,7 @@ export class BraceletService {
     const { data: items, error: itemsErr } = await supabase
       .from("bracelet_configuration_items")
       .select(
-        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, bead_library_sizes(unit_price, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, availability_status_code, bead_types(slug), bead_availability_statuses(show_in_builder, allow_new_designs, label))",
+        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, bead_library_sizes(unit_price, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs, label))",
       )
       .eq("configuration_id", configId)
       .order("strand_index")
@@ -268,7 +268,7 @@ export class BraceletService {
       const r = row as Record<string, unknown>;
       const lib = r.bead_libraries as Record<string, unknown> | null;
       const type = lib?.bead_types as { slug?: string } | null;
-      const status = lib?.bead_availability_statuses as {
+      const status = lib?.catalog_availability_statuses as {
         show_in_builder?: boolean;
         allow_new_designs?: boolean;
         label?: string;

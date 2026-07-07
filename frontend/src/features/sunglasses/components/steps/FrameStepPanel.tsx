@@ -6,9 +6,11 @@ import { formatCurrency } from "@bino-foundry/shared/currency";
 
 import { SUNGLASSES_COPY, SUNGLASSES_PRICE } from "../../copy";
 import { getFrontPlateUrl } from "../../utils/frame-plates";
+import { isUnavailableFrame, unavailableIssueForFrame } from "../../unavailable-frame";
 
 interface FrameStepPanelProps {
   frames: FrameOption[];
+  selectedFrame: FrameOption;
   selectedFrameId: string;
   currencyCode: string;
   onSelectFrame: (id: string) => void;
@@ -39,11 +41,15 @@ function FrameCardThumbnail({ frame }: { frame: FrameOption }) {
 
 export function FrameStepPanel({
   frames,
+  selectedFrame,
   selectedFrameId,
   currencyCode,
   onSelectFrame,
 }: FrameStepPanelProps) {
-  if (frames.length === 0) {
+  const unavailable = isUnavailableFrame(selectedFrame);
+  const unavailableIssue = unavailableIssueForFrame(selectedFrame);
+
+  if (frames.length === 0 && !unavailable) {
     return (
       <div className="space-y-4">
         <div>
@@ -57,6 +63,19 @@ export function FrameStepPanel({
   return (
     <div className="space-y-4">
       <h3 className="type-h3">{SUNGLASSES_COPY.frameStepTitle}</h3>
+
+      {unavailable ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm font-medium text-foreground">{SUNGLASSES_COPY.unavailableFrameName}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {unavailableIssue === "deleted"
+              ? SUNGLASSES_COPY.unavailableFrameDeleted
+              : SUNGLASSES_COPY.unavailableFrameStatus}
+            {" · "}
+            {SUNGLASSES_COPY.unavailableFramePrompt}
+          </p>
+        </div>
+      ) : null}
 
       <div
         role="radiogroup"

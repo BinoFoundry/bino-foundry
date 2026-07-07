@@ -1,3 +1,4 @@
+import { isCatalogItemVisibleInBuilder } from "@/features/catalog-lifecycle/visibility";
 import type { PlacedBead } from "@/lib/luxe-data";
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
@@ -64,8 +65,5 @@ export function isBeadVisibleInBuilder(
   bead: BeadLibraryEntry,
   statusByCode: Map<string, { showInBuilder: boolean }>,
 ): boolean {
-  const code = bead.availabilityStatusCode ?? (bead.isActive === false ? "INACTIVE" : "ACTIVE");
-  const status = statusByCode.get(code);
-  if (status) return status.showInBuilder;
-  return bead.isActive !== false;
+  return isCatalogItemVisibleInBuilder(bead.availabilityStatusCode, bead.isActive, statusByCode);
 }

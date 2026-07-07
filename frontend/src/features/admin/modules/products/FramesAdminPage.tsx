@@ -1,14 +1,14 @@
 import { useMemo, useRef, useState } from "react";
 import { Glasses, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { FrameEntry } from "@/data/glasses";
-import { formatApiErrorMessage, isApiError } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 import {
   applyAdminSaveModalState,
+  notifyAdminDeleteFailed,
+  notifyAdminDeleted,
   notifyAdminSaveFailed,
   type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
@@ -30,11 +30,24 @@ import { useAdminList } from "../../hooks/useAdminList";
 
 type ModalState = AdminEditorModalState<FrameEntry>;
 
+type DeleteState = {
+  frameId: string;
+  designCount: number;
+  itemCount: number;
+};
+
 export function FramesAdminPage() {
   const cat = useCatalogue();
   const { format } = useFormatCurrency();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const statusLabelByCode = useMemo(
+    () => new Map(cat.catalogAvailabilityStatuses.map((s) => [s.code, s.label])),
+    [cat.catalogAvailabilityStatuses],
+  );
 
   const frames = cat.frames ?? [];
   const list = useAdminList(frames, (f, q) => f.name.toLowerCase().includes(q));
@@ -45,6 +58,37 @@ export function FramesAdminPage() {
     if (!modal) return "Frames";
     return modal.type === "add" ? "New frame" : "Edit frame";
   }, [modal]);
+
+  const availabilityLabel = (frame: FrameEntry) => {
+    const code = frame.availabilityStatusCode ?? (frame.isActive === false ? "INACTIVE" : "ACTIVE");
+    return statusLabelByCode.get(code) ?? code;
+  };
+
+  const requestDelete = async (frameId: string) => {
+    try {
+      const refs = await cat.getFrameReferences(frameId);
+      setDeleteState({ frameId, designCount: refs.designCount, itemCount: refs.itemCount });
+    } catch (err) {
+      notifyAdminDeleteFailed(err);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteState) return;
+    setDeleteLoading(true);
+    try {
+      await cat.deleteFrame(deleteState.frameId, { force: true });
+      if (modal?.type === "edit" && modal.entry.id === deleteState.frameId) {
+        setModal(null);
+      }
+      setDeleteState(null);
+      notifyAdminDeleted("Frame");
+    } catch (err) {
+      notifyAdminDeleteFailed(err);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -100,31 +144,34 @@ export function FramesAdminPage() {
                 const clip = summarizeFrameClipStatus(f.renderViews);
                 const frontPlate =
                   f.renderViews?.find((v) => v.view === "front")?.plateUrl ?? f.frameImages?.[0];
+                const statusCode =
+                  f.availabilityStatusCode ?? (f.isActive === false ? "INACTIVE" : "ACTIVE");
                 return (
                   <AdminListRow
                     key={f.id}
                     onClick={() => setModal({ type: "edit", entry: f })}
                     actions={
-                      list.isDeleting(f.id) ? (
+                      deleteState?.frameId === f.id ? (
                         <AdminDeleteConfirm
-                          onCancel={list.cancelDelete}
-                          onConfirm={async () => {
-                            try {
-                              await cat.deleteFrame(f.id);
-                              list.cancelDelete();
-                            } catch (err) {
-                              toast.error(
-                                isApiError(err) ? err.message : formatApiErrorMessage(err) || "Failed to delete frame",
-                              );
-                            }
-                          }}
+                          label="Force delete this frame?"
+                          confirmLabel={deleteLoading ? "Deleting…" : "Force Delete"}
+                          message={
+                            deleteState.designCount > 0
+                              ? `This frame is currently used in ${deleteState.designCount} saved design${deleteState.designCount === 1 ? "" : "s"}. Force deleting it will permanently remove it from the catalogue. Users opening those designs will be prompted to replace the unavailable frame.`
+                              : "This will permanently delete the frame and all associated assets."
+                          }
+                          onCancel={() => setDeleteState(null)}
+                          onConfirm={confirmDelete}
                         />
                       ) : (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() => list.requestDelete(f.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void requestDelete(f.id);
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -145,11 +192,12 @@ export function FramesAdminPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{f.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(f.price)} · clip {FRAME_CLIP_LABELS[clip].toLowerCase()}
+                        {format(f.price)} · clip {FRAME_CLIP_LABELS[clip].toLowerCase()} ·{" "}
+                        {availabilityLabel(f)}
                       </p>
                     </div>
-                    {f.isActive === false ? (
-                      <AdminStatusBadge label="Unpublished" variant="danger" />
+                    {statusCode !== "ACTIVE" ? (
+                      <AdminStatusBadge label={availabilityLabel(f)} variant="danger" />
                     ) : clip === "ready" ? (
                       <AdminStatusBadge label="Ready" variant="success" />
                     ) : null}

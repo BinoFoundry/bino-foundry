@@ -31,6 +31,7 @@ export function createCatalogRoutes(): Router {
   router.use("/orders", createOrdersRoutes());
   router.get("/bead-library-sizes", asyncHandler(beadLibrarySizeHandlers.list));
   router.use("/bead-availability-statuses", createBeadAvailabilityStatusRoutes());
+  router.use("/catalog-availability-statuses", createBeadAvailabilityStatusRoutes());
 
   router.use("/admin/settings", createAdminSettingsRoutes());
 

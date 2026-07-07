@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { isCatalogItemVisibleInBuilder } from "@/features/catalog-lifecycle/visibility";
 import { AssetLoader } from "@/render/assets/asset-loader";
 import { buildCustomiserCompositorConfig } from "@/render/adapters/customiser-config";
 import { calculateSunglassesTotal, formatConfigSummary } from "@/render/engine/pricing";
@@ -11,6 +12,8 @@ import type { FrameOption } from "@/lib/luxe-data";
 import { FRAME_BASE_PRICE } from "@/lib/luxe-data";
 
 import { loadCustomiserSession, saveCustomiserSession } from "../utils/customiser-session";
+import { resolveLoadedSunglassesFrame } from "../load-saved-sunglasses";
+import { isUnavailableFrame } from "../unavailable-frame";
 
 const EMPTY_FRAME: FrameOption = {
   id: "fallback",
@@ -24,22 +27,40 @@ const EMPTY_FRAME: FrameOption = {
 const plateLoader = new AssetLoader();
 
 export function useSunglassesCustomiserState(onPriceChange?: (price: number) => void) {
-  const { frames: allFrames } = useCatalogue();
+  const { frames: allFrames, catalogAvailabilityStatuses } = useCatalogue();
   const sunglassesCatalog = useSunglassesCatalog();
   const sessionHydrated = useRef(false);
 
-  const frames = useMemo(
-    () => allFrames.filter((f) => f.isActive !== false),
-    [allFrames],
+  const statusByCode = useMemo(
+    () => new Map(catalogAvailabilityStatuses.map((s) => [s.code, s])),
+    [catalogAvailabilityStatuses],
+  );
+
+  const builderFrames = useMemo(
+    () =>
+      allFrames.filter((f) =>
+        isCatalogItemVisibleInBuilder(f.availabilityStatusCode, f.isActive, statusByCode),
+      ),
+    [allFrames, statusByCode],
   );
 
   const [frameSkuId, setFrameSkuId] = useState<string>("");
+  const [loadedFrameOverride, setLoadedFrameOverride] = useState<FrameOption | null>(null);
+  const [frameCatalogIssue, setFrameCatalogIssue] = useState<"deleted" | "unavailable" | null>(
+    null,
+  );
+
   const [selectedTintId, setSelectedTintId] = useState<string | null>(null);
 
   const frameSku = useMemo(() => {
-    if (!frames.length) return EMPTY_FRAME;
-    return frames.find((f) => f.id === frameSkuId) ?? frames[0];
-  }, [frames, frameSkuId]);
+    if (loadedFrameOverride) return loadedFrameOverride;
+    if (!allFrames.length && !builderFrames.length) return EMPTY_FRAME;
+    const match = allFrames.find((f) => f.id === frameSkuId) ?? builderFrames.find((f) => f.id === frameSkuId);
+    return match ?? builderFrames[0] ?? EMPTY_FRAME;
+  }, [allFrames, builderFrames, frameSkuId, loadedFrameOverride]);
+
+  const hasUnavailableFrame =
+    frameCatalogIssue != null || isUnavailableFrame(frameSku);
 
   const selectedTintEntry = useMemo(() => {
     if (!sunglassesCatalog.lensTints.length) return null;
@@ -69,12 +90,21 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
   });
 
   useEffect(() => {
-    if (sessionHydrated.current || !frames.length || !sunglassesCatalog.lensTints.length) return;
+    if (sessionHydrated.current || !builderFrames.length || !sunglassesCatalog.lensTints.length) {
+      return;
+    }
     const saved = loadCustomiserSession();
-    if (saved?.frameSkuId && frames.some((f) => f.id === saved.frameSkuId)) {
-      setFrameSkuId(saved.frameSkuId);
+    if (saved?.frameSkuId) {
+      const resolved = resolveLoadedSunglassesFrame({
+        savedFrameId: saved.frameSkuId,
+        allFrames,
+      });
+      setFrameSkuId(resolved.frameId);
+      if (isUnavailableFrame(resolved.frame)) {
+        setLoadedFrameOverride(resolved.frame);
+      }
     } else {
-      setFrameSkuId(frames[0].id);
+      setFrameSkuId(builderFrames[0].id);
     }
     if (saved?.selectedTintId && sunglassesCatalog.getTintById(saved.selectedTintId)) {
       setSelectedTintId(saved.selectedTintId);
@@ -85,14 +115,14 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
       render.dispatch({ type: "SET_OPTIONS", options: saved.options });
     }
     sessionHydrated.current = true;
-  }, [frames, sunglassesCatalog, render.dispatch]);
+  }, [builderFrames, allFrames, sunglassesCatalog, render.dispatch]);
 
   useEffect(() => {
     if (!sessionHydrated.current) return;
-    if (!frameSkuId && frames.length) {
-      setFrameSkuId(frames[0].id);
+    if (!frameSkuId && builderFrames.length) {
+      setFrameSkuId(builderFrames[0].id);
     }
-  }, [frames, frameSkuId]);
+  }, [builderFrames, frameSkuId]);
 
   useEffect(() => {
     if (!sessionHydrated.current) return;
@@ -158,18 +188,46 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
     onPriceChange?.(totalPrice);
   }, [totalPrice, onPriceChange]);
 
-  const selectFrameSku = useCallback((id: string) => {
-    setFrameSkuId(id);
-  }, []);
+  const selectFrameSku = useCallback(
+    (id: string) => {
+      setFrameSkuId(id);
+      setLoadedFrameOverride(null);
+      setFrameCatalogIssue(null);
+    },
+    [],
+  );
+
+  const applyLoadedFrame = useCallback(
+    (savedFrameId: string, catalogIssue?: "deleted" | "unavailable" | null) => {
+      const resolved = resolveLoadedSunglassesFrame({
+        savedFrameId,
+        catalogIssue,
+        allFrames,
+      });
+      setFrameSkuId(resolved.frameId);
+      setFrameCatalogIssue(
+        catalogIssue ?? (resolved.hasCatalogIssue ? (isUnavailableFrame(resolved.frame) ? "deleted" : "unavailable") : null),
+      );
+      if (isUnavailableFrame(resolved.frame)) {
+        setLoadedFrameOverride(resolved.frame);
+      } else {
+        setLoadedFrameOverride(null);
+      }
+    },
+    [allFrames],
+  );
 
   const selectTintById = useCallback((tintId: string) => {
     setSelectedTintId(tintId);
   }, []);
 
   return {
-    frames,
+    frames: builderFrames,
+    allFrames,
     frameSku,
+    hasUnavailableFrame,
     selectFrameSku,
+    applyLoadedFrame,
     compositorConfig,
     totalPrice,
     summaryText,

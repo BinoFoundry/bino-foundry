@@ -12,8 +12,47 @@ function newPublicId(prefix: string): string {
   return `${prefix}_${randomBytes(8).toString("hex")}`;
 }
 
+type CatalogIssue = "deleted" | "unavailable" | null;
+
+function resolveFrameCatalogIssue(
+  frame: Record<string, unknown> | null,
+  status: { allow_new_designs?: boolean } | null,
+): CatalogIssue {
+  if (!frame) return "deleted";
+  if (status?.allow_new_designs !== true) return "unavailable";
+  return null;
+}
+
 export class SunglassesConfigService {
+  private async assertFrameAvailableForSave(frameId: string): Promise<void> {
+    const supabase = getSupabaseServiceRole();
+    const { data, error } = await supabase
+      .from("frames")
+      .select("id, name, catalog_availability_statuses(allow_new_designs, label)")
+      .eq("id", frameId)
+      .maybeSingle();
+
+    assertNoDbError(error);
+    if (!data) {
+      throw new ValidationError("Selected frame is no longer available. Choose another frame.");
+    }
+
+    const status = (data as Record<string, unknown>).catalog_availability_statuses as {
+      allow_new_designs?: boolean;
+      label?: string;
+    } | null;
+
+    if (status?.allow_new_designs !== true) {
+      const frameName = String((data as { name?: string }).name ?? "This frame");
+      throw new ValidationError(
+        `"${frameName}" is not available for new designs. Choose another frame.`,
+      );
+    }
+  }
+
   async create(dto: SunglassesConfigDTO, ownerUserId: string) {
+    await this.assertFrameAvailableForSave(dto.frameId);
+
     const supabase = getSupabaseServiceRole();
     const siteSettings = await settingsService.getGeneralSettings();
     const subtotal = dto.subtotal ?? 0;
@@ -26,6 +65,7 @@ export class SunglassesConfigService {
         status: "saved",
         owner_user_id: ownerUserId,
         frame_id: dto.frameId,
+        frame_id_snapshot: dto.frameId,
         lens_tint_id: dto.lensTintId,
         selected_options: dto.selectedOptions,
         builder_step: dto.builderStep ?? "preview",
@@ -33,24 +73,30 @@ export class SunglassesConfigService {
         subtotal,
       })
       .select(
-        "public_id, status, frame_id, lens_tint_id, selected_options, builder_step, subtotal, currency_code, created_at, updated_at",
+        "public_id, status, frame_id, frame_id_snapshot, lens_tint_id, selected_options, builder_step, subtotal, currency_code, created_at, updated_at",
       )
       .single();
 
     assertNoDbError(error);
     if (!data) throw new ValidationError("Failed to save sunglasses configuration");
-    return this.mapRow(data);
+    return this.getConfiguration(String((data as { public_id: string }).public_id), {
+      validateCatalog: false,
+    });
   }
 
   async update(publicId: string, dto: SunglassesConfigDTO, ownerUserId: string) {
+    await this.getForOwner(publicId, ownerUserId);
+    await this.assertFrameAvailableForSave(dto.frameId);
+
     const supabase = getSupabaseServiceRole();
-    const existing = await this.getForOwner(publicId, ownerUserId);
+    const existing = await this.getByPublicId(publicId);
     const siteSettings = await settingsService.getGeneralSettings();
 
     const { data, error } = await supabase
       .from("sunglasses_configurations")
       .update({
         frame_id: dto.frameId,
+        frame_id_snapshot: dto.frameId,
         lens_tint_id: dto.lensTintId,
         selected_options: dto.selectedOptions,
         builder_step: dto.builderStep ?? existing.builderStep,
@@ -60,36 +106,89 @@ export class SunglassesConfigService {
       .eq("public_id", publicId)
       .eq("owner_user_id", ownerUserId)
       .select(
-        "public_id, status, frame_id, lens_tint_id, selected_options, builder_step, subtotal, currency_code, created_at, updated_at",
+        "public_id, status, frame_id, frame_id_snapshot, lens_tint_id, selected_options, builder_step, subtotal, currency_code, created_at, updated_at",
       )
       .single();
 
     assertNoDbError(error);
     if (!data) throw new ValidationError("Failed to update sunglasses configuration");
-    return this.mapRow(data);
+    return this.getConfiguration(publicId, { validateCatalog: false });
   }
 
   async getByPublicId(publicId: string) {
+    const config = await this.getConfiguration(publicId, { validateCatalog: false });
+    return config;
+  }
+
+  async getForOwner(publicId: string, ownerUserId: string) {
+    const config = await this.getConfiguration(publicId, { validateCatalog: false });
+    if (config.ownerUserId && config.ownerUserId !== ownerUserId) {
+      throw new NotFoundError("Sunglasses configuration not found");
+    }
+    return config;
+  }
+
+  async getConfiguration(publicId: string, options?: { validateCatalog?: boolean }) {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
       .from("sunglasses_configurations")
       .select(
-        "public_id, status, owner_user_id, frame_id, lens_tint_id, selected_options, builder_step, subtotal, currency_code, created_at, updated_at",
+        "public_id, status, owner_user_id, frame_id, frame_id_snapshot, lens_tint_id, selected_options, builder_step, subtotal, currency_code, created_at, updated_at, frames(id, name, availability_status_code, catalog_availability_statuses(show_in_builder, allow_new_designs, label))",
       )
       .eq("public_id", publicId)
       .maybeSingle();
 
     assertNoDbError(error);
     if (!data) throw new NotFoundError("Sunglasses configuration not found");
-    return this.mapRow(data);
-  }
 
-  async getForOwner(publicId: string, ownerUserId: string) {
-    const config = await this.getByPublicId(publicId);
-    if (config.ownerUserId && config.ownerUserId !== ownerUserId) {
-      throw new NotFoundError("Sunglasses configuration not found");
+    const r = data as Record<string, unknown>;
+    const frame = r.frames as Record<string, unknown> | null;
+    const status = frame?.catalog_availability_statuses as {
+      show_in_builder?: boolean;
+      allow_new_designs?: boolean;
+      label?: string;
+    } | null;
+    const snapshotId = String(r.frame_id_snapshot ?? "").trim();
+    const frameUuid = r.frame_id ? String(r.frame_id) : "";
+    const catalogIssue = resolveFrameCatalogIssue(frame, status);
+    const frameId = frameUuid || snapshotId;
+
+    if (options?.validateCatalog && catalogIssue) {
+      throw new ValidationError(
+        catalogIssue === "deleted"
+          ? "This design references a frame that is no longer available. Replace it before ordering."
+          : "This design references a frame that is not available for ordering. Replace it before ordering.",
+      );
     }
-    return config;
+
+    const missingFrameIds = catalogIssue === "deleted" && frameId ? [frameId] : [];
+    const unavailableFrameIds = catalogIssue === "unavailable" && frameId ? [frameId] : [];
+
+    return {
+      id: String(r.public_id),
+      status: String(r.status),
+      ownerUserId: (r.owner_user_id as string | null) ?? null,
+      frameId,
+      frameName: frame ? String(frame.name ?? "") : undefined,
+      lensTintId: String(r.lens_tint_id),
+      selectedOptions: (r.selected_options as Record<string, boolean>) ?? {},
+      builderStep: String(r.builder_step ?? "frame") as SunglassesConfigDTO["builderStep"],
+      subtotal: Number(r.subtotal ?? 0),
+      currencyCode: String(r.currency_code ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode),
+      catalogIssue,
+      availabilityStatusCode: frame ? String(frame.availability_status_code ?? "ACTIVE") : null,
+      availabilityStatusLabel: status?.label ?? null,
+      catalogWarnings:
+        missingFrameIds.length || unavailableFrameIds.length
+          ? {
+              missingFrameIds,
+              unavailableFrameIds,
+            }
+          : undefined,
+      hasCatalogIssues: catalogIssue != null,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
   }
 
   async markOrdered(publicId: string, ownerUserId: string, orderReference: string) {
@@ -113,29 +212,12 @@ export class SunglassesConfigService {
     assertNoDbError(error);
     if (!data) throw new ValidationError("Failed to update sunglasses configuration status");
 
-    const r = data as Record<string, unknown>;
+    const row = data as Record<string, unknown>;
     return {
-      id: String(r.public_id),
-      status: String(r.status),
-      orderReference: (r.order_reference as string | null) ?? null,
-      updatedAt: r.updated_at,
-    };
-  }
-
-  private mapRow(row: unknown) {
-    const r = row as Record<string, unknown>;
-    return {
-      id: String(r.public_id),
-      status: String(r.status),
-      ownerUserId: (r.owner_user_id as string | null) ?? null,
-      frameId: String(r.frame_id),
-      lensTintId: String(r.lens_tint_id),
-      selectedOptions: (r.selected_options as Record<string, boolean>) ?? {},
-      builderStep: String(r.builder_step ?? "frame") as SunglassesConfigDTO["builderStep"],
-      subtotal: Number(r.subtotal ?? 0),
-      currencyCode: String(r.currency_code ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode),
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
+      id: String(row.public_id),
+      status: String(row.status),
+      orderReference: (row.order_reference as string | null) ?? null,
+      updatedAt: row.updated_at,
     };
   }
 }

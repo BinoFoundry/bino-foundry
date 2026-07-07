@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { beadAvailabilityStatusesApi } from "@/services/api/bead-availability-statuses";
+import { catalogAvailabilityStatusesApi } from "@/services/api/catalog-availability-statuses";
 import { beadSizesApi } from "@/services/api/bead-sizes";
 import { wristSizesApi } from "@/services/api/wrist-sizes";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
@@ -82,7 +82,8 @@ export interface CatalogueActions {
   deleteWristSize: (id: string) => Promise<void>;
   addFrame: (entry: FrameEntry) => Promise<FrameEntry>;
   updateFrame: (entry: FrameEntry) => Promise<FrameEntry>;
-  deleteFrame: (id: string) => Promise<void>;
+  getFrameReferences: (id: string) => Promise<{ designCount: number; itemCount: number }>;
+  deleteFrame: (id: string, options?: { force?: boolean }) => Promise<void>;
   resetToDefaults: () => void;
   refreshFromApi: () => Promise<void>;
 }
@@ -111,7 +112,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, beadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries, beadAvailabilityStatuses, strandRenderDefaults] =
+      const [frames, beadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries, catalogAvailabilityStatuses, strandRenderDefaults] =
         await Promise.all([
         catalogueApi.listFrames(),
         beadsApi.listTypes(),
@@ -119,7 +120,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         wristSizesApi.list(true),
         beadLibrarySizesApi.list(),
         beadsApi.listLibraries(),
-        beadAvailabilityStatusesApi.list(),
+        catalogAvailabilityStatusesApi.list(),
         settingsApi.getStrandRenderDefaults(),
       ]);
       const next: CatalogueStore = {
@@ -129,7 +130,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         wristSizes,
         beadLibrarySizes,
         beadLibraries,
-        beadAvailabilityStatuses,
+        catalogAvailabilityStatuses,
+        beadAvailabilityStatuses: catalogAvailabilityStatuses,
         strandRenderDefaults,
       };
       saveToStorage(next);
@@ -456,8 +458,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   );
 
   const deleteFrame = useCallback(
-    async (id: string) => {
-      await catalogueApi.deleteFrame(id);
+    async (id: string, options?: { force?: boolean }) => {
+      await catalogueApi.deleteFrame(id, options);
       mergeStore((prev) => ({
         ...prev,
         frames: removeById(prev.frames, id),
@@ -465,6 +467,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     },
     [mergeStore],
   );
+
+  const getFrameReferences = useCallback(async (id: string) => {
+    return catalogueApi.getFrameReferences(id);
+  }, []);
 
   const resetToDefaults = useCallback(() => {
     localStorage.removeItem(CATALOGUE_STORAGE_KEY);
@@ -500,6 +506,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addFrame,
       updateFrame,
       deleteFrame,
+      getFrameReferences,
       resetToDefaults,
       refreshFromApi,
     }),
@@ -530,6 +537,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addFrame,
       updateFrame,
       deleteFrame,
+      getFrameReferences,
       resetToDefaults,
       refreshFromApi,
     ],

@@ -2,7 +2,7 @@ import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError } from "../../lib/errors.js";
 
-export interface BeadAvailabilityStatusRow {
+export interface CatalogAvailabilityStatusRow {
   code: string;
   label: string;
   description: string;
@@ -11,7 +11,7 @@ export interface BeadAvailabilityStatusRow {
   displayOrder: number;
 }
 
-function mapRow(row: Record<string, unknown>): BeadAvailabilityStatusRow {
+function mapRow(row: Record<string, unknown>): CatalogAvailabilityStatusRow {
   return {
     code: String(row.code),
     label: String(row.label),
@@ -22,11 +22,14 @@ function mapRow(row: Record<string, unknown>): BeadAvailabilityStatusRow {
   };
 }
 
-export class BeadAvailabilityStatusService {
-  async list(): Promise<BeadAvailabilityStatusRow[]> {
+/** @deprecated Use CatalogAvailabilityStatusService */
+export type BeadAvailabilityStatusRow = CatalogAvailabilityStatusRow;
+
+export class CatalogAvailabilityStatusService {
+  async list(): Promise<CatalogAvailabilityStatusRow[]> {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
-      .from("bead_availability_statuses")
+      .from("catalog_availability_statuses")
       .select("code, label, description, show_in_builder, allow_new_designs, display_order")
       .order("display_order", { ascending: true })
       .order("code", { ascending: true });
@@ -35,18 +38,20 @@ export class BeadAvailabilityStatusService {
     return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
   }
 
-  async getByCode(code: string): Promise<BeadAvailabilityStatusRow> {
+  async getByCode(code: string): Promise<CatalogAvailabilityStatusRow> {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
-      .from("bead_availability_statuses")
+      .from("catalog_availability_statuses")
       .select("code, label, description, show_in_builder, allow_new_designs, display_order")
       .eq("code", code)
       .maybeSingle();
 
     assertNoDbError(error);
-    if (!data) throw new NotFoundError(`Unknown bead availability status: ${code}`);
+    if (!data) throw new NotFoundError(`Unknown catalog availability status: ${code}`);
     return mapRow(data as Record<string, unknown>);
   }
 }
 
-export const beadAvailabilityStatusService = new BeadAvailabilityStatusService();
+/** @deprecated Use catalogAvailabilityStatusService */
+export const beadAvailabilityStatusService = new CatalogAvailabilityStatusService();
+export const catalogAvailabilityStatusService = beadAvailabilityStatusService;

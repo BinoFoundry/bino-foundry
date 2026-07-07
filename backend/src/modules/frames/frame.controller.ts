@@ -30,9 +30,15 @@ async function update(req: Request, res: Response): Promise<void> {
   sendJson(res, await frameService.update(id, dto));
 }
 
+async function references(req: Request, res: Response): Promise<void> {
+  const { id } = frameIdParam.parse(req.params);
+  sendJson(res, await frameService.countDesignReferences(id));
+}
+
 async function remove(req: Request, res: Response): Promise<void> {
   const { id } = frameIdParam.parse(req.params);
-  sendJson(res, await frameService.remove(id));
+  const force = req.query.force === "1" || req.query.force === "true";
+  sendJson(res, await frameService.remove(id, { force }));
 }
 
 export const frameHandlers = {
@@ -40,5 +46,6 @@ export const frameHandlers = {
   retrieve: asyncHandler(retrieve),
   create: asyncHandler(create),
   update: asyncHandler(update),
+  references: asyncHandler(references),
   remove: asyncHandler(remove),
 };

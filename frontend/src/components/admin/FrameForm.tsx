@@ -10,6 +10,7 @@ import type { FrameRenderView } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES } from "@/types/frame-rendering";
 import { prepareRenderViewsForSave } from "@/lib/prepare-frame-views-for-save";
 import { serializeRenderViewsForApi } from "@/lib/frame-render-views";
+import { useCatalogue } from "@/state/catalogue";
 
 import { Button } from "../ui/button";
 
@@ -38,12 +39,14 @@ function normalizeViews(views?: FrameRenderView[]): FrameRenderView[] {
 }
 
 export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
+  const cat = useCatalogue();
   const blank: FrameEntry = {
     id: "",
     name: "",
     price: 0,
     description: "",
     isActive: true,
+    availabilityStatusCode: "ACTIVE",
     displayOrder: 0,
     renderViews: normalizeViews(),
   };
@@ -157,14 +160,30 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
             onChange={(e) => set("displayOrder", Number(e.target.value))}
           />
         </div>
-        <label className="col-span-2 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.isActive !== false}
-            onChange={(e) => set("isActive", e.target.checked)}
-          />
-          Published (visible in sunglasses customiser)
-        </label>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Availability status</label>
+          <select
+            value={form.availabilityStatusCode ?? (form.isActive === false ? "INACTIVE" : "ACTIVE")}
+            onChange={(e) => {
+              const code = e.target.value;
+              set("availabilityStatusCode", code);
+              const status = cat.catalogAvailabilityStatuses.find((s) => s.code === code);
+              if (status) set("isActive", status.showInBuilder);
+            }}
+            className="w-full rounded border border-border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+          >
+            {cat.catalogAvailabilityStatuses.map((status) => (
+              <option key={status.code} value={status.code}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {cat.catalogAvailabilityStatuses.find(
+              (s) => s.code === (form.availabilityStatusCode ?? (form.isActive === false ? "INACTIVE" : "ACTIVE")),
+            )?.description ?? ""}
+          </p>
+        </div>
       </div>
 
       <div ref={viewsBlockRef} className="space-y-2">

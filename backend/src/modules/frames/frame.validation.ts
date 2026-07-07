@@ -32,6 +32,7 @@ export const frameCreateDto = z.object({
   price: z.coerce.number().nonnegative(),
   description: z.string().optional(),
   isActive: z.boolean().optional(),
+  availabilityStatusCode: z.string().min(1).optional(),
   displayOrder: z.coerce.number().int().optional(),
   frameImages: z.array(z.string()).optional(),
   lensColors: z.array(lensColorSchema).optional(),

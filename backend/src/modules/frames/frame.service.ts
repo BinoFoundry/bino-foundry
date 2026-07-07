@@ -2,9 +2,12 @@ import { randomBytes } from "node:crypto";
 
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
-import { NotFoundError } from "../../lib/errors.js";
+import { ConflictError, NotFoundError } from "../../lib/errors.js";
+import { runBackgroundTask } from "../../lib/run-background-task.js";
 import { settingsService } from "../settings/settings.service.js";
+import { catalogAvailabilityStatusService } from "../bead-availability-statuses/bead-availability-status.service.js";
 import { slugifyKebab } from "../../lib/slug.js";
+import { collectFrameAssetUrls, deleteFrameAssetUrls } from "./frame-assets.js";
 import type { FrameCreateDTO, FrameUpdateDTO } from "./frame.validation.js";
 
 type MarketingCopy = Record<string, unknown>;
@@ -57,6 +60,7 @@ function mapFrameRow(
     price: Number(row.base_price),
     description: row.description ?? "",
     isActive: row.is_active !== false,
+    availabilityStatusCode: String(row.availability_status_code ?? "ACTIVE"),
     displayOrder: Number(row.display_order ?? 0),
     frameImages: Array.isArray(images) ? images : [],
     lensColors: Array.isArray(lens) ? lens : [],
@@ -238,6 +242,10 @@ export class FrameService {
     marketing_copy.legacy_lens_colors = payload.lensColors ?? [];
     if (payload.renderViews?.length) marketing_copy.render_views = payload.renderViews;
 
+    const availabilityStatusCode =
+      payload.availabilityStatusCode ?? (payload.isActive === false ? "INACTIVE" : "ACTIVE");
+    await catalogAvailabilityStatusService.getByCode(availabilityStatusCode);
+
     const insertRow = {
       slug,
       name: payload.name.trim(),
@@ -247,6 +255,7 @@ export class FrameService {
       marketing_copy,
       display_order: payload.displayOrder ?? 0,
       is_active: payload.isActive ?? true,
+      availability_status_code: availabilityStatusCode,
     };
 
     const { data, error } = await supabase.from("frames").insert(insertRow).select("*").single();
@@ -279,6 +288,14 @@ export class FrameService {
       marketing_copy: mc,
     };
 
+    if (payload.isActive !== undefined && payload.availabilityStatusCode === undefined) {
+      updates.availability_status_code = payload.isActive === false ? "INACTIVE" : "ACTIVE";
+    }
+    if (payload.availabilityStatusCode !== undefined) {
+      await catalogAvailabilityStatusService.getByCode(payload.availabilityStatusCode);
+      updates.availability_status_code = payload.availabilityStatusCode;
+    }
+
     const { data, error } = await supabase.from("frames").update(updates).eq("id", recordId).select("*").single();
 
     assertNoDbError(error);
@@ -289,13 +306,85 @@ export class FrameService {
     return mapFrameRow(data as Record<string, unknown>, viewMap.get(recordId) ?? []);
   }
 
-  async remove(recordId: string): Promise<{ message: string }> {
-    await this.getById(recordId);
-
+  async countDesignReferences(recordId: string): Promise<{ designCount: number; itemCount: number }> {
     const supabase = getSupabaseServiceRole();
-    const { error } = await supabase.from("frames").delete().eq("id", recordId);
 
-    assertNoDbError(error);
+    const { data: existing, error: loadErr } = await supabase
+      .from("frames")
+      .select("id")
+      .eq("id", recordId)
+      .maybeSingle();
+
+    assertNoDbError(loadErr);
+    if (!existing) throw new NotFoundError("Frame not found");
+
+    const { data: refs, error: refErr } = await supabase
+      .from("sunglasses_configurations")
+      .select("public_id")
+      .eq("frame_id", recordId);
+    assertNoDbError(refErr);
+
+    const configurations = refs ?? [];
+    return {
+      designCount: configurations.length,
+      itemCount: configurations.length,
+    };
+  }
+
+  async remove(recordId: string, options?: { force?: boolean }): Promise<{ message: string }> {
+    const supabase = getSupabaseServiceRole();
+
+    const { data: existing, error: loadErr } = await supabase
+      .from("frames")
+      .select("id, name, marketing_copy")
+      .eq("id", recordId)
+      .maybeSingle();
+
+    assertNoDbError(loadErr);
+    if (!existing) throw new NotFoundError("Frame not found");
+
+    const frameName = String((existing as { name?: string }).name ?? "This frame").trim() || "This frame";
+
+    const { count: refCount, error: refErr } = await supabase
+      .from("sunglasses_configurations")
+      .select("id", { count: "exact", head: true })
+      .eq("frame_id", recordId);
+    assertNoDbError(refErr);
+
+    if (!options?.force && (refCount ?? 0) > 0) {
+      throw new ConflictError(
+        `Cannot delete "${frameName}" — it is used in saved sunglasses designs. Use force delete to remove it from the catalogue while preserving saved designs as replaceable placeholders.`,
+      );
+    }
+
+    const { data: renderViewRows, error: viewsErr } = await supabase
+      .from("frame_render_views")
+      .select("*")
+      .eq("frame_id", recordId);
+    assertNoDbError(viewsErr);
+
+    if (options?.force) {
+      const { error: snapshotErr } = await supabase
+        .from("sunglasses_configurations")
+        .update({ frame_id_snapshot: recordId })
+        .eq("frame_id", recordId);
+      assertNoDbError(snapshotErr);
+    }
+
+    const assetUrls = collectFrameAssetUrls(
+      existing as Record<string, unknown>,
+      (renderViewRows ?? []) as Record<string, unknown>[],
+    );
+
+    const { error: delErr } = await supabase.from("frames").delete().eq("id", recordId);
+    assertNoDbError(delErr);
+
+    if (assetUrls.length) {
+      runBackgroundTask("frame-asset-cleanup", async () => {
+        await deleteFrameAssetUrls(assetUrls);
+      });
+    }
+
     return { message: "Frame deleted successfully" };
   }
 

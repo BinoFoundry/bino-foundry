@@ -4,9 +4,11 @@ import type { SunglassesCompositorConfig } from "@/render/types";
 import { BuilderPreviewFitScope } from "@/features/builder/components/BuilderPreviewFitScope";
 import { getCustomiserDisplayViews } from "../utils/compositor-views";
 import { NO_PREVIEW_MESSAGE } from "../utils/frame-plates";
+import { SUNGLASSES_COPY } from "../copy";
 
 interface SunglassesPreviewPanelProps {
   config: SunglassesCompositorConfig;
+  unavailableFrame?: boolean;
 }
 
 function PreviewSlot({
@@ -36,10 +38,21 @@ function PreviewSlot({
 }
 
 /** Front + optional side / 45° live previews (synced to the same configuration). */
-export function SunglassesPreviewPanel({ config }: SunglassesPreviewPanelProps) {
+export function SunglassesPreviewPanel({ config, unavailableFrame = false }: SunglassesPreviewPanelProps) {
   const displayViews = getCustomiserDisplayViews(config);
   const primary = displayViews[0];
   const secondary = displayViews.slice(1);
+
+  if (unavailableFrame) {
+    return (
+      <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-2 p-8 text-center">
+        <p className="text-sm font-medium text-foreground">{SUNGLASSES_COPY.unavailableFrameName}</p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          This frame is no longer available. {SUNGLASSES_COPY.unavailableFramePrompt}
+        </p>
+      </div>
+    );
+  }
 
   if (!primary) {
     return (
