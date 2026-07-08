@@ -31,7 +31,6 @@ import {
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import {
   computeStrandAutoFitScale,
-  computeTwinPreviewScale,
   measureStrandCanvasSize,
 } from "@/features/bracelet/strand-viewport";
 import { BraceletBuilderLayout } from "@/layouts/BraceletBuilderLayout";
@@ -282,42 +281,26 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     [strandSize, layoutCanvasSize],
   );
 
-  const twinPreviewScale = useMemo(() => {
-    if (!builder.twinning || containerSize.width <= 0) return 1;
-    const twinAutoFit = computeStrandAutoFitScale(strandSize, layoutCanvasSize, {
-      twinning: true,
-      viewportWidthPx: containerSize.width,
-    });
-    return computeTwinPreviewScale(baseAutoFitScale, twinAutoFit);
-  }, [builder.twinning, strandSize, layoutCanvasSize, containerSize.width, baseAutoFitScale]);
-
   const strandZoomLayout = useMemo(
     () => ({
       viewportSize: strandSize,
       layoutCanvasSize,
       autoFitScale: baseAutoFitScale,
-      twinPreviewScale,
       twinning: builder.twinning,
     }),
-    [strandSize, layoutCanvasSize, baseAutoFitScale, twinPreviewScale, builder.twinning],
+    [strandSize, layoutCanvasSize, baseAutoFitScale, builder.twinning],
   );
 
   const defaultStrandZoom = useMemo(
     () =>
       computeDefaultStrandZoom({
-        twinning: builder.twinning,
+        twinning: false,
         containerWidth: containerSize.width,
         containerHeight: containerSize.height,
         isMobile,
         autoFitScale: baseAutoFitScale,
       }),
-    [
-      builder.twinning,
-      containerSize.width,
-      containerSize.height,
-      isMobile,
-      baseAutoFitScale,
-    ],
+    [containerSize.width, containerSize.height, isMobile, baseAutoFitScale],
   );
 
   const {

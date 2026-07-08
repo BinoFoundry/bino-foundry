@@ -1,84 +1,67 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  computeLayoutFitScale,
-  computeStrandViewScale,
-  computeTwinPreviewScale,
-} from "./strand-viewport";
+  cameraStateEquals,
+  computeStrandRenderTransform,
+  type CameraState,
+} from "./strand-camera";
+import { computeStrandViewScale } from "./strand-viewport";
 
-/** Mirrors useStrandZoom restore logic after a matching-pair cycle. */
-function simulateTwinToggleRestore(params: {
-  userZoom: number;
-  singleFit: number;
-  twinFit: number;
-  containerWidth: number;
-  layoutCanvas: number;
-}) {
-  const { userZoom, singleFit, layoutCanvas } = params;
-  const twinPreview = computeTwinPreviewScale(
-    singleFit,
-    Math.min(singleFit, Math.max(0, (params.containerWidth - 12) / (2 * layoutCanvas))),
-  );
+const LAYOUT = {
+  autoFitScale: 1,
+  layoutCanvasSize: 500,
+  twinning: false,
+};
 
-  const viewScaleBefore = computeStrandViewScale({
-    autoFitScale: singleFit,
-    userZoom,
-    twinPreviewScale: 1,
-  });
+const TWIN_LAYOUT = { ...LAYOUT, twinning: true };
 
-  computeStrandViewScale({
-    autoFitScale: singleFit,
-    userZoom,
-    twinPreviewScale: twinPreview,
-  });
-
-  const fitAfterExit = computeLayoutFitScale({
-    autoFitScale: singleFit,
-    twinPreviewScale: 1,
-  });
-  const restoredUserZoom = viewScaleBefore / fitAfterExit;
-
-  return computeStrandViewScale({
-    autoFitScale: singleFit,
-    userZoom: restoredUserZoom,
-    twinPreviewScale: 1,
-  });
+/** Simulates the camera engine: twin toggle never mutates CameraState. */
+function simulateTwinToggleCycle(camera: CameraState, cycles = 100): CameraState {
+  let current = { ...camera };
+  for (let i = 0; i < cycles; i += 1) {
+    const beforeSingle = computeStrandRenderTransform(current, LAYOUT);
+    const duringTwin = computeStrandRenderTransform(current, TWIN_LAYOUT);
+    expect(duringTwin.viewScale).toBe(beforeSingle.viewScale);
+    expect(duringTwin.displayZoom).toBe(beforeSingle.displayZoom);
+    current = { ...current };
+    const afterTwin = computeStrandRenderTransform(current, LAYOUT);
+    expect(afterTwin.viewScale).toBe(beforeSingle.viewScale);
+    expect(cameraStateEquals(current, camera)).toBe(true);
+  }
+  return current;
 }
 
-describe("matching pair camera restore", () => {
-  it("restores the exact single-strand view scale after a toggle cycle", () => {
-    const before = computeStrandViewScale({
-      autoFitScale: 1,
-      userZoom: 1.56,
-      twinPreviewScale: 1,
-    });
-    const after = simulateTwinToggleRestore({
-      userZoom: 1.56,
-      singleFit: 1,
-      twinFit: 0.74,
-      containerWidth: 900,
-      layoutCanvas: 500,
-    });
-    expect(after).toBeCloseTo(before, 8);
+describe("strand camera engine", () => {
+  it("displayZoom always equals camera.zoom", () => {
+    const transform = computeStrandRenderTransform({ zoom: 1.5, panX: 0, panY: 0 }, LAYOUT);
+    expect(transform.displayZoom).toBe(1.5);
+    expect(transform.viewScale).toBe(1.5);
   });
 
-  it("does not drift after 20 toggle cycles", () => {
-    const before = computeStrandViewScale({
-      autoFitScale: 0.95,
-      userZoom: 1.56,
-      twinPreviewScale: 1,
-    });
-    let userZoom = 1.56;
-    for (let i = 0; i < 20; i += 1) {
-      const restored = simulateTwinToggleRestore({
-        userZoom,
-        singleFit: 0.95,
-        twinFit: 0.7,
-        containerWidth: 900,
-        layoutCanvas: 500,
-      });
-      expect(restored).toBeCloseTo(before, 8);
-      userZoom = (restored / 0.95);
-    }
+  it("twin toggle does not change viewScale when camera is unchanged", () => {
+    const camera: CameraState = { zoom: 1.56, panX: 12, panY: -8 };
+    const single = computeStrandRenderTransform(camera, LAYOUT);
+    const twin = computeStrandRenderTransform(camera, TWIN_LAYOUT);
+    expect(twin.viewScale).toBe(single.viewScale);
+    expect(twin.displayZoom).toBe(single.displayZoom);
+    expect(twin.panX).toBe(camera.panX);
+    expect(twin.panY).toBe(camera.panY);
+  });
+
+  it("has zero drift after 100 twin toggle cycles", () => {
+    const camera: CameraState = { zoom: 1.56, panX: 20, panY: -15 };
+    const result = simulateTwinToggleCycle(camera, 100);
+    expect(cameraStateEquals(result, camera)).toBe(true);
+    expect(computeStrandViewScale({ autoFitScale: 1, userZoom: result.zoom })).toBeCloseTo(1.56, 10);
+  });
+
+  it("auto-fit changes do not mutate camera — only viewScale output", () => {
+    const camera: CameraState = { zoom: 1.5, panX: 0, panY: 0 };
+    const loose = computeStrandRenderTransform(camera, { ...LAYOUT, autoFitScale: 0.8 });
+    const tight = computeStrandRenderTransform(camera, { ...LAYOUT, autoFitScale: 1 });
+    expect(loose.displayZoom).toBe(1.5);
+    expect(tight.displayZoom).toBe(1.5);
+    expect(loose.viewScale).toBeCloseTo(1.2, 5);
+    expect(tight.viewScale).toBeCloseTo(1.5, 5);
   });
 });

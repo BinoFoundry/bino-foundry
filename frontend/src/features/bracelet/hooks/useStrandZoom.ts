@@ -10,10 +10,13 @@ import {
 
 import { shouldApplyCanvasWheelZoom, shouldStartCanvasPan } from "../interaction";
 import {
-  computeLayoutFitScale,
-  computeStrandViewScale,
-  TWIN_STRAND_PREVIEW_GAP_PX,
-} from "../strand-viewport";
+  type CameraState,
+  computeStrandRenderTransform,
+  expectedStrandContentExtent,
+  isStrandCameraDebugEnabled,
+  logCameraDebugSnapshot,
+} from "../strand-camera";
+import { TWIN_STRAND_PREVIEW_GAP_PX } from "../strand-viewport";
 
 export interface StrandZoomOptions {
   /** When true, pan gestures are ignored (e.g. library HTML5 drag in progress). */
@@ -26,7 +29,7 @@ export interface StrandZoomOptions {
 
 export const STRAND_ZOOM_MIN = 0.55;
 export const STRAND_ZOOM_MAX = 3;
-/** Default zoom when matching pair is enabled — use {@link computeDefaultStrandZoom} for responsive defaults. */
+/** @deprecated Twin no longer changes default zoom — kept for API compat. */
 export const STRAND_TWIN_DEFAULT_ZOOM = 1.02;
 const ZOOM_BUTTON_STEP = 0.08;
 const ZOOM_WHEEL_SENSITIVITY = 0.0011;
@@ -47,8 +50,6 @@ export interface StrandZoomLayout {
   layoutCanvasSize: number;
   /** Single-strand auto-fit (≤ 1) — stable when twinning toggles. */
   autoFitScale: number;
-  /** Temporary twin fit multiplier (≤ 1 when twinning). */
-  twinPreviewScale?: number;
   twinning: boolean;
 }
 
@@ -75,22 +76,15 @@ function panNeedsUpdate(prev: StrandPan, next: StrandPan): boolean {
 }
 
 function layoutSignature(layout: StrandZoomLayout): string {
-  return `${layout.viewportSize}|${layout.layoutCanvasSize}|${layout.autoFitScale}|${layout.twinPreviewScale ?? 1}|${layout.twinning}`;
+  return `${layout.viewportSize}|${layout.layoutCanvasSize}|${layout.autoFitScale}|${layout.twinning}`;
 }
 
-function fitScaleForLayout(layout: StrandZoomLayout): number {
-  return computeLayoutFitScale({
+function layoutContext(layout: StrandZoomLayout) {
+  return {
     autoFitScale: layout.autoFitScale,
-    twinPreviewScale: layout.twinPreviewScale,
-  });
-}
-
-function viewScaleForLayout(layout: StrandZoomLayout, userZoom: number): number {
-  return computeStrandViewScale({
-    autoFitScale: layout.autoFitScale,
-    userZoom,
-    twinPreviewScale: layout.twinPreviewScale,
-  });
+    layoutCanvasSize: layout.layoutCanvasSize,
+    twinning: layout.twinning,
+  };
 }
 
 function measureContentExtent(content: HTMLElement) {
@@ -107,26 +101,17 @@ function measureContentExtent(content: HTMLElement) {
   };
 }
 
-function expectedContentSize(layout: StrandZoomLayout, userZoom: number) {
-  const viewScale = viewScaleForLayout(layout, userZoom);
-  const scaled = layout.layoutCanvasSize * viewScale;
-  return {
-    width: layout.twinning ? scaled * 2 + TWIN_STRAND_PREVIEW_GAP_PX : scaled,
-    height: scaled + STRAND_CHROME_Y_PX,
-  };
-}
-
 function computePanBounds(
   container: HTMLElement,
   content: HTMLElement,
   layout: StrandZoomLayout,
-  userZoom: number,
+  camera: CameraState,
 ) {
   const cw = container.clientWidth;
   const ch = container.clientHeight;
   const extent = measureContentExtent(content);
-  const viewScale = viewScaleForLayout(layout, userZoom);
-  const expected = expectedContentSize(layout, userZoom);
+  const viewScale = layout.autoFitScale * camera.zoom;
+  const expected = expectedStrandContentExtent(layoutContext(layout), camera, STRAND_CHROME_Y_PX);
   const contentW = Math.max(extent.width, expected.width);
   const contentH = Math.max(extent.height, expected.height);
   const zoomSlack = Math.max(0, (viewScale - layout.autoFitScale) * layout.layoutCanvasSize * 0.35);
@@ -152,6 +137,13 @@ export function useStrandZoom(
   const defaultZoomRef = useRef(defaultZoomOption ?? initial);
   defaultZoomRef.current = defaultZoomOption ?? initial;
 
+  /** Single camera — never modified by twin toggle or auto-fit recalculation. */
+  const cameraRef = useRef<CameraState>({
+    zoom: initial,
+    panX: 0,
+    panY: 0,
+  });
+
   const [zoomTarget, setZoomTarget] = useState(initial);
   const [zoomSmooth, setZoomSmooth] = useState(initial);
   const [pan, setPan] = useState<StrandPan>({ x: 0, y: 0 });
@@ -168,23 +160,56 @@ export function useStrandZoom(
   const [panPointerId, setPanPointerId] = useState<number | null>(null);
   const panBoundsRef = useRef({ maxX: 0, maxY: 0 });
   const isPanningRef = useRef(false);
-  const panRef = useRef(pan);
-  panRef.current = pan;
   const zoomSmoothRef = useRef(initial);
+  const panRef = useRef<StrandPan>({ x: 0, y: 0 });
+  panRef.current = pan;
+  const prevTwinningRef = useRef(layout.twinning);
+  const debugEnabledRef = useRef(isStrandCameraDebugEnabled());
 
   const applyContentTransform = useCallback(() => {
     const el = contentRef?.current;
     if (!el) return;
-    const viewScale = viewScaleForLayout(layoutRef.current, zoomSmoothRef.current);
-    const { x, y } = panRef.current;
-    el.style.transform = `translate(${x}px, ${y}px) scale(${viewScale})`;
+    const camera: CameraState = {
+      zoom: zoomSmoothRef.current,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
+    };
+    const transform = computeStrandRenderTransform(camera, layoutContext(layoutRef.current));
+    el.style.transform = `translate(${transform.panX}px, ${transform.panY}px) scale(${transform.viewScale})`;
   }, [contentRef]);
+
+  const emitDebugSnapshot = useCallback(
+    (label: string) => {
+      if (!debugEnabledRef.current) return;
+      const viewport = viewportRef?.current ?? containerRef?.current;
+      const container = containerRef?.current;
+      const content = contentRef?.current;
+      const extent = content ? measureContentExtent(content) : { width: 0, height: 0 };
+      logCameraDebugSnapshot(label, {
+        camera: {
+          zoom: zoomSmoothRef.current,
+          panX: panRef.current.x,
+          panY: panRef.current.y,
+        },
+        layout: layoutContext(layoutRef.current),
+        viewportWidth: viewport?.clientWidth ?? 0,
+        viewportHeight: viewport?.clientHeight ?? 0,
+        containerWidth: container?.clientWidth ?? 0,
+        containerHeight: container?.clientHeight ?? 0,
+        contentWidth: extent.width,
+        contentHeight: extent.height,
+      });
+    },
+    [containerRef, viewportRef, contentRef],
+  );
 
   const finishPanDrag = useCallback((pointerId?: number) => {
     const drag = panDragRef.current;
     if (drag && pointerId !== undefined && drag.pointerId !== pointerId) return;
     if (drag?.armed) {
-      setPan(panRef.current);
+      cameraRef.current.panX = panRef.current.x;
+      cameraRef.current.panY = panRef.current.y;
+      setPan({ ...panRef.current });
     }
     panDragRef.current = null;
     isPanningRef.current = false;
@@ -194,6 +219,8 @@ export function useStrandZoom(
 
   const clearPan = useCallback(() => {
     panRef.current = { x: 0, y: 0 };
+    cameraRef.current.panX = 0;
+    cameraRef.current.panY = 0;
     setPan({ x: 0, y: 0 });
     applyContentTransform();
     finishPanDrag();
@@ -210,7 +237,7 @@ export function useStrandZoom(
       container,
       content,
       layoutRef.current,
-      zoomSmoothRef.current,
+      cameraRef.current,
     );
   }, [containerRef, viewportRef, contentRef]);
 
@@ -220,6 +247,11 @@ export function useStrandZoom(
     const { maxX, maxY } = panBoundsRef.current;
     setPan((p) => {
       const next = clampPan(p, maxX, maxY);
+      if (panNeedsUpdate(p, next)) {
+        panRef.current = next;
+        cameraRef.current.panX = next.x;
+        cameraRef.current.panY = next.y;
+      }
       return panNeedsUpdate(p, next) ? next : p;
     });
   }, [measurePanBounds]);
@@ -230,10 +262,15 @@ export function useStrandZoom(
       const { maxX, maxY } = panBoundsRef.current;
       const clamped = clampPan(next, maxX, maxY);
       panRef.current = clamped;
+      cameraRef.current.panX = clamped.x;
+      cameraRef.current.panY = clamped.y;
+      setPan((prev) => {
+        if (options?.syncState === false) {
+          return prev;
+        }
+        return panNeedsUpdate(prev, clamped) ? clamped : prev;
+      });
       applyContentTransform();
-      if (options?.syncState !== false) {
-        setPan((prev) => (panNeedsUpdate(prev, clamped) ? clamped : prev));
-      }
     },
     [measurePanBounds, applyContentTransform],
   );
@@ -241,15 +278,16 @@ export function useStrandZoom(
   const applyZoomAtPoint = useCallback(
     (factor: number, clientX: number, clientY: number) => {
       const viewport = viewportRef?.current ?? containerRef?.current;
-      const layout = layoutRef.current;
-      const oldUserZoom = zoomSmoothRef.current;
-      const newUserZoom = clampZoom(oldUserZoom * factor);
-      const oldViewScale = viewScaleForLayout(layout, oldUserZoom);
-      const newViewScale = viewScaleForLayout(layout, newUserZoom);
+      const layoutCtx = layoutContext(layoutRef.current);
+      const oldZoom = zoomSmoothRef.current;
+      const newZoom = clampZoom(oldZoom * factor);
+      const oldViewScale = layoutCtx.autoFitScale * oldZoom;
+      const newViewScale = layoutCtx.autoFitScale * newZoom;
       if (Math.abs(newViewScale - oldViewScale) < ZOOM_SNAP_EPSILON) return;
 
       if (!viewport) {
-        setZoomTarget(newUserZoom);
+        cameraRef.current.zoom = newZoom;
+        setZoomTarget(newZoom);
         return;
       }
 
@@ -258,10 +296,11 @@ export function useStrandZoom(
       const focalY = clientY - rect.top - rect.height / 2;
       const ratio = newViewScale / oldViewScale;
       setPanClamped({
-        x: panRef.current.x - focalX * (ratio - 1),
-        y: panRef.current.y - focalY * (ratio - 1),
+        x: cameraRef.current.panX - focalX * (ratio - 1),
+        y: cameraRef.current.panY - focalY * (ratio - 1),
       });
-      setZoomTarget(newUserZoom);
+      cameraRef.current.zoom = newZoom;
+      setZoomTarget(newZoom);
     },
     [containerRef, viewportRef, setPanClamped],
   );
@@ -281,47 +320,28 @@ export function useStrandZoom(
 
   const reset = useCallback(() => {
     const dz = defaultZoomRef.current;
+    cameraRef.current.zoom = dz;
     setZoomTarget(dz);
     zoomSmoothRef.current = dz;
     setZoomSmooth(dz);
     clearPan();
     applyContentTransform();
-  }, [clearPan, applyContentTransform]);
+    emitDebugSnapshot("camera-reset");
+  }, [clearPan, applyContentTransform, emitDebugSnapshot]);
 
-  const prevTwinningRef = useRef(layout.twinning);
-  const savedCameraRef = useRef<{ userZoom: number; pan: StrandPan; viewScale: number } | null>(null);
-
+  /** Twin toggle: camera is never modified — only layout/pan bounds update. */
   useLayoutEffect(() => {
     const wasTwinning = prevTwinningRef.current;
     const isTwinning = layout.twinning;
 
-    if (!wasTwinning && isTwinning) {
-      savedCameraRef.current = {
-        userZoom: zoomSmoothRef.current,
-        pan: { ...panRef.current },
-        viewScale: viewScaleForLayout(layoutRef.current, zoomSmoothRef.current),
-      };
-    } else if (wasTwinning && !isTwinning) {
-      const saved = savedCameraRef.current;
-      if (saved) {
-        const fitScale = fitScaleForLayout({
-          ...layoutRef.current,
-          twinPreviewScale: 1,
-          twinning: false,
-        });
-        const restoredUserZoom = clampZoom(saved.viewScale / Math.max(fitScale, 0.001));
-        setZoomTarget(restoredUserZoom);
-        zoomSmoothRef.current = restoredUserZoom;
-        setZoomSmooth(restoredUserZoom);
-        panRef.current = saved.pan;
-        setPan(saved.pan);
-        savedCameraRef.current = null;
-      }
+    if (wasTwinning !== isTwinning) {
+      emitDebugSnapshot(isTwinning ? "twin-enter" : "twin-exit");
     }
 
     prevTwinningRef.current = isTwinning;
     applyContentTransform();
-  }, [layout.twinning, applyContentTransform]);
+    clampPanInBounds();
+  }, [layout.twinning, applyContentTransform, clampPanInBounds, emitDebugSnapshot]);
 
   useEffect(() => {
     let frame = 0;
@@ -332,6 +352,7 @@ export function useStrandZoom(
       if (Math.abs(diff) < ZOOM_SNAP_EPSILON) {
         if (current !== target) {
           zoomSmoothRef.current = target;
+          cameraRef.current.zoom = target;
           applyContentTransform();
           setZoomSmooth(target);
         }
@@ -339,6 +360,7 @@ export function useStrandZoom(
       }
       const next = current + diff * ZOOM_SMOOTH_FACTOR;
       zoomSmoothRef.current = next;
+      cameraRef.current.zoom = next;
       applyContentTransform();
       frame = requestAnimationFrame(tick);
     };
@@ -348,7 +370,7 @@ export function useStrandZoom(
 
   useLayoutEffect(() => {
     applyContentTransform();
-  }, [pan, layout.autoFitScale, layout.twinPreviewScale, applyContentTransform]);
+  }, [pan, layout.autoFitScale, applyContentTransform]);
 
   const layoutSig = layoutSignature(layout);
 
@@ -431,12 +453,7 @@ export function useStrandZoom(
       document.removeEventListener("pointercancel", onDocumentPointerEnd);
       window.removeEventListener("blur", onWindowBlur);
     };
-  }, [
-    panPointerId,
-    finishPanDrag,
-    isPointerInsideViewport,
-    setPanClamped,
-  ]);
+  }, [panPointerId, finishPanDrag, isPointerInsideViewport, setPanClamped]);
 
   useEffect(() => {
     clampPanInBounds();
@@ -509,11 +526,11 @@ export function useStrandZoom(
       if (e.touches.length !== 2 || pinchDistance <= 0) return;
       e.preventDefault();
       const dist = touchDistance(e.touches);
-      const layout = layoutRef.current;
-      const oldUserZoom = zoomSmoothRef.current;
-      const targetUserZoom = clampZoom(pinchStartZoom * (dist / pinchDistance));
-      const oldViewScale = viewScaleForLayout(layout, oldUserZoom);
-      const targetViewScale = viewScaleForLayout(layout, targetUserZoom);
+      const layoutCtx = layoutContext(layoutRef.current);
+      const oldZoom = zoomSmoothRef.current;
+      const targetZoom = clampZoom(pinchStartZoom * (dist / pinchDistance));
+      const oldViewScale = layoutCtx.autoFitScale * oldZoom;
+      const targetViewScale = layoutCtx.autoFitScale * targetZoom;
       if (Math.abs(targetViewScale - oldViewScale) < ZOOM_SNAP_EPSILON) return;
       const scale = targetViewScale / oldViewScale;
       const viewport = viewportRef?.current ?? containerRef?.current;
@@ -522,11 +539,12 @@ export function useStrandZoom(
         const focalX = pinchCenterX - rect.left - rect.width / 2;
         const focalY = pinchCenterY - rect.top - rect.height / 2;
         setPanClamped({
-          x: panRef.current.x - focalX * (scale - 1),
-          y: panRef.current.y - focalY * (scale - 1),
+          x: cameraRef.current.panX - focalX * (scale - 1),
+          y: cameraRef.current.panY - focalY * (scale - 1),
         });
       }
-      setZoomTarget(targetUserZoom);
+      cameraRef.current.zoom = targetZoom;
+      setZoomTarget(targetZoom);
     };
 
     const onTouchEnd = () => {
@@ -543,7 +561,7 @@ export function useStrandZoom(
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [containerRef, viewportRef, zoomSurfaceRef, applyZoomAtPoint]);
+  }, [containerRef, viewportRef, zoomSurfaceRef, setPanClamped]);
 
   const onPanPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -553,8 +571,8 @@ export function useStrandZoom(
       panDragRef.current = {
         startX: e.clientX,
         startY: e.clientY,
-        panX: panRef.current.x,
-        panY: panRef.current.y,
+        panX: cameraRef.current.panX,
+        panY: cameraRef.current.panY,
         armed: false,
         pointerId: e.pointerId,
       };
@@ -574,17 +592,21 @@ export function useStrandZoom(
     [finishPanDrag],
   );
 
-  const viewScale = viewScaleForLayout(layout, zoomSmooth);
-  const fitScale = fitScaleForLayout(layout);
-  const displayZoom = fitScale > 0 ? viewScale / fitScale : zoomSmooth;
+  const camera: CameraState = {
+    zoom: zoomSmooth,
+    panX: pan.x,
+    panY: pan.y,
+  };
+  const transform = computeStrandRenderTransform(camera, layoutContext(layout));
 
   return {
     zoom: zoomTarget,
     zoomSmooth,
-    viewScale,
-    fitScale,
-    displayZoom,
+    viewScale: transform.viewScale,
+    fitScale: layout.autoFitScale,
+    displayZoom: transform.displayZoom,
     pan,
+    camera,
     isPanning,
     panMode,
     zoomIn,
@@ -598,3 +620,5 @@ export function useStrandZoom(
     zoomMax: STRAND_ZOOM_MAX,
   };
 }
+
+export { TWIN_STRAND_PREVIEW_GAP_PX };

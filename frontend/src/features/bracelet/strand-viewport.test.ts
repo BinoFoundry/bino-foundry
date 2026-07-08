@@ -149,14 +149,10 @@ describe("computeTwinPreviewScale", () => {
 });
 
 describe("computeLayoutFitScale", () => {
-  it("separates layout fit from user zoom", () => {
+  it("combines auto-fit with optional twin preview multiplier", () => {
     expect(
       computeLayoutFitScale({ autoFitScale: 1, twinPreviewScale: 0.74 }),
     ).toBeCloseTo(0.74, 5);
-    expect(computeStrandViewScale({ autoFitScale: 1, userZoom: 1.56, twinPreviewScale: 0.74 })).toBeCloseTo(
-      0.74 * 1.56,
-      5,
-    );
   });
 });
 
@@ -175,72 +171,41 @@ describe("computeStrandViewScale", () => {
   const userZoom = 1.55;
   const baseAutoFit = 1;
 
-  it("preserves single-strand framing after a matching-pair toggle cycle", () => {
+  it("ignores twinPreviewScale — camera zoom is the sole user multiplier", () => {
     const singleViewScale = computeStrandViewScale({
       autoFitScale: baseAutoFit,
       userZoom,
     });
 
-    const twinPreview = computeTwinPreviewScale(
-      baseAutoFit,
-      computeStrandAutoFitScale(600, 600, {
-        twinning: true,
-        viewportWidthPx: 900,
-      }),
-    );
-
     const twinViewScale = computeStrandViewScale({
       autoFitScale: baseAutoFit,
       userZoom,
-      twinPreviewScale: twinPreview,
+      twinPreviewScale: 0.74,
     });
 
-    expect(twinViewScale).toBeLessThan(singleViewScale);
-
-    const restoredViewScale = computeStrandViewScale({
-      autoFitScale: baseAutoFit,
-      userZoom,
-      twinPreviewScale: 1,
-    });
-
-    expect(restoredViewScale).toBe(singleViewScale);
+    expect(twinViewScale).toBe(singleViewScale);
   });
 
-  it("does not drift after repeated matching-pair toggles", () => {
+  it("does not drift when camera zoom is unchanged across twin toggles", () => {
     const singleViewScale = computeStrandViewScale({
       autoFitScale: baseAutoFit,
       userZoom: 1.8,
     });
 
-    let zoom = 1.8;
-    let pan = { x: 12, y: -8 };
-
-    for (let i = 0; i < 20; i += 1) {
-      const twinPreview = computeTwinPreviewScale(
-        baseAutoFit,
-        computeStrandAutoFitScale(600, 600, {
-          twinning: true,
-          viewportWidthPx: 900,
-        }),
-      );
-
-      computeStrandViewScale({
+    for (let i = 0; i < 100; i += 1) {
+      const duringTwin = computeStrandViewScale({
         autoFitScale: baseAutoFit,
-        userZoom: zoom,
-        twinPreviewScale: twinPreview,
+        userZoom: 1.8,
+        twinPreviewScale: 0.74,
       });
+      expect(duringTwin).toBe(singleViewScale);
 
-      zoom = 1.8;
-      pan = { x: 12, y: -8 };
-
-      const restored = computeStrandViewScale({
+      const afterTwin = computeStrandViewScale({
         autoFitScale: baseAutoFit,
-        userZoom: zoom,
+        userZoom: 1.8,
         twinPreviewScale: 1,
       });
-
-      expect(restored).toBe(singleViewScale);
-      expect(pan).toEqual({ x: 12, y: -8 });
+      expect(afterTwin).toBe(singleViewScale);
     }
   });
 });

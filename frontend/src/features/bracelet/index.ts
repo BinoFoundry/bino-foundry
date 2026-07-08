@@ -28,6 +28,12 @@ export {
   computeDefaultStrandZoom,
   measureStrandCanvasSize,
 } from "./strand-viewport";
+export {
+  type CameraState,
+  type StrandRenderTransform,
+  computeStrandRenderTransform,
+  isStrandCameraDebugEnabled,
+} from "./strand-camera";
 export { useBraceletBuilder } from "./hooks/useBraceletBuilder";
 export {
   canPlaceBeadSize,
