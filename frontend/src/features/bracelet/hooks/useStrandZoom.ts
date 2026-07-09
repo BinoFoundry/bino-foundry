@@ -10,33 +10,37 @@ import {
 
 import { shouldApplyCanvasWheelZoom, shouldStartCanvasPan } from "../interaction";
 import {
-  type CameraState,
-  computeStrandRenderTransform,
-  expectedStrandContentExtent,
-  isStrandCameraDebugEnabled,
-  logCameraDebugSnapshot,
-} from "../strand-camera";
+  applyRenderCameraToElement,
+  cloneRenderCamera,
+  createMatchingPairCamera,
+  initializeBraceletCamera,
+  isRenderCameraDebugEnabled,
+  logRenderCameraSnapshot,
+  refitMatchingPairCamera,
+  syncRenderScale,
+  type RenderCamera,
+  type RenderCameraLayoutInput,
+} from "../render-camera";
+import { MATCHING_PAIR_CHROME_HEIGHT_PX } from "../strand-camera";
 import { TWIN_STRAND_PREVIEW_GAP_PX } from "../strand-viewport";
-
-export interface StrandZoomOptions {
-  /** When true, pan gestures are ignored (e.g. library HTML5 drag in progress). */
-  suspendPan?: boolean;
-  /** When false, canvas pan is disabled — editing interactions take priority. */
-  panMode?: boolean;
-  /** Zoom level for reset (defaults to `initial`). */
-  defaultZoom?: number;
-}
 
 export const STRAND_ZOOM_MIN = 0.55;
 export const STRAND_ZOOM_MAX = 3;
-/** @deprecated Twin no longer changes default zoom — kept for API compat. */
 export const STRAND_TWIN_DEFAULT_ZOOM = 1.02;
+
 const ZOOM_BUTTON_STEP = 0.08;
 const ZOOM_WHEEL_SENSITIVITY = 0.0011;
 const ZOOM_SMOOTH_FACTOR = 0.28;
 const ZOOM_SNAP_EPSILON = 0.006;
 const PAN_DRAG_THRESHOLD_PX = 5;
-const STRAND_CHROME_Y_PX = 52;
+const STRAND_CHROME_Y_PX = MATCHING_PAIR_CHROME_HEIGHT_PX;
+
+export interface StrandZoomOptions {
+  suspendPan?: boolean;
+  panMode?: boolean;
+  /** When false, camera init is deferred until the canvas viewport is measured. */
+  layoutReady?: boolean;
+}
 
 export interface StrandPan {
   x: number;
@@ -44,12 +48,9 @@ export interface StrandPan {
 }
 
 export interface StrandZoomLayout {
-  /** Viewport square budget from container measurement. */
-  viewportSize: number;
-  /** Layout canvas side length (may exceed viewport when beads need room). */
+  viewportWidthPx: number;
+  viewportHeightPx: number;
   layoutCanvasSize: number;
-  /** Single-strand auto-fit (≤ 1) — stable when twinning toggles. */
-  autoFitScale: number;
   twinning: boolean;
 }
 
@@ -71,20 +72,25 @@ function clampPan(pan: StrandPan, maxX: number, maxY: number): StrandPan {
   };
 }
 
-function panNeedsUpdate(prev: StrandPan, next: StrandPan): boolean {
-  return prev.x !== next.x || prev.y !== next.y;
-}
-
 function layoutSignature(layout: StrandZoomLayout): string {
-  return `${layout.viewportSize}|${layout.layoutCanvasSize}|${layout.autoFitScale}|${layout.twinning}`;
+  return `${layout.layoutCanvasSize}|${layout.twinning}|${layout.viewportWidthPx}|${layout.viewportHeightPx}`;
 }
 
-function layoutContext(layout: StrandZoomLayout) {
+function toLayoutInput(layout: StrandZoomLayout): RenderCameraLayoutInput {
   return {
-    autoFitScale: layout.autoFitScale,
-    layoutCanvasSize: layout.layoutCanvasSize,
+    viewportWidthPx: layout.viewportWidthPx,
+    viewportHeightPx: layout.viewportHeightPx,
+    layoutCanvasSizePx: layout.layoutCanvasSize,
     twinning: layout.twinning,
   };
+}
+
+function isLayoutMeasurable(layout: StrandZoomLayout): boolean {
+  return (
+    layout.viewportWidthPx > 0 &&
+    layout.viewportHeightPx > 0 &&
+    layout.layoutCanvasSize > 0
+  );
 }
 
 function measureContentExtent(content: HTMLElement) {
@@ -101,53 +107,62 @@ function measureContentExtent(content: HTMLElement) {
   };
 }
 
-function computePanBounds(
-  container: HTMLElement,
-  content: HTMLElement,
+function expectedContentExtent(
   layout: StrandZoomLayout,
-  camera: CameraState,
-) {
-  const cw = container.clientWidth;
-  const ch = container.clientHeight;
-  const extent = measureContentExtent(content);
-  const viewScale = layout.autoFitScale * camera.zoom;
-  const expected = expectedStrandContentExtent(layoutContext(layout), camera, STRAND_CHROME_Y_PX);
-  const contentW = Math.max(extent.width, expected.width);
-  const contentH = Math.max(extent.height, expected.height);
-  const zoomSlack = Math.max(0, (viewScale - layout.autoFitScale) * layout.layoutCanvasSize * 0.35);
-
+  camera: RenderCamera,
+): { width: number; height: number } {
+  const scaled = layout.layoutCanvasSize * camera.renderScale;
+  if (!layout.twinning) {
+    return { width: scaled, height: scaled + STRAND_CHROME_Y_PX };
+  }
+  const pairLayout = camera.matchingPairLayout ?? "side-by-side";
+  if (pairLayout === "stacked") {
+    return {
+      width: scaled,
+      height: scaled * 2 + TWIN_STRAND_PREVIEW_GAP_PX + STRAND_CHROME_Y_PX,
+    };
+  }
   return {
-    maxX: Math.max(0, (contentW - cw) / 2 + zoomSlack),
-    maxY: Math.max(0, (contentH - ch) / 2 + zoomSlack),
+    width: scaled * 2 + TWIN_STRAND_PREVIEW_GAP_PX,
+    height: scaled + STRAND_CHROME_Y_PX,
   };
 }
 
-/** Strand zoom (layout size) + pan offset for inspecting zoomed areas. */
+/**
+ * Viewport pan + zoom — backed by immutable single/twin RenderCamera objects.
+ * Display scale is exclusively camera.renderScale.
+ */
 export function useStrandZoom(
   refs: StrandZoomRefs,
   layout: StrandZoomLayout,
-  initial = 1,
   options: StrandZoomOptions = {},
 ) {
   const { zoomSurfaceRef, containerRef, viewportRef, contentRef } = refs;
-  const { suspendPan = false, panMode = false, defaultZoom: defaultZoomOption } = options;
-  const layoutRef = useRef<StrandZoomLayout>(layout);
+  const { suspendPan = false, panMode = false, layoutReady = false } = options;
+  const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
-  const defaultZoomRef = useRef(defaultZoomOption ?? initial);
-  defaultZoomRef.current = defaultZoomOption ?? initial;
+  const singleCameraRef = useRef<RenderCamera | null>(null);
+  const twinCameraRef = useRef<RenderCamera | null>(null);
+  const prevTwinningRef = useRef(layout.twinning);
+  const prevLayoutSigRef = useRef("");
+  const initializedRef = useRef(false);
+  const swappingRef = useRef(false);
+  const debugRef = useRef(isRenderCameraDebugEnabled());
 
-  /** Single camera — never modified by twin toggle or auto-fit recalculation. */
-  const cameraRef = useRef<CameraState>({
-    zoom: initial,
-    panX: 0,
-    panY: 0,
-  });
+  const activeCameraRef = useRef<RenderCamera>(
+    initializeBraceletCamera(toLayoutInput(layout)),
+  );
 
-  const [zoomTarget, setZoomTarget] = useState(initial);
-  const [zoomSmooth, setZoomSmooth] = useState(initial);
+  const [zoomTarget, setZoomTarget] = useState(1);
+  const [zoomSmooth, setZoomSmooth] = useState(1);
   const [pan, setPan] = useState<StrandPan>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [matchingPairLayout, setMatchingPairLayout] = useState<"side-by-side" | "stacked">(
+    "side-by-side",
+  );
+  const [fitScale, setFitScale] = useState(1);
+  const [renderScale, setRenderScale] = useState(1);
 
   const panDragRef = useRef<{
     startX: number;
@@ -160,71 +175,57 @@ export function useStrandZoom(
   const [panPointerId, setPanPointerId] = useState<number | null>(null);
   const panBoundsRef = useRef({ maxX: 0, maxY: 0 });
   const isPanningRef = useRef(false);
-  const zoomSmoothRef = useRef(initial);
+  const zoomSmoothRef = useRef(1);
   const panRef = useRef<StrandPan>({ x: 0, y: 0 });
   panRef.current = pan;
-  const prevTwinningRef = useRef(layout.twinning);
-  const debugEnabledRef = useRef(isStrandCameraDebugEnabled());
 
-  const applyContentTransform = useCallback(() => {
-    const el = contentRef?.current;
-    if (!el) return;
-    const camera: CameraState = {
-      zoom: zoomSmoothRef.current,
-      panX: panRef.current.x,
-      panY: panRef.current.y,
-    };
-    const transform = computeStrandRenderTransform(camera, layoutContext(layoutRef.current));
-    el.style.transform = `translate(${transform.panX}px, ${transform.panY}px) scale(${transform.viewScale})`;
-  }, [contentRef]);
-
-  const emitDebugSnapshot = useCallback(
-    (label: string) => {
-      if (!debugEnabledRef.current) return;
-      const viewport = viewportRef?.current ?? containerRef?.current;
-      const container = containerRef?.current;
-      const content = contentRef?.current;
-      const extent = content ? measureContentExtent(content) : { width: 0, height: 0 };
-      logCameraDebugSnapshot(label, {
-        camera: {
-          zoom: zoomSmoothRef.current,
-          panX: panRef.current.x,
-          panY: panRef.current.y,
-        },
-        layout: layoutContext(layoutRef.current),
-        viewportWidth: viewport?.clientWidth ?? 0,
-        viewportHeight: viewport?.clientHeight ?? 0,
-        containerWidth: container?.clientWidth ?? 0,
-        containerHeight: container?.clientHeight ?? 0,
-        contentWidth: extent.width,
-        contentHeight: extent.height,
-      });
-    },
-    [containerRef, viewportRef, contentRef],
-  );
-
-  const finishPanDrag = useCallback((pointerId?: number) => {
-    const drag = panDragRef.current;
-    if (drag && pointerId !== undefined && drag.pointerId !== pointerId) return;
-    if (drag?.armed) {
-      cameraRef.current.panX = panRef.current.x;
-      cameraRef.current.panY = panRef.current.y;
-      setPan({ ...panRef.current });
-    }
-    panDragRef.current = null;
-    isPanningRef.current = false;
-    setIsPanning(false);
-    setPanPointerId(null);
+  const resolveActiveCamera = useCallback((): RenderCamera => {
+    return layoutRef.current.twinning && twinCameraRef.current
+      ? twinCameraRef.current
+      : singleCameraRef.current ?? activeCameraRef.current;
   }, []);
 
-  const clearPan = useCallback(() => {
-    panRef.current = { x: 0, y: 0 };
-    cameraRef.current.panX = 0;
-    cameraRef.current.panY = 0;
-    setPan({ x: 0, y: 0 });
-    applyContentTransform();
-    finishPanDrag();
-  }, [finishPanDrag, applyContentTransform]);
+  const writeActiveCamera = useCallback((camera: RenderCamera) => {
+    const next = syncRenderScale(cloneRenderCamera(camera));
+    if (layoutRef.current.twinning) {
+      twinCameraRef.current = next;
+    } else {
+      singleCameraRef.current = next;
+    }
+    activeCameraRef.current = next;
+    setFitScale(next.fitScale);
+    setRenderScale(next.renderScale);
+    return next;
+  }, []);
+
+  const syncRuntimeFromCamera = useCallback((camera: RenderCamera) => {
+    const next = cloneRenderCamera(camera);
+    activeCameraRef.current = next;
+    zoomSmoothRef.current = next.zoom;
+    setZoomTarget(next.zoom);
+    setZoomSmooth(next.zoom);
+    setFitScale(next.fitScale);
+    setRenderScale(next.renderScale);
+    panRef.current = { x: next.panX, y: next.panY };
+    setPan({ x: next.panX, y: next.panY });
+    if (next.matchingPairLayout) {
+      setMatchingPairLayout(next.matchingPairLayout);
+    }
+    return next;
+  }, []);
+
+  const applyTransform = useCallback(() => {
+    applyRenderCameraToElement(contentRef?.current, activeCameraRef.current);
+  }, [contentRef]);
+
+  const emitDebug = useCallback(
+    (label: string) => {
+      if (!debugRef.current) return;
+      const mode = layoutRef.current.twinning ? "twin" : "single";
+      logRenderCameraSnapshot(label, mode, activeCameraRef.current);
+    },
+    [],
+  );
 
   const measurePanBounds = useCallback(() => {
     const container = viewportRef?.current ?? containerRef?.current;
@@ -233,60 +234,65 @@ export function useStrandZoom(
       panBoundsRef.current = { maxX: 0, maxY: 0 };
       return;
     }
-    panBoundsRef.current = computePanBounds(
-      container,
-      content,
-      layoutRef.current,
-      cameraRef.current,
+    const camera = activeCameraRef.current;
+    const extent = measureContentExtent(content);
+    const expected = expectedContentExtent(layoutRef.current, camera);
+    const contentW = Math.max(extent.width, expected.width);
+    const contentH = Math.max(extent.height, expected.height);
+    const zoomSlack = Math.max(
+      0,
+      (camera.renderScale - 1) * layoutRef.current.layoutCanvasSize * 0.35,
     );
+    panBoundsRef.current = {
+      maxX: Math.max(0, (contentW - container.clientWidth) / 2 + zoomSlack),
+      maxY: Math.max(0, (contentH - container.clientHeight) / 2 + zoomSlack),
+    };
   }, [containerRef, viewportRef, contentRef]);
 
-  const clampPanInBounds = useCallback(() => {
-    if (isPanningRef.current) return;
-    measurePanBounds();
-    const { maxX, maxY } = panBoundsRef.current;
-    setPan((p) => {
-      const next = clampPan(p, maxX, maxY);
-      if (panNeedsUpdate(p, next)) {
-        panRef.current = next;
-        cameraRef.current.panX = next.x;
-        cameraRef.current.panY = next.y;
-      }
-      return panNeedsUpdate(p, next) ? next : p;
-    });
-  }, [measurePanBounds]);
+  const finishPanDrag = useCallback((pointerId?: number) => {
+    const drag = panDragRef.current;
+    if (drag && pointerId !== undefined && drag.pointerId !== pointerId) return;
+    if (drag?.armed) {
+      writeActiveCamera({
+        ...activeCameraRef.current,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+      });
+      setPan({ ...panRef.current });
+    }
+    panDragRef.current = null;
+    isPanningRef.current = false;
+    setIsPanning(false);
+    setPanPointerId(null);
+  }, [writeActiveCamera]);
 
   const setPanClamped = useCallback(
-    (next: StrandPan, options?: { syncState?: boolean }) => {
+    (next: StrandPan, opts?: { syncState?: boolean }) => {
       measurePanBounds();
       const { maxX, maxY } = panBoundsRef.current;
       const clamped = clampPan(next, maxX, maxY);
       panRef.current = clamped;
-      cameraRef.current.panX = clamped.x;
-      cameraRef.current.panY = clamped.y;
-      setPan((prev) => {
-        if (options?.syncState === false) {
-          return prev;
-        }
-        return panNeedsUpdate(prev, clamped) ? clamped : prev;
-      });
-      applyContentTransform();
+      writeActiveCamera({ ...activeCameraRef.current, panX: clamped.x, panY: clamped.y });
+      if (opts?.syncState !== false) {
+        setPan(clamped);
+      }
+      applyTransform();
     },
-    [measurePanBounds, applyContentTransform],
+    [measurePanBounds, writeActiveCamera, applyTransform],
   );
 
   const applyZoomAtPoint = useCallback(
     (factor: number, clientX: number, clientY: number) => {
       const viewport = viewportRef?.current ?? containerRef?.current;
-      const layoutCtx = layoutContext(layoutRef.current);
-      const oldZoom = zoomSmoothRef.current;
+      const camera = activeCameraRef.current;
+      const oldZoom = camera.zoom;
       const newZoom = clampZoom(oldZoom * factor);
-      const oldViewScale = layoutCtx.autoFitScale * oldZoom;
-      const newViewScale = layoutCtx.autoFitScale * newZoom;
-      if (Math.abs(newViewScale - oldViewScale) < ZOOM_SNAP_EPSILON) return;
+      const oldScale = camera.renderScale;
+      const newScale = camera.fitScale * newZoom;
+      if (Math.abs(newScale - oldScale) < ZOOM_SNAP_EPSILON) return;
 
       if (!viewport) {
-        cameraRef.current.zoom = newZoom;
+        writeActiveCamera({ ...camera, zoom: newZoom });
         setZoomTarget(newZoom);
         return;
       }
@@ -294,15 +300,15 @@ export function useStrandZoom(
       const rect = viewport.getBoundingClientRect();
       const focalX = clientX - rect.left - rect.width / 2;
       const focalY = clientY - rect.top - rect.height / 2;
-      const ratio = newViewScale / oldViewScale;
+      const ratio = newScale / oldScale;
       setPanClamped({
-        x: cameraRef.current.panX - focalX * (ratio - 1),
-        y: cameraRef.current.panY - focalY * (ratio - 1),
+        x: camera.panX - focalX * (ratio - 1),
+        y: camera.panY - focalY * (ratio - 1),
       });
-      cameraRef.current.zoom = newZoom;
+      writeActiveCamera({ ...activeCameraRef.current, zoom: newZoom });
       setZoomTarget(newZoom);
     },
-    [containerRef, viewportRef, setPanClamped],
+    [containerRef, viewportRef, writeActiveCamera, setPanClamped],
   );
 
   const nudgeZoom = useCallback(
@@ -315,64 +321,123 @@ export function useStrandZoom(
     [applyZoomAtPoint, containerRef, viewportRef],
   );
 
-  const zoomIn = useCallback(() => nudgeZoom(1), [nudgeZoom]);
-  const zoomOut = useCallback(() => nudgeZoom(-1), [nudgeZoom]);
-
   const reset = useCallback(() => {
-    const dz = defaultZoomRef.current;
-    cameraRef.current.zoom = dz;
-    setZoomTarget(dz);
-    zoomSmoothRef.current = dz;
-    setZoomSmooth(dz);
-    clearPan();
-    applyContentTransform();
-    emitDebugSnapshot("camera-reset");
-  }, [clearPan, applyContentTransform, emitDebugSnapshot]);
+    if (!initializedRef.current || !isLayoutMeasurable(layoutRef.current)) return;
+    const camera = initializeBraceletCamera(toLayoutInput(layoutRef.current));
+    writeActiveCamera(camera);
+    syncRuntimeFromCamera(camera);
+    applyTransform();
+    emitDebug("camera-reset");
+  }, [writeActiveCamera, syncRuntimeFromCamera, applyTransform, emitDebug]);
 
-  /** Twin toggle: camera is never modified — only layout/pan bounds update. */
+  const layoutSig = layoutSignature(layout);
+  const measurable = layoutReady && isLayoutMeasurable(layout);
+
   useLayoutEffect(() => {
+    if (!measurable) return;
+
+    swappingRef.current = true;
     const wasTwinning = prevTwinningRef.current;
     const isTwinning = layout.twinning;
+    const layoutChanged = prevLayoutSigRef.current !== layoutSig;
 
-    if (wasTwinning !== isTwinning) {
-      emitDebugSnapshot(isTwinning ? "twin-enter" : "twin-exit");
+    if (!initializedRef.current) {
+      const camera = initializeBraceletCamera(toLayoutInput(layout));
+      singleCameraRef.current = camera;
+      syncRuntimeFromCamera(camera);
+      initializedRef.current = true;
+      prevLayoutSigRef.current = layoutSig;
+      prevTwinningRef.current = isTwinning;
+      activeCameraRef.current = camera;
+      applyTransform();
+      swappingRef.current = false;
+      emitDebug("camera-init");
+      return;
     }
 
+    if (!wasTwinning && isTwinning) {
+      singleCameraRef.current = cloneRenderCamera(activeCameraRef.current);
+      if (twinCameraRef.current) {
+        syncRuntimeFromCamera(cloneRenderCamera(twinCameraRef.current));
+      } else {
+        const twin = createMatchingPairCamera(toLayoutInput(layout));
+        twinCameraRef.current = twin;
+        syncRuntimeFromCamera(twin);
+      }
+      emitDebug("twin-enter");
+    } else if (wasTwinning && !isTwinning) {
+      if (twinCameraRef.current) {
+        twinCameraRef.current = cloneRenderCamera(activeCameraRef.current);
+      }
+      syncRuntimeFromCamera(cloneRenderCamera(singleCameraRef.current!));
+      emitDebug("twin-exit-restored");
+    } else if (isTwinning && twinCameraRef.current) {
+      const refitted = refitMatchingPairCamera(twinCameraRef.current, toLayoutInput(layout));
+      twinCameraRef.current = refitted;
+      syncRuntimeFromCamera(refitted);
+    } else if (!isTwinning && layoutChanged && singleCameraRef.current) {
+      const camera = initializeBraceletCamera(toLayoutInput(layout), {
+        preserve: singleCameraRef.current,
+      });
+      singleCameraRef.current = camera;
+      syncRuntimeFromCamera(camera);
+      emitDebug("camera-viewport-resize");
+    }
+
+    activeCameraRef.current = resolveActiveCamera();
     prevTwinningRef.current = isTwinning;
-    applyContentTransform();
-    clampPanInBounds();
-  }, [layout.twinning, applyContentTransform, clampPanInBounds, emitDebugSnapshot]);
+    prevLayoutSigRef.current = layoutSig;
+    applyTransform();
+    swappingRef.current = false;
+  }, [
+    measurable,
+    layout.twinning,
+    layoutSig,
+    layout,
+    syncRuntimeFromCamera,
+    resolveActiveCamera,
+    applyTransform,
+    emitDebug,
+  ]);
+
+  useLayoutEffect(() => {
+    if (measurable) applyTransform();
+  }, [measurable, applyTransform, renderScale, pan]);
 
   useEffect(() => {
     let frame = 0;
     const tick = () => {
+      if (swappingRef.current || !initializedRef.current) return;
       const target = zoomTarget;
       const current = zoomSmoothRef.current;
       const diff = target - current;
       if (Math.abs(diff) < ZOOM_SNAP_EPSILON) {
         if (current !== target) {
           zoomSmoothRef.current = target;
-          cameraRef.current.zoom = target;
-          applyContentTransform();
+          writeActiveCamera({ ...activeCameraRef.current, zoom: target });
+          applyTransform();
           setZoomSmooth(target);
+          setRenderScale(activeCameraRef.current.renderScale);
         }
         return;
       }
       const next = current + diff * ZOOM_SMOOTH_FACTOR;
       zoomSmoothRef.current = next;
-      cameraRef.current.zoom = next;
-      applyContentTransform();
+      const updated = writeActiveCamera({ ...activeCameraRef.current, zoom: next });
+      applyTransform();
+      setZoomSmooth(next);
+      setRenderScale(updated.renderScale);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [zoomTarget, applyContentTransform]);
+  }, [zoomTarget, writeActiveCamera, applyTransform]);
 
-  useLayoutEffect(() => {
-    applyContentTransform();
-  }, [pan, layout.autoFitScale, applyContentTransform]);
-
-  const layoutSig = layoutSignature(layout);
+  useEffect(() => {
+    if (!layout.twinning && !swappingRef.current && initializedRef.current) {
+      measurePanBounds();
+    }
+  }, [zoomTarget, layout.twinning, layoutSig, measurePanBounds]);
 
   useEffect(() => {
     if (panMode) return;
@@ -384,195 +449,61 @@ export function useStrandZoom(
     finishPanDrag();
   }, [suspendPan, finishPanDrag]);
 
-  const isPointerInsideViewport = useCallback(
-    (clientX: number, clientY: number) => {
-      const viewport = viewportRef?.current;
-      if (!viewport) return true;
-      const rect = viewport.getBoundingClientRect();
-      return (
-        clientX >= rect.left &&
-        clientX <= rect.right &&
-        clientY >= rect.top &&
-        clientY <= rect.bottom
-      );
-    },
-    [viewportRef],
-  );
+  useEffect(() => {
+    const el = zoomSurfaceRef?.current ?? viewportRef?.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
+      if (!shouldApplyCanvasWheelZoom(e, el)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      applyZoomAtPoint(Math.exp(-e.deltaY * ZOOM_WHEEL_SENSITIVITY), e.clientX, e.clientY);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomSurfaceRef, viewportRef, applyZoomAtPoint]);
 
   useEffect(() => {
     if (panPointerId === null) return;
-
     const activePointerId = panPointerId;
-
-    const onDocumentPointerMove = (e: PointerEvent) => {
+    const onMove = (e: PointerEvent) => {
       if (e.pointerId !== activePointerId) return;
       const drag = panDragRef.current;
       if (!drag || drag.pointerId !== activePointerId) return;
-
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
-
       if (!drag.armed) {
         if (Math.hypot(dx, dy) < PAN_DRAG_THRESHOLD_PX) return;
         drag.armed = true;
         isPanningRef.current = true;
         setIsPanning(true);
       }
-
-      if (!isPointerInsideViewport(e.clientX, e.clientY)) {
-        finishPanDrag(activePointerId);
-        return;
-      }
-
-      setPanClamped(
-        {
-          x: drag.panX + dx,
-          y: drag.panY + dy,
-        },
-        { syncState: false },
-      );
+      setPanClamped({ x: drag.panX + dx, y: drag.panY + dy }, { syncState: false });
     };
-
-    const onDocumentPointerEnd = (e: PointerEvent) => {
-      if (e.pointerId !== activePointerId) return;
-      finishPanDrag(activePointerId);
+    const onEnd = (e: PointerEvent) => {
+      if (e.pointerId === activePointerId) finishPanDrag(activePointerId);
     };
-
-    const onWindowBlur = () => {
-      finishPanDrag(activePointerId);
-    };
-
-    document.addEventListener("pointermove", onDocumentPointerMove);
-    document.addEventListener("pointerup", onDocumentPointerEnd);
-    document.addEventListener("pointercancel", onDocumentPointerEnd);
-    window.addEventListener("blur", onWindowBlur);
-
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onEnd);
+    document.addEventListener("pointercancel", onEnd);
     return () => {
-      document.removeEventListener("pointermove", onDocumentPointerMove);
-      document.removeEventListener("pointerup", onDocumentPointerEnd);
-      document.removeEventListener("pointercancel", onDocumentPointerEnd);
-      window.removeEventListener("blur", onWindowBlur);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onEnd);
+      document.removeEventListener("pointercancel", onEnd);
     };
-  }, [panPointerId, finishPanDrag, isPointerInsideViewport, setPanClamped]);
-
-  useEffect(() => {
-    clampPanInBounds();
-  }, [zoomTarget, layoutSig, clampPanInBounds]);
-
-  useEffect(() => {
-    const container = viewportRef?.current ?? containerRef?.current;
-    const content = contentRef?.current;
-    if (!container) return;
-
-    const observer = new ResizeObserver(() => {
-      clampPanInBounds();
-    });
-    observer.observe(container);
-    if (content) observer.observe(content);
-    return () => observer.disconnect();
-  }, [containerRef, viewportRef, contentRef, clampPanInBounds]);
-
-  useEffect(() => {
-    const el = zoomSurfaceRef?.current ?? viewportRef?.current;
-    if (!el) return;
-
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaY === 0) return;
-      if (!shouldApplyCanvasWheelZoom(e, el)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const factor = Math.exp(-e.deltaY * ZOOM_WHEEL_SENSITIVITY);
-      applyZoomAtPoint(factor, e.clientX, e.clientY);
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomSurfaceRef, viewportRef, applyZoomAtPoint]);
-
-  useEffect(() => {
-    const el = zoomSurfaceRef?.current ?? viewportRef?.current ?? containerRef?.current;
-    if (!el) return;
-
-    let pinchDistance = 0;
-    let pinchStartZoom = 1;
-    let pinchCenterX = 0;
-    let pinchCenterY = 0;
-
-    const touchDistance = (touches: TouchList) => {
-      if (touches.length < 2) return 0;
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.hypot(dx, dy);
-    };
-
-    const touchCenter = (touches: TouchList) => {
-      if (touches.length < 2) return { x: 0, y: 0 };
-      return {
-        x: (touches[0].clientX + touches[1].clientX) / 2,
-        y: (touches[0].clientY + touches[1].clientY) / 2,
-      };
-    };
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
-      pinchDistance = touchDistance(e.touches);
-      pinchStartZoom = zoomSmoothRef.current;
-      const c = touchCenter(e.touches);
-      pinchCenterX = c.x;
-      pinchCenterY = c.y;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || pinchDistance <= 0) return;
-      e.preventDefault();
-      const dist = touchDistance(e.touches);
-      const layoutCtx = layoutContext(layoutRef.current);
-      const oldZoom = zoomSmoothRef.current;
-      const targetZoom = clampZoom(pinchStartZoom * (dist / pinchDistance));
-      const oldViewScale = layoutCtx.autoFitScale * oldZoom;
-      const targetViewScale = layoutCtx.autoFitScale * targetZoom;
-      if (Math.abs(targetViewScale - oldViewScale) < ZOOM_SNAP_EPSILON) return;
-      const scale = targetViewScale / oldViewScale;
-      const viewport = viewportRef?.current ?? containerRef?.current;
-      if (viewport) {
-        const rect = viewport.getBoundingClientRect();
-        const focalX = pinchCenterX - rect.left - rect.width / 2;
-        const focalY = pinchCenterY - rect.top - rect.height / 2;
-        setPanClamped({
-          x: cameraRef.current.panX - focalX * (scale - 1),
-          y: cameraRef.current.panY - focalY * (scale - 1),
-        });
-      }
-      cameraRef.current.zoom = targetZoom;
-      setZoomTarget(targetZoom);
-    };
-
-    const onTouchEnd = () => {
-      pinchDistance = 0;
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd);
-    el.addEventListener("touchcancel", onTouchEnd);
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchEnd);
-    };
-  }, [containerRef, viewportRef, zoomSurfaceRef, setPanClamped]);
+  }, [panPointerId, finishPanDrag, setPanClamped]);
 
   const onPanPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (!panMode || suspendPan || e.button !== 0) return;
       if (!shouldStartCanvasPan(e.target)) return;
       finishPanDrag();
+      const camera = activeCameraRef.current;
       panDragRef.current = {
         startX: e.clientX,
         startY: e.clientY,
-        panX: cameraRef.current.panX,
-        panY: cameraRef.current.panY,
+        panX: camera.panX,
+        panY: camera.panY,
         armed: false,
         pointerId: e.pointerId,
       };
@@ -581,41 +512,28 @@ export function useStrandZoom(
     [panMode, suspendPan, finishPanDrag],
   );
 
-  const onPanPointerMove = useCallback((_e: ReactPointerEvent<HTMLDivElement>) => {
-    /* Document-level listener handles pan moves while a session is active. */
-  }, []);
-
-  const endPanDrag = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      finishPanDrag(e.pointerId);
-    },
-    [finishPanDrag],
-  );
-
-  const camera: CameraState = {
-    zoom: zoomSmooth,
-    panX: pan.x,
-    panY: pan.y,
-  };
-  const transform = computeStrandRenderTransform(camera, layoutContext(layout));
-
   return {
     zoom: zoomTarget,
     zoomSmooth,
-    viewScale: transform.viewScale,
-    fitScale: layout.autoFitScale,
-    displayZoom: transform.displayZoom,
+    viewScale: renderScale,
+    fitScale,
+    displayZoom: zoomTarget,
     pan,
-    camera,
+    camera: {
+      zoom: activeCameraRef.current.zoom,
+      panX: activeCameraRef.current.panX,
+      panY: activeCameraRef.current.panY,
+    },
+    matchingPairLayout,
     isPanning,
     panMode,
-    zoomIn,
-    zoomOut,
+    zoomIn: () => nudgeZoom(1),
+    zoomOut: () => nudgeZoom(-1),
     reset,
     onPanPointerDown,
-    onPanPointerMove,
-    onPanPointerUp: endPanDrag,
-    onPanPointerCancel: endPanDrag,
+    onPanPointerMove: () => {},
+    onPanPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => finishPanDrag(e.pointerId),
+    onPanPointerCancel: (e: ReactPointerEvent<HTMLDivElement>) => finishPanDrag(e.pointerId),
     zoomMin: STRAND_ZOOM_MIN,
     zoomMax: STRAND_ZOOM_MAX,
   };

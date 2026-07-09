@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import type { BraceletConfigurationPayload } from "@bino-foundry/shared/types";
 
@@ -37,6 +38,7 @@ import { STRAND_PATH_START_ANGLE } from "../strand-path";
 import { serializeBraceletConfiguration } from "../serialize";
 import { buildBraceletBuilderSummary } from "../summary";
 import { buildPlacedFromSavedBracelet, type SavedBraceletLoadInput } from "../load-saved-bracelet";
+import { resolveAutoPlacementStrand, isMatchingPairMatched } from "../matching-pair-placement";
 import { strandHasUnavailableBeads } from "../unavailable-bead";
 import {
   activeWristSizes,
@@ -44,6 +46,14 @@ import {
   defaultWristSize,
   findWristSizeById,
 } from "../wrist-sizes";
+
+function copyPlacedBeads(source: PlacedBead[]): PlacedBead[] {
+  return normalizeSequence(source).map((bead) => ({
+    position: bead.position,
+    bead: bead.bead,
+    size: { ...bead.size },
+  }));
+}
 
 function buildPlacedBead(
   bead: BeadLibraryEntry,
@@ -412,42 +422,66 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     [bumpLayout],
   );
 
-  const handleDuplicateBraceletToB = useCallback(() => {
+  const handleMatchBracelets = useCallback(() => {
     if (!twinning) return;
+    if (normalizeFromSlots(placedBeadsA).length === 0) return;
     if (!strandFitsOnWrist(wristSizeB, placedBeadsA)) {
       publishCapacityNotice(BRACELET_COPY.overCapacityBanner, "full");
       return;
     }
-    setPlacedBeadsB(
-      normalizeSequence(placedBeadsA).map((b) => ({
-        position: b.position,
-        bead: b.bead,
-        size: b.size,
-      })),
-    );
+    setPlacedBeadsB(copyPlacedBeads(placedBeadsA));
     setStrandAnchorAngleB(strandAnchorAngleA);
     setCapacityNotice(null);
+    setSelectedStrandBead((sel) => (sel?.bracelet === "B" ? null : sel));
     bumpLayout();
+    toast.success(BRACELET_COPY.matchBraceletsSuccess);
   }, [twinning, placedBeadsA, wristSizeB, strandAnchorAngleA, bumpLayout, publishCapacityNotice]);
+
+  const handleUnmatchBracelets = useCallback(() => {
+    if (!twinning) return;
+    setPlacedBeadsB([]);
+    setStrandAnchorAngleB(STRAND_PATH_START_ANGLE);
+    setSelectedStrandBead((sel) => (sel?.bracelet === "B" ? null : sel));
+    setCapacityNotice(null);
+    bumpLayout();
+    toast.success(BRACELET_COPY.unmatchBraceletsSuccess);
+  }, [twinning, bumpLayout]);
 
   const autoPlaceItem = useCallback(
     (bead: BeadLibraryEntry, size: BeadLibrarySizeOffer) => {
-      if (!canPlaceBeadSize(wristSizeA, placedBeadsA, size.sizeMm)) {
+      const target = resolveAutoPlacementStrand({
+        twinning,
+        wristSizeA,
+        wristSizeB,
+        placedA: placedBeadsA,
+        placedB: placedBeadsB,
+        beadSizeMm: size.sizeMm,
+      });
+
+      if (!target) {
+        const aFull = !canPlaceBeadSize(wristSizeA, placedBeadsA, size.sizeMm);
         publishCapacityNotice(
-          isStrandFull(wristSizeA, placedBeadsA)
+          twinning && aFull && !canPlaceBeadSize(wristSizeB, placedBeadsB, size.sizeMm)
             ? BRACELET_COPY.capacityFull
-            : BRACELET_COPY.capacityBlocked(size.sizeMm),
-          isStrandFull(wristSizeA, placedBeadsA) ? "full" : "blocked",
+            : isStrandFull(wristSizeA, placedBeadsA)
+              ? BRACELET_COPY.capacityFull
+              : BRACELET_COPY.capacityBlocked(size.sizeMm),
+          "full",
         );
         return false;
       }
+
       const item = buildPlacedBead(bead, size, 0);
-      setPlacedBeadsA((prev) => insertBeadWithAutoLayout(prev, item));
+      if (target === "A") {
+        setPlacedBeadsA((prev) => insertBeadWithAutoLayout(prev, item));
+      } else {
+        setPlacedBeadsB((prev) => insertBeadWithAutoLayout(prev, item));
+      }
       setCapacityNotice(null);
       bumpLayout();
       return true;
     },
-    [bumpLayout, wristSizeA, placedBeadsA, publishCapacityNotice],
+    [bumpLayout, twinning, wristSizeA, wristSizeB, placedBeadsA, placedBeadsB, publishCapacityNotice],
   );
 
   const handleSelectBead = useCallback(
@@ -476,13 +510,23 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       setSelectedBead(bead);
       setSelectedStrandBead(null);
       setSelectedSizeOfferKey(s.offerKey);
-      if (wristSizeConfirmed && !canPlaceBeadSize(wristSizeA, placedBeadsA, s.sizeMm)) {
-        publishCapacityNotice(
-          isStrandFull(wristSizeA, placedBeadsA)
-            ? BRACELET_COPY.capacityFull
-            : BRACELET_COPY.capacityBlocked(s.sizeMm),
-          isStrandFull(wristSizeA, placedBeadsA) ? "full" : "blocked",
-        );
+      if (wristSizeConfirmed) {
+        const target = resolveAutoPlacementStrand({
+          twinning,
+          wristSizeA,
+          wristSizeB,
+          placedA: placedBeadsA,
+          placedB: placedBeadsB,
+          beadSizeMm: s.sizeMm,
+        });
+        if (!target) {
+          publishCapacityNotice(
+            isStrandFull(wristSizeA, placedBeadsA) && (!twinning || isStrandFull(wristSizeB, placedBeadsB))
+              ? BRACELET_COPY.capacityFull
+              : BRACELET_COPY.capacityBlocked(s.sizeMm),
+            "full",
+          );
+        }
       }
     },
     [
@@ -493,7 +537,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       selectedStrandBead,
       placedBeadsA,
       placedBeadsB,
+      twinning,
       wristSizeA,
+      wristSizeB,
       applySizeOffer,
       publishCapacityNotice,
     ],
@@ -524,8 +570,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       }
       return true;
     });
-    bumpLayout();
-  }, [bumpLayout, wristSizeConfirmed, wristSizeIdA, wristSizeIdB]);
+  }, [wristSizeConfirmed, wristSizeIdA, wristSizeIdB]);
 
   const selectDraftWristA = useCallback((entry: { id: string }) => {
     setDraftWristIdA(entry.id);
@@ -590,9 +635,15 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     [twinning, wristSizeB, placedBeadsB],
   );
 
-  const canDuplicateToB = useMemo(
-    () => strandFitsOnWrist(wristSizeB, placedBeadsA),
+  const canMatchBracelets = useMemo(
+    () =>
+      normalizeFromSlots(placedBeadsA).length > 0 && strandFitsOnWrist(wristSizeB, placedBeadsA),
     [wristSizeB, placedBeadsA],
+  );
+
+  const braceletBMatched = useMemo(
+    () => isMatchingPairMatched(placedBeadsB),
+    [placedBeadsB],
   );
 
   const toSavedPayload = useCallback(
@@ -658,7 +709,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     hasUnavailableBeads,
     isStrandFullA,
     isStrandFullB,
-    canDuplicateToB,
+    canMatchBracelets,
+    braceletBMatched,
     capacityNotice,
     capacityNoticeVariant,
     setCapacityNotice,
@@ -686,7 +738,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     handleBeadDrop,
     handleBeadsReorder,
     handleRemoveBead,
-    handleDuplicateBraceletToB,
+    handleMatchBracelets,
+    handleUnmatchBracelets,
     handleSelectBead,
     handleReset,
     handleToggleTwinning,

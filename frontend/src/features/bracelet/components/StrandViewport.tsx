@@ -2,6 +2,7 @@ import type { ReactNode, RefObject } from "react";
 
 import { cn } from "@/lib/utils";
 
+import type { MatchingPairLayout } from "../strand-camera";
 import type { StrandPan } from "../hooks/useStrandZoom";
 
 interface StrandViewportProps {
@@ -15,6 +16,7 @@ interface StrandViewportProps {
   panMode?: boolean;
   /** Side-by-side pair layout — both strands stay visible without wrapping. */
   twinning?: boolean;
+  matchingPairLayout?: MatchingPairLayout;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -34,6 +36,7 @@ export function StrandViewport({
   viewScale: _viewScale = 1,
   panMode = false,
   twinning = false,
+  matchingPairLayout = "side-by-side",
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -59,7 +62,9 @@ export function StrandViewport({
         className={cn(
           "inline-flex w-max max-w-none items-center justify-center",
           twinning
-            ? "flex-row flex-nowrap gap-1.5 sm:gap-2 md:gap-3"
+            ? matchingPairLayout === "stacked"
+              ? "flex-col flex-nowrap gap-1.5 sm:gap-2"
+              : "flex-row flex-nowrap gap-1.5 sm:gap-2 md:gap-3"
             : "flex-row flex-wrap gap-1 sm:gap-1.5",
         )}
         style={{

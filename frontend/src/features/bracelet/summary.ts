@@ -9,6 +9,7 @@ import type { PlacedBead } from "@/lib/luxe-data";
 import type { BeadTypeEntry } from "@/types/beads";
 
 import { BRACELET_COPY } from "./copy";
+import { formatPricingLineItemLabel } from "./pricing";
 import { estimateWristFit, formatTargetWristLabel } from "./wrist-fit";
 
 const CRYSTAL_SLUGS = new Set(["crystal", "accent"]);
@@ -23,7 +24,7 @@ function groupByProductKind(pricing: BraceletPricingBreakdown) {
 
   for (const item of pricing.lineItems) {
     const row = {
-      name: item.sizeLabel || `${item.beadName} (${item.beadSizeMm} mm)`,
+      name: formatPricingLineItemLabel({ ...item, quantity: 1 }),
       quantity: item.quantity,
       subtotal: item.lineTotal,
     };
@@ -53,7 +54,7 @@ function buildMaterialSections(
       buckets.set(slug, { slug, title, rows: [] });
     }
     buckets.get(slug)!.rows.push({
-      name: item.sizeLabel || item.beadName,
+      name: formatPricingLineItemLabel({ ...item, quantity: 1 }),
       quantity: item.quantity,
       subtotal: item.lineTotal,
     });

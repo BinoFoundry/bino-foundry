@@ -11,6 +11,7 @@ export interface BraceletConfigPanelProps {
   wristSizeCm: number;
   wristSizeCmB?: number;
   twinning?: boolean;
+  braceletBMatched?: boolean;
   wristSizes: WristSizeEntry[];
   wristSizeIdA: string | null;
   wristSizeIdB?: string | null;
@@ -32,6 +33,7 @@ export function BraceletConfigPanel({
   wristSizeCm,
   wristSizeCmB,
   twinning,
+  braceletBMatched,
   wristSizes,
   wristSizeIdA,
   wristSizeIdB,
@@ -65,6 +67,7 @@ export function BraceletConfigPanel({
             wristSizeCm={wristSizeCm}
             wristSizeCmB={wristSizeCmB}
             twinning={twinning}
+            braceletBMatched={braceletBMatched}
             wristSizes={wristSizes}
             wristSizeIdA={wristSizeIdA}
             wristSizeIdB={wristSizeIdB}

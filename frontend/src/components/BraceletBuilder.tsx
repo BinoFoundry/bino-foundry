@@ -14,7 +14,7 @@ import {
   StrandZoomControls,
   useBraceletBuilder,
   useStrandZoom,
-  computeDefaultStrandZoom,
+  measureStrandCanvasSize,
   CapacityAlertBanner,
   WristSizeStep,
 } from "@/features/bracelet";
@@ -29,10 +29,6 @@ import {
   fingerprintBraceletVisual,
 } from "@/features/designs/design-save-fingerprint";
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
-import {
-  computeStrandAutoFitScale,
-  measureStrandCanvasSize,
-} from "@/features/bracelet/strand-viewport";
 import { BraceletBuilderLayout } from "@/layouts/BraceletBuilderLayout";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
@@ -50,32 +46,52 @@ interface BraceletBuilderProps {
   onPriceChange: (price: number) => void;
 }
 
-function useCanvasSize(isMobile: boolean) {
+function useCanvasSize(isMobile: boolean, enabled: boolean) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [strandSize, setStrandSize] = useState(400);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
-  useEffect(() => {
-    const measure = () => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      setContainerSize({ width: rect.width, height: rect.height });
-      setStrandSize(
-        measureStrandCanvasSize({
-          containerWidth: rect.width,
-          containerHeight: rect.height,
-          isMobile,
-          twinning: false,
-          libraryOpen: false,
-        }),
-      );
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
+  const measureLayoutCanvas = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setStrandSize(
+      measureStrandCanvasSize({
+        containerWidth: rect.width,
+        containerHeight: rect.height,
+        isMobile,
+        twinning: false,
+        libraryOpen: false,
+      }),
+    );
   }, [isMobile]);
+
+  const measureViewport = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setContainerSize({ width: rect.width, height: rect.height });
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    measureViewport();
+    measureLayoutCanvas();
+
+    const observer = new ResizeObserver(measureViewport);
+    const node = containerRef.current;
+    if (node) observer.observe(node);
+
+    const onWindowResize = () => {
+      measureViewport();
+      measureLayoutCanvas();
+    };
+    window.addEventListener("resize", onWindowResize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", onWindowResize);
+    };
+  }, [enabled, measureViewport, measureLayoutCanvas]);
 
   return { containerRef, strandSize, containerSize };
 }
@@ -259,7 +275,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   ]);
 
   const wristConfirmed = builder.wristSizeConfirmed;
-  const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile);
+  const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile, wristConfirmed);
   const canvasZoomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -273,41 +289,31 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const guideMm = builder.activeSizeOffer?.sizeMm ?? 8;
 
-  /** Fixed workspace — sized from container only, never from bead count or ring expansion. */
+  /** Fixed workspace — sized from container on mount/window resize only, never from twin chrome. */
   const layoutCanvasSize = strandSize;
-
-  const baseAutoFitScale = useMemo(
-    () => computeStrandAutoFitScale(strandSize, layoutCanvasSize),
-    [strandSize, layoutCanvasSize],
-  );
 
   const strandZoomLayout = useMemo(
     () => ({
-      viewportSize: strandSize,
+      viewportWidthPx: containerSize.width,
+      viewportHeightPx: containerSize.height,
       layoutCanvasSize,
-      autoFitScale: baseAutoFitScale,
       twinning: builder.twinning,
     }),
-    [strandSize, layoutCanvasSize, baseAutoFitScale, builder.twinning],
+    [containerSize.width, containerSize.height, layoutCanvasSize, builder.twinning],
   );
 
-  const defaultStrandZoom = useMemo(
-    () =>
-      computeDefaultStrandZoom({
-        twinning: false,
-        containerWidth: containerSize.width,
-        containerHeight: containerSize.height,
-        isMobile,
-        autoFitScale: baseAutoFitScale,
-      }),
-    [containerSize.width, containerSize.height, isMobile, baseAutoFitScale],
-  );
+  const layoutReady =
+    wristConfirmed &&
+    containerSize.width > 0 &&
+    containerSize.height > 0 &&
+    layoutCanvasSize > 0;
 
   const {
     zoom,
     displayZoom,
     viewScale,
     pan,
+    matchingPairLayout,
     isPanning,
     zoomIn,
     zoomOut,
@@ -324,8 +330,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       contentRef: contentRef as RefObject<HTMLElement | null>,
     },
     strandZoomLayout,
-    defaultStrandZoom,
-    { suspendPan: libraryDragActive, panMode, defaultZoom: defaultStrandZoom },
+    { suspendPan: libraryDragActive, panMode, layoutReady },
   );
 
   useEffect(() => {
@@ -343,8 +348,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const builderActions = {
     twinning: builder.twinning,
     onToggleTwinning: builder.handleToggleTwinning,
-    onDuplicateToB: builder.handleDuplicateBraceletToB,
-    duplicateDisabled: builder.placedBeadsA.length === 0 || !builder.canDuplicateToB,
+    onMatchBracelets: builder.handleMatchBracelets,
+    onUnmatchBracelets: builder.handleUnmatchBracelets,
+    matchDisabled: !builder.canMatchBracelets,
   };
 
   const handleAddToCart = useCallback(async () => {
@@ -420,12 +426,14 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           wristSizeCm={builder.wristSizeA}
           wristSizeCmB={builder.twinning ? builder.wristSizeB : undefined}
           twinning={builder.twinning}
+          braceletBMatched={builder.braceletBMatched}
           wristSizes={builder.wristSizes}
           wristSizeIdA={builder.wristSizeIdA}
           wristSizeIdB={builder.wristSizeIdB}
           onSelectWristA={builder.setWristA}
           onSelectWristB={builder.setWristB}
           onOpenLibrary={() => setLibraryOpen(true)}
+          builderActions={builderActions}
         />
       ) : null}
 
@@ -438,6 +446,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           wristSizeCm={builder.wristSizeA}
           wristSizeCmB={builder.twinning ? builder.wristSizeB : undefined}
           twinning={builder.twinning}
+          braceletBMatched={builder.braceletBMatched}
           wristSizes={builder.wristSizes}
           wristSizeIdA={builder.wristSizeIdA}
           wristSizeIdB={builder.wristSizeIdB}
@@ -557,6 +566,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           viewScale={viewScale}
           panMode={panMode}
           twinning={builder.twinning}
+          matchingPairLayout={matchingPairLayout}
           onPointerDown={onPanPointerDown}
           onPointerMove={onPanPointerMove}
           onPointerUp={onPanPointerUp}
@@ -641,6 +651,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             wristSizeCm={builder.wristSizeA}
             wristSizeCmB={builder.twinning ? builder.wristSizeB : undefined}
             twinning={builder.twinning}
+            braceletBMatched={builder.braceletBMatched}
             wristSizes={builder.wristSizes}
             wristSizeIdA={builder.wristSizeIdA}
             wristSizeIdB={builder.wristSizeIdB}

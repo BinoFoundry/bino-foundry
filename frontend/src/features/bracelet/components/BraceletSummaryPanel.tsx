@@ -12,6 +12,7 @@ import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
 
 import { BRACELET_COPY } from "../copy";
+import { formatPricingLineItemLabel } from "../pricing";
 import { StrandCapacityCard } from "./StrandCapacityCard";
 import { SummaryInfoCard } from "./SummaryInfoCard";
 
@@ -83,11 +84,7 @@ export function BraceletSummaryPanel({
             {pricing.lineItems.map((item) => (
               <CostLine
                 key={item.offerKey}
-                label={
-                  item.quantity > 1
-                    ? `${item.sizeLabel || item.beadName} × ${item.quantity}`
-                    : item.sizeLabel || item.beadName
-                }
+                label={formatPricingLineItemLabel(item)}
                 amount={item.lineTotal}
                 currencyCode={pricing.currencyCode}
               />

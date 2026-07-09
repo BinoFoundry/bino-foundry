@@ -171,7 +171,7 @@ describe("computeStrandViewScale", () => {
   const userZoom = 1.55;
   const baseAutoFit = 1;
 
-  it("ignores twinPreviewScale — camera zoom is the sole user multiplier", () => {
+  it("applies twinPreviewScale as a render-only multiplier", () => {
     const singleViewScale = computeStrandViewScale({
       autoFitScale: baseAutoFit,
       userZoom,
@@ -183,30 +183,21 @@ describe("computeStrandViewScale", () => {
       twinPreviewScale: 0.74,
     });
 
-    expect(twinViewScale).toBe(singleViewScale);
+    expect(twinViewScale).toBeCloseTo(singleViewScale * 0.74, 5);
   });
 
-  it("does not drift when camera zoom is unchanged across twin toggles", () => {
+  it("single-strand view scale unchanged when twin preview is 1", () => {
     const singleViewScale = computeStrandViewScale({
       autoFitScale: baseAutoFit,
       userZoom: 1.8,
     });
 
-    for (let i = 0; i < 100; i += 1) {
-      const duringTwin = computeStrandViewScale({
-        autoFitScale: baseAutoFit,
-        userZoom: 1.8,
-        twinPreviewScale: 0.74,
-      });
-      expect(duringTwin).toBe(singleViewScale);
-
-      const afterTwin = computeStrandViewScale({
-        autoFitScale: baseAutoFit,
-        userZoom: 1.8,
-        twinPreviewScale: 1,
-      });
-      expect(afterTwin).toBe(singleViewScale);
-    }
+    const restored = computeStrandViewScale({
+      autoFitScale: baseAutoFit,
+      userZoom: 1.8,
+      twinPreviewScale: 1,
+    });
+    expect(restored).toBe(singleViewScale);
   });
 });
 

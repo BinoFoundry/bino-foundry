@@ -12,6 +12,18 @@ import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import { buildStrandFitMetrics, maxStrandSlots, MIN_BEAD_SIZE_MM } from "./capacity";
 import { minActiveOfferSizeMm } from "./library-sizes";
 
+type PricingLineItemLabel = Pick<
+  BraceletPricingLineItem,
+  "beadName" | "sizeLabel" | "beadSizeMm" | "quantity"
+>;
+
+/** Customer-facing label: bead name, size, and optional quantity. */
+export function formatPricingLineItemLabel(item: PricingLineItemLabel): string {
+  const size = item.sizeLabel?.trim() || `${item.beadSizeMm} mm`;
+  const descriptor = `${item.beadName} (${size})`;
+  return item.quantity > 1 ? `${descriptor} × ${item.quantity}` : descriptor;
+}
+
 function aggregateLineItems(items: BraceletPricingLineItem[]): BraceletPricingLineItem[] {
   const map = new Map<string, BraceletPricingLineItem>();
   for (const item of items) {

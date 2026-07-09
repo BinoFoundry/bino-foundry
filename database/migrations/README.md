@@ -60,6 +60,8 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/000001_initial_ca
 34. `000038_strand_render_profiles.sql` — seeds `metadata.strandRender` on `bead_types` (occupancy, anchor, rotation, visual scale) for data-driven bracelet rendering.
 35. `000039_strand_render_system_defaults.sql` — seeds `bracelet.strand_render_defaults_v1` in `config_kv` as platform-wide strand rendering fallbacks (admin-editable via Settings).
 36. `000040_strand_render_auto_migration.sql` — backfills missing `metadata.strandRender` on all bead types (slug-aware presets + round-bead fallback) and removes empty per-bead override shells.
+37. `000044_matching_pair_link_state.sql` — **deprecated** UI flags (`matching_pair_linked`, `active_bracelet`); superseded by 000045.
+38. `000045_drop_matching_pair_link_state.sql` — removes deprecated matching-pair link columns; match state is derived from bracelet B contents. Rollback: `000045_drop_matching_pair_link_state.down.sql`.
 
 Further layout semantics live at [`database/storage/STORAGE_LAYOUT.md`](../storage/STORAGE_LAYOUT.md).
 

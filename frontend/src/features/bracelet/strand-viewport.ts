@@ -258,9 +258,8 @@ export function computeLayoutFitScale(params: {
 export function computeStrandViewScale(params: {
   autoFitScale: number;
   userZoom: number;
-  /** @deprecated Twin preview scale is no longer applied — camera stays constant. */
   twinPreviewScale?: number;
 }): number {
-  void params.twinPreviewScale;
-  return params.autoFitScale * params.userZoom;
+  const twin = params.twinPreviewScale ?? 1;
+  return params.autoFitScale * params.userZoom * twin;
 }

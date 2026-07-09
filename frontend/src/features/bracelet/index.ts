@@ -23,6 +23,20 @@ export { StrandViewport } from "./components/StrandViewport";
 export { StrandZoomControls } from "./components/StrandZoomControls";
 export { useStrandZoom, STRAND_TWIN_DEFAULT_ZOOM } from "./hooks/useStrandZoom";
 export {
+  type RenderCamera,
+  type RenderCameraLayoutInput,
+  applyRenderCameraToElement,
+  cloneRenderCamera,
+  computeSingleBraceletFitZoom,
+  createMatchingPairCamera,
+  createRenderCamera,
+  initializeBraceletCamera,
+  renderCameraTransform,
+  renderCamerasEqual,
+  refitMatchingPairCamera,
+  syncRenderScale,
+} from "./render-camera";
+export {
   computeLayoutCanvasSize,
   computeStrandAutoFitScale,
   computeDefaultStrandZoom,
@@ -30,9 +44,22 @@ export {
 } from "./strand-viewport";
 export {
   type CameraState,
+  type MatchingPairLayout,
+  type StrandCameraSnapshot,
   type StrandRenderTransform,
+  captureStrandCameraSnapshot,
+  cloneCameraState,
+  cloneStrandCameraSnapshot,
+  cameraStateEquals,
+  computeMatchingPairCameraZoom,
+  computeMatchingPairRenderFitScale,
   computeStrandRenderTransform,
+  computeStrandRenderTransformFromSnapshot,
   isStrandCameraDebugEnabled,
+  matchingPairFitsViewport,
+  resolveMatchingPairLayout,
+  strandCameraSnapshotsEqual,
+  viewScaleFromSnapshot,
 } from "./strand-camera";
 export { useBraceletBuilder } from "./hooks/useBraceletBuilder";
 export {
@@ -77,6 +104,12 @@ export {
 } from "./composition";
 export { buildBraceletPricing } from "./pricing";
 export { serializeBraceletConfiguration } from "./serialize";
+export {
+  resolveAutoPlacementStrand,
+  isMatchingPairMatched,
+  type MatchingPairMirrorMode,
+  type StrandId,
+} from "./matching-pair-placement";
 export { buildBraceletBuilderSummary, formatBraceletConfigSummary } from "./summary";
 export {
   computeStrandPathLayout,

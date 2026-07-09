@@ -2,28 +2,34 @@ import { Button } from "@/components/ui/button";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
 
 import { BRACELET_COPY } from "../copy";
+import type { BraceletBuilderActionsProps } from "./BraceletBuilderActions";
+import { MatchingPairControls } from "./MatchingPairControls";
 import { WristSizeSlider } from "./WristSizeSlider";
 
 interface BraceletMobileConfigBarProps {
   wristSizeCm: number;
   wristSizeCmB?: number;
   twinning?: boolean;
+  braceletBMatched?: boolean;
   wristSizes: WristSizeEntry[];
   wristSizeIdA: string | null;
   wristSizeIdB?: string | null;
   onSelectWristA: (entry: WristSizeEntry) => void;
   onSelectWristB?: (entry: WristSizeEntry) => void;
   onOpenLibrary: () => void;
+  builderActions?: BraceletBuilderActionsProps;
 }
 
 export function BraceletMobileConfigBar({
   twinning = false,
+  braceletBMatched = false,
   wristSizes,
   wristSizeIdA,
   wristSizeIdB,
   onSelectWristA,
   onSelectWristB,
   onOpenLibrary,
+  builderActions,
 }: BraceletMobileConfigBarProps) {
   return (
     <div className="shrink-0 space-y-2 border-b border-border/60 bg-background/95 px-3 py-2 md:hidden">
@@ -48,6 +54,15 @@ export function BraceletMobileConfigBar({
           selectedId={wristSizeIdB ?? null}
           onSelect={onSelectWristB}
           label={BRACELET_COPY.wristTwinB}
+        />
+      ) : null}
+      {builderActions ? (
+        <MatchingPairControls
+          twinning={twinning}
+          braceletBMatched={braceletBMatched}
+          builderActions={builderActions}
+          touchFriendly
+          className="border-t border-border/50 pt-2"
         />
       ) : null}
     </div>
