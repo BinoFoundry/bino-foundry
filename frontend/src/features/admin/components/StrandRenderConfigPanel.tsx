@@ -4,6 +4,7 @@ import {
   parseStrandRenderProfile,
   strandRenderSourceLabel,
   type StrandAnchorPreset,
+  type StrandOrientationMode,
   type StrandRenderConfigSource,
   type StrandRenderProfile,
   type StrandRenderProfileKey,
@@ -12,7 +13,7 @@ import {
 
 import { adminFieldClass } from "./admin-styles";
 
-export type StrandRenderConfigPanelMode = "system" | "beadType" | "bead";
+export type StrandRenderConfigPanelMode = "system" | "beadType" | "subBeadType" | "bead";
 
 export interface StrandRenderConfigPanelProps {
   mode: StrandRenderConfigPanelMode;
@@ -37,7 +38,9 @@ function SourceBadge({ source }: { source?: StrandRenderConfigSource }) {
       ? "AUTO (System default)"
       : source === "beadType"
         ? "AUTO (Inherited from bead type)"
-        : "Custom override";
+        : source === "subBeadType"
+          ? "AUTO (Inherited from sub-type)"
+          : "Custom override";
   return (
     <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
       {label}
@@ -57,13 +60,15 @@ export function StrandRenderConfigPanel({
   disabled = false,
   showAdvanced = false,
 }: StrandRenderConfigPanelProps) {
-  const readOnly = disabled || (mode === "bead" && inheritTypeDefaults);
+  const readOnly = disabled || ((mode === "bead" || mode === "subBeadType") && inheritTypeDefaults);
   const title =
     mode === "system"
       ? "System rendering defaults"
       : mode === "beadType"
         ? "Bead type rendering defaults"
-        : "Strand appearance";
+        : mode === "subBeadType"
+          ? "Sub-type rendering defaults"
+          : "Strand appearance";
 
   return (
     <section className="space-y-3 rounded-xl border border-border bg-muted/15 p-4">
@@ -74,12 +79,23 @@ export function StrandRenderConfigPanel({
             {mode === "system"
               ? "Fallback for all bead types and assets."
               : mode === "beadType"
-                ? "Inherited by every bead of this type unless individually overridden."
-                : "Optional overrides for this asset only."}
+                ? "Inherited by sub-types and beads unless overridden."
+                : mode === "subBeadType"
+                  ? "Inherited by beads of this sub-type unless individually overridden."
+                  : "Optional overrides for this asset only."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {mode === "bead" && onResetToType ? (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              onClick={onResetToType}
+            >
+              Reset to sub-type
+            </button>
+          ) : null}
+          {(mode === "subBeadType" || mode === "beadType") && onResetToType ? (
             <button
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
@@ -100,32 +116,32 @@ export function StrandRenderConfigPanel({
         </div>
       </div>
 
-      {mode === "bead" && onInheritTypeDefaultsChange ? (
+      {(mode === "bead" || mode === "subBeadType") && onInheritTypeDefaultsChange ? (
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={inheritTypeDefaults}
             onChange={(e) => onInheritTypeDefaultsChange(e.target.checked)}
           />
-          Use bead type defaults
+          {mode === "subBeadType" ? "Use bead type defaults" : "Use sub-type defaults"}
         </label>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field
-          label="Strand occupancy"
-          source={provenance?.strandOccupancy}
+          label="Contact width"
+          source={provenance?.contactWidth}
           readOnly={readOnly}
         >
           <input
             type="number"
             step="0.01"
-            min={0.05}
+            min={0.02}
             max={2}
             disabled={readOnly}
             className={adminFieldClass()}
-            value={value.strandOccupancy}
-            onChange={(e) => onChange({ strandOccupancy: Number(e.target.value) })}
+            value={value.contactWidth}
+            onChange={(e) => onChange({ contactWidth: Number(e.target.value) })}
           />
         </Field>
         <Field label="Visual scale" source={provenance?.visualScale} readOnly={readOnly}>
@@ -155,19 +171,17 @@ export function StrandRenderConfigPanel({
             <option value="bottom">Bottom</option>
           </select>
         </Field>
-        <Field label="Rotation" source={provenance?.rotationMode} readOnly={readOnly}>
+        <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
           <select
             disabled={readOnly}
             className={adminFieldClass()}
-            value={value.rotationMode}
+            value={value.orientationMode}
             onChange={(e) =>
-              onChange({ rotationMode: e.target.value as StrandRotationMode })
+              onChange({ orientationMode: e.target.value as StrandOrientationMode })
             }
           >
-            <option value="tangent">Rotate with strand</option>
-            <option value="radial-upright">Face outward</option>
-            <option value="fixed-upright">Stay upright</option>
-            <option value="none">No rotation</option>
+            <option value="outward">Outward (face away from centre)</option>
+            <option value="inward">Inward (face toward centre)</option>
           </select>
         </Field>
         <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
@@ -196,6 +210,81 @@ export function StrandRenderConfigPanel({
 
       {showAdvanced ? (
         <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+          <Field
+            label="Leading overlap"
+            source={provenance?.leadingOverlap}
+            readOnly={readOnly}
+          >
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              max={0.5}
+              disabled={readOnly}
+              className={adminFieldClass()}
+              value={value.leadingOverlap}
+              onChange={(e) => onChange({ leadingOverlap: Number(e.target.value) })}
+            />
+          </Field>
+          <Field
+            label="Trailing overlap"
+            source={provenance?.trailingOverlap}
+            readOnly={readOnly}
+          >
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              max={0.5}
+              disabled={readOnly}
+              className={adminFieldClass()}
+              value={value.trailingOverlap}
+              onChange={(e) => onChange({ trailingOverlap: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Hang offset" source={provenance?.hangOffset} readOnly={readOnly}>
+            <input
+              type="number"
+              step="0.01"
+              min={-1}
+              max={1}
+              disabled={readOnly}
+              className={adminFieldClass()}
+              value={value.hangOffset}
+              onChange={(e) => onChange({ hangOffset: Number(e.target.value) })}
+            />
+          </Field>
+          <Field
+            label="Strand occupancy (legacy)"
+            source={provenance?.strandOccupancy}
+            readOnly={readOnly}
+          >
+            <input
+              type="number"
+              step="0.01"
+              min={0.05}
+              max={2}
+              disabled={readOnly}
+              className={adminFieldClass()}
+              value={value.strandOccupancy}
+              onChange={(e) => onChange({ strandOccupancy: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Rotation (advanced)" source={provenance?.rotationMode} readOnly={readOnly}>
+            <select
+              disabled={readOnly}
+              className={adminFieldClass()}
+              value={value.rotationMode}
+              onChange={(e) =>
+                onChange({ rotationMode: e.target.value as StrandRotationMode })
+              }
+            >
+              <option value="tangent">Rotate with strand (legacy)</option>
+              <option value="radial-upright">Radial upright (legacy)</option>
+              <option value="fixed-upright">Stay upright</option>
+              <option value="none">No rotation</option>
+            </select>
+          </Field>
           <Field
             label="Collision padding (px)"
             source={provenance?.collisionPadding}

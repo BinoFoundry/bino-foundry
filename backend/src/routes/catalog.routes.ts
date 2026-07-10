@@ -6,6 +6,7 @@ import { requireMutationAuth } from "../middleware/auth-mutations.js";
 import { createBeadAvailabilityStatusRoutes } from "../modules/bead-availability-statuses/bead-availability-status.routes.js";
 import { createBeadLibraryRoutes } from "../modules/bead-libraries/bead-library.routes.js";
 import { createBeadTypeRoutes } from "../modules/bead-types/bead-type.routes.js";
+import { createSubBeadTypeRoutes } from "../modules/sub-bead-types/sub-bead-type.routes.js";
 import { createStrandRenderMigrationRoutes } from "../modules/strand-render/strand-render-migration.routes.js";
 import { createBeadSizeRoutes } from "../modules/bead-sizes/bead-size.routes.js";
 import { createWristSizeRoutes } from "../modules/wrist-sizes/wrist-size.routes.js";
@@ -40,6 +41,7 @@ export function createCatalogRoutes(): Router {
   router.use("/rendering", createRenderingRoutes());
   router.use("/frames", createFrameRoutes());
   router.use("/bead-types", createBeadTypeRoutes());
+  router.use("/sub-bead-types", createSubBeadTypeRoutes());
   router.use("/strand-render-migration", createStrandRenderMigrationRoutes());
   router.use("/bead-sizes", createBeadSizeRoutes());
   router.use("/wrist-sizes", createWristSizeRoutes());

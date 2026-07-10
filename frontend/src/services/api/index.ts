@@ -6,6 +6,7 @@ export { ordersApi, type OrderDetail } from "./orders";
 export { usersApi } from "./users";
 export { catalogueApi } from "./catalogue";
 export { beadsApi } from "./beads";
+export { subBeadTypesApi } from "./sub-bead-types";
 export { sunglassesApi } from "./sunglasses";
 export { renderingApi, isApiFrameId } from "./rendering";
 export { uploadApi, type CloudinaryUploadResult, type StagingUploadResult } from "./upload";

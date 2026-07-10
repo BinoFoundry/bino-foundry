@@ -10,6 +10,13 @@ import {
   type BeadSlotSizingResult,
   type StrandRenderCatalogueContext,
 } from "@/render/bead-crop";
+import {
+  contactArcPxFromSlotWidth,
+  contactGeometryFromProfile,
+  netContactLoopArcPx,
+  type ContactArcPx,
+  type StrandLayoutGeometry,
+} from "@bino-foundry/shared/types";
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
 import { normalizeFromSlots } from "./composition";
@@ -20,7 +27,7 @@ import { STRAND_LAYOUT_BASELINE_PX } from "./strand-viewport";
 /** Continuous bracelet — no inter-bead gaps at layout scale factor 1. */
 export const BEAD_PAIR_GAP_BASE_PX = 0;
 
-/** No bleed padding — occupancy comes from physical footprint only. */
+/** No bleed padding — spacing comes from contact geometry only. */
 export const BEAD_VISUAL_BLEED_BASE_PX = 0;
 
 export interface BeadSpacingPx {
@@ -37,9 +44,27 @@ export function scaledBeadSpacingPx(scaleFactor: number): BeadSpacingPx {
   };
 }
 
+export type { ContactArcPx, StrandLayoutGeometry };
+
+export { contactGeometryFromProfile };
+
 /**
- * Tangential footprint used for strand spacing — rendered visible width, not bitmap canvas size.
- * Charms/spacers use attachment occupancy only (dangling art excluded).
+ * Tangential contact arc from mm slot width — never from bitmap dimensions.
+ */
+export function beadContactArcPxFromSizing(
+  sizing: Pick<BeadSlotSizingResult, "dimensions">,
+  profile: Pick<
+    StrandRenderProfile,
+    "contactWidth" | "leadingOverlap" | "trailingOverlap" | "collisionPadding"
+  >,
+  scaleFactor = 1,
+): ContactArcPx {
+  const slotWidthPx = getBeadTangentArcPx(sizing.dimensions);
+  return contactArcPxFromSlotWidth(slotWidthPx, profile, scaleFactor);
+}
+
+/**
+ * @deprecated Use beadContactArcPxFromSizing — layout no longer uses bitmap footprint.
  */
 export function beadStrandFootprintPx(
   sizing: Pick<
@@ -48,58 +73,79 @@ export function beadStrandFootprintPx(
   >,
   profile?: Pick<
     StrandRenderProfile,
-    "strandOccupancy" | "forceRoundFootprint" | "collisionPadding"
+    "contactWidth" | "strandOccupancy" | "forceRoundFootprint" | "collisionPadding"
   >,
 ): number {
-  const occupancy = profile?.strandOccupancy ?? 1;
-  const wrapperTangent = getBeadTangentArcPx(sizing.dimensions);
-
-  if (profile?.forceRoundFootprint === false || occupancy < 0.99) {
-    return wrapperTangent * occupancy;
-  }
-
-  const visibleTangent =
-    sizing.visibleContentWidthPx ??
-    sizing.imageRenderWidthPx ??
-    sizing.visibleContentDiameterPx ??
-    wrapperTangent;
-
-  return Math.max(wrapperTangent, visibleTangent);
+  const slotWidthPx = getBeadTangentArcPx(sizing.dimensions);
+  const contactWidth = profile?.contactWidth ?? profile?.strandOccupancy ?? 1;
+  return contactWidth * slotWidthPx;
 }
 
-/**
- * Strand arc occupancy from rendered footprint and render profile.
- * Adjacent centres are (arcᵢ + arcⱼ) / 2 apart along the ring (edge-to-edge).
- */
+/** Strand contact arc from mm slot width and contact geometry profile. */
 export function beadLayoutArcPx(
   dim: BeadSlotDimensions,
   scaleFactor: number,
-  profile?: Pick<StrandRenderProfile, "strandOccupancy" | "collisionPadding" | "forceRoundFootprint">,
+  profile?: Pick<
+    StrandRenderProfile,
+    "contactWidth" | "leadingOverlap" | "trailingOverlap" | "collisionPadding"
+  >,
 ): number {
-  const sizing = {
-    dimensions: dim,
-    visibleContentWidthPx: dim.width,
-    visibleContentDiameterPx: Math.max(dim.width, dim.height),
-    imageRenderWidthPx: dim.width,
-  };
-  return beadLayoutArcPxFromSizing(sizing, profile, scaleFactor);
+  return beadLayoutArcPxFromSizing(
+    { dimensions: dim },
+    profile ?? { contactWidth: 1, leadingOverlap: 0, trailingOverlap: 0, collisionPadding: 0 },
+    scaleFactor,
+  );
 }
 
 export function beadLayoutArcPxFromSizing(
-  sizing: Pick<
-    BeadSlotSizingResult,
-    "dimensions" | "visibleContentWidthPx" | "visibleContentDiameterPx" | "imageRenderWidthPx"
-  >,
+  sizing: Pick<BeadSlotSizingResult, "dimensions">,
   profile?: Pick<
     StrandRenderProfile,
-    "strandOccupancy" | "collisionPadding" | "forceRoundFootprint"
+    "contactWidth" | "leadingOverlap" | "trailingOverlap" | "collisionPadding"
   >,
   scaleFactor = 1,
 ): number {
-  const footprint = beadStrandFootprintPx(sizing, profile);
-  const padding = (profile?.collisionPadding ?? 0) * Math.max(0.5, scaleFactor);
-  const { bleedPx } = scaledBeadSpacingPx(scaleFactor);
-  return footprint + bleedPx * 2 + padding;
+  return beadContactArcPxFromSizing(
+    sizing,
+    profile ?? { contactWidth: 1, leadingOverlap: 0, trailingOverlap: 0, collisionPadding: 0 },
+    scaleFactor,
+  ).contactArcPx;
+}
+
+/** Build per-bead contact arc + overlap arrays for the layout packer. */
+export function beadContactLayoutArrays(
+  sizingResults: Pick<BeadSlotSizingResult, "dimensions">[],
+  profiles: Pick<
+    StrandRenderProfile,
+    "contactWidth" | "leadingOverlap" | "trailingOverlap" | "collisionPadding"
+  >[],
+  scaleFactor = 1,
+): {
+  contactArcPx: number[];
+  leadingOverlapPx: number[];
+  trailingOverlapPx: number[];
+} {
+  const contactArcPx: number[] = [];
+  const leadingOverlapPx: number[] = [];
+  const trailingOverlapPx: number[] = [];
+
+  for (let i = 0; i < sizingResults.length; i++) {
+    const contact = beadContactArcPxFromSizing(
+      sizingResults[i]!,
+      profiles[i] ?? {
+        contactWidth: 1,
+        leadingOverlap: 0,
+        trailingOverlap: 0,
+        collisionPadding: 0,
+      },
+      scaleFactor,
+    );
+    contactArcPx.push(contact.contactArcPx);
+    leadingOverlapPx.push(contact.leadingOverlapPx);
+    trailingOverlapPx.push(contact.trailingOverlapPx);
+  }
+
+  return { contactArcPx, leadingOverlapPx, trailingOverlapPx };
 }
 
 /**
@@ -117,15 +163,19 @@ export interface ResolvedRingRadiusResult {
   /** True when the resolved ring exceeds available canvas radius (zoom/pan may help). */
   isVisualOverCanvas: boolean;
   beadArcPx: number[];
+  leadingOverlapPx: number[];
+  trailingOverlapPx: number[];
   pairGapPx: number;
 }
 
 /**
- * Resolve ring radius from wrist baseline + rendered bead extents so adjacent beads do not overlap.
+ * Resolve ring radius from wrist baseline + contact arcs so adjacent beads do not overlap.
  * Expands the ring when needed; never clamps below the overlap-free radius.
  */
 export function computeResolvedRingRadiusPx(params: {
   beadLayoutArcPx: number[];
+  leadingOverlapPx?: number[];
+  trailingOverlapPx?: number[];
   wristRadiusPx: number;
   maxRadiusPx: number;
   scaleFactor?: number;
@@ -140,12 +190,23 @@ export function computeResolvedRingRadiusPx(params: {
   } = params;
 
   const n = layoutArcs.length;
+  const leadingOverlapPx =
+    params.leadingOverlapPx?.length === n
+      ? params.leadingOverlapPx
+      : new Array<number>(n).fill(0);
+  const trailingOverlapPx =
+    params.trailingOverlapPx?.length === n
+      ? params.trailingOverlapPx
+      : new Array<number>(n).fill(0);
+
   if (!n) {
     return {
       radiusPx: Math.max(1, wristRadiusPx),
       expanded: false,
       isVisualOverCanvas: false,
       beadArcPx: [],
+      leadingOverlapPx: [],
+      trailingOverlapPx: [],
       pairGapPx,
     };
   }
@@ -155,7 +216,8 @@ export function computeResolvedRingRadiusPx(params: {
 
   for (let iter = 0; iter < 16; iter++) {
     beadArcPx = layoutArcs.map(beadArcPxOnRing);
-    const totalArcPx = beadArcPx.reduce((sum, arc) => sum + arc, 0) + n * pairGapPx;
+    const totalArcPx =
+      netContactLoopArcPx(beadArcPx, leadingOverlapPx, trailingOverlapPx) + n * pairGapPx;
     const neededRadius = totalArcPx / (2 * Math.PI);
     const nextRadius = Math.max(wristRadiusPx, neededRadius);
     if (Math.abs(nextRadius - radiusPx) < 0.25) {
@@ -173,6 +235,8 @@ export function computeResolvedRingRadiusPx(params: {
     expanded,
     isVisualOverCanvas,
     beadArcPx,
+    leadingOverlapPx,
+    trailingOverlapPx,
     pairGapPx,
   };
 }
@@ -234,15 +298,14 @@ export function resolveStrandRingLayout(params: {
     bounds,
   );
   const maxRadiusPx = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
-  const beadLayoutArcsPx = sizingResults.map((sizing, i) =>
-    beadLayoutArcPxFromSizing(
-      sizing,
-      resolveStrandRenderConfigForBead(normalized[i]?.bead, renderCatalogue),
-      scaleFactor,
-    ),
+  const profiles = normalized.map((p) =>
+    resolveStrandRenderConfigForBead(p.bead, renderCatalogue),
   );
+  const contactArrays = beadContactLayoutArrays(sizingResults, profiles, scaleFactor);
   const resolved = computeResolvedRingRadiusPx({
-    beadLayoutArcPx: beadLayoutArcsPx,
+    beadLayoutArcPx: contactArrays.contactArcPx,
+    leadingOverlapPx: contactArrays.leadingOverlapPx,
+    trailingOverlapPx: contactArrays.trailingOverlapPx,
     wristRadiusPx,
     maxRadiusPx,
     scaleFactor,
@@ -265,11 +328,12 @@ export function adjacentArcClearancePx(
   angleB: number,
   arcPxB: number,
   radiusPx: number,
+  junctionOverlapPx = 0,
 ): number {
   let delta = Math.abs(angleB - angleA);
   if (delta > Math.PI) delta = 2 * Math.PI - delta;
   const centerDistPx = delta * radiusPx;
-  return centerDistPx - arcPxA / 2 - arcPxB / 2;
+  return centerDistPx - arcPxA / 2 - arcPxB / 2 + junctionOverlapPx;
 }
 
 /** Verify adjacent bead sectors do not overlap on the ring (for tests). */
@@ -299,17 +363,22 @@ export function adjacentPairsMeetGap(
   radiusPx: number,
   minGapPx: number,
   closedLoop = true,
+  leadingOverlapPx: number[] = [],
+  trailingOverlapPx: number[] = [],
 ): boolean {
   if (angles.length < 2) return true;
   const pairCount = closedLoop ? angles.length : angles.length - 1;
   for (let i = 0; i < pairCount; i++) {
     const j = (i + 1) % angles.length;
+    const junctionOverlap =
+      trailingOverlapPx[i]! + leadingOverlapPx[j]!;
     const clearance = adjacentArcClearancePx(
       angles[i]!,
       beadArcPx[i]!,
       angles[j]!,
       beadArcPx[j]!,
       radiusPx,
+      junctionOverlap,
     );
     if (clearance < minGapPx - 0.01) return false;
   }

@@ -97,24 +97,23 @@ export function radialOutwardRotationDeg(angle: number): number {
   return (angle * 180) / Math.PI + 90;
 }
 
+/** Radial inward rotation — front faces toward the bracelet centre. */
+export function radialInwardRotationDeg(angle: number): number {
+  return radialOutwardRotationDeg(angle) + 180;
+}
+
 /** Strand rotation from data-driven render profile (never from category slug). */
 export function strandRotationDeg(angle: number, profile: StrandRenderProfile): number {
-  let base = 0;
-  switch (profile.rotationMode) {
-    case "radial-upright":
-      base = radialOutwardRotationDeg(angle);
-      break;
-    case "fixed-upright":
-      base = 0;
-      break;
-    case "none":
-      base = 0;
-      break;
-    case "tangent":
-    default:
-      base = tangentRotationDeg(angle);
-      break;
+  if (profile.rotationMode === "fixed-upright" || profile.rotationMode === "none") {
+    return profile.rotationOffsetDeg;
   }
+
+  // Processed bead art faces the raster bottom; radialOutward aligns image top with the
+  // outward normal (legacy tangent / rotationMode). Visual front-outward needs +180°.
+  const base =
+    profile.orientationMode === "inward"
+      ? radialOutwardRotationDeg(angle)
+      : radialInwardRotationDeg(angle);
   return base + profile.rotationOffsetDeg;
 }
 
@@ -151,7 +150,9 @@ export function computeBeadShellPosition(
   profile: StrandRenderProfile,
 ): BeadShellPlacement {
   const renderDim = strandLayoutShellDimensions(dim, profile);
-  const radial = profile.verticalOffset * renderDim.height;
+  const hang =
+    profile.hangOffset !== 0 ? profile.hangOffset : profile.verticalOffset;
+  const radial = hang * renderDim.height;
   const anchorX = ringX + radial * Math.cos(angle);
   const anchorY = ringY + radial * Math.sin(angle);
   const originX = profile.anchorX * renderDim.width;
@@ -235,6 +236,8 @@ export function computeStrandPathLayout(params: {
   rotationOffsetByIndex?: (index: number) => number;
   /** Minimum arc gap between adjacent beads (same units as layoutCircumferenceMm). */
   minGapPx?: number;
+  /** Contact junction overlaps (px) — enables contact-geometry packing. */
+  contactOverlaps?: { leadingPx: number[]; trailingPx: number[] };
 }): StrandPathBeadLayout[] {
   const {
     beads,
@@ -245,6 +248,7 @@ export function computeStrandPathLayout(params: {
     startAngle = STRAND_PATH_START_ANGLE,
     rotationOffsetByIndex,
     minGapPx = 0,
+    contactOverlaps,
   } = params;
 
   const n = beads.length;
@@ -257,6 +261,7 @@ export function computeStrandPathLayout(params: {
       layoutCircumferenceMm!,
       startAngle,
       minGapPx,
+      contactOverlaps,
     );
     return beads.map((bead, i) => {
       const angle = elastic.angles[i]!;

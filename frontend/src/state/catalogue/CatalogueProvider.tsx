@@ -15,11 +15,12 @@ import { wristSizesApi } from "@/services/api/wrist-sizes";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { buildBeadSaveDiff } from "@/features/admin/lib/bead-save-pipeline";
 import { beadsApi } from "@/services/api/beads";
+import { subBeadTypesApi } from "@/services/api/sub-bead-types";
 import { catalogueApi, settingsApi } from "@/services/api";
 import { isApiError } from "@/services/api/errors";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
-import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
 import type { FrameEntry } from "@/types/catalogue";
@@ -74,6 +75,15 @@ export interface CatalogueActions {
     settings: import("@bino-foundry/shared/types").StrandRenderProfile,
   ) => Promise<import("@bino-foundry/shared/types").StrandRenderProfile>;
   deleteBeadType: (id: string) => Promise<void>;
+  addSubBeadType: (
+    entry: Pick<SubBeadTypeEntry, "beadTypeId" | "name" | "description"> & {
+      displayOrder?: number;
+      isActive?: boolean;
+      metadata?: SubBeadTypeEntry["metadata"];
+    },
+  ) => Promise<SubBeadTypeEntry>;
+  updateSubBeadType: (entry: SubBeadTypeEntry) => Promise<SubBeadTypeEntry>;
+  deleteSubBeadType: (id: string) => Promise<void>;
   addBeadSize: (entry: Omit<BeadSizeEntry, "id" | "createdAt" | "updatedAt">) => Promise<BeadSizeEntry>;
   updateBeadSize: (entry: BeadSizeEntry) => Promise<BeadSizeEntry>;
   deleteBeadSize: (id: string) => Promise<void>;
@@ -112,10 +122,11 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, beadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries, catalogAvailabilityStatuses, strandRenderDefaults] =
+      const [frames, beadTypes, subBeadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries, catalogAvailabilityStatuses, strandRenderDefaults] =
         await Promise.all([
         catalogueApi.listFrames(),
         beadsApi.listTypes(),
+        subBeadTypesApi.list(),
         beadSizesApi.list(true),
         wristSizesApi.list(true),
         beadLibrarySizesApi.list(),
@@ -126,6 +137,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       const next: CatalogueStore = {
         frames,
         beadTypes,
+        subBeadTypes,
         beadSizes,
         wristSizes,
         beadLibrarySizes,
@@ -322,9 +334,11 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       },
     ) => {
       const created = await beadsApi.createType(entry);
+      const subBeadTypes = await subBeadTypesApi.list();
       mergeStore((prev) => ({
         ...prev,
         beadTypes: replaceById(prev.beadTypes, created),
+        subBeadTypes,
       }));
       return created;
     },
@@ -358,6 +372,48 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       mergeStore((prev) => ({
         ...prev,
         beadTypes: removeById(prev.beadTypes, id),
+        subBeadTypes: prev.subBeadTypes.filter((s) => s.beadTypeId !== id),
+      }));
+    },
+    [mergeStore],
+  );
+
+  const addSubBeadType = useCallback(
+    async (
+      entry: Pick<SubBeadTypeEntry, "beadTypeId" | "name" | "description"> & {
+        displayOrder?: number;
+        isActive?: boolean;
+        metadata?: SubBeadTypeEntry["metadata"];
+      },
+    ) => {
+      const created = await subBeadTypesApi.create(entry);
+      mergeStore((prev) => ({
+        ...prev,
+        subBeadTypes: replaceById(prev.subBeadTypes, created),
+      }));
+      return created;
+    },
+    [mergeStore],
+  );
+
+  const updateSubBeadType = useCallback(
+    async (entry: SubBeadTypeEntry) => {
+      const updated = await subBeadTypesApi.update(entry.id, entry);
+      mergeStore((prev) => ({
+        ...prev,
+        subBeadTypes: replaceById(prev.subBeadTypes, updated),
+      }));
+      return updated;
+    },
+    [mergeStore],
+  );
+
+  const deleteSubBeadType = useCallback(
+    async (id: string) => {
+      await subBeadTypesApi.delete(id);
+      mergeStore((prev) => ({
+        ...prev,
+        subBeadTypes: removeById(prev.subBeadTypes, id),
       }));
     },
     [mergeStore],
@@ -497,6 +553,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       updateBeadType,
       updateStrandRenderDefaults,
       deleteBeadType,
+      addSubBeadType,
+      updateSubBeadType,
+      deleteSubBeadType,
       addBeadSize,
       updateBeadSize,
       deleteBeadSize,
@@ -528,6 +587,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       updateBeadType,
       updateStrandRenderDefaults,
       deleteBeadType,
+      addSubBeadType,
+      updateSubBeadType,
+      deleteSubBeadType,
       addBeadSize,
       updateBeadSize,
       deleteBeadSize,

@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { BeadCategoryScroller } from "@/features/bracelet/components/BeadCategoryScroller";
 import { BeadInfoButton } from "@/features/bracelet/components/BeadInfoButton";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { isBeadVisibleInBuilder } from "@/features/bracelet/unavailable-bead";
@@ -178,6 +177,7 @@ const BeadLibrary = ({
   const currency = siteSettings.currencyCode;
   const [search, setSearch] = useState("");
   const [activeBeadTypeId, setActiveBeadTypeId] = useState<string>("");
+  const [activeSubBeadTypeId, setActiveSubBeadTypeId] = useState<string>("");
   const [sizeByBeadId, setSizeByBeadId] = useState<Record<string, string>>({});
   const suppressClickAfterDragRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -234,6 +234,34 @@ const BeadLibrary = ({
   const currentBeadTypeId = activeBeadTypeId || activeTypes[0]?.id || "";
   const currentType = activeTypes.find((t) => t.id === currentBeadTypeId);
 
+  const activeSubTypes = useMemo(
+    () =>
+      cat.subBeadTypes
+        .filter((s) => s.beadTypeId === currentBeadTypeId && s.isActive !== false)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    [cat.subBeadTypes, currentBeadTypeId],
+  );
+
+  const currentSubBeadTypeId =
+    activeSubBeadTypeId && activeSubTypes.some((s) => s.id === activeSubBeadTypeId)
+      ? activeSubBeadTypeId
+      : activeSubTypes[0]?.id ?? "";
+  const currentSubType = activeSubTypes.find((s) => s.id === currentSubBeadTypeId);
+
+  const handleSelectBeadType = useCallback(
+    (typeId: string) => {
+      setActiveBeadTypeId(typeId);
+      setActiveSubBeadTypeId((prev) => {
+        const subs = cat.subBeadTypes
+          .filter((s) => s.beadTypeId === typeId && s.isActive !== false)
+          .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+        if (prev && subs.some((s) => s.id === prev)) return prev;
+        return subs[0]?.id ?? "";
+      });
+    },
+    [cat.subBeadTypes],
+  );
+
   const builderStatusByCode = useMemo(
     () => new Map(cat.beadAvailabilityStatuses.map((s) => [s.code, { showInBuilder: s.showInBuilder }])),
     [cat.beadAvailabilityStatuses],
@@ -242,10 +270,11 @@ const BeadLibrary = ({
   const filtered = useMemo(() => {
     return cat.beadLibraries.filter((b) => {
       if (!isBeadVisibleInBuilder(b, builderStatusByCode)) return false;
-      if (b.beadTypeId !== currentBeadTypeId) return false;
+      if (!currentSubBeadTypeId) return false;
+      if (b.subBeadTypeId !== currentSubBeadTypeId) return false;
       return b.name.toLowerCase().includes(search.toLowerCase());
     });
-  }, [cat.beadLibraries, builderStatusByCode, currentBeadTypeId, search]);
+  }, [cat.beadLibraries, builderStatusByCode, currentSubBeadTypeId, search]);
 
   const gridColumns = compact ? 2 : isMobile ? 1 : 2;
   const rowCount = Math.ceil(filtered.length / gridColumns);
@@ -263,9 +292,11 @@ const BeadLibrary = ({
   const emptyMessage =
     search.trim().length > 0
       ? BRACELET_COPY.librarySearchEmpty
-      : currentType
-        ? BRACELET_COPY.libraryEmpty(currentType.name)
-        : BRACELET_COPY.libraryEmpty("beads");
+      : currentSubType
+        ? BRACELET_COPY.libraryEmpty(currentSubType.name)
+        : currentType
+          ? BRACELET_COPY.libraryEmpty(currentType.name)
+          : BRACELET_COPY.libraryEmpty("beads");
 
   const panelClass = isEmbedded
     ? "flex min-h-0 flex-1 flex-col"
@@ -336,8 +367,62 @@ const BeadLibrary = ({
     </div>
   );
 
+  const filterSelectTriggerClass = cn(
+    "h-8 w-full bg-background text-xs focus:ring-selection/40",
+    compact ? "px-2" : "px-2.5",
+  );
+
+  const libraryFilters = (
+    <div
+      className={cn(
+        "shrink-0 space-y-2 border-b border-border/60",
+        compact ? "px-2 py-2" : "px-3 py-3",
+      )}
+    >
+      <div className="space-y-1">
+        <label className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          {BRACELET_COPY.beadTypeFilter}
+        </label>
+        <Select value={currentBeadTypeId} onValueChange={handleSelectBeadType}>
+          <SelectTrigger className={filterSelectTriggerClass}>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            {activeTypes.map((t) => (
+              <SelectItem key={t.id} value={t.id} className="text-xs">
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {activeSubTypes.length > 0 ? (
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            {BRACELET_COPY.subBeadTypeFilter}
+          </label>
+          <Select value={currentSubBeadTypeId} onValueChange={setActiveSubBeadTypeId}>
+            <SelectTrigger className={filterSelectTriggerClass}>
+              <SelectValue placeholder="Select sub-type" />
+            </SelectTrigger>
+            <SelectContent>
+              {activeSubTypes.map((s) => (
+                <SelectItem key={s.id} value={s.id} className="text-xs">
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+    </div>
+  );
+
   const libraryBody = (
     <>
+      {libraryFilters}
+
       <div className={cn("shrink-0 border-b border-border/60", compact ? "p-2" : "p-3")}>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -350,21 +435,6 @@ const BeadLibrary = ({
         </div>
       </div>
 
-      <BeadCategoryScroller
-        types={activeTypes}
-        activeId={currentBeadTypeId}
-        onSelect={setActiveBeadTypeId}
-        compact={compact}
-      />
-
-      {compact ? (
-        <div className="shrink-0 border-b border-border/60 px-2 py-1">
-          <p className="type-label text-[10px] text-primary/75">
-            {currentType?.name ?? BRACELET_COPY.crystalLibrary}
-          </p>
-        </div>
-      ) : null}
-
       {beadGrid}
     </>
   );
@@ -375,14 +445,11 @@ const BeadLibrary = ({
         <div className="fixed inset-0 z-40 bg-[hsl(var(--overlay))]" onClick={onClose} aria-hidden />
       )}
       <div className={panelClass}>
-        {!compact ? (
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-            <h3 className="type-h3 text-sm">{currentType?.name ?? BRACELET_COPY.crystalLibrary}</h3>
-            {!isEmbedded ? (
-              <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
-                <X className="h-4 w-4" />
-              </Button>
-            ) : null}
+        {!compact && !isEmbedded ? (
+          <div className="flex shrink-0 justify-end border-b border-border px-2 py-2">
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close collection">
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         ) : null}
 

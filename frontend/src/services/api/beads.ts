@@ -1,4 +1,4 @@
-import type { BeadCropConfig, BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { BeadCropConfig, BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 
 import { apiRequest } from "./client";
@@ -46,6 +46,7 @@ export const beadsApi = {
         name: payload.name,
         sizes,
         beadTypeId: payload.beadTypeId,
+        subBeadTypeId: payload.subBeadTypeId,
         description: payload.description,
         originalImage: payload.originalImage ?? payload.image,
         processedImage: payload.processedImage,
@@ -88,6 +89,7 @@ export const beadsApi = {
       body: {
         name: payload.name,
         beadTypeId: payload.beadTypeId,
+        subBeadTypeId: payload.subBeadTypeId,
         description: payload.description,
         originalImage,
         processedImage: payload.processedImage,

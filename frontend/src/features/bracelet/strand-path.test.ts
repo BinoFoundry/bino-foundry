@@ -8,6 +8,7 @@ import {
   evenBeadAngleStepRad,
   insertionIndexFromPointerAngle,
   polarToCartesian,
+  radialInwardRotationDeg,
   radialOutwardRotationDeg,
   resolveStrandDropTarget,
   strandRotationDeg,
@@ -157,12 +158,40 @@ describe("charm strand presentation", () => {
     expect(radialOutwardRotationDeg(-Math.PI / 2)).toBeCloseTo(0, 5);
   });
 
-  it("uses radial rotation for charms and tangent for crystals", () => {
+  it("faces inward opposite to outward", () => {
+    const angle = Math.PI / 4;
+    expect(radialInwardRotationDeg(angle)).toBeCloseTo(radialOutwardRotationDeg(angle) + 180, 5);
+  });
+
+  it("uses outward orientation for charms and crystals by default", () => {
     const angle = -Math.PI / 2;
     const charmProfile = resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE);
     const crystalProfile = resolveStrandRenderConfigForType("crystal", TEST_STRAND_RENDER_CATALOGUE);
-    expect(strandRotationDeg(angle, charmProfile)).toBeCloseTo(0, 5);
-    expect(strandRotationDeg(angle, crystalProfile)).toBeCloseTo(tangentRotationDeg(angle), 5);
+    expect(strandRotationDeg(angle, charmProfile)).toBeCloseTo(
+      radialInwardRotationDeg(angle),
+      5,
+    );
+    expect(strandRotationDeg(angle, crystalProfile)).toBeCloseTo(
+      radialInwardRotationDeg(angle),
+      5,
+    );
+  });
+
+  it("legacy tangent rotation matches radialOutward (previous default appearance)", () => {
+    const angle = Math.PI / 6;
+    expect(tangentRotationDeg(angle)).toBeCloseTo(radialOutwardRotationDeg(angle), 5);
+  });
+
+  it("respects inward orientation override", () => {
+    const angle = -Math.PI / 2;
+    const inwardProfile = {
+      ...resolveStrandRenderConfigForType("crystal", TEST_STRAND_RENDER_CATALOGUE),
+      orientationMode: "inward" as const,
+    };
+    expect(strandRotationDeg(angle, inwardProfile)).toBeCloseTo(
+      radialOutwardRotationDeg(angle),
+      5,
+    );
   });
 
   it("anchors charm loop on the ring point", () => {

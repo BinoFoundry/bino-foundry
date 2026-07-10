@@ -1,8 +1,10 @@
-import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import {
   beadLibrariesStrandRenderStamp,
   parseStrandRenderProfile,
   resolveStrandRenderConfig,
+  subBeadTypeInheritsBeadTypeStrandDefaults,
+  subBeadTypesStrandRenderStamp,
   type ResolvedStrandRenderConfig,
   type StrandRenderProfile,
 } from "@bino-foundry/shared/types";
@@ -11,6 +13,7 @@ export type { ResolvedStrandRenderConfig, StrandRenderProfile };
 
 export interface StrandRenderCatalogueContext {
   beadTypes?: BeadTypeEntry[];
+  subBeadTypes?: SubBeadTypeEntry[];
   /** Platform defaults from config_kv — loaded once with catalogue. */
   strandRenderDefaults?: StrandRenderProfile | null;
 }
@@ -27,10 +30,26 @@ function beadTypeFor(
   );
 }
 
+function subBeadTypeFor(
+  bead: BeadLibraryEntry | null | undefined,
+  catalogue?: StrandRenderCatalogueContext,
+): SubBeadTypeEntry | null {
+  if (!bead?.subBeadTypeId || !catalogue?.subBeadTypes?.length) return null;
+  return catalogue.subBeadTypes.find((s) => s.id === bead.subBeadTypeId) ?? null;
+}
+
 function typeDefaultsFromEntry(type: BeadTypeEntry | null): Partial<StrandRenderProfile> | null {
   if (!type) return null;
   const meta = type.metadata as { strandRender?: unknown } | undefined;
   return parseStrandRenderProfile(meta?.strandRender);
+}
+
+function subTypeOverrideFromEntry(
+  subType: SubBeadTypeEntry | null | undefined,
+): Partial<StrandRenderProfile> | null {
+  if (!subType) return null;
+  const meta = subType.metadata as { strandRenderOverride?: unknown } | undefined;
+  return parseStrandRenderProfile(meta?.strandRenderOverride);
 }
 
 function libraryOverrideFromEntry(
@@ -44,7 +63,7 @@ function libraryOverrideFromEntry(
   return parseStrandRenderProfile(meta?.strandRenderOverride);
 }
 
-function libraryInheritsTypeDefaults(bead: BeadLibraryEntry | null | undefined): boolean {
+function libraryInheritsSubTypeDefaults(bead: BeadLibraryEntry | null | undefined): boolean {
   const meta = bead?.metadata as { useTypeStrandDefaults?: boolean; strandRenderOverride?: unknown } | undefined;
   if (meta?.useTypeStrandDefaults === true) return true;
   if (meta?.strandRenderOverride == null) return true;
@@ -57,11 +76,15 @@ export function resolveStrandRenderConfigForBead(
   catalogue?: StrandRenderCatalogueContext,
 ): ResolvedStrandRenderConfig {
   const typeEntry = beadTypeFor(bead, catalogue);
+  const subTypeEntry = subBeadTypeFor(bead, catalogue);
+
   return resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
+    subBeadTypeOverride: subTypeOverrideFromEntry(subTypeEntry),
+    inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subTypeEntry?.metadata),
     beadOverride: libraryOverrideFromEntry(bead),
-    inheritTypeDefaults: libraryInheritsTypeDefaults(bead),
+    inheritBeadFromSubBeadType: libraryInheritsSubTypeDefaults(bead),
   });
 }
 
@@ -83,6 +106,23 @@ export function resolveStrandRenderConfigForType(
   return resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
+  });
+}
+
+/** Resolve by sub-type id when sub-type context is available. */
+export function resolveStrandRenderConfigForSubBeadType(
+  subTypeId: string | undefined,
+  catalogue?: StrandRenderCatalogueContext,
+): ResolvedStrandRenderConfig {
+  const subTypeEntry = catalogue?.subBeadTypes?.find((s) => s.id === subTypeId) ?? null;
+  const typeEntry =
+    catalogue?.beadTypes?.find((t) => t.id === subTypeEntry?.beadTypeId) ?? null;
+
+  return resolveStrandRenderConfig({
+    systemDefaults: catalogue?.strandRenderDefaults ?? null,
+    beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
+    subBeadTypeOverride: subTypeOverrideFromEntry(subTypeEntry),
+    inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subTypeEntry?.metadata),
   });
 }
 
@@ -112,7 +152,8 @@ export function strandRenderCacheVersion(
   const typesStamp = (catalogue.beadTypes ?? [])
     .map((t) => `${t.id}:${JSON.stringify(t.metadata?.strandRender ?? null)}`)
     .join("|");
+  const subTypesStamp = subBeadTypesStrandRenderStamp(catalogue.subBeadTypes ?? []);
   const systemStamp = JSON.stringify(catalogue.strandRenderDefaults ?? null);
   const librariesStamp = beadLibrariesStrandRenderStamp(libraries);
-  return `${systemStamp}::${typesStamp}::${librariesStamp}`;
+  return `${systemStamp}::${typesStamp}::${subTypesStamp}::${librariesStamp}`;
 }

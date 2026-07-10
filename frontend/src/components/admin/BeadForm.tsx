@@ -12,7 +12,7 @@ import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import { formatUploadErrorMessage, validateUploadFile } from "@/features/admin/lib/upload-pipeline";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
-import { resolveStrandRenderConfigForBead } from "@/render/bead-crop";
+import { resolveStrandRenderConfigForBead, resolveStrandRenderConfigForSubBeadType } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import type { BeadSizeDraftRow } from "@/types/bead-library-sizes";
@@ -24,7 +24,6 @@ import {
   mergeLazyStrandRenderOverride,
   parseStrandRenderProfile,
   pruneStrandRenderOverride,
-  resolveStrandRenderConfig,
   strandRenderOverrideIsEmpty,
   type BeadCropConfig,
   type StrandRenderProfile,
@@ -33,6 +32,7 @@ import {
 interface BeadFormProps {
   initial?: BeadLibraryEntry;
   defaultBeadTypeId?: string;
+  defaultSubBeadTypeId?: string;
   onSave: (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => void | Promise<void>;
   onCancel: () => void;
 }
@@ -88,11 +88,16 @@ function setInheritTypeDefaults(form: BeadLibraryEntry, inherit: boolean): BeadL
   return { ...form, metadata: meta };
 }
 
-export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadFormProps) {
+export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onSave, onCancel }: BeadFormProps) {
   const cat = useCatalogue();
   const developerMode = useAdminDeveloperMode();
   const defaultType =
     defaultBeadTypeId ?? cat.beadTypes.find((t) => t.slug === "crystal")?.id ?? cat.beadTypes[0]?.id ?? "";
+  const defaultSubType =
+    defaultSubBeadTypeId ??
+    cat.subBeadTypes.find((s) => s.beadTypeId === defaultType && s.isActive !== false)?.id ??
+    cat.subBeadTypes.find((s) => s.beadTypeId === defaultType)?.id ??
+    "";
 
   const blank: BeadLibraryEntry = useMemo(
     () => ({
@@ -102,6 +107,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       originalImage: "",
       processedImage: "",
       beadTypeId: defaultType,
+      subBeadTypeId: defaultSubType,
       description: "",
       isActive: true,
       availabilityStatusCode: "ACTIVE",
@@ -109,7 +115,7 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       cropStatus: "draft",
       cropConfig: null,
     }),
-    [defaultType],
+    [defaultType, defaultSubType],
   );
 
   const [form, setForm] = useState<BeadLibraryEntry>(initial ?? blank);
@@ -293,22 +299,26 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
       ?.useTypeStrandDefaults !== false &&
       (form.metadata as { strandRenderOverride?: unknown } | undefined)?.strandRenderOverride == null,
   );
+  const subTypesForSelectedType = useMemo(
+    () =>
+      cat.subBeadTypes
+        .filter((s) => s.beadTypeId === form.beadTypeId && s.isActive !== false)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    [cat.subBeadTypes, form.beadTypeId],
+  );
+
   const renderCatalogue = useMemo(
-    () => ({ beadTypes: cat.beadTypes, strandRenderDefaults: cat.strandRenderDefaults }),
-    [cat.beadTypes, cat.strandRenderDefaults],
+    () => ({ beadTypes: cat.beadTypes, subBeadTypes: cat.subBeadTypes, strandRenderDefaults: cat.strandRenderDefaults }),
+    [cat.beadTypes, cat.subBeadTypes, cat.strandRenderDefaults],
   );
   const resolvedStrand = useMemo(
     () => resolveStrandRenderConfigForBead(form, renderCatalogue),
     [form, renderCatalogue],
   );
-  const inheritedTypeStrand = useMemo(() => {
-    const type = cat.beadTypes.find((t) => t.id === form.beadTypeId);
-    const meta = type?.metadata as { strandRender?: unknown } | undefined;
-    return resolveStrandRenderConfig({
-      systemDefaults: cat.strandRenderDefaults,
-      beadTypeDefaults: parseStrandRenderProfile(meta?.strandRender),
-    });
-  }, [form.beadTypeId, cat.beadTypes, cat.strandRenderDefaults]);
+  const inheritedSubTypeStrand = useMemo(
+    () => resolveStrandRenderConfigForSubBeadType(form.subBeadTypeId, renderCatalogue),
+    [form.subBeadTypeId, renderCatalogue],
+  );
   const [showStrandAdvanced, setShowStrandAdvanced] = useState(false);
 
   return (
@@ -333,12 +343,37 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
             <select
               required
               value={form.beadTypeId}
-              onChange={(e) => set("beadTypeId", e.target.value)}
+              onChange={(e) => {
+                const nextTypeId = e.target.value;
+                const nextSub =
+                  cat.subBeadTypes.find((s) => s.beadTypeId === nextTypeId && s.isActive !== false) ??
+                  cat.subBeadTypes.find((s) => s.beadTypeId === nextTypeId);
+                setForm((f) => ({
+                  ...f,
+                  beadTypeId: nextTypeId,
+                  subBeadTypeId: nextSub?.id ?? f.subBeadTypeId,
+                }));
+              }}
               className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-body focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               {cat.beadTypes.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Sub-type *</label>
+            <select
+              required
+              value={form.subBeadTypeId}
+              onChange={(e) => set("subBeadTypeId", e.target.value)}
+              className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-body focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              {subTypesForSelectedType.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -490,12 +525,12 @@ export function BeadForm({ initial, defaultBeadTypeId, onSave, onCancel }: BeadF
         inheritTypeDefaults={inheritTypeDefaults}
         showAdvanced={showStrandAdvanced}
         onInheritTypeDefaultsChange={(inherit) => setForm((f) => setInheritTypeDefaults(f, inherit))}
-        onChange={(patch) => setForm((f) => updateStrandOverride(f, patch, inheritedTypeStrand))}
+        onChange={(patch) => setForm((f) => updateStrandOverride(f, patch, inheritedSubTypeStrand))}
         onResetToType={() => setForm((f) => setInheritTypeDefaults(f, true))}
         onResetToSystem={() =>
           setForm((f) => {
             const system = cat.strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE;
-            const override = pruneStrandRenderOverride(system, inheritedTypeStrand);
+            const override = pruneStrandRenderOverride(system, inheritedSubTypeStrand);
             if (strandRenderOverrideIsEmpty(override)) {
               return setInheritTypeDefaults(f, true);
             }

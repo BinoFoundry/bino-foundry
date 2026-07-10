@@ -5,6 +5,9 @@ export type StrandRotationMode =
   | "fixed-upright"
   | "none";
 
+/** Which way the bead front faces relative to the bracelet centre. */
+export type StrandOrientationMode = "outward" | "inward";
+
 /** Preset anchor presets — resolved to normalised slot coordinates. */
 export type StrandAnchorPreset = "center" | "loop" | "top" | "bottom";
 
@@ -18,8 +21,22 @@ export type StrandAttachmentStyle = "inline" | "betweenItems";
 export interface StrandRenderProfile {
   /** Inline on occupied arc, or between two neighbours (connectors). */
   attachmentStyle: StrandAttachmentStyle;
-  /** Fraction of tangent width occupied on the strand (1 = one bead width). */
+  /** Fraction of tangent width occupied on the strand (1 = one bead width). @deprecated Use contactWidth */
   strandOccupancy: number;
+  /**
+   * Tangential contact width as a fraction of the mm slot width.
+   * Layout spacing uses this — not bitmap dimensions.
+   */
+  contactWidth: number;
+  /** Overlap with the previous neighbour along the strand (fraction of slot width). */
+  leadingOverlap: number;
+  /** Overlap with the next neighbour along the strand (fraction of slot width). */
+  trailingOverlap: number;
+  /**
+   * Radial hang below the strand (fraction of shell height).
+   * Positive moves away from ring centre for hanging ornaments.
+   */
+  hangOffset: number;
   anchorPreset: StrandAnchorPreset;
   /** Normalised anchor X in slot (0–1). Derived from preset unless overridden. */
   anchorX: number;
@@ -32,6 +49,8 @@ export interface StrandRenderProfile {
   verticalOffset: number;
   /** Visual size multiplier — independent from strand occupancy. */
   visualScale: number;
+  /** Resolved facing — outward (away from centre) or inward (toward centre). */
+  orientationMode: StrandOrientationMode;
   rotationMode: StrandRotationMode;
   /** Extra rotation applied after path rotation (degrees). */
   rotationOffsetDeg: number;
@@ -49,11 +68,16 @@ export interface StrandRenderProfile {
 export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
   attachmentStyle: "inline",
   strandOccupancy: 1,
+  contactWidth: 1,
+  leadingOverlap: 0,
+  trailingOverlap: 0,
+  hangOffset: 0,
   anchorPreset: "center",
   anchorX: 0.5,
   anchorY: 0.5,
   verticalOffset: 0,
   visualScale: 1,
+  orientationMode: "outward",
   rotationMode: "tangent",
   rotationOffsetDeg: 0,
   zPriority: 0,
@@ -67,57 +91,74 @@ export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
 export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>> = {
   crystal: {
     strandOccupancy: 1,
+    contactWidth: 1,
     anchorPreset: "center",
-    rotationMode: "tangent",
+    orientationMode: "outward",
     forceRoundFootprint: true,
   },
   gemstone: {
     strandOccupancy: 1,
+    contactWidth: 1,
     anchorPreset: "center",
-    rotationMode: "tangent",
+    orientationMode: "outward",
     forceRoundFootprint: true,
   },
   accent: {
     strandOccupancy: 1,
+    contactWidth: 1,
     anchorPreset: "center",
-    rotationMode: "tangent",
+    orientationMode: "outward",
     forceRoundFootprint: true,
   },
   "round-bead": {
     strandOccupancy: 1,
+    contactWidth: 1,
     anchorPreset: "center",
-    rotationMode: "tangent",
+    orientationMode: "outward",
     forceRoundFootprint: true,
   },
   charm: {
     strandOccupancy: 1,
+    contactWidth: 0.1,
+    leadingOverlap: 0.02,
+    trailingOverlap: 0.02,
     anchorPreset: "loop",
     anchorX: 0.5,
     anchorY: 0.08,
     verticalOffset: 0,
+    hangOffset: 0,
     visualScale: 1,
-    rotationMode: "radial-upright",
+    orientationMode: "outward",
     zPriority: 10,
     forceRoundFootprint: false,
   },
   spacer: {
     strandOccupancy: 0.38,
+    contactWidth: 0.16,
+    leadingOverlap: 0.05,
+    trailingOverlap: 0.05,
     anchorPreset: "center",
-    rotationMode: "radial-upright",
+    orientationMode: "outward",
     forceRoundFootprint: false,
     visualScale: 1,
   },
   separator: {
     strandOccupancy: 0.38,
+    contactWidth: 0.16,
+    leadingOverlap: 0.05,
+    trailingOverlap: 0.05,
     anchorPreset: "center",
-    rotationMode: "radial-upright",
+    orientationMode: "outward",
     forceRoundFootprint: false,
     preferStrandImageUrl: true,
   },
   connector: {
     strandOccupancy: 0.45,
+    contactWidth: 0.2,
+    leadingOverlap: 0.04,
+    trailingOverlap: 0.04,
     anchorPreset: "center",
-    rotationMode: "radial-upright",
+    orientationMode: "outward",
     forceRoundFootprint: false,
     preferStrandImageUrl: true,
   },
@@ -151,6 +192,10 @@ export function mergeStrandRenderProfile(
     merged.anchorY = coords.anchorY;
   }
   merged.strandOccupancy = Math.max(0.05, Math.min(2, merged.strandOccupancy));
+  merged.contactWidth = Math.max(0.02, Math.min(2, merged.contactWidth));
+  merged.leadingOverlap = Math.max(0, Math.min(0.5, merged.leadingOverlap));
+  merged.trailingOverlap = Math.max(0, Math.min(0.5, merged.trailingOverlap));
+  merged.hangOffset = Math.max(-1, Math.min(1, merged.hangOffset));
   merged.visualScale = Math.max(0.25, Math.min(3, merged.visualScale));
   merged.stringOcclusion = Math.max(0, Math.min(1, merged.stringOcclusion));
   return merged;
@@ -161,6 +206,10 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   const o = raw as Record<string, unknown>;
   const partial: Partial<StrandRenderProfile> = {};
   if (typeof o.strandOccupancy === "number") partial.strandOccupancy = o.strandOccupancy;
+  if (typeof o.contactWidth === "number") partial.contactWidth = o.contactWidth;
+  if (typeof o.leadingOverlap === "number") partial.leadingOverlap = o.leadingOverlap;
+  if (typeof o.trailingOverlap === "number") partial.trailingOverlap = o.trailingOverlap;
+  if (typeof o.hangOffset === "number") partial.hangOffset = o.hangOffset;
   if (typeof o.attachmentStyle === "string") {
     partial.attachmentStyle = o.attachmentStyle as StrandAttachmentStyle;
   }
@@ -169,6 +218,9 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   if (typeof o.anchorY === "number") partial.anchorY = o.anchorY;
   if (typeof o.verticalOffset === "number") partial.verticalOffset = o.verticalOffset;
   if (typeof o.visualScale === "number") partial.visualScale = o.visualScale;
+  if (o.orientationMode === "outward" || o.orientationMode === "inward") {
+    partial.orientationMode = o.orientationMode;
+  }
   if (typeof o.rotationMode === "string") partial.rotationMode = o.rotationMode as StrandRotationMode;
   if (typeof o.rotationOffsetDeg === "number") partial.rotationOffsetDeg = o.rotationOffsetDeg;
   if (typeof o.zPriority === "number") partial.zPriority = o.zPriority;

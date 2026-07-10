@@ -1,4 +1,5 @@
 import { STRAND_PATH_START_ANGLE } from "./strand-path";
+import { netContactLoopArcPx } from "@bino-foundry/shared/types";
 
 export interface ElasticBeadLayout {
   angles: number[];
@@ -6,6 +7,11 @@ export interface ElasticBeadLayout {
   gapMm: number;
   insertionAngles: number[];
   isOverCapacity: boolean;
+}
+
+export interface ContactOverlapPx {
+  leadingPx: number[];
+  trailingPx: number[];
 }
 
 function normalizeAngleRad(a: number): number {
@@ -33,6 +39,44 @@ export function adjacentIndexAngleDeltaRad(angles: number[], index: number): num
   let delta = next - curr;
   if (delta <= 0) delta += 2 * Math.PI;
   return delta;
+}
+
+/**
+ * Contact-geometry packing — each bead occupies contactArcPx along the strand.
+ * Junction spacing: prev.contact - prev.trailingOverlap + current.leadingOverlap.
+ */
+function packContactArcLayout(
+  contactArcPx: number[],
+  leadingOverlapPx: number[],
+  trailingOverlapPx: number[],
+  layoutCircumferencePx: number,
+  startAngle: number,
+  minGapPx: number,
+): { angles: number[]; arcSpans: number[] } {
+  const n = contactArcPx.length;
+  const netArc = netContactLoopArcPx(contactArcPx, leadingOverlapPx, trailingOverlapPx);
+  const minTotalGap = n * minGapPx;
+  const slack = Math.max(0, layoutCircumferencePx - netArc - minTotalGap);
+  const slackPerGap = n > 0 ? slack / n : 0;
+
+  let cursorPx = 0;
+  const angles: number[] = [];
+  const arcSpans: number[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const arcPx = contactArcPx[i]!;
+    if (i > 0) {
+      cursorPx -= trailingOverlapPx[i - 1]! + leadingOverlapPx[i]!;
+    }
+    const centerPx = cursorPx + arcPx / 2;
+    angles.push(
+      normalizeAngleRad(startAngle + (centerPx / layoutCircumferencePx) * 2 * Math.PI),
+    );
+    arcSpans.push((arcPx / layoutCircumferencePx) * 2 * Math.PI);
+    cursorPx += arcPx + minGapPx + slackPerGap;
+  }
+
+  return { angles, arcSpans };
 }
 
 /**
@@ -86,13 +130,14 @@ export function adjacentArcSectorsOverlap(
 
 /**
  * Elastic arc-length distribution along a wrist-sized circumference.
- * Each entry in `beadArcMm` is the arc length that bead must occupy (physical mm or visual mm).
+ * When `contactOverlaps` is provided, uses contact geometry junction spacing.
  */
 export function computeElasticBeadLayout(
   beadArcMm: number[],
   layoutCircumferenceMm: number,
   startAngle = STRAND_PATH_START_ANGLE,
   minGapPx = 0,
+  contactOverlaps?: ContactOverlapPx,
 ): ElasticBeadLayout {
   const n = beadArcMm.length;
   if (!n || layoutCircumferenceMm <= 0) {
@@ -105,7 +150,13 @@ export function computeElasticBeadLayout(
     };
   }
 
-  const totalBeadMm = beadArcMm.reduce((sum, mm) => sum + mm, 0);
+  const leadingPx = contactOverlaps?.leadingPx ?? new Array<number>(n).fill(0);
+  const trailingPx = contactOverlaps?.trailingPx ?? new Array<number>(n).fill(0);
+  const usesContactPacking = contactOverlaps != null;
+
+  const totalBeadMm = usesContactPacking
+    ? netContactLoopArcPx(beadArcMm, leadingPx, trailingPx)
+    : beadArcMm.reduce((sum, mm) => sum + mm, 0);
   const minTotalGap = n * minGapPx;
   const isOverCapacity = totalBeadMm + minTotalGap > layoutCircumferenceMm + 1e-6;
   const gapMm = 0;
@@ -128,6 +179,17 @@ export function computeElasticBeadLayout(
     const mm = beadArcMm[0]!;
     angles.push(normalizeAngleRad(startAngle));
     arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
+  } else if (usesContactPacking) {
+    const packed = packContactArcLayout(
+      beadArcMm,
+      leadingPx,
+      trailingPx,
+      layoutCircumferenceMm,
+      startAngle,
+      minGapPx,
+    );
+    angles.push(...packed.angles);
+    arcSpans.push(...packed.arcSpans);
   } else {
     const packed = packSequentialArcLayout(beadArcMm, layoutCircumferenceMm, startAngle, minGapPx);
     angles.push(...packed.angles);

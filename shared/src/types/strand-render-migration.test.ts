@@ -49,12 +49,12 @@ describe("strand render migration helpers", () => {
   it("builds hanging-item defaults with loop anchor", () => {
     const profile = strandRenderDefaultsForBehaviorPreset("hanging-item");
     expect(profile.anchorPreset).toBe("loop");
-    expect(profile.rotationMode).toBe("radial-upright");
+    expect(profile.orientationMode).toBe("outward");
   });
 
   it("prunes override keys that match inherited values", () => {
     const inherited = resolvedTypeStrandProfile(
-      { visualScale: 1, rotationMode: "radial-upright" },
+      { visualScale: 1, orientationMode: "outward" },
       null,
     );
     const pruned = pruneStrandRenderOverride(

@@ -1,15 +1,16 @@
 import type { CatalogAvailabilityStatus } from "@/types/catalog-availability";
-import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
+import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { FrameEntry } from "@/types/catalogue";
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
-export const CATALOGUE_STORAGE_KEY = "bino_catalogue_v7";
+export const CATALOGUE_STORAGE_KEY = "bino_catalogue_v8";
 
 export interface CatalogueStore {
   beadTypes: BeadTypeEntry[];
+  subBeadTypes: SubBeadTypeEntry[];
   beadSizes: BeadSizeEntry[];
   wristSizes: WristSizeEntry[];
   beadLibrarySizes: BeadLibrarySizeOffer[];
@@ -32,6 +33,7 @@ export function saveToStorage(_data: CatalogueStore): void {
 export function createInitialCatalogueStore(): CatalogueStore {
   return {
     beadTypes: [],
+    subBeadTypes: [],
     beadSizes: [],
     wristSizes: [],
     beadLibrarySizes: [],

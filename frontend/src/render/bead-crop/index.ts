@@ -28,6 +28,7 @@ export {
   resolveStrandRenderProfile,
   resolveStrandRenderProfileBySlug,
   resolveStrandRenderConfigForBead,
+  resolveStrandRenderConfigForSubBeadType,
   resolveStrandRenderConfigForType,
   buildStrandRenderConfigCache,
   strandRenderCacheVersion,

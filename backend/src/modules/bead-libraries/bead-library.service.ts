@@ -41,6 +41,7 @@ function processedUrlFromCropConfig(cropConfig: unknown): string {
 
 function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown> {
   const beadType = row.bead_types as Record<string, unknown> | null | undefined;
+  const subBeadType = row.sub_bead_types as Record<string, unknown> | null | undefined;
   const original = String(row.original_image_url ?? "").trim();
   let processed = String(row.processed_image_url ?? "").trim();
   if (processed && original && processed === original) {
@@ -60,6 +61,9 @@ function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown
     processedImage: processed,
     beadTypeId: row.bead_type_id,
     beadTypeSlug: beadType?.slug ?? undefined,
+    subBeadTypeId: row.sub_bead_type_id,
+    subBeadTypeSlug: subBeadType?.slug ?? undefined,
+    subBeadTypeName: subBeadType?.name ?? undefined,
     description: row.description ?? "",
     metadata: row.metadata ?? {},
     cropConfig: row.crop_config ?? null,
@@ -77,7 +81,7 @@ export class BeadLibraryService {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
       .from("bead_libraries")
-      .select("*, bead_types(slug, name)")
+      .select("*, bead_types(slug, name), sub_bead_types(slug, name, bead_type_id)")
       .order("display_order", { ascending: true })
       .order("public_id", { ascending: true });
 
@@ -89,7 +93,7 @@ export class BeadLibraryService {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
       .from("bead_libraries")
-      .select("*, bead_types(slug, name)")
+      .select("*, bead_types(slug, name), sub_bead_types(slug, name, bead_type_id)")
       .eq("public_id", clientId)
       .maybeSingle();
 
@@ -119,12 +123,26 @@ export class BeadLibraryService {
       payload.availabilityStatusCode ?? (payload.isActive === false ? "INACTIVE" : "ACTIVE");
     await beadAvailabilityStatusService.getByCode(availabilityStatusCode);
 
+    const { data: subType, error: subErr } = await supabase
+      .from("sub_bead_types")
+      .select("bead_type_id")
+      .eq("id", payload.subBeadTypeId)
+      .maybeSingle();
+    assertNoDbError(subErr);
+    if (!subType) {
+      throw new ValidationError("subBeadTypeId not found");
+    }
+    if (String((subType as { bead_type_id: string }).bead_type_id) !== payload.beadTypeId) {
+      throw new ValidationError("subBeadTypeId must belong to the selected bead type");
+    }
+
     const insertRow = {
       public_id: payload.id.trim(),
       name: payload.name.trim(),
       currency_code: currencyCode,
       description: payload.description?.trim() ?? "",
       bead_type_id: payload.beadTypeId,
+      sub_bead_type_id: payload.subBeadTypeId,
       original_image_url: original,
       processed_image_url: processed,
       crop_config: payload.cropConfig ?? null,
@@ -165,10 +183,28 @@ export class BeadLibraryService {
     const row = existing as Record<string, unknown>;
     let specs = mergeSpecs(row.specs, {});
 
+    if (payload.subBeadTypeId !== undefined) {
+      const beadTypeId =
+        payload.beadTypeId ?? String((row as { bead_type_id: string }).bead_type_id);
+      const { data: subType, error: subErr } = await supabase
+        .from("sub_bead_types")
+        .select("bead_type_id")
+        .eq("id", payload.subBeadTypeId)
+        .maybeSingle();
+      assertNoDbError(subErr);
+      if (!subType) {
+        throw new ValidationError("subBeadTypeId not found");
+      }
+      if (String((subType as { bead_type_id: string }).bead_type_id) !== beadTypeId) {
+        throw new ValidationError("subBeadTypeId must belong to the selected bead type");
+      }
+    }
+
     const updates: Record<string, unknown> = {
       ...(payload.name !== undefined && { name: payload.name.trim() }),
       ...(payload.description !== undefined && { description: payload.description.trim() }),
       ...(payload.beadTypeId !== undefined && { bead_type_id: payload.beadTypeId }),
+      ...(payload.subBeadTypeId !== undefined && { sub_bead_type_id: payload.subBeadTypeId }),
       ...(payload.metadata !== undefined && { metadata: payload.metadata }),
       ...(payload.displayOrder !== undefined && { display_order: payload.displayOrder }),
     };
@@ -207,7 +243,7 @@ export class BeadLibraryService {
       .from("bead_libraries")
       .update(updates)
       .eq("public_id", clientId)
-      .select("*, bead_types(slug, name)")
+      .select("*, bead_types(slug, name), sub_bead_types(slug, name, bead_type_id)")
       .single();
 
     assertNoDbError(error);

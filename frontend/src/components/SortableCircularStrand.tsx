@@ -46,7 +46,7 @@ import {
 } from "@/features/bracelet/strand-elastic-layout";
 import { resolveBeadIndexUnderPointer } from "@/features/bracelet/strand-reorder-hit-test";
 import {
-  beadLayoutArcPxFromSizing,
+  beadContactLayoutArrays,
   computeResolvedRingRadiusPx,
 } from "@/features/bracelet/strand-ring-geometry";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
@@ -414,10 +414,10 @@ const SortableCircularStrand = ({
   layoutKey = 0,
 }: SortableCircularStrandProps) => {
   const isMobile = useIsMobile();
-  const { beadSizes, beadLibrarySizes, beadTypes, strandRenderDefaults } = useCatalogue();
+  const { beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, strandRenderDefaults } = useCatalogue();
   const sizingCatalogue = useMemo<BeadSlotSizingCatalogueContext>(
-    () => ({ beadSizes, beadLibrarySizes, beadTypes, strandRenderDefaults }),
-    [beadSizes, beadLibrarySizes, beadTypes, strandRenderDefaults],
+    () => ({ beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, strandRenderDefaults }),
+    [beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, strandRenderDefaults],
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragClientPos, setDragClientPos] = useState<{ x: number; y: number } | null>(null);
@@ -502,6 +502,7 @@ const SortableCircularStrand = ({
   );
   const { getForBead } = useStrandRenderConfigCache({
     beadTypes,
+    subBeadTypes,
     beadLibraries: placedLibraries,
     strandRenderDefaults,
   });
@@ -587,12 +588,16 @@ const SortableCircularStrand = ({
       let insertionAngles: number[] = [];
 
       if (!isStrandEmpty) {
-        const beadLayoutArcsPx = sizingResults.map((sizing, i) =>
-          beadLayoutArcPxFromSizing(sizing, renderProfiles[i], scaleFactor),
+        const contactArrays = beadContactLayoutArrays(
+          sizingResults,
+          renderProfiles,
+          scaleFactor,
         );
 
         const resolved = computeResolvedRingRadiusPx({
-          beadLayoutArcPx: beadLayoutArcsPx,
+          beadLayoutArcPx: contactArrays.contactArcPx,
+          leadingOverlapPx: contactArrays.leadingOverlapPx,
+          trailingOverlapPx: contactArrays.trailingOverlapPx,
           wristRadiusPx: wristRadius,
           maxRadiusPx,
           scaleFactor,
@@ -606,6 +611,10 @@ const SortableCircularStrand = ({
           ringCircumferencePx,
           pathStartAngle,
           resolved.pairGapPx,
+          {
+            leadingPx: resolved.leadingOverlapPx,
+            trailingPx: resolved.trailingOverlapPx,
+          },
         );
         insertionAngles = elastic.insertionAngles;
 
@@ -617,6 +626,10 @@ const SortableCircularStrand = ({
           radius,
           startAngle: pathStartAngle,
           minGapPx: resolved.pairGapPx,
+          contactOverlaps: {
+            leadingPx: resolved.leadingOverlapPx,
+            trailingPx: resolved.trailingOverlapPx,
+          },
         });
 
         layoutSectors = pathLayout.map((path) => ({

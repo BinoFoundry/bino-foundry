@@ -18,6 +18,8 @@ export const BRACELET_COPY = {
   changeSize: "Change size",
   wristLabel: "Bracelet target",
   crystalLibrary: "Crystal library",
+  beadTypeFilter: "Bead type",
+  subBeadTypeFilter: "Sub bead type",
   selectedBeadsTitle: "Selected beads",
   mainBraceletTitle: "Main bracelet",
   matchingPairTitle: "Matching pair",

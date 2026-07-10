@@ -58,6 +58,10 @@ function layoutForWrist(
     circumferencePx,
     undefined,
     resolved.pairGapPx,
+    {
+      leadingPx: resolved.leadingOverlapPx,
+      trailingPx: resolved.trailingOverlapPx,
+    },
   );
   return { resolved, elastic, pairGapPx, scaleFactor: layout.scaleFactor, layout };
 }
@@ -81,6 +85,8 @@ function assertCleanLayout(
       resolved.radiusPx,
       pairGapPx,
       closedLoop,
+      resolved.leadingOverlapPx,
+      resolved.trailingOverlapPx,
     ),
   ).toBe(true);
   return resolved;
@@ -88,7 +94,7 @@ function assertCleanLayout(
 
 describe("computeResolvedRingRadiusPx", () => {
   it("expands beyond wrist baseline when large rendered beads need more arc", () => {
-    const beads = Array.from({ length: 12 }, () => mockPlaced(12, "charm"));
+    const beads = Array.from({ length: 12 }, () => mockPlaced(12));
     const { resolved, layout } = layoutForWrist(16, beads, 1.35);
     expect(resolved.radiusPx).toBeGreaterThanOrEqual(layout.wristRadiusPx);
     expect(resolved.expanded).toBe(true);
@@ -149,6 +155,23 @@ describe("mixed bead sizes on 16cm wrist", () => {
   it("does not overlap 6/8/10/12mm crystals", () => {
     const beads = [6, 8, 10, 12, 8, 6].map((mm) => mockPlaced(mm));
     assertCleanLayout(16, beads);
+  });
+});
+
+describe("contact geometry layout", () => {
+  it("packs spacer with smaller contact arc than crystal", () => {
+    const crystal = mockPlaced(8);
+    const spacer = mockPlaced(4, "spacer");
+    const { resolved } = layoutForWrist(16, [crystal, spacer, crystal]);
+    const spacerArc = resolved.beadArcPx[1]!;
+    const crystalArc = resolved.beadArcPx[0]!;
+    expect(spacerArc).toBeLessThan(crystalArc * 0.5);
+  });
+
+  it("uses junction overlaps for charm + crystal pairs", () => {
+    const { resolved } = layoutForWrist(16, [mockPlaced(10, "charm"), mockPlaced(8)]);
+    expect(resolved.leadingOverlapPx[0]).toBeGreaterThan(0);
+    expect(resolved.trailingOverlapPx[0]).toBeGreaterThan(0);
   });
 });
 

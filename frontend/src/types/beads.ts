@@ -15,6 +15,22 @@ export interface BeadTypeEntry {
   updatedAt?: string;
 }
 
+/** Second-level grouping within a bead type (e.g. Crystal → Quartz). */
+export interface SubBeadTypeEntry {
+  id: string;
+  beadTypeId: string;
+  beadTypeSlug?: string;
+  beadTypeName?: string;
+  slug: string;
+  name: string;
+  description: string;
+  displayOrder?: number;
+  isActive?: boolean;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /** Unified bracelet bead catalogue item. */
 export interface BeadLibraryEntry {
   id: string;
@@ -25,6 +41,9 @@ export interface BeadLibraryEntry {
   processedImage?: string;
   beadTypeId: string;
   beadTypeSlug?: string;
+  subBeadTypeId?: string;
+  subBeadTypeSlug?: string;
+  subBeadTypeName?: string;
   description: string;
   metadata?: Record<string, unknown>;
   cropConfig?: BeadCropConfig | null;

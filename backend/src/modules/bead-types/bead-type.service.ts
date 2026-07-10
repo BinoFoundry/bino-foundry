@@ -6,6 +6,7 @@ import { ConflictError, NotFoundError } from "../../lib/errors.js";
 import { slugifyKebab } from "../../lib/slug.js";
 import type { BeadTypeCreateDTO, BeadTypeUpdateDTO } from "./bead-type.validation.js";
 import { metadataWithStrandRenderDefaults } from "../strand-render/strand-render-migration.service.js";
+import { subBeadTypeService } from "../sub-bead-types/sub-bead-type.service.js";
 
 function mapBeadTypeRow(row: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -77,7 +78,18 @@ export class BeadTypeService {
     const { data, error } = await supabase.from("bead_types").insert(insertRow).select("*").single();
 
     assertNoDbError(error);
-    return mapBeadTypeRow(data as Record<string, unknown>);
+    const mapped = mapBeadTypeRow(data as Record<string, unknown>);
+
+    await subBeadTypeService.create({
+      beadTypeId: String(mapped.id),
+      name: "General",
+      description: `Default grouping for ${payload.name.trim()}`,
+      displayOrder: 0,
+      isActive: true,
+      metadata: { useBeadTypeStrandDefaults: true },
+    });
+
+    return mapped;
   }
 
   async update(recordId: string, payload: BeadTypeUpdateDTO): Promise<unknown> {
@@ -109,6 +121,17 @@ export class BeadTypeService {
     if ((count ?? 0) > 0) {
       throw new ConflictError(
         "Cannot delete this bead type — beads in the library still use it. Reassign or delete those beads first.",
+      );
+    }
+
+    const { count: subCount, error: subErr } = await supabase
+      .from("sub_bead_types")
+      .select("id", { count: "exact", head: true })
+      .eq("bead_type_id", recordId);
+    assertNoDbError(subErr);
+    if ((subCount ?? 0) > 0) {
+      throw new ConflictError(
+        "Cannot delete this bead type — sub bead types still reference it. Remove those sub-types first.",
       );
     }
 

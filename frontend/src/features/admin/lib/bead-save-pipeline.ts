@@ -61,6 +61,7 @@ export function buildBeadSaveDiff(
 
   if (!initial || initial.name !== next.name) libraryPayload.name = next.name;
   if (!initial || initial.beadTypeId !== next.beadTypeId) libraryPayload.beadTypeId = next.beadTypeId;
+  if (!initial || initial.subBeadTypeId !== next.subBeadTypeId) libraryPayload.subBeadTypeId = next.subBeadTypeId;
   if (!initial || initial.description !== next.description) libraryPayload.description = next.description;
   if (!initial || initial.isActive !== next.isActive) libraryPayload.isActive = next.isActive;
   if (!initial || initial.availabilityStatusCode !== next.availabilityStatusCode) {

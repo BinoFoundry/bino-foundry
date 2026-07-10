@@ -1,7 +1,6 @@
 import { useMemo, useRef } from "react";
 
-import type { BeadLibraryEntry } from "@/types/beads";
-import type { BeadTypeEntry } from "@/types/beads";
+import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import type { ResolvedStrandRenderConfig, StrandRenderProfile } from "@bino-foundry/shared/types";
 
 import {
@@ -20,25 +19,26 @@ export interface StrandRenderConfigState {
 /** Build a memoized strand render config cache — rebuilds only when catalogue data changes. */
 export function useStrandRenderConfigCache(params: {
   beadTypes: BeadTypeEntry[];
+  subBeadTypes: SubBeadTypeEntry[];
   beadLibraries: BeadLibraryEntry[];
   strandRenderDefaults: StrandRenderProfile | null;
 }): StrandRenderConfigState {
-  const { beadTypes, beadLibraries, strandRenderDefaults } = params;
+  const { beadTypes, subBeadTypes, beadLibraries, strandRenderDefaults } = params;
   const version = useMemo(
-    () => strandRenderCacheVersion({ beadTypes, strandRenderDefaults }, beadLibraries),
-    [beadTypes, strandRenderDefaults, beadLibraries],
+    () => strandRenderCacheVersion({ beadTypes, subBeadTypes, strandRenderDefaults }, beadLibraries),
+    [beadTypes, subBeadTypes, strandRenderDefaults, beadLibraries],
   );
   const librariesRef = useRef(beadLibraries);
   librariesRef.current = beadLibraries;
 
   const cache = useMemo(() => {
-    const context: StrandRenderCatalogueContext = { beadTypes, strandRenderDefaults };
+    const context: StrandRenderCatalogueContext = { beadTypes, subBeadTypes, strandRenderDefaults };
     return buildStrandRenderConfigCache(librariesRef.current, context);
-  }, [beadTypes, strandRenderDefaults, version]);
+  }, [beadTypes, subBeadTypes, strandRenderDefaults, version]);
 
   const context = useMemo(
-    (): StrandRenderCatalogueContext => ({ beadTypes, strandRenderDefaults }),
-    [beadTypes, strandRenderDefaults],
+    (): StrandRenderCatalogueContext => ({ beadTypes, subBeadTypes, strandRenderDefaults }),
+    [beadTypes, subBeadTypes, strandRenderDefaults],
   );
 
   const getForBead = useMemo(

@@ -19,6 +19,7 @@ export * from "./bead-variant.js";
 export * from "./bracelet-config.js";
 export * from "./lens-clip.js";
 export * from "./lens-tint-render.js";
+export * from "./strand-contact-geometry.js";
 export * from "./strand-render-profile.js";
 export * from "./strand-render-config.js";
 export * from "./strand-render-migration.js";

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Gem, Trash2 } from "lucide-react";
 
 import { BeadForm } from "@/components/admin/BeadForm";
@@ -37,8 +38,16 @@ type DeleteState = {
 export function BeadsAdminPage() {
   const { currencyCode } = useFormatCurrency();
   const cat = useCatalogue();
+  const [searchParams] = useSearchParams();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const initialSubFilter = searchParams.get("subBeadTypeId") ?? "all";
+  const initialTypeFilter = useMemo(() => {
+    if (initialSubFilter === "all") return "all";
+    const sub = cat.subBeadTypes.find((s) => s.id === initialSubFilter);
+    return sub?.beadTypeId ?? "all";
+  }, [cat.subBeadTypes, initialSubFilter]);
+  const [typeFilter, setTypeFilter] = useState<string>(initialTypeFilter);
+  const [subTypeFilter, setSubTypeFilter] = useState<string>(initialSubFilter);
   const [modal, setModal] = useState<AdminEditorModalState<BeadLibraryEntry>>(null);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -49,16 +58,30 @@ export function BeadsAdminPage() {
   );
 
   const filtered = useMemo(() => {
-    if (typeFilter === "all") return cat.beadLibraries;
-    return cat.beadLibraries.filter((b) => b.beadTypeId === typeFilter);
-  }, [cat.beadLibraries, typeFilter]);
+    return cat.beadLibraries.filter((b) => {
+      if (typeFilter !== "all" && b.beadTypeId !== typeFilter) return false;
+      if (subTypeFilter !== "all" && b.subBeadTypeId !== subTypeFilter) return false;
+      return true;
+    });
+  }, [cat.beadLibraries, typeFilter, subTypeFilter]);
+
+  const subTypesForFilter = useMemo(
+    () =>
+      typeFilter === "all"
+        ? cat.subBeadTypes
+        : cat.subBeadTypes.filter((s) => s.beadTypeId === typeFilter),
+    [cat.subBeadTypes, typeFilter],
+  );
 
   const list = useAdminList(filtered, (b, q) => b.name.toLowerCase().includes(q));
 
-  useAdminEditorScroll(scrollRef, modal, [typeFilter]);
+  useAdminEditorScroll(scrollRef, modal, [typeFilter, subTypeFilter]);
 
   const typeName = (beadTypeId: string) => cat.beadTypes.find((t) => t.id === beadTypeId)?.name ?? "—";
+  const subTypeName = (subBeadTypeId: string) =>
+    cat.subBeadTypes.find((s) => s.id === subBeadTypeId)?.name ?? "—";
   const defaultTypeId = typeFilter !== "all" ? typeFilter : undefined;
+  const defaultSubTypeId = subTypeFilter !== "all" ? subTypeFilter : undefined;
 
   const availabilityLabel = (bead: BeadLibraryEntry) => {
     const code = bead.availabilityStatusCode ?? (bead.isActive === false ? "INACTIVE" : "ACTIVE");
@@ -104,18 +127,35 @@ export function BeadsAdminPage() {
         title={modal ? (modal.type === "add" ? "New bead" : "Edit bead") : "Bead library"}
         trailing={
           !modal ? (
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-            >
-              <option value="all">All types</option>
-              {cat.beadTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={typeFilter}
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setSubTypeFilter("all");
+                }}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+              >
+                <option value="all">All types</option>
+                {cat.beadTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={subTypeFilter}
+                onChange={(e) => setSubTypeFilter(e.target.value)}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+              >
+                <option value="all">All sub-types</option>
+                {subTypesForFilter.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           ) : undefined
         }
       />
@@ -126,6 +166,7 @@ export function BeadsAdminPage() {
             key={modal.type === "add" ? "new" : modal.entry.id}
             initial={modal.type === "edit" ? modal.entry : undefined}
             defaultBeadTypeId={defaultTypeId}
+            defaultSubBeadTypeId={defaultSubTypeId}
             onCancel={() => setModal(null)}
             onSave={async (entry, sizes: BeadLibrarySizeInput[]) => {
               const perf = new BeadSavePerf();
@@ -206,7 +247,8 @@ export function BeadsAdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{b.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {typeName(b.beadTypeId)} · {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)}
+                    {typeName(b.beadTypeId)} · {subTypeName(b.subBeadTypeId ?? "")} ·{" "}
+                    {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)}
                     {b.cropStatus === "ready" ? " · Ready" : " · Draft"}
                   </p>
                 </div>

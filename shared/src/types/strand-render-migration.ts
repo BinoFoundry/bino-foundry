@@ -191,6 +191,64 @@ export function beadLibraryInheritsTypeStrandDefaults(
   return strandRenderOverrideIsEmpty(parseStrandRenderProfile(meta.strandRenderOverride));
 }
 
+export interface SubBeadTypeStrandMetadata {
+  useBeadTypeStrandDefaults?: boolean;
+  strandRenderOverride?: Partial<StrandRenderProfile>;
+}
+
+export function subBeadTypeInheritsBeadTypeStrandDefaults(
+  metadata: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!metadata || typeof metadata !== "object") return true;
+  const meta = metadata as SubBeadTypeStrandMetadata & Record<string, unknown>;
+  if (meta.useBeadTypeStrandDefaults === true) return true;
+  if (meta.strandRenderOverride == null) return true;
+  return strandRenderOverrideIsEmpty(parseStrandRenderProfile(meta.strandRenderOverride));
+}
+
+/** Normalize sub-type metadata — drop empty overrides, prefer inheritance. */
+export function normalizeSubBeadTypeStrandMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  inherited: StrandRenderProfile,
+): Record<string, unknown> {
+  const base = { ...(metadata ?? {}) } as Record<string, unknown>;
+  const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
+  const pruned = pruneStrandRenderOverride(rawOverride, inherited);
+
+  if (strandRenderOverrideIsEmpty(pruned)) {
+    delete base.strandRenderOverride;
+    base.useBeadTypeStrandDefaults = true;
+    return base;
+  }
+
+  base.strandRenderOverride = pruned;
+  base.useBeadTypeStrandDefaults = false;
+  return base;
+}
+
+/** Resolved sub-type tier profile for diffing bead overrides. */
+export function resolvedSubBeadTypeStrandProfile(
+  subTypeDefaults: Partial<StrandRenderProfile> | null | undefined,
+  beadTypeDefaults?: Partial<StrandRenderProfile> | null,
+  systemDefaults?: Partial<StrandRenderProfile> | null,
+): StrandRenderProfile {
+  return mergeStrandRenderProfile(systemDefaults, beadTypeDefaults, subTypeDefaults);
+}
+
+/** Stamp for cache invalidation when sub-type override metadata changes. */
+export function subBeadTypesStrandRenderStamp(
+  subTypes: Array<{ id: string; metadata?: Record<string, unknown> | null }>,
+): string {
+  return subTypes
+    .map((sub) => {
+      const meta = sub.metadata ?? {};
+      const override = meta.strandRenderOverride ?? null;
+      const inherit = meta.useBeadTypeStrandDefaults ?? null;
+      return `${sub.id}:${inherit}:${JSON.stringify(override)}`;
+    })
+    .join("|");
+}
+
 /** Stamp for cache invalidation when library override metadata changes. */
 export function beadLibrariesStrandRenderStamp(
   libraries: Array<{ id: string; metadata?: Record<string, unknown> | null }>,

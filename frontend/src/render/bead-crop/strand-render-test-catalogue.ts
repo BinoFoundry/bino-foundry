@@ -1,7 +1,7 @@
 import type { BeadTypeEntry } from "@/types/beads";
 import type { StrandRenderCatalogueContext } from "./strand-render-profile";
 
-/** Bead type strand defaults aligned with migration 000038 seeds (tests only). */
+/** Bead type strand defaults aligned with migration seeds (tests only). */
 export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
   {
     id: "type-crystal",
@@ -11,12 +11,16 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     metadata: {
       strandRender: {
         strandOccupancy: 1,
+        contactWidth: 1,
+        leadingOverlap: 0,
+        trailingOverlap: 0,
+        hangOffset: 0,
         anchorPreset: "center",
         anchorX: 0.5,
         anchorY: 0.5,
         verticalOffset: 0,
         visualScale: 1,
-        rotationMode: "tangent",
+        orientationMode: "outward",
         rotationOffsetDeg: 0,
         zPriority: 0,
         collisionPadding: 0,
@@ -34,12 +38,16 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     metadata: {
       strandRender: {
         strandOccupancy: 1,
+        contactWidth: 0.1,
+        leadingOverlap: 0.02,
+        trailingOverlap: 0.02,
+        hangOffset: 0,
         anchorPreset: "loop",
         anchorX: 0.5,
         anchorY: 0.08,
         verticalOffset: 0,
         visualScale: 1,
-        rotationMode: "radial-upright",
+        orientationMode: "outward",
         rotationOffsetDeg: 0,
         zPriority: 10,
         collisionPadding: 0,
@@ -57,12 +65,16 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     metadata: {
       strandRender: {
         strandOccupancy: 0.38,
+        contactWidth: 0.16,
+        leadingOverlap: 0.05,
+        trailingOverlap: 0.05,
+        hangOffset: 0,
         anchorPreset: "center",
         anchorX: 0.5,
         anchorY: 0.5,
         verticalOffset: 0,
         visualScale: 1,
-        rotationMode: "radial-upright",
+        orientationMode: "outward",
         rotationOffsetDeg: 0,
         zPriority: 0,
         collisionPadding: 0,

@@ -60,6 +60,7 @@ export const beadLibraryCreateSchema = z.object({
   name: z.string().min(1).max(200),
   sizes: z.array(librarySizeInputSchema).min(1, "At least one size with price is required"),
   beadTypeId: z.string().uuid(),
+  subBeadTypeId: z.string().uuid(),
   isActive: z.boolean().optional(),
   availabilityStatusCode: z.string().min(1).max(64).optional(),
   displayOrder: z.coerce.number().int().min(0).optional(),
@@ -77,6 +78,7 @@ export const beadLibraryUpdateSchema = beadLibraryCreateSchema
   .partial()
   .extend({
     beadTypeId: z.string().uuid().optional(),
+    subBeadTypeId: z.string().uuid().optional(),
   });
 
 export const beadLibraryCropSchema = z.object({

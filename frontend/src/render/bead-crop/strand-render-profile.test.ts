@@ -9,10 +9,10 @@ import { TEST_STRAND_RENDER_CATALOGUE } from "./strand-render-test-catalogue";
 describe("strand render profile", () => {
   it("resolves charm defaults from bead type metadata (not slug presets)", () => {
     const profile = resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE);
-    expect(profile.rotationMode).toBe("radial-upright");
+    expect(profile.orientationMode).toBe("outward");
     expect(profile.anchorPreset).toBe("loop");
     expect(profile.forceRoundFootprint).toBe(false);
-    expect(profile.provenance.rotationMode).toBe("beadType");
+    expect(profile.provenance.orientationMode).toBe("beadType");
   });
 
   it("applies spacer occupancy from bead type defaults", () => {
@@ -50,7 +50,7 @@ describe("strand render profile", () => {
     );
     expect(profile.visualScale).toBe(1.05);
     expect(profile.provenance.visualScale).toBe("beadOverride");
-    expect(profile.provenance.rotationMode).toBe("system");
+    expect(profile.provenance.orientationMode).toBe("system");
   });
 
   it("ignores bead override when inheriting type defaults", () => {
