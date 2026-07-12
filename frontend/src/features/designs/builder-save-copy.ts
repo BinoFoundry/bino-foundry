@@ -1,11 +1,11 @@
 import type { DesignAutoSaveStatus } from "./design-autosave-controller";
 
 export const BUILDER_SAVE_COPY = {
-  saving: "Saving…",
-  saved: "✓ All changes saved",
-  pending: "Changes pending…",
+  saving: "Saving...",
+  saved: "All changes saved",
+  pending: "Unsaved changes",
   offline: "Offline — changes will sync later",
-  error: "Couldn't save — will retry",
+  error: "Save failed",
   signInToSave: "Sign in to save your design",
 } as const;
 

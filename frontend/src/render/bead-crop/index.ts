@@ -42,8 +42,10 @@ export {
   assertMmDiameterOrdering,
   CANONICAL_STRAND_REFERENCE_MM,
   GLOBAL_BEAD_RENDER_SCALE,
+  getBeadRenderCalibrationFactor,
   layoutDiameterFromCanonicalAsset,
   layoutDiameterPxForMm,
+  setBeadRenderCalibrationFactor,
 } from "./canonical-strand-mm-scale";
 export {
   calibratedVisualDiameterPx,

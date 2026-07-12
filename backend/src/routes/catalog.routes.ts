@@ -10,6 +10,8 @@ import { createSubBeadTypeRoutes } from "../modules/sub-bead-types/sub-bead-type
 import { createStrandRenderMigrationRoutes } from "../modules/strand-render/strand-render-migration.routes.js";
 import { createBeadSizeRoutes } from "../modules/bead-sizes/bead-size.routes.js";
 import { createWristSizeRoutes } from "../modules/wrist-sizes/wrist-size.routes.js";
+import { createHowWePrepareRoutes } from "../modules/how-we-prepare/how-we-prepare.routes.js";
+import { createTagRoutes } from "../modules/tags/tag.routes.js";
 import { beadLibrarySizeHandlers } from "../modules/bead-library-sizes/bead-library-size.controller.js";
 import { createBeadLibrarySizeRoutes } from "../modules/bead-library-sizes/bead-library-size.routes.js";
 import { createBraceletRoutes } from "../modules/bracelet/bracelet.routes.js";
@@ -41,10 +43,12 @@ export function createCatalogRoutes(): Router {
   router.use("/rendering", createRenderingRoutes());
   router.use("/frames", createFrameRoutes());
   router.use("/bead-types", createBeadTypeRoutes());
+  router.use("/tags", createTagRoutes());
   router.use("/sub-bead-types", createSubBeadTypeRoutes());
   router.use("/strand-render-migration", createStrandRenderMigrationRoutes());
   router.use("/bead-sizes", createBeadSizeRoutes());
   router.use("/wrist-sizes", createWristSizeRoutes());
+  router.use("/how-we-prepare-options", createHowWePrepareRoutes());
   router.use("/bead-libraries", createBeadLibraryRoutes());
   router.use("/sunglasses", createSunglassesRoutes());
   router.use("/settings", createSettingsRoutes());

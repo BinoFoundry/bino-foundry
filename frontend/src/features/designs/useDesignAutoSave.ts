@@ -12,6 +12,8 @@ import {
 export interface UseDesignAutoSaveOptions {
   enabled: boolean;
   paused?: boolean;
+  /** When true, dirty state is tracked but saves wait until the interaction ends. */
+  interactionHold?: boolean;
   designId: string | null;
   saveDesign: (
     request: SaveDesignRequest,
@@ -27,6 +29,7 @@ export interface UseDesignAutoSaveOptions {
 export function useDesignAutoSave({
   enabled,
   paused = false,
+  interactionHold = false,
   designId,
   saveDesign,
   onSaved,
@@ -66,6 +69,10 @@ export function useDesignAutoSave({
   useEffect(() => {
     controller.setPaused(paused || !enabled);
   }, [controller, paused, enabled]);
+
+  useEffect(() => {
+    controller.setInteractionHold(interactionHold);
+  }, [controller, interactionHold]);
 
   useEffect(() => {
     return () => controller.destroy();

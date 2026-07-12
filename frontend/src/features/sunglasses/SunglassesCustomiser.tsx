@@ -138,6 +138,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
     getFingerprint: getSunglassesFingerprint,
     getVisualFingerprint: getSunglassesVisualFingerprint,
     buildRequest: buildSunglassesRequest,
+    debounceMs: 1000,
   });
 
   useEffect(() => {

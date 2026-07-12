@@ -108,6 +108,7 @@ interface SortableCircularStrandProps {
   onHoverDropTarget?: (target: StrandDropHover) => void;
   libraryDragActive?: boolean;
   libraryDragPreview?: LibraryDragPayload | null;
+  onStrandDragActiveChange?: (active: boolean) => void;
   /** Ring start angle (radians) — first bead anchors here after empty-strand drop. */
   pathStartAngle?: number;
   size?: number;
@@ -408,6 +409,7 @@ const SortableCircularStrand = ({
   onHoverDropTarget,
   libraryDragActive = false,
   libraryDragPreview = null,
+  onStrandDragActiveChange,
   pathStartAngle = STRAND_PATH_START_ANGLE,
   wristSizeBounds,
   size = 320,
@@ -850,6 +852,7 @@ const SortableCircularStrand = ({
 
   const handleDragStart = (event: DragStartEvent) => {
     dismissReorderHint();
+    onStrandDragActiveChange?.(true);
     const id = event.active.id as string;
     setActiveId(id);
     const from = parseSlotId(id);
@@ -878,6 +881,16 @@ const SortableCircularStrand = ({
     publishReorderTargetIndex(targetIndex);
   };
 
+  const finishStrandDrag = () => {
+    onStrandDragActiveChange?.(false);
+    reorderSourceRef.current = null;
+    setActiveId(null);
+    dragClientStartRef.current = null;
+    setDragClientPos(null);
+    lastHoverKeyRef.current = null;
+    publishReorderTargetIndex(null);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const source = reorderSourceRef.current;
     const sourceIndex = source?.sourceIndex ?? parseSlotId(event.active.id);
@@ -892,12 +905,7 @@ const SortableCircularStrand = ({
     if (sourceIndex !== null && targetIndex !== null && sourceIndex !== targetIndex) {
       onBeadsReorder(sourceIndex, targetIndex);
     }
-    reorderSourceRef.current = null;
-    setActiveId(null);
-    dragClientStartRef.current = null;
-    setDragClientPos(null);
-    lastHoverKeyRef.current = null;
-    publishReorderTargetIndex(null);
+    finishStrandDrag();
   };
 
   const activeBead = activeId
@@ -944,12 +952,7 @@ const SortableCircularStrand = ({
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onDragCancel={() => {
-        setActiveId(null);
-        dragClientStartRef.current = null;
-        setDragClientPos(null);
-        reorderSourceRef.current = null;
-        lastHoverKeyRef.current = null;
-        publishReorderTargetIndex(null);
+        finishStrandDrag();
       }}
     >
       <div className="flex flex-col items-center gap-1 sm:gap-1.5">

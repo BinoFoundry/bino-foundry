@@ -1,4 +1,5 @@
 import {
+  clampBeadRenderCalibrationFactor,
   DEFAULT_SITE_GENERAL_SETTINGS,
   DEFAULT_STRAND_RENDER_PROFILE,
   parseStrandRenderProfile,
@@ -25,7 +26,11 @@ function parseSiteSettings(value: unknown): SiteGeneralSettings {
     typeof titleRaw === "string" && titleRaw.trim()
       ? titleRaw.trim()
       : DEFAULT_SITE_GENERAL_SETTINGS.braceletBuilderLibraryTitle;
-  return { currencyCode: code, braceletBuilderLibraryTitle };
+  return {
+    currencyCode: code,
+    braceletBuilderLibraryTitle,
+    beadRenderCalibrationFactor: clampBeadRenderCalibrationFactor(o.beadRenderCalibrationFactor),
+  };
 }
 
 function parseStrandRenderDefaults(value: unknown): StrandRenderProfile {
@@ -53,6 +58,9 @@ export class SettingsService {
       currencyCode: payload.currencyCode.toUpperCase(),
       braceletBuilderLibraryTitle:
         payload.braceletBuilderLibraryTitle?.trim() || current.braceletBuilderLibraryTitle,
+      beadRenderCalibrationFactor: clampBeadRenderCalibrationFactor(
+        payload.beadRenderCalibrationFactor ?? current.beadRenderCalibrationFactor,
+      ),
     };
 
     const { data, error } = await supabase

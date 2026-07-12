@@ -512,6 +512,8 @@ export function useStrandZoom(
     [panMode, suspendPan, finishPanDrag],
   );
 
+  const isZoomAnimating = Math.abs(zoomTarget - zoomSmooth) > ZOOM_SNAP_EPSILON;
+
   return {
     zoom: zoomTarget,
     zoomSmooth,
@@ -526,6 +528,7 @@ export function useStrandZoom(
     },
     matchingPairLayout,
     isPanning,
+    isZoomAnimating,
     panMode,
     zoomIn: () => nudgeZoom(1),
     zoomOut: () => nudgeZoom(-1),

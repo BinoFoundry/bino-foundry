@@ -4,6 +4,7 @@ import { AdminLayout } from "./components/AdminLayout";
 import { AdminMobileNav } from "./components/AdminMobileNav";
 import { AdminSectionRefreshProvider } from "./context/AdminSectionRefreshContext";
 import { AdminDashboardPage } from "./modules/dashboard/AdminDashboardPage";
+import { HowWePrepareAdminPage } from "./modules/settings/HowWePrepareAdminPage";
 import { GeneralSettingsPage } from "./modules/settings/GeneralSettingsPage";
 import { SunglassesConfigPage } from "./modules/pricing/SunglassesConfigPage";
 import { BeadsAdminPage } from "./modules/products/BeadsAdminPage";
@@ -22,6 +23,7 @@ const ADMIN_SECTIONS = new Set<AdminSection>([
   "bead-types",
   "bead-sizes",
   "wrist-sizes",
+  "how-we-prepare",
   "general-settings",
   "sunglasses-config",
 ]);
@@ -55,6 +57,8 @@ function AdminSectionView({
       return <BeadSizesAdminPage />;
     case "wrist-sizes":
       return <WristSizesAdminPage />;
+    case "how-we-prepare":
+      return <HowWePrepareAdminPage />;
     case "general-settings":
       return <GeneralSettingsPage />;
     case "sunglasses-config":

@@ -1,9 +1,20 @@
 import { SUPPORTED_CURRENCY_CODES } from "@bino-foundry/shared/currency";
+import {
+  BEAD_RENDER_CALIBRATION_FACTOR_MAX,
+  BEAD_RENDER_CALIBRATION_FACTOR_MIN,
+  DEFAULT_SITE_GENERAL_SETTINGS,
+  clampBeadRenderCalibrationFactor,
+} from "@bino-foundry/shared/types";
 import { z } from "zod";
 
 export const siteGeneralSettingsDto = z.object({
   currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
   braceletBuilderLibraryTitle: z.string().trim().min(1).max(80),
+  beadRenderCalibrationFactor: z
+    .number()
+    .min(BEAD_RENDER_CALIBRATION_FACTOR_MIN)
+    .max(BEAD_RENDER_CALIBRATION_FACTOR_MAX)
+    .default(DEFAULT_SITE_GENERAL_SETTINGS.beadRenderCalibrationFactor),
 });
 
 export const strandRenderDefaultsDto = z.object({

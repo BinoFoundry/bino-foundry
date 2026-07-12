@@ -3,6 +3,20 @@ import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 
 import { apiRequest } from "./client";
 
+function tagNamesFromEntry(payload: Partial<BeadLibraryEntry>): string[] | undefined {
+  if (payload.tags === undefined) return undefined;
+  return payload.tags.map((tag) => tag.name);
+}
+
+function serializeLibraryBody(payload: Partial<BeadLibraryEntry>): Record<string, unknown> {
+  const { tags, ...rest } = payload;
+  const body: Record<string, unknown> = { ...rest };
+  if (tags !== undefined) {
+    body.tags = tags.map((tag) => tag.name);
+  }
+  return body;
+}
+
 export const beadsApi = {
   listTypes(): Promise<BeadTypeEntry[]> {
     return apiRequest<BeadTypeEntry[]>("/bead-types");
@@ -57,6 +71,7 @@ export const beadsApi = {
         isActive: payload.isActive,
         availabilityStatusCode: payload.availabilityStatusCode,
         displayOrder: payload.displayOrder,
+        tags: tagNamesFromEntry(payload),
       },
     });
   },
@@ -75,7 +90,10 @@ export const beadsApi = {
   }> {
     return apiRequest(`/bead-libraries/${encodeURIComponent(publicId)}/save`, {
       method: "PUT",
-      body: payload,
+      body: {
+        library: serializeLibraryBody(payload.library),
+        sizes: payload.sizes,
+      },
     });
   },
 
@@ -99,6 +117,7 @@ export const beadsApi = {
         isActive: payload.isActive,
         availabilityStatusCode: payload.availabilityStatusCode,
         displayOrder: payload.displayOrder,
+        tags: tagNamesFromEntry(payload),
       },
     });
   },

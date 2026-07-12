@@ -14,6 +14,7 @@ export {
 } from "./library-sizes";
 export { BraceletBuilderActions } from "./components/BraceletBuilderActions";
 export { BraceletSummaryPanel } from "./components/BraceletSummaryPanel";
+export { HowWePrepareSection } from "./components/HowWePrepareSection";
 export { WristSizeStep } from "./components/WristSizeStep";
 export { StrandCapacityCard } from "./components/StrandCapacityCard";
 export { CapacityAlertBanner } from "./components/CapacityAlertBanner";

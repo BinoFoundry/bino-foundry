@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import type { BraceletConfigurationPayload } from "@bino-foundry/shared/types";
+import type { BraceletConfigurationPayload, BraceletPreparationSelection } from "@bino-foundry/shared/types";
+import {
+  applyPreparationPricing,
+  resolvePreparationSelection,
+} from "@bino-foundry/shared/how-we-prepare";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
@@ -75,7 +79,7 @@ export interface UseBraceletBuilderOptions {
 export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const { onPriceChange } = options;
   const isMobile = useIsMobile();
-  const { beadTypes, beadLibrarySizes, beadLibraries, beadAvailabilityStatuses, wristSizes } =
+  const { beadTypes, beadLibrarySizes, beadLibraries, beadAvailabilityStatuses, wristSizes, howWePrepareOptions } =
     useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currencyCode = siteSettings.currencyCode;
@@ -123,6 +127,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const [selectedStrandBead, setSelectedStrandBead] = useState<SelectedStrandBead | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [hoverSlot, setHoverSlot] = useState<{ bracelet: "A" | "B"; position: number } | null>(null);
+  const [preparationSelection, setPreparationSelection] = useState<BraceletPreparationSelection | null>(null);
 
   const bumpLayout = useCallback(() => setLayoutRevision((n) => n + 1), []);
 
@@ -150,7 +155,21 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     }
   }, [selectedStrandBead, placedBeadsA, placedBeadsB, selectedSizeOfferKey]);
 
-  const pricing = useMemo(
+  const activeHowWePrepareOptions = useMemo(
+    () =>
+      howWePrepareOptions
+        .filter((o) => o.status === "active")
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.slug.localeCompare(b.slug)),
+    [howWePrepareOptions],
+  );
+
+  useEffect(() => {
+    setPreparationSelection((prev) =>
+      resolvePreparationSelection(activeHowWePrepareOptions, prev),
+    );
+  }, [activeHowWePrepareOptions]);
+
+  const basePricing = useMemo(
     () =>
       buildBraceletPricing(
         placedBeadsA,
@@ -172,6 +191,56 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       currencyCode,
       beadLibrarySizes,
     ],
+  );
+
+  const preparationPricing = useMemo(
+    () =>
+      applyPreparationPricing({
+        beadSubtotal: basePricing.subtotal,
+        twinning,
+        options: activeHowWePrepareOptions,
+        selection: preparationSelection,
+      }),
+    [basePricing.subtotal, twinning, activeHowWePrepareOptions, preparationSelection],
+  );
+
+  const pricing = useMemo(
+    () => ({
+      ...basePricing,
+      preparationLineItem: preparationPricing.preparationLineItem,
+      preparationSubtotal: preparationPricing.preparationSubtotal,
+      total: preparationPricing.total,
+    }),
+    [basePricing, preparationPricing],
+  );
+
+  const selectPreparation = useCallback(
+    (slug: string) => {
+      const option = activeHowWePrepareOptions.find((o) => o.slug === slug);
+      if (!option) return;
+      setPreparationSelection({
+        optionSlug: slug,
+        quantity: option.quantityEnabled ? option.defaultQuantity : 1,
+      });
+    },
+    [activeHowWePrepareOptions],
+  );
+
+  const setPreparationQuantity = useCallback(
+    (quantity: number) => {
+      setPreparationSelection((prev) => {
+        if (!prev) return prev;
+        const option = activeHowWePrepareOptions.find((o) => o.slug === prev.optionSlug);
+        if (!option?.quantityEnabled) return prev;
+        const nextQty = Math.min(
+          option.maximumQuantity,
+          Math.max(option.minimumQuantity, quantity),
+        );
+        if (nextQty === prev.quantity) return prev;
+        return { ...prev, quantity: nextQty };
+      });
+    },
+    [activeHowWePrepareOptions],
   );
 
   const summary = useMemo(
@@ -210,8 +279,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         wristSizeB,
         pricing,
         "draft",
+        preparationSelection,
       ),
-    [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, pricing],
+    [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, pricing, preparationSelection],
   );
 
   useEffect(() => {
@@ -656,8 +726,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         wristSizeB,
         pricing,
         status,
+        preparationSelection,
       ),
-    [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, pricing],
+    [placedBeadsA, placedBeadsB, twinning, wristSizeA, wristSizeB, pricing, preparationSelection],
   );
 
   const hasUnavailableBeads = useMemo(
@@ -734,6 +805,10 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     pricing,
     summary,
     configuration,
+    howWePrepareOptions: activeHowWePrepareOptions,
+    preparationSelection,
+    selectPreparation,
+    setPreparationQuantity,
     handleSlotClick,
     handleBeadDrop,
     handleBeadsReorder,

@@ -57,6 +57,11 @@ export function getDefaultSectionRefresh(
         label: "Refresh wrist sizes",
         action: () => catalogue.refreshFromApi(),
       };
+    case "how-we-prepare":
+      return {
+        label: "Refresh preparation options",
+        action: () => catalogue.refreshFromApi(),
+      };
     case "general-settings":
       return {
         label: "Reload settings",

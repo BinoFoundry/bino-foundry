@@ -3,6 +3,7 @@ import {
   Gem,
   Glasses,
   LayoutDashboard,
+  Package,
   Ruler,
   Settings,
   Settings2,
@@ -61,6 +62,13 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Wrist sizes",
     description: "Customer wrist targets and bracelet capacity",
     icon: CircleDot,
+    group: "products",
+  },
+  {
+    id: "how-we-prepare",
+    label: "How We Prepare",
+    description: "Bracelet preparation options before checkout",
+    icon: Package,
     group: "products",
   },
   {

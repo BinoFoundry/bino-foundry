@@ -1,5 +1,3 @@
-import { Check, CloudOff, Loader2 } from "lucide-react";
-
 import { cn } from "@/lib/utils";
 
 import { labelForAutoSaveStatus, BUILDER_SAVE_COPY } from "./builder-save-copy";
@@ -24,7 +22,7 @@ export function BuilderSaveStatus({
     return (
       <p
         className={cn(
-          "text-[10px] leading-snug text-muted-foreground sm:text-xs",
+          "text-center text-[10px] leading-snug text-muted-foreground sm:text-xs",
           className,
         )}
         role="status"
@@ -38,27 +36,17 @@ export function BuilderSaveStatus({
   const label = labelForAutoSaveStatus(status);
   if (!label) return null;
 
-  const Icon =
-    status === "saving" ? Loader2 : status === "offline" ? CloudOff : status === "saved" ? Check : null;
-
   return (
     <p
       className={cn(
-        "flex items-center justify-center gap-1.5 text-[10px] leading-snug text-muted-foreground sm:text-xs",
-        status === "saved" && "text-status-success",
+        "text-center text-[10px] leading-snug text-muted-foreground sm:text-xs",
         status === "error" && "text-destructive",
         className,
       )}
       role="status"
       aria-live="polite"
     >
-      {Icon ? (
-        <Icon
-          className={cn("h-3 w-3 shrink-0", status === "saving" && "animate-spin")}
-          aria-hidden
-        />
-      ) : null}
-      <span>{label}</span>
+      {label}
     </p>
   );
 }

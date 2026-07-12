@@ -9,11 +9,14 @@ import {
   type ReactNode,
 } from "react";
 
+import { howWePrepareApi } from "@/services/api/how-we-prepare";
+import { tagsApi } from "@/services/api/tags";
 import { catalogAvailabilityStatusesApi } from "@/services/api/catalog-availability-statuses";
 import { beadSizesApi } from "@/services/api/bead-sizes";
 import { wristSizesApi } from "@/services/api/wrist-sizes";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { buildBeadSaveDiff } from "@/features/admin/lib/bead-save-pipeline";
+import { syncBeadRenderCalibrationFromSettings } from "@/render/bead-crop/sync-bead-render-calibration";
 import { beadsApi } from "@/services/api/beads";
 import { subBeadTypesApi } from "@/services/api/sub-bead-types";
 import { catalogueApi, settingsApi } from "@/services/api";
@@ -23,6 +26,7 @@ import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
+import type { HowWePrepareOption } from "@bino-foundry/shared/types";
 import type { FrameEntry } from "@/types/catalogue";
 
 import {
@@ -90,6 +94,11 @@ export interface CatalogueActions {
   addWristSize: (entry: Omit<WristSizeEntry, "id" | "createdAt" | "updatedAt">) => Promise<WristSizeEntry>;
   updateWristSize: (entry: WristSizeEntry) => Promise<WristSizeEntry>;
   deleteWristSize: (id: string) => Promise<void>;
+  addHowWePrepareOption: (
+    entry: Omit<HowWePrepareOption, "id" | "createdAt" | "updatedAt">,
+  ) => Promise<HowWePrepareOption>;
+  updateHowWePrepareOption: (entry: HowWePrepareOption) => Promise<HowWePrepareOption>;
+  deleteHowWePrepareOption: (id: string) => Promise<void>;
   addFrame: (entry: FrameEntry) => Promise<FrameEntry>;
   updateFrame: (entry: FrameEntry) => Promise<FrameEntry>;
   getFrameReferences: (id: string) => Promise<{ designCount: number; itemCount: number }>;
@@ -122,7 +131,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, beadTypes, subBeadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries, catalogAvailabilityStatuses, strandRenderDefaults] =
+      const [frames, beadTypes, subBeadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries, catalogAvailabilityStatuses, strandRenderDefaults, generalSettings, howWePrepareOptions, beadTags] =
         await Promise.all([
         catalogueApi.listFrames(),
         beadsApi.listTypes(),
@@ -133,7 +142,11 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         beadsApi.listLibraries(),
         catalogAvailabilityStatusesApi.list(),
         settingsApi.getStrandRenderDefaults(),
+        settingsApi.getGeneralSettings(),
+        howWePrepareApi.list(),
+        tagsApi.list().catch(() => []),
       ]);
+      syncBeadRenderCalibrationFromSettings(generalSettings);
       const next: CatalogueStore = {
         frames,
         beadTypes,
@@ -145,6 +158,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         catalogAvailabilityStatuses,
         beadAvailabilityStatuses: catalogAvailabilityStatuses,
         strandRenderDefaults,
+        howWePrepareOptions,
+        beadTags,
       };
       saveToStorage(next);
       syncCatalogueSnapshot(next);
@@ -254,7 +269,14 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
             ...result.sizes,
           ];
         }
-        return { ...prev, beadLibraries, beadLibrarySizes };
+        const beadTags = [...prev.beadTags];
+        for (const tag of result.library.tags ?? []) {
+          if (!beadTags.some((t) => t.id === tag.id || t.name.toLowerCase() === tag.name.toLowerCase())) {
+            beadTags.push(tag);
+          }
+        }
+        beadTags.sort((a, b) => a.name.localeCompare(b.name));
+        return { ...prev, beadLibraries, beadLibrarySizes, beadTags };
       });
 
       if (result.cropChanged || result.sizesChanged) {
@@ -489,6 +511,41 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     [mergeStore],
   );
 
+  const addHowWePrepareOption = useCallback(
+    async (entry: Omit<HowWePrepareOption, "id" | "createdAt" | "updatedAt">) => {
+      const created = await howWePrepareApi.create(entry);
+      mergeStore((prev) => ({
+        ...prev,
+        howWePrepareOptions: replaceById(prev.howWePrepareOptions, created),
+      }));
+      return created;
+    },
+    [mergeStore],
+  );
+
+  const updateHowWePrepareOption = useCallback(
+    async (entry: HowWePrepareOption) => {
+      const updated = await howWePrepareApi.update(entry.id, entry);
+      mergeStore((prev) => ({
+        ...prev,
+        howWePrepareOptions: replaceById(prev.howWePrepareOptions, updated),
+      }));
+      return updated;
+    },
+    [mergeStore],
+  );
+
+  const deleteHowWePrepareOption = useCallback(
+    async (id: string) => {
+      await howWePrepareApi.delete(id);
+      mergeStore((prev) => ({
+        ...prev,
+        howWePrepareOptions: removeById(prev.howWePrepareOptions, id),
+      }));
+    },
+    [mergeStore],
+  );
+
   const addFrame = useCallback(
     async (entry: FrameEntry) => {
       const created = await catalogueApi.createFrame(entry);
@@ -562,6 +619,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addWristSize,
       updateWristSize,
       deleteWristSize,
+      addHowWePrepareOption,
+      updateHowWePrepareOption,
+      deleteHowWePrepareOption,
       addFrame,
       updateFrame,
       deleteFrame,
@@ -596,6 +656,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       addWristSize,
       updateWristSize,
       deleteWristSize,
+      addHowWePrepareOption,
+      updateHowWePrepareOption,
+      deleteHowWePrepareOption,
       addFrame,
       updateFrame,
       deleteFrame,

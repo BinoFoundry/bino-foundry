@@ -5,8 +5,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { BeadCropEditor, beadCropEditorPlateKey } from "@/features/admin/components/BeadCropEditor";
 import { BeadAssetValidationPanel } from "@/features/admin/components/BeadAssetValidationPanel";
-import { NormalizedExportDebugPanel } from "@/features/admin/components/NormalizedExportDebugPanel";
 import { BeadLibrarySizesPanel } from "@/features/admin/components/BeadLibrarySizesPanel";
+import { NormalizedExportDebugPanel } from "@/features/admin/components/NormalizedExportDebugPanel";
+import { BeadTagsField } from "@/features/admin/components/BeadTagsField";
 import { StrandRenderConfigPanel } from "@/features/admin/components/StrandRenderConfigPanel";
 import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import { formatUploadErrorMessage, validateUploadFile } from "@/features/admin/lib/upload-pipeline";
@@ -119,6 +120,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
   );
 
   const [form, setForm] = useState<BeadLibraryEntry>(initial ?? blank);
+  const [tagNames, setTagNames] = useState<string[]>(() => initial?.tags?.map((tag) => tag.name) ?? []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sizesError, setSizesError] = useState<string | null>(null);
@@ -285,6 +287,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
           cropConfig: cropConfig ?? form.cropConfig,
           cropStatus:
             cropConfig && isBeadCropConfigValid(cropConfig) ? "ready" : form.cropStatus ?? "draft",
+          tags: tagNames.map((name) => ({ id: "", name, slug: name.toLowerCase().replace(/\s+/g, "-") })),
         },
         sizes,
       );
@@ -420,6 +423,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
             />
           </div>
         </div>
+        <BeadTagsField allTags={cat.beadTags} value={tagNames} onChange={setTagNames} />
       </section>
 
       <section className="space-y-4">

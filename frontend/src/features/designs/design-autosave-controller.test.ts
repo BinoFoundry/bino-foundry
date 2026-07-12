@@ -67,6 +67,26 @@ describe("DesignAutoSaveController", () => {
     expect(save).toHaveBeenCalledTimes(2);
   });
 
+  it("defers debounced save while an interaction hold is active", async () => {
+    const save = vi.fn().mockResolvedValue({ id: "dsn_1" });
+    const controller = new DesignAutoSaveController({
+      debounceMs: 500,
+      save,
+      onStatus: vi.fn(),
+      getDesignId: () => null,
+    });
+
+    controller.setInteractionHold(true);
+    controller.schedule("fp-1", "vis-1", () => ({ productType: "bracelet" as const }));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(save).not.toHaveBeenCalled();
+
+    controller.setInteractionHold(false);
+    await vi.advanceTimersByTimeAsync(500);
+    await Promise.resolve();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
   it("omits thumbnail when visual fingerprint is unchanged", async () => {
     const save = vi.fn().mockResolvedValue({ id: "dsn_1" });
     const controller = new DesignAutoSaveController({

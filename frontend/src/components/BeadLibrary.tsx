@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 
 import { BeadInfoButton } from "@/features/bracelet/components/BeadInfoButton";
+import { SubBeadTypeTabs } from "@/features/bracelet/components/SubBeadTypeTabs";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { isBeadVisibleInBuilder } from "@/features/bracelet/unavailable-bead";
 import { useLibraryPanelWheelScroll } from "@/features/bracelet/hooks/use-library-panel-wheel-scroll";
@@ -24,6 +25,12 @@ import {
 } from "@/features/bracelet/library-sizes";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
+import {
+  beadMatchesSearchIndex,
+  buildBeadSearchIndex,
+  SUB_BEAD_TYPE_ALL,
+  type SubBeadTypeTabValue,
+} from "@/lib/bead-library-search";
 import { getBeadLibraryImageUrl, getBeadLibraryThumbnailStyle } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -177,7 +184,7 @@ const BeadLibrary = ({
   const currency = siteSettings.currencyCode;
   const [search, setSearch] = useState("");
   const [activeBeadTypeId, setActiveBeadTypeId] = useState<string>("");
-  const [activeSubBeadTypeId, setActiveSubBeadTypeId] = useState<string>("");
+  const [activeSubBeadTypeId, setActiveSubBeadTypeId] = useState<SubBeadTypeTabValue>(SUB_BEAD_TYPE_ALL);
   const [sizeByBeadId, setSizeByBeadId] = useState<Record<string, string>>({});
   const suppressClickAfterDragRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -233,6 +240,7 @@ const BeadLibrary = ({
 
   const currentBeadTypeId = activeBeadTypeId || activeTypes[0]?.id || "";
   const currentType = activeTypes.find((t) => t.id === currentBeadTypeId);
+  const subTypesEnabled = currentType?.enableSubTypes === true;
 
   const activeSubTypes = useMemo(
     () =>
@@ -243,42 +251,48 @@ const BeadLibrary = ({
   );
 
   const currentSubBeadTypeId =
-    activeSubBeadTypeId && activeSubTypes.some((s) => s.id === activeSubBeadTypeId)
+    subTypesEnabled &&
+    activeSubBeadTypeId !== SUB_BEAD_TYPE_ALL &&
+    activeSubTypes.some((s) => s.id === activeSubBeadTypeId)
       ? activeSubBeadTypeId
-      : activeSubTypes[0]?.id ?? "";
-  const currentSubType = activeSubTypes.find((s) => s.id === currentSubBeadTypeId);
+      : SUB_BEAD_TYPE_ALL;
+  const currentSubType =
+    currentSubBeadTypeId === SUB_BEAD_TYPE_ALL
+      ? undefined
+      : activeSubTypes.find((s) => s.id === currentSubBeadTypeId);
 
-  const handleSelectBeadType = useCallback(
-    (typeId: string) => {
-      setActiveBeadTypeId(typeId);
-      setActiveSubBeadTypeId((prev) => {
-        const subs = cat.subBeadTypes
-          .filter((s) => s.beadTypeId === typeId && s.isActive !== false)
-          .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-        if (prev && subs.some((s) => s.id === prev)) return prev;
-        return subs[0]?.id ?? "";
-      });
-    },
-    [cat.subBeadTypes],
-  );
+  const handleSelectBeadType = useCallback((typeId: string) => {
+    setActiveBeadTypeId(typeId);
+    setActiveSubBeadTypeId(SUB_BEAD_TYPE_ALL);
+  }, []);
 
   const builderStatusByCode = useMemo(
     () => new Map(cat.beadAvailabilityStatuses.map((s) => [s.code, { showInBuilder: s.showInBuilder }])),
     [cat.beadAvailabilityStatuses],
   );
 
+  const beadsForType = useMemo(
+    () =>
+      cat.beadLibraries.filter(
+        (b) => b.beadTypeId === currentBeadTypeId && isBeadVisibleInBuilder(b, builderStatusByCode),
+      ),
+    [cat.beadLibraries, currentBeadTypeId, builderStatusByCode],
+  );
+
+  const searchIndex = useMemo(() => buildBeadSearchIndex(beadsForType), [beadsForType]);
+
   const filtered = useMemo(() => {
-    return cat.beadLibraries.filter((b) => {
-      if (!isBeadVisibleInBuilder(b, builderStatusByCode)) return false;
-      if (!currentSubBeadTypeId) return false;
-      if (b.subBeadTypeId !== currentSubBeadTypeId) return false;
-      return b.name.toLowerCase().includes(search.toLowerCase());
+    return beadsForType.filter((b) => {
+      if (subTypesEnabled && currentSubBeadTypeId !== SUB_BEAD_TYPE_ALL && b.subBeadTypeId !== currentSubBeadTypeId) {
+        return false;
+      }
+      return beadMatchesSearchIndex(searchIndex, b.id, search);
     });
-  }, [cat.beadLibraries, builderStatusByCode, currentSubBeadTypeId, search]);
+  }, [beadsForType, subTypesEnabled, currentSubBeadTypeId, searchIndex, search]);
 
   const gridColumns = compact ? 2 : isMobile ? 1 : 2;
   const rowCount = Math.ceil(filtered.length / gridColumns);
-  const rowEstimate = compact ? 118 : 132;
+  const rowEstimate = compact ? 122 : 132;
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -305,7 +319,7 @@ const BeadLibrary = ({
       : "surface-elevated absolute bottom-0 left-0 top-0 z-30 flex w-64 flex-col border-r border-subtle";
 
   const beadGrid = (
-    <div ref={gridAnchorRef} className="p-2">
+    <div ref={gridAnchorRef} className={cn(compact ? "p-2.5" : "p-2")}>
       {filtered.length === 0 ? (
         <p className="px-2 py-8 text-center text-xs leading-relaxed text-muted-foreground">{emptyMessage}</p>
       ) : (
@@ -317,7 +331,10 @@ const BeadLibrary = ({
             return (
               <div
                 key={virtualRow.key}
-                className={cn("absolute left-0 right-0 grid gap-2 px-0", compact ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2")}
+                className={cn(
+                  "absolute left-0 right-0 grid px-0",
+                  compact ? "grid-cols-2 gap-2.5" : "grid-cols-1 gap-2 sm:grid-cols-2",
+                )}
                 style={{
                   top: virtualRow.start,
                   height: virtualRow.size,
@@ -376,7 +393,7 @@ const BeadLibrary = ({
     <div
       className={cn(
         "shrink-0 space-y-2 border-b border-border/60",
-        compact ? "px-2 py-2" : "px-3 py-3",
+        compact ? "px-2.5 py-2.5" : "px-3 py-3",
       )}
     >
       <div className="space-y-1">
@@ -397,23 +414,16 @@ const BeadLibrary = ({
         </Select>
       </div>
 
-      {activeSubTypes.length > 0 ? (
+      {subTypesEnabled && activeSubTypes.length > 0 ? (
         <div className="space-y-1">
           <label className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             {BRACELET_COPY.subBeadTypeFilter}
           </label>
-          <Select value={currentSubBeadTypeId} onValueChange={setActiveSubBeadTypeId}>
-            <SelectTrigger className={filterSelectTriggerClass}>
-              <SelectValue placeholder="Select sub-type" />
-            </SelectTrigger>
-            <SelectContent>
-              {activeSubTypes.map((s) => (
-                <SelectItem key={s.id} value={s.id} className="text-xs">
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SubBeadTypeTabs
+            options={activeSubTypes}
+            value={currentSubBeadTypeId}
+            onChange={setActiveSubBeadTypeId}
+          />
         </div>
       ) : null}
     </div>
@@ -423,7 +433,7 @@ const BeadLibrary = ({
     <>
       {libraryFilters}
 
-      <div className={cn("shrink-0 border-b border-border/60", compact ? "p-2" : "p-3")}>
+      <div className={cn("shrink-0 border-b border-border/60", compact ? "p-2.5" : "p-3")}>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <input

@@ -112,6 +112,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [hoverB, setHoverB] = useState<StrandDropHover>(null);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
   const [libraryDragPreview, setLibraryDragPreview] = useState<LibraryDragPayload | null>(null);
+  const [strandDragActive, setStrandDragActive] = useState(false);
   const [panMode, setPanMode] = useState(false);
   const [braceletName, setBraceletName] = useState("");
 
@@ -189,6 +190,69 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     [designIdFromUrl, setSearchParams],
   );
 
+  const wristConfirmed = builder.wristSizeConfirmed;
+  const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile, wristConfirmed);
+  const canvasZoomRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const layoutKey = [
+    builder.layoutRevision,
+    builder.wristSizeA,
+    builder.wristSizeB,
+    builder.placedBeadsA.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
+    builder.placedBeadsB.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
+  ].join("|");
+
+  const guideMm = builder.activeSizeOffer?.sizeMm ?? 8;
+
+  /** Fixed workspace — sized from container on mount/window resize only, never from twin chrome. */
+  const layoutCanvasSize = strandSize;
+
+  const strandZoomLayout = useMemo(
+    () => ({
+      viewportWidthPx: containerSize.width,
+      viewportHeightPx: containerSize.height,
+      layoutCanvasSize,
+      twinning: builder.twinning,
+    }),
+    [containerSize.width, containerSize.height, layoutCanvasSize, builder.twinning],
+  );
+
+  const layoutReady =
+    wristConfirmed &&
+    containerSize.width > 0 &&
+    containerSize.height > 0 &&
+    layoutCanvasSize > 0;
+
+  const {
+    zoom,
+    displayZoom,
+    viewScale,
+    pan,
+    matchingPairLayout,
+    isPanning,
+    isZoomAnimating,
+    zoomIn,
+    zoomOut,
+    reset,
+    onPanPointerDown,
+    onPanPointerMove,
+    onPanPointerUp,
+    onPanPointerCancel,
+  } = useStrandZoom(
+    {
+      zoomSurfaceRef: canvasZoomRef as RefObject<HTMLElement | null>,
+      containerRef: canvasZoomRef as RefObject<HTMLElement | null>,
+      viewportRef: viewportRef as RefObject<HTMLElement | null>,
+      contentRef: contentRef as RefObject<HTMLElement | null>,
+    },
+    strandZoomLayout,
+    { suspendPan: libraryDragActive, panMode, layoutReady },
+  );
+
+  const autoSaveInteractionHold =
+    libraryDragActive || strandDragActive || isPanning || isZoomAnimating;
+
   const { status: autoSaveStatus, setBaseline, flush, hasPendingChanges } = useDesignAutoSave({
     enabled: autoSaveEnabled,
     paused: autoSavePaused,
@@ -198,6 +262,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     getFingerprint: getBraceletFingerprint,
     getVisualFingerprint: getBraceletVisualFingerprint,
     buildRequest: buildBraceletRequest,
+    debounceMs: 1000,
+    interactionHold: autoSaveInteractionHold,
   });
 
   useEffect(() => {
@@ -274,65 +340,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     builder.loadFromSaved,
   ]);
 
-  const wristConfirmed = builder.wristSizeConfirmed;
-  const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile, wristConfirmed);
-  const canvasZoomRef = useRef<HTMLDivElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const layoutKey = [
-    builder.layoutRevision,
-    builder.wristSizeA,
-    builder.wristSizeB,
-    builder.placedBeadsA.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
-    builder.placedBeadsB.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
-  ].join("|");
-
-  const guideMm = builder.activeSizeOffer?.sizeMm ?? 8;
-
-  /** Fixed workspace — sized from container on mount/window resize only, never from twin chrome. */
-  const layoutCanvasSize = strandSize;
-
-  const strandZoomLayout = useMemo(
-    () => ({
-      viewportWidthPx: containerSize.width,
-      viewportHeightPx: containerSize.height,
-      layoutCanvasSize,
-      twinning: builder.twinning,
-    }),
-    [containerSize.width, containerSize.height, layoutCanvasSize, builder.twinning],
-  );
-
-  const layoutReady =
-    wristConfirmed &&
-    containerSize.width > 0 &&
-    containerSize.height > 0 &&
-    layoutCanvasSize > 0;
-
-  const {
-    zoom,
-    displayZoom,
-    viewScale,
-    pan,
-    matchingPairLayout,
-    isPanning,
-    zoomIn,
-    zoomOut,
-    reset,
-    onPanPointerDown,
-    onPanPointerMove,
-    onPanPointerUp,
-    onPanPointerCancel,
-  } = useStrandZoom(
-    {
-      zoomSurfaceRef: canvasZoomRef as RefObject<HTMLElement | null>,
-      containerRef: canvasZoomRef as RefObject<HTMLElement | null>,
-      viewportRef: viewportRef as RefObject<HTMLElement | null>,
-      contentRef: contentRef as RefObject<HTMLElement | null>,
-    },
-    strandZoomLayout,
-    { suspendPan: libraryDragActive, panMode, layoutReady },
-  );
-
   useEffect(() => {
     if (!libraryDragActive) return;
     const onDragEnd = () => {
@@ -394,6 +401,10 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const summaryPanelProps = {
     summary: builder.summary,
+    howWePrepareOptions: builder.howWePrepareOptions,
+    preparationSelection: builder.preparationSelection,
+    onSelectPreparation: builder.selectPreparation,
+    onPreparationQuantityChange: builder.setPreparationQuantity,
     onAddToCart: () => void handleAddToCart(),
     saveDisabled,
     autoSaveStatus,
@@ -595,6 +606,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               }
               libraryDragActive={libraryDragActive}
               libraryDragPreview={libraryDragPreview}
+              onStrandDragActiveChange={setStrandDragActive}
               pathStartAngle={builder.strandAnchorAngleA}
               size={layoutCanvasSize}
             />
@@ -624,6 +636,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                 }
                 libraryDragActive={libraryDragActive}
                 libraryDragPreview={libraryDragPreview}
+                onStrandDragActiveChange={setStrandDragActive}
                 pathStartAngle={builder.strandAnchorAngleB}
                 size={layoutCanvasSize}
               />

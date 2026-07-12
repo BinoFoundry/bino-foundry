@@ -27,6 +27,7 @@ import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { AdminListPagination } from "../../components/AdminListPagination";
+import { beadMatchesLibrarySearch } from "@/lib/bead-library-search";
 import { useAdminList } from "../../hooks/useAdminList";
 
 type DeleteState = {
@@ -73,7 +74,7 @@ export function BeadsAdminPage() {
     [cat.subBeadTypes, typeFilter],
   );
 
-  const list = useAdminList(filtered, (b, q) => b.name.toLowerCase().includes(q));
+  const list = useAdminList(filtered, (b, q) => beadMatchesLibrarySearch(b, q));
 
   useAdminEditorScroll(scrollRef, modal, [typeFilter, subTypeFilter]);
 

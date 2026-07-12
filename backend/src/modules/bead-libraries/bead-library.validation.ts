@@ -71,6 +71,7 @@ export const beadLibraryCreateSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
   cropConfig: beadCropConfigSchema.nullable().optional(),
   cropStatus: cropStatusSchema.optional(),
+  tags: z.array(z.string().trim().min(1).max(80)).optional(),
 });
 
 export const beadLibraryUpdateSchema = beadLibraryCreateSchema

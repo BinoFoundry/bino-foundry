@@ -46,6 +46,10 @@ export function librarySizesSemanticallyEqual(
   return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
 }
 
+function tagNames(entry: BeadLibraryEntry | undefined): string[] {
+  return (entry?.tags ?? []).map((tag) => tag.name.toLowerCase()).sort();
+}
+
 export function buildBeadSaveDiff(
   initial: BeadLibraryEntry | undefined,
   next: BeadLibraryEntry,
@@ -68,6 +72,11 @@ export function buildBeadSaveDiff(
     libraryPayload.availabilityStatusCode = next.availabilityStatusCode;
   }
   if (!initial || initial.displayOrder !== next.displayOrder) libraryPayload.displayOrder = next.displayOrder;
+
+  const tagsChanged = JSON.stringify(tagNames(initial)) !== JSON.stringify(tagNames(next));
+  if (tagsChanged) {
+    libraryPayload.tags = next.tags;
+  }
 
   if (metadataChanged) {
     libraryPayload.metadata = next.metadata;

@@ -1,5 +1,7 @@
 import type { BeadCropConfig, BeadCropStatus } from "@bino-foundry/shared/types";
 
+import type { BeadTagEntry } from "@/types/tags";
+
 export type { BeadCropConfig, BeadCropStatus };
 
 /** Dynamic bead category (Crystal, Charm, Spacer, …). */
@@ -10,6 +12,7 @@ export interface BeadTypeEntry {
   description: string;
   displayOrder?: number;
   isActive?: boolean;
+  enableSubTypes?: boolean;
   metadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
@@ -52,6 +55,9 @@ export interface BeadLibraryEntry {
   availabilityStatusCode?: string;
   isActive?: boolean;
   displayOrder?: number;
+  /** Reusable catalogue tags for search and merchandising. */
+  tags?: BeadTagEntry[];
+  tagSlugs?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

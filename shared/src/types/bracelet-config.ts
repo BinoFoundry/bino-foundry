@@ -1,5 +1,7 @@
 /** Bracelet builder / checkout configuration (relational + minimal render refs). */
 
+import type { BraceletPreparationLineItem, BraceletPreparationSelection } from "./how-we-prepare.js";
+
 export const BRACELET_CONFIG_VERSION = 3 as const;
 
 /** Millimeters — any positive value from `bead_sizes` / `bead_library_sizes`. */
@@ -57,7 +59,10 @@ export interface BraceletPricingBreakdown {
     strandB?: BraceletStrandFitMetrics;
     totalMaxSlots: number;
   };
+  /** Bead line items only (excludes preparation). */
   subtotal: number;
+  preparationLineItem: BraceletPreparationLineItem | null;
+  preparationSubtotal: number;
   total: number;
 }
 
@@ -71,6 +76,7 @@ export interface BraceletConfigurationPayload {
   /** Optional placement default for new beads (not used for strand fit). */
   defaultBeadSizeMm?: BraceletBeadSizeMm;
   items: BraceletConfigurationItemRef[];
+  preparation?: BraceletPreparationSelection;
   pricing: BraceletPricingBreakdown;
   /** ISO timestamp when snapshot was taken. */
   updatedAt: string;

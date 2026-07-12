@@ -26,6 +26,8 @@ export * from "./strand-render-migration.js";
 export * from "./saved-design.js";
 export * from "./rbac.js";
 export * from "./user-management.js";
+export * from "./bead-render-calibration.js";
+export * from "./how-we-prepare.js";
 export * from "./site-settings.js";
 export * from "./smtp-settings.js";
 export * from "./email-log.js";

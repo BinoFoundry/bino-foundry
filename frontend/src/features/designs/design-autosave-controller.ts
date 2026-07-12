@@ -34,6 +34,7 @@ export class DesignAutoSaveController {
   private inFlight = false;
   private queued = false;
   private paused = false;
+  private interactionHold = false;
   private lastSavedFingerprint: string | null = null;
   private lastThumbnailFingerprint: string | null = null;
   private pendingFingerprint: string | null = null;
@@ -41,7 +42,7 @@ export class DesignAutoSaveController {
   private pendingBuild: DesignAutoSaveBuildFn | null = null;
 
   constructor(options: DesignAutoSaveControllerOptions) {
-    this.debounceMs = options.debounceMs ?? 800;
+    this.debounceMs = options.debounceMs ?? 1000;
     this.save = options.save;
     this.onStatus = options.onStatus;
     this.onSaved = options.onSaved;
@@ -53,6 +54,29 @@ export class DesignAutoSaveController {
     if (paused) {
       this.clearDebounce();
     }
+  }
+
+  /** Pause debounced saves while the user is dragging, zooming, or panning. */
+  setInteractionHold(hold: boolean): void {
+    if (this.interactionHold === hold) return;
+    this.interactionHold = hold;
+    if (hold) {
+      this.clearDebounce();
+      return;
+    }
+    this.armDebounce();
+  }
+
+  private armDebounce(): void {
+    if (this.paused || this.interactionHold) return;
+    if (!this.pendingFingerprint || !this.pendingBuild) return;
+    if (this.pendingFingerprint === this.lastSavedFingerprint) return;
+
+    this.clearDebounce();
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      void this.runSave();
+    }, this.debounceMs);
   }
 
   setBaseline(fingerprint: string, visualFingerprint?: string): void {
@@ -107,11 +131,7 @@ export class DesignAutoSaveController {
     this.pendingBuild = build;
     this.onStatus("pending");
 
-    this.clearDebounce();
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = null;
-      void this.runSave();
-    }, this.debounceMs);
+    this.armDebounce();
   }
 
   async flush(): Promise<SavedDesignSummary | null> {

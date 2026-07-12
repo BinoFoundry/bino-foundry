@@ -86,6 +86,8 @@ describe("buildBraceletPricing", () => {
       librarySizes,
     );
     expect(p.total).toBe(24);
+    expect(p.preparationLineItem).toBeNull();
+    expect(p.preparationSubtotal).toBe(0);
     expect(p.placedCount).toBe(2);
   });
 });

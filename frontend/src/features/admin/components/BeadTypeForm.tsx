@@ -108,6 +108,14 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
             Active in builder
           </label>
         </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.enableSubTypes === true}
+            onChange={(e) => setForm({ ...form, enableSubTypes: e.target.checked })}
+          />
+          Enable sub-types in builder
+        </label>
         {initial?.slug ? (
           <p className="font-mono text-[10px] text-muted-foreground">Slug: {initial.slug}</p>
         ) : null}

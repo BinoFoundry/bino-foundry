@@ -11,6 +11,7 @@ import {
 } from "@bino-foundry/shared/types";
 import { beadAvailabilityStatusService } from "../bead-availability-statuses/bead-availability-status.service.js";
 import { beadLibrarySizeService } from "../bead-library-sizes/bead-library-size.service.js";
+import { tagService } from "../tags/tag.service.js";
 import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
 import {
   collectBeadLibraryAssetUrls,
@@ -39,7 +40,10 @@ function processedUrlFromCropConfig(cropConfig: unknown): string {
   return typeof url === "string" ? url.trim() : "";
 }
 
-function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown> {
+function mapBeadLibraryRow(
+  row: Record<string, unknown>,
+  tags: { id: string; name: string; slug: string }[] = [],
+): Record<string, unknown> {
   const beadType = row.bead_types as Record<string, unknown> | null | undefined;
   const subBeadType = row.sub_bead_types as Record<string, unknown> | null | undefined;
   const original = String(row.original_image_url ?? "").trim();
@@ -71,6 +75,8 @@ function mapBeadLibraryRow(row: Record<string, unknown>): Record<string, unknown
     isActive: row.is_active !== false,
     availabilityStatusCode: String(row.availability_status_code ?? "ACTIVE"),
     displayOrder: Number(row.display_order ?? 0),
+    tags,
+    tagSlugs: tags.map((t) => t.slug),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -86,7 +92,14 @@ export class BeadLibraryService {
       .order("public_id", { ascending: true });
 
     assertNoDbError(error);
-    return (data ?? []).map((row) => mapBeadLibraryRow(row as Record<string, unknown>));
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const internalIds = rows.map((row) => String(row.id));
+    const tagsByLibraryId = await tagService.tagsByBeadLibraryIds(internalIds);
+
+    return rows.map((row) => {
+      const tags = tagsByLibraryId.get(String(row.id)) ?? [];
+      return mapBeadLibraryRow(row, tags);
+    });
   }
 
   async getByClientId(clientId: string): Promise<unknown> {
@@ -99,7 +112,9 @@ export class BeadLibraryService {
 
     assertNoDbError(error);
     if (!data) throw new NotFoundError("Bead not found");
-    return mapBeadLibraryRow(data as Record<string, unknown>);
+    const row = data as Record<string, unknown>;
+    const tags = (await tagService.tagsByBeadLibraryIds([String(row.id)])).get(String(row.id)) ?? [];
+    return mapBeadLibraryRow(row, tags);
   }
 
   async create(payload: BeadLibraryCreateDTO): Promise<unknown> {
@@ -154,18 +169,21 @@ export class BeadLibraryService {
       is_active: payload.isActive ?? true,
     };
 
-    const { data, error } = await supabase.from("bead_libraries").insert(insertRow).select("*, bead_types(slug, name)").single();
+    const { data, error } = await supabase.from("bead_libraries").insert(insertRow).select("*, bead_types(slug, name), sub_bead_types(slug, name, bead_type_id)").single();
 
     if (error?.code === "23505") {
       throw new ConflictError("Bead id already exists");
     }
     assertNoDbError(error);
 
+    const createdRow = data as Record<string, unknown>;
+    const tags = await tagService.syncBeadLibraryTags(String(createdRow.id), payload.tags);
+
     await beadLibrarySizeService.syncLibrarySizes(payload.id.trim(), {
       sizes: payload.sizes,
     });
 
-    return mapBeadLibraryRow(data as Record<string, unknown>);
+    return mapBeadLibraryRow(createdRow, tags);
   }
 
   async update(clientId: string, payload: BeadLibraryUpdateDTO): Promise<unknown> {
@@ -258,7 +276,10 @@ export class BeadLibraryService {
         await mmGroupNormalizationService.recalculateForLibrary(clientId);
       });
     }
-    return mapBeadLibraryRow(data as Record<string, unknown>);
+
+    const updatedRow = data as Record<string, unknown>;
+    const tags = await tagService.syncBeadLibraryTags(String(updatedRow.id), payload.tags);
+    return mapBeadLibraryRow(updatedRow, tags);
   }
 
   async updateCrop(clientId: string, payload: BeadLibraryCropDTO): Promise<unknown> {

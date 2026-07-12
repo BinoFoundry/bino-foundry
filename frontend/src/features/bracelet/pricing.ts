@@ -107,6 +107,8 @@ export function buildBraceletPricing(
       totalMaxSlots,
     },
     subtotal,
+    preparationLineItem: null,
+    preparationSubtotal: 0,
     total: subtotal,
   };
 }

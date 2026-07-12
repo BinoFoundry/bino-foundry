@@ -3,6 +3,7 @@ import {
   type BraceletConfigurationItemRef,
   type BraceletConfigurationPayload,
   type BraceletConfigStatus,
+  type BraceletPreparationSelection,
   type BraceletPricingBreakdown,
 } from "@bino-foundry/shared/types";
 
@@ -29,6 +30,7 @@ export function serializeBraceletConfiguration(
   wristB: number,
   pricing: BraceletPricingBreakdown,
   status: BraceletConfigStatus = "draft",
+  preparation: BraceletPreparationSelection | null = null,
 ): BraceletConfigurationPayload {
   const items: BraceletConfigurationItemRef[] = [
     ...strandItems(placedA, 0),
@@ -42,6 +44,7 @@ export function serializeBraceletConfiguration(
     wristSizeCmA: wristA,
     wristSizeCmB: wristB,
     items,
+    preparation: preparation ?? undefined,
     pricing,
     updatedAt: new Date().toISOString(),
   };

@@ -2,7 +2,11 @@ import { ChevronDown, ChevronUp, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import type { BraceletBuilderSummary } from "@bino-foundry/shared/types";
+import type {
+  BraceletBuilderSummary,
+  BraceletPreparationSelection,
+  HowWePrepareOption,
+} from "@bino-foundry/shared/types";
 import { formatCurrency } from "@bino-foundry/shared/currency";
 
 import { Button } from "@/components/ui/button";
@@ -13,11 +17,16 @@ import { cn } from "@/lib/utils";
 
 import { BRACELET_COPY } from "../copy";
 import { formatPricingLineItemLabel } from "../pricing";
+import { HowWePrepareSection } from "./HowWePrepareSection";
 import { StrandCapacityCard } from "./StrandCapacityCard";
 import { SummaryInfoCard } from "./SummaryInfoCard";
 
 interface BraceletSummaryPanelProps {
   summary: BraceletBuilderSummary;
+  howWePrepareOptions: HowWePrepareOption[];
+  preparationSelection: BraceletPreparationSelection | null;
+  onSelectPreparation: (slug: string) => void;
+  onPreparationQuantityChange: (quantity: number) => void;
   className?: string;
   collapsible?: boolean;
   defaultOpen?: boolean;
@@ -26,7 +35,6 @@ interface BraceletSummaryPanelProps {
   autoSaveStatus?: DesignAutoSaveStatus;
   autoSaveVisible?: boolean;
   signedIn?: boolean;
-  /** When true, outer title bar is omitted (parent layout supplies sidebar chrome). */
   embedded?: boolean;
 }
 
@@ -51,6 +59,10 @@ function CostLine({
 
 export function BraceletSummaryPanel({
   summary,
+  howWePrepareOptions,
+  preparationSelection,
+  onSelectPreparation,
+  onPreparationQuantityChange,
   className,
   collapsible = false,
   defaultOpen = true,
@@ -100,18 +112,6 @@ export function BraceletSummaryPanel({
         )}
       </SummaryInfoCard>
 
-      <div className="rounded-xl border border-border/45 bg-card/50 px-3 py-2.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="type-body text-sm text-foreground">{BRACELET_COPY.estimatedTotal}</span>
-          <span className="type-price text-xl text-foreground">
-            {formatCurrency(pricing.total, pricing.currencyCode)}
-          </span>
-        </div>
-        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-          {BRACELET_COPY.priceNote(pricing.currencyCode)}
-        </p>
-      </div>
-
       {strandA ? (
         <SummaryInfoCard title={BRACELET_COPY.configurationSummary}>
           <div className="space-y-2">
@@ -120,6 +120,15 @@ export function BraceletSummaryPanel({
           </div>
         </SummaryInfoCard>
       ) : null}
+
+      <HowWePrepareSection
+        options={howWePrepareOptions}
+        selection={preparationSelection}
+        onSelect={onSelectPreparation}
+        onQuantityChange={onPreparationQuantityChange}
+        estimatedTotal={pricing.total}
+        currencyCode={pricing.currencyCode}
+      />
 
       <div className="space-y-1.5 pt-0.5">
         <BuilderSaveStatus

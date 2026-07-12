@@ -4,6 +4,10 @@ import { Gem, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose } from "luc
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
+import {
+  BEAD_LIBRARY_DRAWER_CLASS,
+  beadLibrarySidebarWidthClass,
+} from "@/features/bracelet/builder-layout";
 import { useLibraryPanelWheelScroll } from "@/features/bracelet/hooks/use-library-panel-wheel-scroll";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -188,7 +192,7 @@ export function BraceletBuilderLayout({
   const leftTitle = leftPanelLabel ?? BRACELET_COPY.braceletNameLabel;
   const rightTitle = BRACELET_COPY.summaryTitle;
 
-  const dockedLeftWidth = isWideDesktop ? "w-[min(220px,20vw)]" : "w-[min(188px,22vw)]";
+  const dockedLeftWidth = beadLibrarySidebarWidthClass(isWideDesktop);
   const dockedRightWidth = isWideDesktop ? "w-[min(232px,20vw)]" : "w-[min(200px,22vw)]";
 
   if (isMobile) {
@@ -227,7 +231,10 @@ export function BraceletBuilderLayout({
             <Sheet open={leftOpen} onOpenChange={setLeftOpen}>
               <SheetContent
                 side="left"
-                className="flex h-full max-h-full w-[min(300px,88vw)] max-w-[320px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[320px] [&>button.absolute]:hidden"
+                className={cn(
+                  "flex h-full max-h-full flex-col gap-0 overflow-hidden p-0 [&>button.absolute]:hidden",
+                  BEAD_LIBRARY_DRAWER_CLASS,
+                )}
               >
                 <SheetTitle className="sr-only">{leftTitle}</SheetTitle>
                 <SidebarHeader

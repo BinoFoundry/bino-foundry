@@ -1,15 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { DEFAULT_BEAD_RENDER_CALIBRATION_FACTOR } from "@bino-foundry/shared/types";
 
 import {
   assertMmDiameterOrdering,
   CANONICAL_STRAND_REFERENCE_MM,
-  GLOBAL_BEAD_RENDER_SCALE,
+  getBeadRenderCalibrationFactor,
   layoutDiameterFromCanonicalAsset,
   layoutDiameterPxForMm,
+  setBeadRenderCalibrationFactor,
 } from "./canonical-strand-mm-scale";
 import { calibratedVisualDiameterPx } from "./visual-bead-scale";
 
 describe("canonical-strand-mm-scale", () => {
+  beforeEach(() => {
+    setBeadRenderCalibrationFactor(DEFAULT_BEAD_RENDER_CALIBRATION_FACTOR);
+  });
+
   it("orders diameters strictly by configured mm", () => {
     expect(assertMmDiameterOrdering([2, 4, 6, 8, 10, 12])).toBe(true);
     expect(layoutDiameterPxForMm(6, 1)).toBeLessThan(layoutDiameterPxForMm(8, 1));
@@ -35,11 +42,33 @@ describe("canonical-strand-mm-scale", () => {
     const eight = layoutDiameterPxForMm(8, 1);
     const ten = layoutDiameterPxForMm(10, 1);
 
-    expect(six).toBeCloseTo(calibratedVisualDiameterPx(6) * GLOBAL_BEAD_RENDER_SCALE, 5);
-    expect(eight).toBeCloseTo(calibratedVisualDiameterPx(8) * GLOBAL_BEAD_RENDER_SCALE, 5);
-    expect(ten).toBeCloseTo(calibratedVisualDiameterPx(10) * GLOBAL_BEAD_RENDER_SCALE, 5);
+    expect(six).toBeCloseTo(
+      calibratedVisualDiameterPx(6) * getBeadRenderCalibrationFactor(),
+      5,
+    );
+    expect(eight).toBeCloseTo(
+      calibratedVisualDiameterPx(8) * getBeadRenderCalibrationFactor(),
+      5,
+    );
+    expect(ten).toBeCloseTo(
+      calibratedVisualDiameterPx(10) * getBeadRenderCalibrationFactor(),
+      5,
+    );
 
     const ratioBefore = calibratedVisualDiameterPx(8) / calibratedVisualDiameterPx(6);
     expect(eight / six).toBeCloseTo(ratioBefore, 8);
+  });
+
+  it("scales all sizes uniformly when calibration factor changes", () => {
+    setBeadRenderCalibrationFactor(0.9);
+    const sixAtNine = layoutDiameterPxForMm(6, 1);
+    const tenAtNine = layoutDiameterPxForMm(10, 1);
+    setBeadRenderCalibrationFactor(0.7);
+    expect(layoutDiameterPxForMm(6, 1) / sixAtNine).toBeCloseTo(0.7 / 0.9, 5);
+    expect(layoutDiameterPxForMm(10, 1) / tenAtNine).toBeCloseTo(0.7 / 0.9, 5);
+    expect(layoutDiameterPxForMm(10, 1) / layoutDiameterPxForMm(6, 1)).toBeCloseTo(
+      tenAtNine / sixAtNine,
+      5,
+    );
   });
 });

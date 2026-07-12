@@ -16,6 +16,7 @@ function mapBeadTypeRow(row: Record<string, unknown>): Record<string, unknown> {
     description: row.description ?? "",
     displayOrder: row.display_order,
     isActive: row.is_active,
+    enableSubTypes: row.enable_sub_types,
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -72,6 +73,7 @@ export class BeadTypeService {
       description: payload.description?.trim() ?? "",
       display_order: payload.displayOrder ?? 0,
       is_active: payload.isActive ?? true,
+      enable_sub_types: payload.enableSubTypes ?? false,
       metadata,
     };
 
@@ -101,6 +103,7 @@ export class BeadTypeService {
     if (payload.description !== undefined) updates.description = payload.description.trim();
     if (payload.displayOrder !== undefined) updates.display_order = payload.displayOrder;
     if (payload.isActive !== undefined) updates.is_active = payload.isActive;
+    if (payload.enableSubTypes !== undefined) updates.enable_sub_types = payload.enableSubTypes;
     if (payload.metadata !== undefined) updates.metadata = payload.metadata;
 
     const { data, error } = await supabase.from("bead_types").update(updates).eq("id", recordId).select("*").single();

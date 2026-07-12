@@ -24,6 +24,10 @@
       "types": "./dist/currency/index.d.ts",
       "import": "./dist/currency/index.js"
     },
+    "./how-we-prepare": {
+      "types": "./dist/how-we-prepare/index.d.ts",
+      "import": "./dist/how-we-prepare/index.js"
+    },
     "./storage": {
       "types": "./dist/storage/index.d.ts",
       "import": "./dist/storage/index.js"

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/common";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { syncBeadRenderCalibrationFromSettings } from "@/render/bead-crop/sync-bead-render-calibration";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,9 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
   const [braceletBuilderLibraryTitle, setBraceletBuilderLibraryTitle] = useState(
     DEFAULT_SITE_GENERAL_SETTINGS.braceletBuilderLibraryTitle,
   );
+  const [beadRenderCalibrationFactor, setBeadRenderCalibrationFactor] = useState(
+    DEFAULT_SITE_GENERAL_SETTINGS.beadRenderCalibrationFactor,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +55,10 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
       setBraceletBuilderLibraryTitle(
         data.braceletBuilderLibraryTitle || DEFAULT_SITE_GENERAL_SETTINGS.braceletBuilderLibraryTitle,
       );
+      setBeadRenderCalibrationFactor(
+        data.beadRenderCalibrationFactor ?? DEFAULT_SITE_GENERAL_SETTINGS.beadRenderCalibrationFactor,
+      );
+      syncBeadRenderCalibrationFromSettings(data);
       setValidationError(null);
     } catch (err) {
       setError(isApiError(err) ? err.message : "Failed to load general settings");
@@ -74,7 +82,9 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
       await settingsApi.updateGeneralSettings({
         currencyCode: currencyCode.toUpperCase(),
         braceletBuilderLibraryTitle: braceletBuilderLibraryTitle.trim(),
+        beadRenderCalibrationFactor,
       });
+      syncBeadRenderCalibrationFromSettings({ beadRenderCalibrationFactor });
       await queryClient.invalidateQueries({ queryKey: siteSettingsKeys.general() });
       notifyAdminSavedEdit();
     } catch (err) {
@@ -150,6 +160,25 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
           />
           <p className="text-xs text-muted-foreground">
             Heading shown in the left sidebar of the bracelet builder (e.g. &quot;Name Your Bracelet&quot;).
+          </p>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-border bg-card p-4">
+        <div className="space-y-2">
+          <Label htmlFor="bead-render-calibration">Bracelet bead render calibration</Label>
+          <Input
+            id="bead-render-calibration"
+            type="number"
+            step="0.01"
+            min={0.5}
+            max={1.25}
+            value={beadRenderCalibrationFactor}
+            onChange={(e) => setBeadRenderCalibrationFactor(Number(e.target.value))}
+          />
+          <p className="text-xs text-muted-foreground">
+            Uniform scale for all bead sizes in the bracelet builder (database mm labels unchanged).
+            Lower values render beads smaller while preserving proportional differences between sizes.
           </p>
         </div>
       </section>

@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { DEFAULT_BEAD_RENDER_CALIBRATION_FACTOR } from "@bino-foundry/shared/types";
 
 import {
   calibratedVisualDiameterPx,
@@ -6,8 +8,8 @@ import {
   VISUAL_BEAD_MAX_PX,
   VISUAL_PX_PER_MM,
 } from "./visual-bead-scale";
+import { getBeadRenderCalibrationFactor, setBeadRenderCalibrationFactor } from "./canonical-strand-mm-scale";
 import { mmToBasePx, STRAND_BEAD_VISUAL_SCALE } from "./strand-bead";
-import { GLOBAL_BEAD_RENDER_SCALE } from "./canonical-strand-mm-scale";
 
 const CATALOG_SIZES_MM = [0.1, 0.25, 0.5, 1, 2.5, 4, 6, 8, 10, 12, 15, 20] as const;
 
@@ -45,6 +47,10 @@ describe("calibratedVisualDiameterPx", () => {
 });
 
 describe("mmToBasePx", () => {
+  beforeEach(() => {
+    setBeadRenderCalibrationFactor(DEFAULT_BEAD_RENDER_CALIBRATION_FACTOR);
+  });
+
   it("scales proportionally with the canvas scale factor", () => {
     const atOne = mmToBasePx(6, 1);
     const atTwo = mmToBasePx(6, 2);
@@ -53,8 +59,20 @@ describe("mmToBasePx", () => {
 
   it("applies the global visual density multiplier", () => {
     expect(mmToBasePx(8, 1)).toBeCloseTo(
-      (VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8) * STRAND_BEAD_VISUAL_SCALE * GLOBAL_BEAD_RENDER_SCALE,
+      (VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8) *
+        STRAND_BEAD_VISUAL_SCALE *
+        getBeadRenderCalibrationFactor(),
       5,
     );
+  });
+
+  it("scales all mm sizes uniformly when calibration changes", () => {
+    setBeadRenderCalibrationFactor(0.9);
+    const six = mmToBasePx(6, 1);
+    const ten = mmToBasePx(10, 1);
+    setBeadRenderCalibrationFactor(0.7);
+    expect(mmToBasePx(6, 1) / six).toBeCloseTo(0.7 / 0.9, 5);
+    expect(mmToBasePx(10, 1) / ten).toBeCloseTo(0.7 / 0.9, 5);
+    expect(mmToBasePx(10, 1) / mmToBasePx(6, 1)).toBeCloseTo(ten / six, 5);
   });
 });
