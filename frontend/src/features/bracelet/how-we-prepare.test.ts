@@ -17,7 +17,6 @@ function option(overrides: Partial<HowWePrepareOption> = {}): HowWePrepareOption
     optionType: "preparation",
     priceType: "per_quantity",
     price: 11,
-    priceLabel: "$11.00 / kit",
     defaultQuantity: 1,
     minimumQuantity: 1,
     maximumQuantity: 10,

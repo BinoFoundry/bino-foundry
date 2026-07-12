@@ -13,7 +13,6 @@ export interface HowWePrepareOption {
   optionType: string;
   priceType: HowWePreparePriceType;
   price: number;
-  priceLabel: string;
   defaultQuantity: number;
   minimumQuantity: number;
   maximumQuantity: number;

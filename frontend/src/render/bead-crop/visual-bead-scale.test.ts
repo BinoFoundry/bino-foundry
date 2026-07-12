@@ -7,6 +7,8 @@ import {
   VISUAL_BEAD_BASE_PX,
   VISUAL_BEAD_MAX_PX,
   VISUAL_PX_PER_MM,
+  VISUAL_SIZE_CURVE_ANCHOR_MM,
+  VISUAL_SIZE_CURVE_EXPONENT,
 } from "./visual-bead-scale";
 import { getBeadRenderCalibrationFactor, setBeadRenderCalibrationFactor } from "./canonical-strand-mm-scale";
 import { mmToBasePx, STRAND_BEAD_VISUAL_SCALE } from "./strand-bead";
@@ -14,10 +16,24 @@ import { mmToBasePx, STRAND_BEAD_VISUAL_SCALE } from "./strand-bead";
 const CATALOG_SIZES_MM = [0.1, 0.25, 0.5, 1, 2.5, 4, 6, 8, 10, 12, 15, 20] as const;
 
 describe("calibratedVisualDiameterPx", () => {
-  it("scales linearly with mm for mid-range sizes", () => {
-    expect(calibratedVisualDiameterPx(2)).toBeCloseTo(VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 2, 5);
-    expect(calibratedVisualDiameterPx(8)).toBeCloseTo(VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8, 5);
-    expect(calibratedVisualDiameterPx(8) / calibratedVisualDiameterPx(2)).toBeCloseTo(3.31, 1);
+  it("anchors the reference size to the legacy linear baseline", () => {
+    const linearAtAnchor = VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * VISUAL_SIZE_CURVE_ANCHOR_MM;
+    expect(calibratedVisualDiameterPx(VISUAL_SIZE_CURVE_ANCHOR_MM)).toBeCloseTo(linearAtAnchor, 5);
+  });
+
+  it("compresses visual jumps between larger sizes", () => {
+    const d6 = calibratedVisualDiameterPx(6);
+    const d8 = calibratedVisualDiameterPx(8);
+    const d10 = calibratedVisualDiameterPx(10);
+    expect(d6).toBeLessThan(d8);
+    expect(d8).toBeLessThan(d10);
+    expect(d10 - d8).toBeLessThan(d8 - d6);
+    expect(d10 - d8).toBeLessThan(VISUAL_PX_PER_MM * 2);
+  });
+
+  it("is less aggressive than linear mapping at 10 mm", () => {
+    const linear10 = VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 10;
+    expect(calibratedVisualDiameterPx(10)).toBeLessThan(linear10);
   });
 
   it("preserves strict ordering for any positive decimal mm", () => {
@@ -44,6 +60,11 @@ describe("calibratedVisualDiameterPx", () => {
       expect(px[i]).toBeGreaterThan(px[i - 1]!);
     }
   });
+
+  it("uses a sub-linear exponent for smoother catalogue progression", () => {
+    expect(VISUAL_SIZE_CURVE_EXPONENT).toBeLessThan(1);
+    expect(VISUAL_SIZE_CURVE_EXPONENT).toBeGreaterThan(0.5);
+  });
 });
 
 describe("mmToBasePx", () => {
@@ -59,9 +80,7 @@ describe("mmToBasePx", () => {
 
   it("applies the global visual density multiplier", () => {
     expect(mmToBasePx(8, 1)).toBeCloseTo(
-      (VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * 8) *
-        STRAND_BEAD_VISUAL_SCALE *
-        getBeadRenderCalibrationFactor(),
+      calibratedVisualDiameterPx(8) * STRAND_BEAD_VISUAL_SCALE * getBeadRenderCalibrationFactor(),
       5,
     );
   });

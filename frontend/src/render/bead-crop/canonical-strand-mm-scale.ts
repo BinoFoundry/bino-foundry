@@ -2,7 +2,7 @@
  * Single source of truth: configured mm → layout pixel diameter.
  *
  * Wrist fit, capacity, and pricing use database mm values.
- * Visual footprint uses this continuous mapping at runtime, scaled by
+ * Visual footprint uses a sub-linear calibrated curve at runtime, scaled by
  * {@link getBeadRenderCalibrationFactor} for bracelet realism.
  */
 
@@ -11,7 +11,7 @@ import {
   DEFAULT_BEAD_RENDER_CALIBRATION_FACTOR,
 } from "@bino-foundry/shared/types";
 
-import { calibratedVisualDiameterPx } from "./visual-bead-scale";
+import { calibratedVisualDiameterPx, visualDiameterRatio } from "./visual-bead-scale";
 
 /** Reference mm for the calibrated px curve (8 mm ≈ 29 px at scale 1). */
 export const CANONICAL_STRAND_REFERENCE_MM = 8;
@@ -62,7 +62,7 @@ export function layoutDiameterFromCanonicalAsset(
   }
   return (
     visibleDiameterPx *
-    (configuredMm / referenceMm) *
+    visualDiameterRatio(configuredMm, referenceMm) *
     layoutScale *
     getBeadRenderCalibrationFactor()
   );

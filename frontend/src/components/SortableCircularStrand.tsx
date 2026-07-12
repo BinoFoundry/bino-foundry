@@ -36,6 +36,7 @@ import {
 import { normalizeFromSlots, strandCircumferenceMm } from "@/features/bracelet/composition";
 import {
   computeMaxRingRadiusPx,
+  computeStrandRingStrokePx,
   computeWristRingRadiusPx,
   type WristSizeBounds,
 } from "@/features/bracelet/strand-ring";
@@ -561,6 +562,7 @@ const SortableCircularStrand = ({
 
     const buildLayout = (beadScaleBoost: number) => {
       const scaleFactor = (canvasSize / STRAND_LAYOUT_BASELINE_PX) * beadScaleBoost;
+      const ringStrokeHalf = computeStrandRingStrokePx(scaleFactor) / 2;
       const guideSlotDim = getGuideSlotDimensions(scaleFactor, guideSizeMm);
 
       let slotsWithPosition: StrandSlot[] = [];
@@ -582,7 +584,14 @@ const SortableCircularStrand = ({
         wristSizeBounds.minCm > 0 && wristSizeBounds.maxCm > 0
           ? wristSizeBounds
           : { minCm: wristSize, maxCm: wristSize };
-      const wristRadius = computeWristRingRadiusPx(center, wristSize, scaleFactor, maxExtent, bounds);
+      const wristRadius = computeWristRingRadiusPx(
+        center,
+        wristSize,
+        scaleFactor,
+        maxExtent,
+        bounds,
+        ringStrokeHalf,
+      );
       const maxRadiusPx = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
 
       let radius = wristRadius;
@@ -670,7 +679,7 @@ const SortableCircularStrand = ({
         });
       }
 
-      return { slotsWithPosition, scaleFactor, center, radius, layoutSectors, insertionAngles };
+      return { slotsWithPosition, scaleFactor, center, radius, layoutSectors, insertionAngles, ringStrokeHalf };
     };
 
     const base = buildLayout(1);
@@ -686,6 +695,7 @@ const SortableCircularStrand = ({
         })),
         laidOut.radius,
         laidOut.center,
+        laidOut.ringStrokeHalf,
       );
       return squareCanvasSizeForBounds(bounds, edgePad);
     };
@@ -694,8 +704,10 @@ const SortableCircularStrand = ({
     let laidOut = base;
     let requiredCanvas = measureRequiredCanvas(laidOut);
 
-    if (requiredCanvas > canvasSize) {
-      scaleBoost = computeStrandCanvasFitBoost(requiredCanvas, canvasSize);
+    for (let attempt = 0; attempt < 8 && requiredCanvas > canvasSize; attempt++) {
+      const nextBoost = scaleBoost * computeStrandCanvasFitBoost(requiredCanvas, canvasSize);
+      if (nextBoost >= scaleBoost) break;
+      scaleBoost = nextBoost;
       laidOut = buildLayout(scaleBoost);
       requiredCanvas = measureRequiredCanvas(laidOut);
     }
@@ -720,6 +732,7 @@ const SortableCircularStrand = ({
   }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead]);
 
   const renderCanvasSize = canvasSize;
+  const ringStrokeWidth = computeStrandRingStrokePx(scaleFactor);
 
   const parseSlotId = (id: string | number | undefined): number | null => {
     const m = String(id ?? "").match(/^bead-(\d+)$/);
@@ -1012,9 +1025,10 @@ const SortableCircularStrand = ({
             );
           })() : null}
           <svg
-            className="pointer-events-none absolute inset-0 z-[5]"
-            width={renderCanvasSize}
-            height={renderCanvasSize}
+            data-strand-ring
+            className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+            viewBox={`0 0 ${renderCanvasSize} ${renderCanvasSize}`}
+            preserveAspectRatio="xMidYMid meet"
             style={{ transition: activeId || externalDrag ? undefined : "opacity 0.25s ease-out" }}
           >
             <circle
@@ -1023,7 +1037,7 @@ const SortableCircularStrand = ({
               r={radius}
               fill="none"
               stroke={externalDrag ? STRAND_CORD.strokeDrag : STRAND_CORD.stroke}
-              strokeWidth={Math.max(2, STRAND_CORD.widthFactor * scaleFactor)}
+              strokeWidth={ringStrokeWidth}
               opacity={externalDrag ? 1 : STRAND_CORD.opacity}
               style={{ transition: activeId || externalDrag ? undefined : "r 0.35s ease-out" }}
             />

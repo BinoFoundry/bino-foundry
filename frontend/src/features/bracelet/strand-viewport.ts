@@ -136,11 +136,12 @@ export function computeStrandContentBounds(
   slots: { x: number; y: number; width: number; height: number }[],
   radius: number,
   center: number,
+  ringStrokeHalfPx = 0,
 ): StrandContentBounds {
-  let minX = center - radius;
-  let maxX = center + radius;
-  let minY = center - radius;
-  let maxY = center + radius;
+  let minX = center - radius - ringStrokeHalfPx;
+  let maxX = center + radius + ringStrokeHalfPx;
+  let minY = center - radius - ringStrokeHalfPx;
+  let maxY = center + radius + ringStrokeHalfPx;
 
   for (const slot of slots) {
     const hw = slot.width / 2;

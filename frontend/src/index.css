@@ -361,8 +361,8 @@
     box-shadow: var(--shadow-none);
   }
 
-  /* Builder preview framing — layout only; renderers stay unchanged. */
-  .builder-preview-fit svg {
+  /* Builder preview framing — layout only; strand guide ring manages its own viewBox. */
+  .builder-preview-fit svg:not([data-strand-ring]) {
     max-height: 100%;
     max-width: var(--builder-preview-fit, 100%);
   }

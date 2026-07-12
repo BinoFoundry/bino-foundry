@@ -49,9 +49,7 @@ export function HowWePrepareSection({
       <div className="space-y-1.5" role="radiogroup" aria-label={BRACELET_COPY.howWePrepareTitle}>
         {visible.map((option) => {
           const checked = selection?.optionSlug === option.slug;
-          const priceDisplay =
-            option.priceLabel.trim() ||
-            formatCurrency(option.price, currencyCode);
+          const priceDisplay = formatCurrency(option.price, currencyCode);
 
           return (
             <label

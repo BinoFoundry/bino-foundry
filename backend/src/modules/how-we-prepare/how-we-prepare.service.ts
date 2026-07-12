@@ -21,7 +21,6 @@ function mapRow(row: Record<string, unknown>) {
     optionType: String(row.option_type ?? "preparation"),
     priceType: String(row.price_type ?? "fixed"),
     price: Number(row.price ?? 0),
-    priceLabel: String(row.price_label ?? ""),
     defaultQuantity: Number(row.default_quantity ?? 1),
     minimumQuantity: Number(row.minimum_quantity ?? 1),
     maximumQuantity: Number(row.maximum_quantity ?? 1),
@@ -91,7 +90,6 @@ export class HowWePrepareService {
         option_type: dto.optionType?.trim() ?? "preparation",
         price_type: dto.priceType ?? "fixed",
         price: dto.price ?? 0,
-        price_label: dto.priceLabel?.trim() ?? "",
         default_quantity: dto.defaultQuantity ?? 1,
         minimum_quantity: dto.minimumQuantity ?? 1,
         maximum_quantity: dto.maximumQuantity ?? 1,
@@ -129,7 +127,6 @@ export class HowWePrepareService {
     if (dto.optionType !== undefined) patch.option_type = dto.optionType.trim();
     if (dto.priceType !== undefined) patch.price_type = dto.priceType;
     if (dto.price !== undefined) patch.price = dto.price;
-    if (dto.priceLabel !== undefined) patch.price_label = dto.priceLabel.trim();
     if (dto.defaultQuantity !== undefined) patch.default_quantity = dto.defaultQuantity;
     if (dto.minimumQuantity !== undefined) patch.minimum_quantity = dto.minimumQuantity;
     if (dto.maximumQuantity !== undefined) patch.maximum_quantity = dto.maximumQuantity;

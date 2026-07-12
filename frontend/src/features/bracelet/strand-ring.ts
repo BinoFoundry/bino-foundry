@@ -20,6 +20,14 @@ export function wristSizeBoundsFromCatalog(
   };
 }
 
+export const STRAND_RING_STROKE_WIDTH_FACTOR = 3.4;
+export const STRAND_RING_STROKE_MIN_PX = 2;
+
+/** Guide-ring stroke width in layout px (matches strand cord SVG). */
+export function computeStrandRingStrokePx(scaleFactor: number): number {
+  return Math.max(STRAND_RING_STROKE_MIN_PX, STRAND_RING_STROKE_WIDTH_FACTOR * scaleFactor);
+}
+
 /**
  * Ring radius (px) mapped linearly across the database wrist-size range.
  * Each distinct `sizeCm` produces a distinct radius — no wrist-size clamping.
@@ -30,9 +38,10 @@ export function computeWristRingRadiusPx(
   scaleFactor: number,
   maxSlotExtentPx: number,
   bounds: WristSizeBounds,
+  ringStrokeHalfPx = 0,
 ): number {
   const padding = STRAND_RING_EDGE_PADDING_PX * scaleFactor;
-  const available = Math.max(1, centerPx - padding - maxSlotExtentPx / 2);
+  const available = Math.max(1, centerPx - padding - maxSlotExtentPx / 2 - ringStrokeHalfPx);
   const span = Math.max(bounds.maxCm - bounds.minCm, 0.01);
   const t = Math.max(0, Math.min(1, (wristSizeCm - bounds.minCm) / span));
   const minFill = 0.52;

@@ -15,7 +15,6 @@ const howWePrepareOptionBaseSchema = z.object({
   optionType: z.string().trim().min(1).max(40).default("preparation"),
   priceType: z.enum(["fixed", "per_bracelet", "per_quantity"]).default("fixed"),
   price: z.number().min(0).default(0),
-  priceLabel: z.string().trim().max(80).default(""),
   defaultQuantity: z.number().int().min(1).default(1),
   minimumQuantity: z.number().int().min(1).default(1),
   maximumQuantity: z.number().int().min(1).default(1),

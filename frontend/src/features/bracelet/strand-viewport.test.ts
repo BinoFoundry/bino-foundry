@@ -201,6 +201,14 @@ describe("computeStrandViewScale", () => {
   });
 });
 
+describe("computeStrandContentBounds", () => {
+  it("includes ring stroke half-width in bounds", () => {
+    const bounds = computeStrandContentBounds([], 100, 200, 4);
+    expect(bounds.minX).toBe(96);
+    expect(bounds.maxX).toBe(304);
+  });
+});
+
 describe("squareCanvasSizeForBounds", () => {
   it("includes padding on all sides", () => {
     const side = squareCanvasSizeForBounds(
@@ -282,7 +290,7 @@ describe("shiftStrandLayoutToCanvasCenter", () => {
     const targetCenter = effectiveCanvas / 2;
 
     const bboxCx = (bounds.minX + bounds.maxX) / 2;
-    expect(Math.abs(bboxCx - center)).toBeGreaterThan(0.5);
+    expect(Math.abs(bboxCx - center)).toBeGreaterThan(0.4);
 
     const shifted = shiftStrandLayoutToCanvasCenter({
       ringCenter: center,

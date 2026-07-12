@@ -17,6 +17,7 @@ import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { useAdminList } from "../../hooks/useAdminList";
+import { useFormatCurrency } from "@/hooks/use-format-currency";
 
 const PRICE_TYPES: HowWePreparePriceType[] = ["fixed", "per_bracelet", "per_quantity"];
 const STATUSES: HowWePrepareStatus[] = ["active", "inactive"];
@@ -46,7 +47,6 @@ function HowWePrepareForm({
   const [optionType, setOptionType] = useState(initial?.optionType ?? "preparation");
   const [priceType, setPriceType] = useState<HowWePreparePriceType>(initial?.priceType ?? "fixed");
   const [price, setPrice] = useState(initial?.price ?? 0);
-  const [priceLabel, setPriceLabel] = useState(initial?.priceLabel ?? "");
   const [defaultQuantity, setDefaultQuantity] = useState(initial?.defaultQuantity ?? 1);
   const [minimumQuantity, setMinimumQuantity] = useState(initial?.minimumQuantity ?? 1);
   const [maximumQuantity, setMaximumQuantity] = useState(initial?.maximumQuantity ?? 1);
@@ -95,7 +95,6 @@ function HowWePrepareForm({
         optionType: optionType.trim() || "preparation",
         priceType,
         price,
-        priceLabel: priceLabel.trim(),
         defaultQuantity,
         minimumQuantity,
         maximumQuantity,
@@ -159,7 +158,7 @@ function HowWePrepareForm({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-xs text-muted-foreground">Price</label>
           <input
@@ -168,15 +167,6 @@ function HowWePrepareForm({
             step={0.01}
             value={price}
             onChange={(e) => setPrice(Number(e.target.value))}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-muted-foreground">Price label</label>
-          <input
-            value={priceLabel}
-            onChange={(e) => setPriceLabel(e.target.value)}
-            placeholder="$11.00 / kit"
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           />
         </div>
@@ -356,6 +346,7 @@ function HowWePrepareForm({
 
 export function HowWePrepareAdminPage() {
   const cat = useCatalogue();
+  const currency = useFormatCurrency();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [modal, setModal] = useState<AdminEditorModalState<HowWePrepareOption>>(null);
   const list = useAdminList(cat.howWePrepareOptions, (item, q) =>
@@ -438,7 +429,7 @@ export function HowWePrepareAdminPage() {
                     ) : null}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {item.slug} · {item.priceLabel || item.price} · order {item.sortOrder}
+                    {item.slug} · {currency.format(item.price)} · order {item.sortOrder}
                     {item.quantityEnabled ? " · qty" : ""}
                   </p>
                 </div>
