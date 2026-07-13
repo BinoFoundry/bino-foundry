@@ -7,8 +7,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { BeadTypeForm } from "../../components/BeadTypeForm";
 import { SubBeadTypeForm } from "../../components/SubBeadTypeForm";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
+import { AdminTaxonomyStatusFilter } from "../../components/AdminTaxonomyStatusFilter";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
+import {
+  filterByTaxonomyStatus,
+  type TaxonomyStatusFilter,
+} from "@/features/admin/lib/taxonomy-status-filter";
 import {
   applyAdminSaveModalState,
   notifyAdminDeleteFailed,
@@ -43,6 +48,8 @@ export function BeadTypesAdminPage() {
   const [selectedTypeId, setSelectedTypeId] = useState<string>("");
   const [typeModal, setTypeModal] = useState<AdminEditorModalState<BeadTypeEntry>>(null);
   const [subModal, setSubModal] = useState<AdminEditorModalState<SubBeadTypeEntry>>(null);
+  const [typeStatusFilter, setTypeStatusFilter] = useState<TaxonomyStatusFilter>("all");
+  const [subStatusFilter, setSubStatusFilter] = useState<TaxonomyStatusFilter>("all");
 
   const selectedType = cat.beadTypes.find((t) => t.id === selectedTypeId);
   const subTypesForType = useMemo(
@@ -53,8 +60,17 @@ export function BeadTypesAdminPage() {
     [cat.subBeadTypes, selectedTypeId],
   );
 
-  const typeList = useAdminList(cat.beadTypes, (t, q) => t.name.toLowerCase().includes(q));
-  const subList = useAdminList(subTypesForType, (s, q) => s.name.toLowerCase().includes(q));
+  const filteredBeadTypes = useMemo(
+    () => filterByTaxonomyStatus(cat.beadTypes, typeStatusFilter),
+    [cat.beadTypes, typeStatusFilter],
+  );
+  const filteredSubTypes = useMemo(
+    () => filterByTaxonomyStatus(subTypesForType, subStatusFilter),
+    [subTypesForType, subStatusFilter],
+  );
+
+  const typeList = useAdminList(filteredBeadTypes, (t, q) => t.name.toLowerCase().includes(q));
+  const subList = useAdminList(filteredSubTypes, (s, q) => s.name.toLowerCase().includes(q));
 
   const activeModal = typeModal ?? subModal;
   useAdminEditorScroll(scrollRef, activeModal, [view, selectedTypeId]);
@@ -116,6 +132,13 @@ export function BeadTypesAdminPage() {
               : undefined
         }
         title={toolbarTitle}
+        trailing={
+          activeModal ? undefined : view === "types" ? (
+            <AdminTaxonomyStatusFilter value={typeStatusFilter} onChange={setTypeStatusFilter} />
+          ) : (
+            <AdminTaxonomyStatusFilter value={subStatusFilter} onChange={setSubStatusFilter} />
+          )
+        }
       />
 
       <AdminPage
@@ -141,6 +164,7 @@ export function BeadTypesAdminPage() {
                         description: entry.description,
                         displayOrder: entry.displayOrder,
                         isActive: entry.isActive,
+                        enableSubTypes: entry.enableSubTypes,
                         metadata: entry.metadata,
                       })
                     : await cat.updateBeadType(entry);
@@ -244,7 +268,9 @@ export function BeadTypesAdminPage() {
                         </p>
                         {t.isActive === false ? (
                           <AdminStatusBadge label="Inactive" variant="danger" />
-                        ) : null}
+                        ) : (
+                          <AdminStatusBadge label="Active" variant="success" />
+                        )}
                       </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     </AdminListRow>
@@ -331,7 +357,9 @@ export function BeadTypesAdminPage() {
                       </p>
                       {s.isActive === false ? (
                         <AdminStatusBadge label="Inactive" variant="danger" />
-                      ) : null}
+                      ) : (
+                        <AdminStatusBadge label="Active" variant="success" />
+                      )}
                     </div>
                   </AdminListRow>
                 );

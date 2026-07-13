@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import {
   mergeStrandRenderProfile,
   parseStrandRenderProfile,
+  STRAND_CONTACT_SPACING_MAX,
+  STRAND_CONTACT_SPACING_MIN,
   strandRenderSourceLabel,
   type StrandAnchorPreset,
   type StrandOrientationMode,
@@ -136,13 +138,36 @@ export function StrandRenderConfigPanel({
           <input
             type="number"
             step="0.01"
-            min={0.02}
-            max={2}
+            min={STRAND_CONTACT_SPACING_MIN}
+            max={STRAND_CONTACT_SPACING_MAX}
             disabled={readOnly}
             className={adminFieldClass()}
             value={value.contactWidth}
             onChange={(e) => onChange({ contactWidth: Number(e.target.value) })}
           />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Tuning from natural touch (0 = neutral). Negative tightens; positive loosens. Legacy type
+            defaults stored as 1 map to neutral.
+          </p>
+        </Field>
+        <Field
+          label="Contact adjustment"
+          source={provenance?.contactOffset}
+          readOnly={readOnly}
+        >
+          <input
+            type="number"
+            step="0.01"
+            min={STRAND_CONTACT_SPACING_MIN}
+            max={STRAND_CONTACT_SPACING_MAX}
+            disabled={readOnly}
+            className={adminFieldClass()}
+            value={value.contactOffset}
+            onChange={(e) => onChange({ contactOffset: Number(e.target.value) })}
+          />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Fine-tune neighbour spacing. Negative closes small gaps; positive adds slack.
+          </p>
         </Field>
         <Field label="Visual scale" source={provenance?.visualScale} readOnly={readOnly}>
           <input

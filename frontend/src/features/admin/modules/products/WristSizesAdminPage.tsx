@@ -12,6 +12,7 @@ import {
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
+import { AdminActiveInactiveStatusField } from "../../components/AdminActiveInactiveStatusField";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
 import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
@@ -108,10 +109,11 @@ function WristSizeForm({
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-        Active
-      </label>
+      <AdminActiveInactiveStatusField
+        value={active}
+        onChange={setActive}
+        hint="Inactive sizes are hidden from the bracelet builder."
+      />
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
         Default selection

@@ -50,6 +50,13 @@ import {
   beadContactLayoutArrays,
   computeResolvedRingRadiusPx,
 } from "@/features/bracelet/strand-ring-geometry";
+import {
+  computeStrandAdjacencySpacingDebug,
+  applyStrandSpacingForceOverrides,
+  isStrandSpacingDebugEnabled,
+  logStrandAdjacencySpacing,
+  logStrandSpacingDataFlow,
+} from "@/features/bracelet/strand-adjacency-spacing-debug";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
 import { BEAD_LIBRARY_DRAG_TYPE, isLibraryDragEvent } from "@/features/bracelet/interaction";
 import {
@@ -578,7 +585,17 @@ const SortableCircularStrand = ({
         maxExtent = getMaxSlotExtent(prelimDims);
       }
 
-      const renderProfiles = normalized.map((placed) => getForBead(placed.bead));
+      const renderProfiles = applyStrandSpacingForceOverrides(
+        normalized.map((placed) => getForBead(placed.bead)),
+      );
+
+      if (isStrandSpacingDebugEnabled() && normalized[0]) {
+        logStrandSpacingDataFlow({
+          bead: normalized[0]!.bead,
+          catalogue: sizingCatalogue,
+          resolved: renderProfiles[0]!,
+        });
+      }
 
       const bounds =
         wristSizeBounds.minCm > 0 && wristSizeBounds.maxCm > 0
@@ -648,6 +665,21 @@ const SortableCircularStrand = ({
           angle: path.angle,
           arcSpan: path.arcSpan,
         }));
+
+        if (isStrandSpacingDebugEnabled()) {
+          logStrandAdjacencySpacing(
+            computeStrandAdjacencySpacingDebug({
+              sizingResults,
+              profiles: renderProfiles,
+              contactArcPx: contactArrays.contactArcPx,
+              leadingOverlapPx: contactArrays.leadingOverlapPx,
+              trailingOverlapPx: contactArrays.trailingOverlapPx,
+              angles: pathLayout.map((path) => path.angle),
+              radiusPx: radius,
+              beadPositions: pathLayout.map((path) => ({ x: path.x, y: path.y })),
+            }),
+          );
+        }
 
         slotsWithPosition = normalized.map((placed, i) => {
           const beadSize = placedBeadSizeMm(placed);

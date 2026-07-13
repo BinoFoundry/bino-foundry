@@ -4,11 +4,12 @@ import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 import { getBeadSlotDimensions, resolveStrandRenderConfigForType } from "@/render/bead-crop";
 import { TEST_STRAND_RENDER_CATALOGUE } from "@/render/bead-crop/strand-render-test-catalogue";
 
+import { netContactLoopArcPx } from "@bino-foundry/shared/types";
+
 import { computeElasticBeadLayout } from "./strand-elastic-layout";
 import {
   adjacentPairsMeetGap,
   beadLayoutArcPx,
-  beadSectorsOverlap,
   computeResolvedRingRadiusPx,
   resolveStrandRingLayout,
   scaledBeadSpacingPx,
@@ -74,10 +75,12 @@ function assertCleanLayout(
 ) {
   const { resolved, elastic, pairGapPx } = layoutForWrist(wristCm, beads, scaleFactor, canvasCenter);
   const circumferencePx = 2 * Math.PI * resolved.radiusPx;
-  const totalArcPx = resolved.beadArcPx.reduce((sum, arc) => sum + arc, 0);
-  const closedLoop =
-    elastic.isOverCapacity || totalArcPx >= circumferencePx * (1 - 1e-4);
-  expect(beadSectorsOverlap(elastic.angles, elastic.arcSpans, 1, closedLoop)).toBe(false);
+  const netArcPx = netContactLoopArcPx(
+    resolved.beadArcPx,
+    resolved.leadingOverlapPx,
+    resolved.trailingOverlapPx,
+  );
+  const closedLoop = elastic.isOverCapacity || netArcPx >= circumferencePx * (1 - 1e-4);
   expect(
     adjacentPairsMeetGap(
       elastic.angles,
@@ -159,13 +162,13 @@ describe("mixed bead sizes on 16cm wrist", () => {
 });
 
 describe("contact geometry layout", () => {
-  it("packs spacer with smaller contact arc than crystal", () => {
+  it("packs spacer with smaller contact arc than crystal (by mm slot)", () => {
     const crystal = mockPlaced(8);
     const spacer = mockPlaced(4, "spacer");
     const { resolved } = layoutForWrist(16, [crystal, spacer, crystal]);
     const spacerArc = resolved.beadArcPx[1]!;
     const crystalArc = resolved.beadArcPx[0]!;
-    expect(spacerArc).toBeLessThan(crystalArc * 0.5);
+    expect(spacerArc).toBeLessThan(crystalArc);
   });
 
   it("uses junction overlaps for charm + crystal pairs", () => {

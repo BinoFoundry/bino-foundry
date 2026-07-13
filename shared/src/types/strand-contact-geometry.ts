@@ -1,4 +1,5 @@
 import type { StrandRenderProfile } from "./strand-render-profile.js";
+import { effectiveStrandContactWidth } from "./strand-render-profile.js";
 
 /** Physical strand contact properties — spacing is independent of bitmap size. */
 export interface StrandContactGeometry {
@@ -59,21 +60,30 @@ export interface ContactArcPx {
   trailingOverlapPx: number;
 }
 
-/** Convert normalised contact geometry to pixel arc lengths on the strand. */
+/**
+ * Convert visible tangent width to layout contact arc (px along strand).
+ * Natural touch = slotWidthPx (visible diameter); contact width/adjustment scale that span.
+ */
 export function contactArcPxFromSlotWidth(
   slotWidthPx: number,
   profile: Pick<
     StrandRenderProfile,
-    "contactWidth" | "leadingOverlap" | "trailingOverlap" | "collisionPadding"
+    | "contactWidth"
+    | "contactOffset"
+    | "spacingAdjustment"
+    | "leadingOverlap"
+    | "trailingOverlap"
+    | "collisionPadding"
   >,
   scaleFactor = 1,
 ): ContactArcPx {
-  const width = Math.max(0, slotWidthPx);
+  const naturalTangentPx = Math.max(0, slotWidthPx);
   const sf = Math.max(0.5, scaleFactor);
+  const spanMultiplier = effectiveStrandContactWidth(profile);
   return {
-    contactArcPx: profile.contactWidth * width + (profile.collisionPadding ?? 0) * sf,
-    leadingOverlapPx: profile.leadingOverlap * width,
-    trailingOverlapPx: profile.trailingOverlap * width,
+    contactArcPx: naturalTangentPx * spanMultiplier + (profile.collisionPadding ?? 0) * sf,
+    leadingOverlapPx: profile.leadingOverlap * naturalTangentPx,
+    trailingOverlapPx: profile.trailingOverlap * naturalTangentPx,
   };
 }
 

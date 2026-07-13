@@ -37,10 +37,11 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     description: "",
     metadata: {
       strandRender: {
+        layoutMode: "dangling",
         strandOccupancy: 1,
-        contactWidth: 0.1,
-        leadingOverlap: 0.02,
-        trailingOverlap: 0.02,
+        contactWidth: 0.08,
+        leadingOverlap: 0.03,
+        trailingOverlap: 0.03,
         hangOffset: 0,
         anchorPreset: "loop",
         anchorX: 0.5,
@@ -64,10 +65,11 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     description: "",
     metadata: {
       strandRender: {
-        strandOccupancy: 0.38,
-        contactWidth: 0.16,
-        leadingOverlap: 0.05,
-        trailingOverlap: 0.05,
+        layoutMode: "inline",
+        strandOccupancy: 1,
+        contactWidth: 1,
+        leadingOverlap: 0.02,
+        trailingOverlap: 0.02,
         hangOffset: 0,
         anchorPreset: "center",
         anchorX: 0.5,

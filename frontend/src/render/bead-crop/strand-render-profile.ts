@@ -1,6 +1,7 @@
 import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import {
   beadLibrariesStrandRenderStamp,
+  beadLibraryInheritsTypeStrandDefaults,
   parseStrandRenderProfile,
   resolveStrandRenderConfig,
   subBeadTypeInheritsBeadTypeStrandDefaults,
@@ -64,10 +65,7 @@ function libraryOverrideFromEntry(
 }
 
 function libraryInheritsSubTypeDefaults(bead: BeadLibraryEntry | null | undefined): boolean {
-  const meta = bead?.metadata as { useTypeStrandDefaults?: boolean; strandRenderOverride?: unknown } | undefined;
-  if (meta?.useTypeStrandDefaults === true) return true;
-  if (meta?.strandRenderOverride == null) return true;
-  return false;
+  return beadLibraryInheritsTypeStrandDefaults(bead?.metadata ?? null);
 }
 
 /** Resolve hierarchical config for one bead library entry. */

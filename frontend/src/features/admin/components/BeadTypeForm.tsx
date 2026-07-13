@@ -12,6 +12,7 @@ import { strandRenderMigrationApi } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 
 import { adminFieldClass } from "./admin-styles";
+import { AdminActiveInactiveStatusField } from "./AdminActiveInactiveStatusField";
 import { StrandRenderConfigPanel } from "./StrandRenderConfigPanel";
 
 interface BeadTypeFormProps {
@@ -99,14 +100,11 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
               onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })}
             />
           </div>
-          <label className="flex items-end gap-2 pb-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.isActive !== false}
-              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-            />
-            Active in builder
-          </label>
+          <AdminActiveInactiveStatusField
+            value={form.isActive}
+            onChange={(isActive) => setForm({ ...form, isActive })}
+            hint="Inactive types are hidden from the bracelet builder."
+          />
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -114,7 +112,7 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
             checked={form.enableSubTypes === true}
             onChange={(e) => setForm({ ...form, enableSubTypes: e.target.checked })}
           />
-          Enable sub-types in builder
+          Sub-type tabs in builder
         </label>
         {initial?.slug ? (
           <p className="font-mono text-[10px] text-muted-foreground">Slug: {initial.slug}</p>

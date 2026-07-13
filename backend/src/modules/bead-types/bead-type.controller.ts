@@ -4,14 +4,16 @@ import { asyncHandler } from "../../lib/async-handler.js";
 import { sendCreated, sendJson } from "../../lib/http-response.js";
 import { validateBody } from "../../lib/validation.js";
 import { beadTypeService } from "./bead-type.service.js";
+import { listForBuilderFromQuery } from "../../lib/catalogue-list-options.js";
 import {
   beadTypeIdParam,
   createBeadTypeDto,
   updateBeadTypeDto,
 } from "./bead-type.validation.js";
 
-async function list(_req: Request, res: Response): Promise<void> {
-  sendJson(res, await beadTypeService.list());
+async function list(req: Request, res: Response): Promise<void> {
+  const forBuilder = listForBuilderFromQuery(req);
+  sendJson(res, await beadTypeService.list({ forBuilder }));
 }
 
 async function retrieve(req: Request, res: Response): Promise<void> {

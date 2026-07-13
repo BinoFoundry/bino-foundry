@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback, memo } from "react";
+import { useMemo, useRef, useState, useCallback, memo, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search, X, Info, Gem } from "lucide-react";
 
@@ -14,7 +14,6 @@ import {
 import { BeadInfoButton } from "@/features/bracelet/components/BeadInfoButton";
 import { SubBeadTypeTabs } from "@/features/bracelet/components/SubBeadTypeTabs";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
-import { isBeadVisibleInBuilder } from "@/features/bracelet/unavailable-bead";
 import { useLibraryPanelWheelScroll } from "@/features/bracelet/hooks/use-library-panel-wheel-scroll";
 import { cn } from "@/lib/utils";
 import { BEAD_LIBRARY_DRAG_TYPE } from "@/features/bracelet/interaction";
@@ -33,6 +32,7 @@ import {
 } from "@/lib/bead-library-search";
 import { getBeadLibraryImageUrl, getBeadLibraryThumbnailStyle } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
+import { useBuilderCatalogue } from "@/state/catalogue/useBuilderCatalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
@@ -180,6 +180,7 @@ const BeadLibrary = ({
   compact = false,
 }: BeadLibraryProps) => {
   const cat = useCatalogue();
+  const builderCatalogue = useBuilderCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currency = siteSettings.currencyCode;
   const [search, setSearch] = useState("");
@@ -232,22 +233,36 @@ const BeadLibrary = ({
 
   const activeTypes = useMemo(
     () =>
-      [...cat.beadTypes]
-        .filter((t) => t.isActive !== false)
-        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
-    [cat.beadTypes],
+      [...builderCatalogue.beadTypes].sort(
+        (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
+      ),
+    [builderCatalogue.beadTypes],
   );
 
-  const currentBeadTypeId = activeBeadTypeId || activeTypes[0]?.id || "";
+  useEffect(() => {
+    if (!activeTypes.length) {
+      if (activeBeadTypeId) setActiveBeadTypeId("");
+      return;
+    }
+    if (!activeBeadTypeId || !builderCatalogue.activeTypeIds.has(activeBeadTypeId)) {
+      setActiveBeadTypeId(activeTypes[0]!.id);
+      setActiveSubBeadTypeId(SUB_BEAD_TYPE_ALL);
+    }
+  }, [activeTypes, activeBeadTypeId, builderCatalogue.activeTypeIds]);
+
+  const currentBeadTypeId =
+    activeBeadTypeId && builderCatalogue.activeTypeIds.has(activeBeadTypeId)
+      ? activeBeadTypeId
+      : activeTypes[0]?.id ?? "";
   const currentType = activeTypes.find((t) => t.id === currentBeadTypeId);
   const subTypesEnabled = currentType?.enableSubTypes === true;
 
   const activeSubTypes = useMemo(
     () =>
-      cat.subBeadTypes
-        .filter((s) => s.beadTypeId === currentBeadTypeId && s.isActive !== false)
+      builderCatalogue.subBeadTypes
+        .filter((s) => s.beadTypeId === currentBeadTypeId)
         .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
-    [cat.subBeadTypes, currentBeadTypeId],
+    [builderCatalogue.subBeadTypes, currentBeadTypeId],
   );
 
   const currentSubBeadTypeId =
@@ -266,24 +281,20 @@ const BeadLibrary = ({
     setActiveSubBeadTypeId(SUB_BEAD_TYPE_ALL);
   }, []);
 
-  const builderStatusByCode = useMemo(
-    () => new Map(cat.beadAvailabilityStatuses.map((s) => [s.code, { showInBuilder: s.showInBuilder }])),
-    [cat.beadAvailabilityStatuses],
-  );
-
   const beadsForType = useMemo(
-    () =>
-      cat.beadLibraries.filter(
-        (b) => b.beadTypeId === currentBeadTypeId && isBeadVisibleInBuilder(b, builderStatusByCode),
-      ),
-    [cat.beadLibraries, currentBeadTypeId, builderStatusByCode],
+    () => builderCatalogue.beadLibraries.filter((b) => b.beadTypeId === currentBeadTypeId),
+    [builderCatalogue.beadLibraries, currentBeadTypeId],
   );
 
   const searchIndex = useMemo(() => buildBeadSearchIndex(beadsForType), [beadsForType]);
 
   const filtered = useMemo(() => {
     return beadsForType.filter((b) => {
-      if (subTypesEnabled && currentSubBeadTypeId !== SUB_BEAD_TYPE_ALL && b.subBeadTypeId !== currentSubBeadTypeId) {
+      if (
+        subTypesEnabled &&
+        currentSubBeadTypeId !== SUB_BEAD_TYPE_ALL &&
+        b.subBeadTypeId !== currentSubBeadTypeId
+      ) {
         return false;
       }
       return beadMatchesSearchIndex(searchIndex, b.id, search);

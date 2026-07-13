@@ -15,6 +15,7 @@ import {
 import { resolveBeadCropConfig } from "./resolve-bead-crop-config";
 import {
   beadExportSilhouetteFillRatio,
+  deriveBeadVisualBoundsNorm,
   resolveBeadPhysicalMetrics,
   resolveBeadRenderFootprintPx,
   resolveBeadVisibleDiameterPx,
@@ -213,16 +214,25 @@ function resolveUniformStrandImageLayout(
   const renderResolution = config ? resolveBeadPhysicalMetrics(config) : null;
   const wrapperDiameter = Math.max(dimensions.width, dimensions.height);
 
+  const visualBounds = config ? deriveBeadVisualBoundsNorm(config) : null;
+  const boundsVisibleWidth = visualBounds
+    ? dimensions.width * visualBounds.width
+    : dimensions.width;
+  const boundsVisibleHeight = visualBounds
+    ? dimensions.height * visualBounds.height
+    : dimensions.height;
+  const boundsVisibleDiameter = Math.max(boundsVisibleWidth, boundsVisibleHeight);
+
   const fallback: UniformStrandImageLayout = {
     imageDimensions: dimensions,
     imageOffsetPx: { left: 0, top: 0 },
     imageRenderScale: 1,
     assetVisibleDiameterPx: canonicalVisibleDiameterPx(entry),
     renderResolution,
-    visibleContentWidthPx: dimensions.width,
-    visibleContentHeightPx: dimensions.height,
-    visibleContentDiameterPx: wrapperDiameter,
-    actualVisibleDiameterPx: wrapperDiameter,
+    visibleContentWidthPx: boundsVisibleWidth,
+    visibleContentHeightPx: boundsVisibleHeight,
+    visibleContentDiameterPx: boundsVisibleDiameter,
+    actualVisibleDiameterPx: boundsVisibleDiameter,
     exportFillRatio: null,
   };
 
@@ -406,4 +416,41 @@ export function resolveBeadSlotSizing(
     usesClipPath,
     squareFallbackReason,
   });
+}
+
+/**
+ * Tangential arc for neighbour spacing — visible silhouette along the strand,
+ * never PNG/processed canvas padding or the mm wrapper alone.
+ */
+export function getBeadStrandTangentContactPx(
+  sizing: Pick<
+    BeadSlotSizingResult,
+    | "dimensions"
+    | "visibleContentWidthPx"
+    | "visibleContentDiameterPx"
+    | "actualVisibleDiameterPx"
+    | "isRoundVisualBead"
+    | "exportFillRatio"
+  >,
+): number {
+  const wrapperTangent = sizing.dimensions.width;
+  const visible = sizing.isRoundVisualBead
+    ? sizing.actualVisibleDiameterPx ??
+      sizing.visibleContentDiameterPx ??
+      sizing.visibleContentWidthPx
+    : sizing.visibleContentWidthPx ??
+      sizing.actualVisibleDiameterPx ??
+      sizing.visibleContentDiameterPx;
+
+  let contactPx = wrapperTangent;
+  if (visible != null && visible > 0 && Number.isFinite(visible)) {
+    contactPx = Math.min(wrapperTangent, visible);
+  }
+
+  const fill = sizing.exportFillRatio;
+  if (fill != null && fill > 0 && fill < 1) {
+    contactPx = Math.min(contactPx, wrapperTangent * fill);
+  }
+
+  return contactPx;
 }

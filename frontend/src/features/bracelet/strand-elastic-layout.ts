@@ -44,6 +44,7 @@ export function adjacentIndexAngleDeltaRad(angles: number[], index: number): num
 /**
  * Contact-geometry packing — each bead occupies contactArcPx along the strand.
  * Junction spacing: prev.contact - prev.trailingOverlap + current.leadingOverlap.
+ * Remaining circumference (if any) stays at the loop closure only — never between neighbours.
  */
 function packContactArcLayout(
   contactArcPx: number[],
@@ -54,10 +55,7 @@ function packContactArcLayout(
   minGapPx: number,
 ): { angles: number[]; arcSpans: number[] } {
   const n = contactArcPx.length;
-  const netArc = netContactLoopArcPx(contactArcPx, leadingOverlapPx, trailingOverlapPx);
-  const minTotalGap = n * minGapPx;
-  const slack = Math.max(0, layoutCircumferencePx - netArc - minTotalGap);
-  const slackPerGap = n > 0 ? slack / n : 0;
+  const layoutCircumference = Math.max(layoutCircumferencePx, 1e-6);
 
   let cursorPx = 0;
   const angles: number[] = [];
@@ -70,10 +68,10 @@ function packContactArcLayout(
     }
     const centerPx = cursorPx + arcPx / 2;
     angles.push(
-      normalizeAngleRad(startAngle + (centerPx / layoutCircumferencePx) * 2 * Math.PI),
+      normalizeAngleRad(startAngle + (centerPx / layoutCircumference) * 2 * Math.PI),
     );
-    arcSpans.push((arcPx / layoutCircumferencePx) * 2 * Math.PI);
-    cursorPx += arcPx + minGapPx + slackPerGap;
+    arcSpans.push((arcPx / layoutCircumference) * 2 * Math.PI);
+    cursorPx += arcPx + minGapPx;
   }
 
   return { angles, arcSpans };
@@ -81,7 +79,7 @@ function packContactArcLayout(
 
 /**
  * Sequential arc-length packing — bead i+1 follows bead i around the ring.
- * Distributes any slack evenly between adjacent pairs for a continuous strand.
+ * Neighbours are edge-to-edge; any spare circumference remains at the loop closure.
  */
 function packSequentialArcLayout(
   beadArcMm: number[],
@@ -90,10 +88,7 @@ function packSequentialArcLayout(
   minGapPx: number,
 ): { angles: number[]; arcSpans: number[] } {
   const n = beadArcMm.length;
-  const totalBeadMm = beadArcMm.reduce((sum, mm) => sum + mm, 0);
-  const minTotalGap = n * minGapPx;
-  const slack = Math.max(0, layoutCircumferenceMm - totalBeadMm - minTotalGap);
-  const slackPerGap = n > 0 ? slack / n : 0;
+  const layoutCircumference = Math.max(layoutCircumferenceMm, 1e-6);
 
   let cursorMm = 0;
   const angles: number[] = [];
@@ -103,10 +98,10 @@ function packSequentialArcLayout(
     const mm = beadArcMm[i]!;
     const centerMm = cursorMm + mm / 2;
     angles.push(
-      normalizeAngleRad(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI),
+      normalizeAngleRad(startAngle + (centerMm / layoutCircumference) * 2 * Math.PI),
     );
-    arcSpans.push((mm / layoutCircumferenceMm) * 2 * Math.PI);
-    cursorMm += mm + minGapPx + slackPerGap;
+    arcSpans.push((mm / layoutCircumference) * 2 * Math.PI);
+    cursorMm += mm + minGapPx;
   }
 
   return { angles, arcSpans };

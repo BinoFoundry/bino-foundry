@@ -18,8 +18,9 @@ function serializeLibraryBody(payload: Partial<BeadLibraryEntry>): Record<string
 }
 
 export const beadsApi = {
-  listTypes(): Promise<BeadTypeEntry[]> {
-    return apiRequest<BeadTypeEntry[]>("/bead-types");
+  listTypes(forBuilder = false): Promise<BeadTypeEntry[]> {
+    const query = forBuilder ? "?forBuilder=1" : "";
+    return apiRequest<BeadTypeEntry[]>(`/bead-types${query}`);
   },
 
   getType(id: string): Promise<BeadTypeEntry> {
@@ -30,6 +31,7 @@ export const beadsApi = {
     payload: Pick<BeadTypeEntry, "name" | "description"> & {
       displayOrder?: number;
       isActive?: boolean;
+      enableSubTypes?: boolean;
       metadata?: BeadTypeEntry["metadata"];
     },
   ): Promise<BeadTypeEntry> {
@@ -44,8 +46,9 @@ export const beadsApi = {
     return apiRequest<{ message: string }>(`/bead-types/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
-  listLibraries(): Promise<BeadLibraryEntry[]> {
-    return apiRequest<BeadLibraryEntry[]>("/bead-libraries");
+  listLibraries(forBuilder = false): Promise<BeadLibraryEntry[]> {
+    const query = forBuilder ? "?forBuilder=1" : "";
+    return apiRequest<BeadLibraryEntry[]>(`/bead-libraries${query}`);
   },
 
   getLibrary(publicId: string): Promise<BeadLibraryEntry> {

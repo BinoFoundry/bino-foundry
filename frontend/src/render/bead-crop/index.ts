@@ -18,6 +18,7 @@ export {
 export {
   isRoundVisualBeadType,
   resolveBeadSlotSizing,
+  getBeadStrandTangentContactPx,
   type BeadClipBoundsPx,
   type BeadRenderSizingPath,
   type BeadSlotSizingCatalogueContext,

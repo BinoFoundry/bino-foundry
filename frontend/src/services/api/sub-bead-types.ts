@@ -3,9 +3,12 @@ import type { SubBeadTypeEntry } from "@/types/beads";
 import { apiRequest } from "./client";
 
 export const subBeadTypesApi = {
-  list(beadTypeId?: string): Promise<SubBeadTypeEntry[]> {
-    const query = beadTypeId ? `?beadTypeId=${encodeURIComponent(beadTypeId)}` : "";
-    return apiRequest<SubBeadTypeEntry[]>(`/sub-bead-types${query}`);
+  list(beadTypeId?: string, forBuilder = false): Promise<SubBeadTypeEntry[]> {
+    const params = new URLSearchParams();
+    if (beadTypeId) params.set("beadTypeId", beadTypeId);
+    if (forBuilder) params.set("forBuilder", "1");
+    const query = params.toString();
+    return apiRequest<SubBeadTypeEntry[]>(`/sub-bead-types${query ? `?${query}` : ""}`);
   },
 
   get(id: string): Promise<SubBeadTypeEntry> {

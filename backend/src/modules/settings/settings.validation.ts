@@ -3,6 +3,8 @@ import {
   BEAD_RENDER_CALIBRATION_FACTOR_MAX,
   BEAD_RENDER_CALIBRATION_FACTOR_MIN,
   DEFAULT_SITE_GENERAL_SETTINGS,
+  STRAND_CONTACT_SPACING_MAX,
+  STRAND_CONTACT_SPACING_MIN,
   clampBeadRenderCalibrationFactor,
 } from "@bino-foundry/shared/types";
 import { z } from "zod";
@@ -20,7 +22,14 @@ export const siteGeneralSettingsDto = z.object({
 export const strandRenderDefaultsDto = z.object({
   attachmentStyle: z.enum(["inline", "betweenItems"]),
   strandOccupancy: z.number().min(0.05).max(2),
-  contactWidth: z.number().min(0.02).max(2),
+  contactWidth: z.number().min(STRAND_CONTACT_SPACING_MIN).max(STRAND_CONTACT_SPACING_MAX),
+  layoutMode: z.enum(["inline", "dangling"]).default("inline"),
+  contactOffset: z.number().min(STRAND_CONTACT_SPACING_MIN).max(STRAND_CONTACT_SPACING_MAX).default(0),
+  spacingAdjustment: z
+    .number()
+    .min(STRAND_CONTACT_SPACING_MIN)
+    .max(STRAND_CONTACT_SPACING_MAX)
+    .default(0),
   leadingOverlap: z.number().min(0).max(0.5),
   trailingOverlap: z.number().min(0).max(0.5),
   hangOffset: z.number().min(-1).max(1),

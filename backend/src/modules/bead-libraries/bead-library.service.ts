@@ -83,16 +83,39 @@ function mapBeadLibraryRow(
 }
 
 export class BeadLibraryService {
-  async list(): Promise<unknown[]> {
+  async list(options?: { forBuilder?: boolean }): Promise<unknown[]> {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
       .from("bead_libraries")
-      .select("*, bead_types(slug, name), sub_bead_types(slug, name, bead_type_id)")
+      .select("*, bead_types(slug, name, is_active), sub_bead_types(slug, name, bead_type_id, is_active)")
       .order("display_order", { ascending: true })
       .order("public_id", { ascending: true });
 
     assertNoDbError(error);
-    const rows = (data ?? []) as Record<string, unknown>[];
+    let rows = (data ?? []) as Record<string, unknown>[];
+
+    if (options?.forBuilder) {
+      const statuses = await beadAvailabilityStatusService.list();
+      const showInBuilderByCode = new Map(
+        statuses.map((status) => [status.code, status.showInBuilder === true]),
+      );
+
+      rows = rows.filter((row) => {
+        if (row.is_active === false) return false;
+
+        const beadType = row.bead_types as { is_active?: boolean } | null | undefined;
+        if (beadType?.is_active === false) return false;
+
+        const subBeadType = row.sub_bead_types as { is_active?: boolean } | null | undefined;
+        if (row.sub_bead_type_id && subBeadType?.is_active === false) return false;
+
+        const code = String(row.availability_status_code ?? "ACTIVE");
+        const showInBuilder = showInBuilderByCode.get(code);
+        if (showInBuilder !== undefined) return showInBuilder;
+        return true;
+      });
+    }
+
     const internalIds = rows.map((row) => String(row.id));
     const tagsByLibraryId = await tagService.tagsByBeadLibraryIds(internalIds);
 

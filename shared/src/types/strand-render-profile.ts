@@ -14,6 +14,9 @@ export type StrandAnchorPreset = "center" | "loop" | "top" | "bottom";
 /** How the asset attaches to the strand layout. */
 export type StrandAttachmentStyle = "inline" | "betweenItems";
 
+/** Whether spacing uses full slot width (inline) or attachment point only (dangling). */
+export type StrandLayoutMode = "inline" | "dangling";
+
 /**
  * Data-driven strand rendering behaviour for a bead type or library override.
  * The renderer reads these values only — never asset category slugs.
@@ -24,10 +27,19 @@ export interface StrandRenderProfile {
   /** Fraction of tangent width occupied on the strand (1 = one bead width). @deprecated Use contactWidth */
   strandOccupancy: number;
   /**
-   * Tangential contact width as a fraction of the mm slot width.
-   * Layout spacing uses this — not bitmap dimensions.
+   * Tangential contact width as a fraction of the mm slot width (1 = full bead width).
+   * Layout spacing uses this — not bitmap dimensions. Slight negatives are allowed for tuning.
    */
   contactWidth: number;
+  /** Inline beads use full slot contact; dangling charms use attachment-point width only. */
+  layoutMode: StrandLayoutMode;
+  /**
+   * Fine spacing adjustment (fraction of slot width).
+   * Negative pulls neighbours closer; positive adds slack.
+   */
+  contactOffset: number;
+  /** @deprecated Prefer contactOffset — summed into effective contact width. */
+  spacingAdjustment: number;
   /** Overlap with the previous neighbour along the strand (fraction of slot width). */
   leadingOverlap: number;
   /** Overlap with the next neighbour along the strand (fraction of slot width). */
@@ -65,10 +77,34 @@ export interface StrandRenderProfile {
   preferStrandImageUrl: boolean;
 }
 
+/** Symmetrical stored range for contact width + adjustment (-max … +max). */
+export const STRAND_CONTACT_SPACING_MAX = 2;
+export const STRAND_CONTACT_SPACING_MIN = -STRAND_CONTACT_SPACING_MAX;
+
+/** @deprecated Use STRAND_CONTACT_SPACING_MIN / STRAND_CONTACT_SPACING_MAX */
+export const STRAND_CONTACT_WIDTH_MIN = STRAND_CONTACT_SPACING_MIN;
+/** @deprecated Use STRAND_CONTACT_SPACING_MIN / STRAND_CONTACT_SPACING_MAX */
+export const STRAND_CONTACT_WIDTH_MAX = STRAND_CONTACT_SPACING_MAX;
+/** @deprecated Use STRAND_CONTACT_SPACING_MIN / STRAND_CONTACT_SPACING_MAX */
+export const STRAND_CONTACT_ADJUSTMENT_MIN = STRAND_CONTACT_SPACING_MIN;
+/** @deprecated Use STRAND_CONTACT_SPACING_MIN / STRAND_CONTACT_SPACING_MAX */
+export const STRAND_CONTACT_ADJUSTMENT_MAX = STRAND_CONTACT_SPACING_MAX;
+
+/** Minimum allowed value when maximum is `absMax` (always `-absMax`). */
+export function strandContactSpacingMin(absMax = STRAND_CONTACT_SPACING_MAX): number {
+  return -absMax;
+}
+
+/** Renderer floor — legacy constant; effective contact width may reach 0 at layout time. */
+export const STRAND_EFFECTIVE_CONTACT_WIDTH_MIN = 0;
+
 export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
   attachmentStyle: "inline",
   strandOccupancy: 1,
   contactWidth: 1,
+  layoutMode: "inline",
+  contactOffset: 0,
+  spacingAdjustment: 0,
   leadingOverlap: 0,
   trailingOverlap: 0,
   hangOffset: 0,
@@ -119,9 +155,10 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
   },
   charm: {
     strandOccupancy: 1,
-    contactWidth: 0.1,
-    leadingOverlap: 0.02,
-    trailingOverlap: 0.02,
+    layoutMode: "dangling",
+    contactWidth: 0.08,
+    leadingOverlap: 0.03,
+    trailingOverlap: 0.03,
     anchorPreset: "loop",
     anchorX: 0.5,
     anchorY: 0.08,
@@ -133,20 +170,22 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     forceRoundFootprint: false,
   },
   spacer: {
-    strandOccupancy: 0.38,
-    contactWidth: 0.16,
-    leadingOverlap: 0.05,
-    trailingOverlap: 0.05,
+    strandOccupancy: 1,
+    layoutMode: "inline",
+    contactWidth: 1,
+    leadingOverlap: 0.02,
+    trailingOverlap: 0.02,
     anchorPreset: "center",
     orientationMode: "outward",
     forceRoundFootprint: false,
     visualScale: 1,
   },
   separator: {
-    strandOccupancy: 0.38,
-    contactWidth: 0.16,
-    leadingOverlap: 0.05,
-    trailingOverlap: 0.05,
+    strandOccupancy: 1,
+    layoutMode: "inline",
+    contactWidth: 1,
+    leadingOverlap: 0.02,
+    trailingOverlap: 0.02,
     anchorPreset: "center",
     orientationMode: "outward",
     forceRoundFootprint: false,
@@ -163,6 +202,37 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     preferStrandImageUrl: true,
   },
 };
+
+function clampContactSpacingStored(value: number): number {
+  return Math.max(
+    STRAND_CONTACT_SPACING_MIN,
+    Math.min(STRAND_CONTACT_SPACING_MAX, value),
+  );
+}
+
+/**
+ * Convert stored contactWidth to an additive tuning delta on natural touch (1 = neutral span).
+ * Legacy DB seeds use occupancy (1 = full visible tangent; charms use 0.08, etc.).
+ * Admin tuning uses 0 = neutral, negative = tighter, positive = looser.
+ */
+export function contactWidthStoredToTuningDelta(stored: number): number {
+  if (Math.abs(stored - 1) < 0.001) return 0;
+  if (stored > 0 && stored <= 2) return stored - 1;
+  return stored;
+}
+
+/**
+ * Span multiplier applied to visible tangent contact (natural touch at 1.0).
+ * Order: natural touch → contact width tuning → contact adjustment → spacing adjustment.
+ */
+export function effectiveStrandContactWidth(
+  profile: Pick<StrandRenderProfile, "contactWidth" | "contactOffset" | "spacingAdjustment">,
+): number {
+  const widthDelta = contactWidthStoredToTuningDelta(profile.contactWidth);
+  const tuning = widthDelta + profile.contactOffset + profile.spacingAdjustment;
+  const span = 1 + tuning;
+  return Math.max(0, Math.min(STRAND_CONTACT_SPACING_MAX, span));
+}
 
 export function anchorCoordsForPreset(preset: StrandAnchorPreset): { anchorX: number; anchorY: number } {
   switch (preset) {
@@ -192,7 +262,12 @@ export function mergeStrandRenderProfile(
     merged.anchorY = coords.anchorY;
   }
   merged.strandOccupancy = Math.max(0.05, Math.min(2, merged.strandOccupancy));
-  merged.contactWidth = Math.max(0.02, Math.min(2, merged.contactWidth));
+  merged.contactWidth = clampContactSpacingStored(merged.contactWidth);
+  merged.contactOffset = clampContactSpacingStored(merged.contactOffset);
+  merged.spacingAdjustment = clampContactSpacingStored(merged.spacingAdjustment);
+  if (merged.layoutMode !== "inline" && merged.layoutMode !== "dangling") {
+    merged.layoutMode = "inline";
+  }
   merged.leadingOverlap = Math.max(0, Math.min(0.5, merged.leadingOverlap));
   merged.trailingOverlap = Math.max(0, Math.min(0.5, merged.trailingOverlap));
   merged.hangOffset = Math.max(-1, Math.min(1, merged.hangOffset));
@@ -207,6 +282,11 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   const partial: Partial<StrandRenderProfile> = {};
   if (typeof o.strandOccupancy === "number") partial.strandOccupancy = o.strandOccupancy;
   if (typeof o.contactWidth === "number") partial.contactWidth = o.contactWidth;
+  if (o.layoutMode === "inline" || o.layoutMode === "dangling") {
+    partial.layoutMode = o.layoutMode;
+  }
+  if (typeof o.contactOffset === "number") partial.contactOffset = o.contactOffset;
+  if (typeof o.spacingAdjustment === "number") partial.spacingAdjustment = o.spacingAdjustment;
   if (typeof o.leadingOverlap === "number") partial.leadingOverlap = o.leadingOverlap;
   if (typeof o.trailingOverlap === "number") partial.trailingOverlap = o.trailingOverlap;
   if (typeof o.hangOffset === "number") partial.hangOffset = o.hangOffset;

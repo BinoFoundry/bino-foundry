@@ -4,6 +4,7 @@ import { asyncHandler } from "../../lib/async-handler.js";
 import { sendCreated, sendJson } from "../../lib/http-response.js";
 import { validateBody } from "../../lib/validation.js";
 import { subBeadTypeService } from "./sub-bead-type.service.js";
+import { listForBuilderFromQuery } from "../../lib/catalogue-list-options.js";
 import {
   createSubBeadTypeDto,
   subBeadTypeIdParam,
@@ -12,7 +13,8 @@ import {
 
 async function list(req: Request, res: Response): Promise<void> {
   const beadTypeId = typeof req.query.beadTypeId === "string" ? req.query.beadTypeId : undefined;
-  sendJson(res, await subBeadTypeService.list(beadTypeId));
+  const forBuilder = listForBuilderFromQuery(req);
+  sendJson(res, await subBeadTypeService.list(beadTypeId, { forBuilder }));
 }
 
 async function retrieve(req: Request, res: Response): Promise<void> {

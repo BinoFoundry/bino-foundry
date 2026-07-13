@@ -24,7 +24,7 @@ function mapSubBeadTypeRow(row: Record<string, unknown>): Record<string, unknown
     name: row.name,
     description: row.description ?? "",
     displayOrder: row.display_order,
-    isActive: row.is_active,
+    isActive: row.is_active !== false,
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -77,11 +77,11 @@ function normalizeMetadataForSave(
 }
 
 export class SubBeadTypeService {
-  async list(beadTypeId?: string): Promise<unknown[]> {
+  async list(beadTypeId?: string, options?: { forBuilder?: boolean }): Promise<unknown[]> {
     const supabase = getSupabaseServiceRole();
     let query = supabase
       .from("sub_bead_types")
-      .select("*, bead_types(slug, name)")
+      .select("*, bead_types(slug, name, is_active)")
       .order("display_order", { ascending: true })
       .order("name", { ascending: true });
 
@@ -89,9 +89,21 @@ export class SubBeadTypeService {
       query = query.eq("bead_type_id", beadTypeId);
     }
 
+    if (options?.forBuilder) {
+      query = query.eq("is_active", true);
+    }
+
     const { data, error } = await query;
     assertNoDbError(error);
-    return (data ?? []).map((row) => mapSubBeadTypeRow(row as Record<string, unknown>));
+    return (data ?? [])
+      .filter((row) => {
+        if (!options?.forBuilder) return true;
+        const typed = row as Record<string, unknown>;
+        if (typed.is_active === false) return false;
+        const beadType = typed.bead_types as { is_active?: boolean } | null | undefined;
+        return beadType?.is_active !== false;
+      })
+      .map((row) => mapSubBeadTypeRow(row as Record<string, unknown>));
   }
 
   async get(recordId: string): Promise<unknown> {

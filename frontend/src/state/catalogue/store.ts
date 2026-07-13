@@ -10,12 +10,17 @@ import type { HowWePrepareOption, StrandRenderProfile } from "@bino-foundry/shar
 export const CATALOGUE_STORAGE_KEY = "bino_catalogue_v8";
 
 export interface CatalogueStore {
+  /** Full taxonomy — includes inactive rows (admin). */
   beadTypes: BeadTypeEntry[];
   subBeadTypes: SubBeadTypeEntry[];
+  beadLibraries: BeadLibraryEntry[];
+  /** Builder-visible taxonomy — API filtered (`?forBuilder=1`). */
+  builderBeadTypes: BeadTypeEntry[];
+  builderSubBeadTypes: SubBeadTypeEntry[];
+  builderBeadLibraries: BeadLibraryEntry[];
   beadSizes: BeadSizeEntry[];
   wristSizes: WristSizeEntry[];
   beadLibrarySizes: BeadLibrarySizeOffer[];
-  beadLibraries: BeadLibraryEntry[];
   catalogAvailabilityStatuses: CatalogAvailabilityStatus[];
   /** @deprecated Use catalogAvailabilityStatuses */
   beadAvailabilityStatuses: CatalogAvailabilityStatus[];
@@ -37,10 +42,13 @@ export function createInitialCatalogueStore(): CatalogueStore {
   return {
     beadTypes: [],
     subBeadTypes: [],
+    beadLibraries: [],
+    builderBeadTypes: [],
+    builderSubBeadTypes: [],
+    builderBeadLibraries: [],
     beadSizes: [],
     wristSizes: [],
     beadLibrarySizes: [],
-    beadLibraries: [],
     catalogAvailabilityStatuses: [],
     beadAvailabilityStatuses: [],
     frames: [],

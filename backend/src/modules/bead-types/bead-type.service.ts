@@ -15,7 +15,7 @@ function mapBeadTypeRow(row: Record<string, unknown>): Record<string, unknown> {
     name: row.name,
     description: row.description ?? "",
     displayOrder: row.display_order,
-    isActive: row.is_active,
+    isActive: row.is_active !== false,
     enableSubTypes: row.enable_sub_types,
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
@@ -36,13 +36,19 @@ async function allocateSlug(label: string): Promise<string> {
 }
 
 export class BeadTypeService {
-  async list(): Promise<unknown[]> {
+  async list(options?: { forBuilder?: boolean }): Promise<unknown[]> {
     const supabase = getSupabaseServiceRole();
-    const { data, error } = await supabase
+    let query = supabase
       .from("bead_types")
       .select("*")
       .order("display_order", { ascending: true })
       .order("name", { ascending: true });
+
+    if (options?.forBuilder) {
+      query = query.eq("is_active", true);
+    }
+
+    const { data, error } = await query;
 
     assertNoDbError(error);
     return (data ?? []).map((row) => mapBeadTypeRow(row as Record<string, unknown>));

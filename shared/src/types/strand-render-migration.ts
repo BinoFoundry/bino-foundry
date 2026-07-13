@@ -177,7 +177,7 @@ export function mergeLazyStrandRenderOverride(
   patch: Partial<StrandRenderProfile>,
   inherited: StrandRenderProfile,
 ): Partial<StrandRenderProfile> {
-  const merged = mergeStrandRenderProfile(currentOverride, patch);
+  const merged: Partial<StrandRenderProfile> = { ...(currentOverride ?? {}), ...patch };
   return pruneStrandRenderOverride(merged, inherited);
 }
 

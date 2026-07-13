@@ -20,7 +20,10 @@ import { useAdminList } from "../../hooks/useAdminList";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 
 const PRICE_TYPES: HowWePreparePriceType[] = ["fixed", "per_bracelet", "per_quantity"];
-const STATUSES: HowWePrepareStatus[] = ["active", "inactive"];
+const STATUSES: { value: HowWePrepareStatus; label: string }[] = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
 
 function slugifyName(name: string): string {
   return name
@@ -316,8 +319,8 @@ function HowWePrepareForm({
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           >
             {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
+              <option key={s.value} value={s.value}>
+                {s.label}
               </option>
             ))}
           </select>

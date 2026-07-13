@@ -49,6 +49,17 @@ function removeById<T extends { id: string }>(list: T[], id: string): T[] {
   return list.filter((x) => x.id !== id);
 }
 
+async function fetchBuilderCatalogueFromApi(): Promise<
+  Pick<CatalogueStore, "builderBeadTypes" | "builderSubBeadTypes" | "builderBeadLibraries">
+> {
+  const [builderBeadTypes, builderSubBeadTypes, builderBeadLibraries] = await Promise.all([
+    beadsApi.listTypes(true),
+    subBeadTypesApi.list(undefined, true),
+    beadsApi.listLibraries(true),
+  ]);
+  return { builderBeadTypes, builderSubBeadTypes, builderBeadLibraries };
+}
+
 export interface CatalogueActions {
   addBeadLibrary: (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => Promise<BeadLibraryEntry>;
   updateBeadLibrary: (entry: BeadLibraryEntry) => Promise<BeadLibraryEntry>;
@@ -71,6 +82,7 @@ export interface CatalogueActions {
     entry: Pick<BeadTypeEntry, "name" | "description"> & {
       displayOrder?: number;
       isActive?: boolean;
+      enableSubTypes?: boolean;
       metadata?: BeadTypeEntry["metadata"];
     },
   ) => Promise<BeadTypeEntry>;
@@ -131,8 +143,21 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     setIsHydrating(true);
     setHydrateError(null);
     try {
-      const [frames, beadTypes, subBeadTypes, beadSizes, wristSizes, beadLibrarySizes, beadLibraries, catalogAvailabilityStatuses, strandRenderDefaults, generalSettings, howWePrepareOptions, beadTags] =
-        await Promise.all([
+      const [
+        frames,
+        beadTypes,
+        subBeadTypes,
+        beadSizes,
+        wristSizes,
+        beadLibrarySizes,
+        beadLibraries,
+        catalogAvailabilityStatuses,
+        strandRenderDefaults,
+        generalSettings,
+        howWePrepareOptions,
+        beadTags,
+        builderCatalogue,
+      ] = await Promise.all([
         catalogueApi.listFrames(),
         beadsApi.listTypes(),
         subBeadTypesApi.list(),
@@ -145,6 +170,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         settingsApi.getGeneralSettings(),
         howWePrepareApi.list(),
         tagsApi.list().catch(() => []),
+        fetchBuilderCatalogueFromApi(),
       ]);
       syncBeadRenderCalibrationFromSettings(generalSettings);
       const next: CatalogueStore = {
@@ -155,6 +181,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         wristSizes,
         beadLibrarySizes,
         beadLibraries,
+        ...builderCatalogue,
         catalogAvailabilityStatuses,
         beadAvailabilityStatuses: catalogAvailabilityStatuses,
         strandRenderDefaults,
@@ -196,6 +223,11 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const refreshBuilderCatalogue = useCallback(async () => {
+    const builderCatalogue = await fetchBuilderCatalogueFromApi();
+    mergeStore((prev) => ({ ...prev, ...builderCatalogue }));
+  }, [mergeStore]);
+
   const addBeadLibrary = useCallback(
     async (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => {
       const created = await beadsApi.createLibrary(entry, sizes);
@@ -208,9 +240,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
           ...librarySizes,
         ],
       }));
+      void refreshBuilderCatalogue();
       return created;
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const updateBeadLibrary = useCallback(
@@ -220,9 +253,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         ...prev,
         beadLibraries: replaceById(prev.beadLibraries, updated),
       }));
+      void refreshBuilderCatalogue();
       return updated;
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const patchBeadLibrarySizes = useCallback(
@@ -285,9 +319,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         });
       }
 
+      void refreshBuilderCatalogue();
       return result.library;
     },
-    [mergeStore, patchBeadLibrarySizes],
+    [mergeStore, patchBeadLibrarySizes, refreshBuilderCatalogue],
   );
 
   const updateBeadCrop = useCallback(
@@ -297,8 +332,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         ...prev,
         beadLibraries: replaceById(prev.beadLibraries, updated),
       }));
+      void refreshBuilderCatalogue();
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const deleteBeadLibrary = useCallback(
@@ -310,8 +346,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         beadLibraries: removeById(prev.beadLibraries, id),
         beadLibrarySizes: librarySizes,
       }));
+      void refreshBuilderCatalogue();
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const getBeadLibraryReferences = useCallback(async (id: string) => {
@@ -326,8 +363,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       beadSizesApi.list(true),
     ]);
     mergeStore((prev) => ({ ...prev, beadLibraries, beadLibrarySizes, beadSizes }));
+    void refreshBuilderCatalogue();
     return result;
-  }, [mergeStore]);
+  }, [mergeStore, refreshBuilderCatalogue]);
 
   const recalculateMmGroupReferences = useCallback(async () => {
     const result = await beadSizesApi.recalculateMmGroupReferences();
@@ -352,6 +390,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       entry: Pick<BeadTypeEntry, "name" | "description"> & {
         displayOrder?: number;
         isActive?: boolean;
+        enableSubTypes?: boolean;
         metadata?: BeadTypeEntry["metadata"];
       },
     ) => {
@@ -362,9 +401,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         beadTypes: replaceById(prev.beadTypes, created),
         subBeadTypes,
       }));
+      void refreshBuilderCatalogue();
       return created;
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const updateBeadType = useCallback(
@@ -374,9 +414,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         ...prev,
         beadTypes: replaceById(prev.beadTypes, updated),
       }));
+      void refreshBuilderCatalogue();
       return updated;
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const updateStrandRenderDefaults = useCallback(
@@ -396,8 +437,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         beadTypes: removeById(prev.beadTypes, id),
         subBeadTypes: prev.subBeadTypes.filter((s) => s.beadTypeId !== id),
       }));
+      void refreshBuilderCatalogue();
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const addSubBeadType = useCallback(
@@ -413,9 +455,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         ...prev,
         subBeadTypes: replaceById(prev.subBeadTypes, created),
       }));
+      void refreshBuilderCatalogue();
       return created;
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const updateSubBeadType = useCallback(
@@ -425,9 +468,10 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         ...prev,
         subBeadTypes: replaceById(prev.subBeadTypes, updated),
       }));
+      void refreshBuilderCatalogue();
       return updated;
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const deleteSubBeadType = useCallback(
@@ -437,8 +481,9 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         ...prev,
         subBeadTypes: removeById(prev.subBeadTypes, id),
       }));
+      void refreshBuilderCatalogue();
     },
-    [mergeStore],
+    [mergeStore, refreshBuilderCatalogue],
   );
 
   const addBeadSize = useCallback(

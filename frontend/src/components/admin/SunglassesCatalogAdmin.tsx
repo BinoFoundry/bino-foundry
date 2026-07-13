@@ -3,6 +3,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { DEFAULT_LENS_TINT_RENDER } from "@bino-foundry/shared/types";
 
 import { AdminDeleteConfirm } from "@/features/admin/components/AdminDeleteConfirm";
+import { AdminActiveInactiveStatusField } from "@/features/admin/components/AdminActiveInactiveStatusField";
 import { adminFieldClass } from "@/features/admin/components/admin-styles";
 import {
   isValidHexColor,
@@ -642,20 +643,12 @@ function TintEditor({
                   onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })}
                 />
               </AdminFormField>
-              <label className="flex items-start gap-2 self-end rounded-lg border border-border/60 px-3 py-2.5 text-sm sm:col-span-2">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={form.isActive}
-                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                />
-                <span>
-                  <span className="block font-medium text-foreground">Active in customiser</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Uncheck to hide from the public builder.
-                  </span>
-                </span>
-              </label>
+              <AdminActiveInactiveStatusField
+                className="sm:col-span-2"
+                value={form.isActive}
+                onChange={(isActive) => setForm({ ...form, isActive })}
+                hint="Inactive lens types are hidden from the sunglasses builder."
+              />
             </div>
           </EditorSection>
         </div>
@@ -796,20 +789,11 @@ function OptionEditor({
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 rounded-lg border border-border/60 px-3 py-2.5 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={form.isActive}
-              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-            />
-            <span>
-              <span className="block font-medium text-foreground">Active in customiser</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                Uncheck to hide this add-on from the public sunglasses builder.
-              </span>
-            </span>
-          </label>
+          <AdminActiveInactiveStatusField
+            value={form.isActive}
+            onChange={(isActive) => setForm({ ...form, isActive })}
+            hint="Inactive options are hidden from the sunglasses builder."
+          />
         </div>
       </div>
       <div className="flex justify-end gap-2">

@@ -4,6 +4,7 @@ import { asyncHandler } from "../../lib/async-handler.js";
 import { sendCreated, sendJson } from "../../lib/http-response.js";
 import { validateBody } from "../../lib/validation.js";
 import { beadLibraryService } from "./bead-library.service.js";
+import { listForBuilderFromQuery } from "../../lib/catalogue-list-options.js";
 import {
   beadLibraryCompleteSaveSchema,
   beadLibraryCropDto,
@@ -12,8 +13,9 @@ import {
   updateBeadLibraryDto,
 } from "./bead-library.validation.js";
 
-async function list(_req: Request, res: Response): Promise<void> {
-  sendJson(res, await beadLibraryService.list());
+async function list(req: Request, res: Response): Promise<void> {
+  const forBuilder = listForBuilderFromQuery(req);
+  sendJson(res, await beadLibraryService.list({ forBuilder }));
 }
 
 async function retrieve(req: Request, res: Response): Promise<void> {

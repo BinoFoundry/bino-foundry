@@ -15,10 +15,11 @@ describe("strand render profile", () => {
     expect(profile.provenance.orientationMode).toBe("beadType");
   });
 
-  it("applies spacer occupancy from bead type defaults", () => {
+  it("applies spacer contact width from bead type defaults", () => {
     const profile = resolveStrandRenderConfigForType("spacer", TEST_STRAND_RENDER_CATALOGUE);
-    expect(profile.strandOccupancy).toBeCloseTo(0.38, 2);
-    expect(profile.provenance.strandOccupancy).toBe("beadType");
+    expect(profile.contactWidth).toBeCloseTo(1, 2);
+    expect(profile.layoutMode).toBe("inline");
+    expect(profile.provenance.contactWidth).toBe("beadType");
   });
 
   it("merges library override over type defaults when not inheriting", () => {
@@ -51,6 +52,78 @@ describe("strand render profile", () => {
     expect(profile.visualScale).toBe(1.05);
     expect(profile.provenance.visualScale).toBe("beadOverride");
     expect(profile.provenance.orientationMode).toBe("system");
+  });
+
+  it("inherits bead type contact spacing when library override is empty", () => {
+    const profile = resolveStrandRenderConfigForBead(
+      {
+        id: "crystal-1",
+        name: "Crystal",
+        image: "",
+        beadTypeId: "type-crystal",
+        beadTypeSlug: "crystal",
+        description: "",
+        metadata: {
+          useTypeStrandDefaults: false,
+          strandRenderOverride: {},
+        },
+      },
+      {
+        ...TEST_STRAND_RENDER_CATALOGUE,
+        beadTypes: [
+          {
+            id: "type-crystal",
+            slug: "crystal",
+            name: "Crystal",
+            description: "",
+            metadata: {
+              strandRender: {
+                contactWidth: 1,
+                contactOffset: -0.15,
+              },
+            },
+          },
+        ],
+      },
+    );
+    expect(profile.contactOffset).toBeCloseTo(-0.15, 5);
+    expect(profile.provenance.contactOffset).toBe("beadType");
+  });
+
+  it("applies library override contact spacing when override differs from type", () => {
+    const profile = resolveStrandRenderConfigForBead(
+      {
+        id: "crystal-1",
+        name: "Crystal",
+        image: "",
+        beadTypeId: "type-crystal",
+        beadTypeSlug: "crystal",
+        description: "",
+        metadata: {
+          useTypeStrandDefaults: false,
+          strandRenderOverride: { contactOffset: 0 },
+        },
+      },
+      {
+        ...TEST_STRAND_RENDER_CATALOGUE,
+        beadTypes: [
+          {
+            id: "type-crystal",
+            slug: "crystal",
+            name: "Crystal",
+            description: "",
+            metadata: {
+              strandRender: {
+                contactWidth: 1,
+                contactOffset: -0.15,
+              },
+            },
+          },
+        ],
+      },
+    );
+    expect(profile.contactOffset).toBe(0);
+    expect(profile.provenance.contactOffset).toBe("beadOverride");
   });
 
   it("ignores bead override when inheriting type defaults", () => {

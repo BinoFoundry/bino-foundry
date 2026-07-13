@@ -23,6 +23,19 @@ describe("computeElasticBeadLayout", () => {
     expect(dense.gapMm).toBe(0);
   });
 
+  it("does not distribute spare circumference as gaps between neighbours", () => {
+    const layout = computeElasticBeadLayout(
+      [20, 20],
+      200,
+      0,
+      0,
+      { leadingPx: [0, 0], trailingPx: [0, 0] },
+    );
+    const delta = adjacentIndexAngleDeltaRad(layout.angles, 0);
+    const minSep = (layout.arcSpans[0]! + layout.arcSpans[1]!) / 2;
+    expect(delta).toBeCloseTo(minSep, 4);
+  });
+
   it("keeps adjacent strand beads from overlapping on a mixed-size strand", () => {
     const layout = computeElasticBeadLayout([6, 10, 8, 12, 6], 160);
     expect(adjacentArcSectorsOverlap(layout.angles, layout.arcSpans)).toBe(false);
@@ -107,7 +120,7 @@ describe("resolveDropTargetFromLayout", () => {
     expect(atBead.index).toBe(1);
 
     const atGap = resolveDropTargetFromLayout(
-      midpointAngleRad(elastic.angles[0]!, elastic.angles[2]!),
+      elastic.insertionAngles[2]!,
       sectors,
       elastic.insertionAngles,
     );
