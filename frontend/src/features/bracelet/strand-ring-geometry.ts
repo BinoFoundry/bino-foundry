@@ -211,10 +211,16 @@ export function beadArcPxOnRing(layoutArcPx: number): number {
 
 export interface ResolvedRingRadiusResult {
   radiusPx: number;
-  /** True when radius was increased beyond the wrist-sized baseline to prevent overlap. */
+  /**
+   * Always false — wrist size fixes the ring. Over-capacity compression (not growth)
+   * finishes a full bracelet on the same circumference.
+   * @deprecated Kept for callers; ring no longer auto-expands.
+   */
   expanded: boolean;
-  /** True when the resolved ring exceeds available canvas radius (zoom/pan may help). */
+  /** True when the wrist ring exceeds available canvas radius (zoom/pan may help). */
   isVisualOverCanvas: boolean;
+  /** Contact arcs require more than the wrist circumference (layout will compress). */
+  isOverWristCapacity: boolean;
   beadArcPx: number[];
   leadingOverlapPx: number[];
   trailingOverlapPx: number[];
@@ -222,8 +228,10 @@ export interface ResolvedRingRadiusResult {
 }
 
 /**
- * Resolve ring radius from wrist baseline + contact arcs so adjacent beads do not overlap.
- * Expands the ring when needed; never clamps below the overlap-free radius.
+ * Resolve ring radius from the wrist baseline only.
+ * Beads pack contiguously on that ring; spare length stays as one empty arc.
+ * When contact arcs exceed the wrist circumference, keep the wrist radius and
+ * let the elastic packer compress proportionally (do not grow the bracelet).
  */
 export function computeResolvedRingRadiusPx(params: {
   beadLayoutArcPx: number[];
@@ -252,11 +260,14 @@ export function computeResolvedRingRadiusPx(params: {
       ? params.trailingOverlapPx
       : new Array<number>(n).fill(0);
 
+  const radiusPx = Math.max(1, wristRadiusPx);
+
   if (!n) {
     return {
-      radiusPx: Math.max(1, wristRadiusPx),
+      radiusPx,
       expanded: false,
       isVisualOverCanvas: false,
+      isOverWristCapacity: false,
       beadArcPx: [],
       leadingOverlapPx: [],
       trailingOverlapPx: [],
@@ -267,15 +278,15 @@ export function computeResolvedRingRadiusPx(params: {
   const beadArcPx: number[] = layoutArcs.map(beadArcPxOnRing);
   const totalArcPx =
     netContactLoopArcPx(beadArcPx, leadingOverlapPx, trailingOverlapPx) + n * pairGapPx;
-  const radiusPx = Math.max(wristRadiusPx, totalArcPx / (2 * Math.PI));
-
-  const expanded = radiusPx > wristRadiusPx + 0.5;
+  const wristCircumferencePx = 2 * Math.PI * radiusPx;
+  const isOverWristCapacity = totalArcPx > wristCircumferencePx + 1e-6;
   const isVisualOverCanvas = radiusPx > maxRadiusPx + 0.5;
 
   return {
     radiusPx,
-    expanded,
+    expanded: false,
     isVisualOverCanvas,
+    isOverWristCapacity,
     beadArcPx,
     leadingOverlapPx,
     trailingOverlapPx,
@@ -293,8 +304,8 @@ export interface ResolveStrandRingLayoutResult {
 }
 
 /**
- * Shared wrist-baseline + elastic-expansion resolution for renderer and UI hints.
- * Wrist size sets the minimum ring radius; visual layout may expand beyond it.
+ * Shared wrist-baseline ring resolution for renderer and UI hints.
+ * Wrist size fixes the ring radius; beads pack contiguously without growing the bracelet.
  */
 export function resolveStrandRingLayout(params: {
   placed: PlacedBead[];

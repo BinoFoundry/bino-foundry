@@ -173,15 +173,17 @@ function simplifyRdp(points: ContourPoint[], epsilon: number): ContourPoint[] {
   return [points[0]!, points[end]!];
 }
 
-/** Reduce a dense contour to a manageable polygon for the editor. */
+/** Reduce a dense open polyline while aiming for a target vertex count. */
 export function simplifyContourToPolygon(
   points: ContourPoint[],
   targetCount: number,
   maxDim: number,
 ): ContourPoint[] {
   if (points.length <= targetCount) return points;
+  // Keep epsilon small so shapes do not collapse to bounding-box corners.
+  const maxEps = Math.max(1.25, maxDim * 0.02);
   let lo = 0;
-  let hi = maxDim * 0.45;
+  let hi = maxEps;
   let best = points;
   for (let i = 0; i < 28; i++) {
     const mid = (lo + hi) / 2;
@@ -193,6 +195,103 @@ export function simplifyContourToPolygon(
     }
   }
   return best.length >= 3 ? best : points.slice(0, Math.max(3, targetCount));
+}
+
+/**
+ * Closed-ring RDP: split at the farthest point from the start, simplify both arcs.
+ * Open-polyline RDP on a closed ring collapses toward a box when endpoints are adjacent.
+ */
+export function simplifyClosedContourToPolygon(
+  points: ContourPoint[],
+  targetCount: number,
+  maxDim: number,
+): ContourPoint[] {
+  if (points.length <= targetCount) return points;
+  const start = points[0]!;
+  let splitIdx = Math.floor(points.length / 2);
+  let maxDist = -1;
+  for (let i = 1; i < points.length; i++) {
+    const d = Math.hypot(points[i]!.x - start.x, points[i]!.y - start.y);
+    if (d > maxDist) {
+      maxDist = d;
+      splitIdx = i;
+    }
+  }
+
+  const halfTarget = Math.max(4, Math.ceil(targetCount / 2) + 1);
+  const arcA = simplifyContourToPolygon(points.slice(0, splitIdx + 1), halfTarget, maxDim);
+  const arcB = simplifyContourToPolygon(
+    [...points.slice(splitIdx), points[0]!],
+    halfTarget,
+    maxDim,
+  );
+  const merged = [...arcA.slice(0, -1), ...arcB.slice(0, -1)];
+  if (merged.length <= targetCount) return merged.length >= 3 ? merged : points;
+  // Fine pass with a tight epsilon budget (still closed-aware via prior arcs).
+  return simplifyContourToPolygon(merged, targetCount, maxDim);
+}
+
+/** Uniform arc-length samples around a closed contour (preserves curved lens shapes). */
+export function resampleClosedContour(points: ContourPoint[], count: number): ContourPoint[] {
+  if (points.length < 3 || count < 3) return points;
+  const n = points.length;
+  const segLens: number[] = [];
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    const a = points[i]!;
+    const b = points[(i + 1) % n]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    segLens.push(len);
+    total += len;
+  }
+  if (total <= 1e-6) return points.slice(0, count);
+
+  const out: ContourPoint[] = [];
+  for (let i = 0; i < count; i++) {
+    let target = (i / count) * total;
+    if (target >= total) target = total - 1e-9;
+    let acc = 0;
+    for (let s = 0; s < n; s++) {
+      const len = segLens[s]!;
+      if (acc + len >= target) {
+        const t = len < 1e-9 ? 0 : (target - acc) / len;
+        const a = points[s]!;
+        const b = points[(s + 1) % n]!;
+        out.push({
+          x: a.x + (b.x - a.x) * t,
+          y: a.y + (b.y - a.y) * t,
+        });
+        break;
+      }
+      acc += len;
+    }
+  }
+  return out;
+}
+
+/** How close a polygon is to its axis-aligned bounding box (1 = perfect rectangle fill). */
+export function polygonRectangularity(points: ContourPoint[]): number {
+  if (points.length < 3) return 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    area += a.x * b.y - b.x * a.y;
+  }
+  area = Math.abs(area) * 0.5;
+  return area / (bw * bh);
 }
 
 /**
@@ -216,12 +315,53 @@ export function processSilhouetteContour(
   const smoothed = smoothContourChaikin(decimated, options.smoothPasses ?? 2);
   const target =
     options.targetPoints ?? adaptiveContourTargetCount(smoothed, maxDim);
-  const simplified = simplifyContourToPolygon(smoothed, target, maxDim);
+  const simplified = simplifyClosedContourToPolygon(smoothed, target, maxDim);
 
   return {
     rawPointCount,
     points: simplified,
     perimeter: contourPerimeter(simplified),
+  };
+}
+
+/**
+ * Lens openings: prefer arc-length resampling over aggressive RDP so results
+ * follow the true contour instead of collapsing into a bounding box.
+ */
+export function processLensOpeningContour(
+  contour: ContourPoint[],
+  width: number,
+  height: number,
+  options: ProcessContourOptions = {},
+): ProcessedContour {
+  const maxDim = options.maxDim ?? Math.max(width, height);
+  const rawPointCount = contour.length;
+  if (contour.length < 3) {
+    return { rawPointCount, points: [], perimeter: 0 };
+  }
+
+  const minSpacing = options.minSpacing ?? Math.max(1, maxDim * 0.0025);
+  const decimated = decimateContour(contour, minSpacing);
+  const smoothed = smoothContourChaikin(decimated, options.smoothPasses ?? 3);
+  const target = Math.max(16, options.targetPoints ?? adaptiveContourTargetCount(smoothed, maxDim));
+
+  // Light closed RDP only to remove stair-step noise, then resample to a stable budget.
+  const lightlySimplified = simplifyClosedContourToPolygon(
+    smoothed,
+    Math.max(target * 2, 48),
+    maxDim,
+  );
+  let points = resampleClosedContour(lightlySimplified, target);
+
+  // If RDP still produced a near-box, resample the smoothed contour directly.
+  if (polygonRectangularity(points) > 0.92 && lightlySimplified.length >= target) {
+    points = resampleClosedContour(smoothed, target);
+  }
+
+  return {
+    rawPointCount,
+    points,
+    perimeter: contourPerimeter(points),
   };
 }
 

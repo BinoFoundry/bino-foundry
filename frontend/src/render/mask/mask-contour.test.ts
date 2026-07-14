@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   decimateContour,
   labelMaskComponents,
+  polygonRectangularity,
+  processLensOpeningContour,
   processSilhouetteContour,
+  resampleClosedContour,
   smoothContourChaikin,
   traceOuterContour,
 } from "./mask-contour";
@@ -49,6 +52,34 @@ describe("mask-contour", () => {
     expect(processed.rawPointCount).toBeGreaterThan(processed.points.length);
     expect(processed.points.length).toBeLessThanOrEqual(22);
     expect(processed.perimeter).toBeGreaterThan(0);
+  });
+
+  it("lens opening processing keeps a curved (non-box) ellipse polygon", () => {
+    const width = 80;
+    const height = 80;
+    const mask = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const nx = (x - 40) / 22;
+        const ny = (y - 40) / 16;
+        if (nx * nx + ny * ny <= 1) mask[y * width + x] = 1;
+      }
+    }
+    const raw = traceOuterContour(mask, width, height);
+    const processed = processLensOpeningContour(raw, width, height, { targetPoints: 24 });
+    expect(processed.points.length).toBe(24);
+    expect(polygonRectangularity(processed.points)).toBeLessThan(0.92);
+  });
+
+  it("resamples a closed contour to a fixed point budget", () => {
+    const square = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ];
+    const resampled = resampleClosedContour(square, 8);
+    expect(resampled).toHaveLength(8);
   });
 
   it("chaikin smoothing reduces stair-step jaggedness", () => {

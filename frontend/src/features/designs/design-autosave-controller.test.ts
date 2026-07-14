@@ -87,6 +87,25 @@ describe("DesignAutoSaveController", () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 
+  it("does not retry immediately after a save failure", async () => {
+    const save = vi.fn().mockRejectedValue(new Error("404"));
+    const onStatus = vi.fn();
+    const controller = new DesignAutoSaveController({
+      debounceMs: 0,
+      save,
+      onStatus,
+      getDesignId: () => "dsn_missing",
+    });
+
+    controller.schedule("fp-1", "vis-1", () => ({ productType: "bracelet" as const }));
+    await vi.runAllTimersAsync();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(onStatus).toHaveBeenCalledWith("error");
+  });
+
   it("omits thumbnail when visual fingerprint is unchanged", async () => {
     const save = vi.fn().mockResolvedValue({ id: "dsn_1" });
     const controller = new DesignAutoSaveController({

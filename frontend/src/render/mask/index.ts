@@ -18,12 +18,14 @@ export {
   type PathAnchor,
 } from "./mask-types";
 export { pathsToMaskCanvas } from "./bezier-path";
-export { buildLayersFromSource, detectLensMask, detectLensMaskBitmap } from "./auto-lens-mask";
+export { buildLayersFromSource, detectLensMask, detectLensMaskBitmap, floodFromBorderThroughOpen, splitMergedLensBridge } from "./auto-lens-mask";
 export {
   detectFrameLensMaskFromSource,
   detectFrameLensMaskFromUrl,
   detectFrameLensSideFromSource,
   detectFrameLensSideFromUrl,
+  assignAnchorsByCentroidX,
+  estimateLensPolygonsFromGeometry,
   isDualLensMaskValid,
   isLensSideValid,
   hasAnyLensMask,

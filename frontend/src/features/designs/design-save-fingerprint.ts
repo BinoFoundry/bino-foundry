@@ -69,8 +69,6 @@ export function fingerprintSunglassesConfig(
     lensTintId: sunglasses.lensTintId,
     selectedOptions: sunglasses.selectedOptions,
     builderStep: sunglasses.builderStep ?? "",
-    subtotal: sunglasses.subtotal ?? 0,
-    currencyCode: sunglasses.currencyCode ?? "",
   });
 }
 

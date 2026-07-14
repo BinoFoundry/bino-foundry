@@ -42,9 +42,10 @@ export function adjacentIndexAngleDeltaRad(angles: number[], index: number): num
 }
 
 /**
- * Contact-geometry packing — each bead occupies contactArcPx along the strand.
- * Junction spacing: prev.contact - prev.trailingOverlap + current.leadingOverlap.
- * Remaining circumference (if any) stays at the loop closure only — never between neighbours.
+ * Contiguous contact-geometry packing — string beads one after another.
+ * Each bead occupies contactArcPx; junction tuck uses leading/trailing overlaps.
+ * Do not redistribute leftover length between neighbours — spare stays as one empty arc
+ * between the last bead and the first (loop closure).
  */
 function packContactArcLayout(
   contactArcPx: number[],
@@ -78,8 +79,8 @@ function packContactArcLayout(
 }
 
 /**
- * Sequential arc-length packing — bead i+1 follows bead i around the ring.
- * Neighbours are edge-to-edge; any spare circumference remains at the loop closure.
+ * Contiguous sequential packing — bead i+1 starts where bead i ends.
+ * Neighbours stay edge-to-edge; spare circumference forms one empty unfinished arc.
  */
 function packSequentialArcLayout(
   beadArcMm: number[],
@@ -124,8 +125,10 @@ export function adjacentArcSectorsOverlap(
 }
 
 /**
- * Elastic arc-length distribution along a wrist-sized circumference.
- * When `contactOverlaps` is provided, uses contact geometry junction spacing.
+ * Contiguous arc-length placement on a fixed wrist circumference.
+ * Under capacity: pack edge-to-edge from startAngle; leftover is one empty arc.
+ * Over capacity: compress proportionally so the finished bracelet fills the ring
+ * (never invent inter-bead gaps or grow the circumference).
  */
 export function computeElasticBeadLayout(
   beadArcMm: number[],
@@ -160,15 +163,31 @@ export function computeElasticBeadLayout(
   const arcSpans: number[] = [];
 
   if (isOverCapacity) {
-    let cursorMm = 0;
-    for (let i = 0; i < n; i++) {
-      const arcMm = (beadArcMm[i]! / totalBeadMm) * layoutCircumferenceMm;
-      const centerMm = cursorMm + arcMm / 2;
-      angles.push(
-        normalizeAngleRad(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI),
+    // Compress onto the fixed wrist circumference — keep relative contact ratios,
+    // do not invent inter-neighbour gaps or grow the ring.
+    const scale = layoutCircumferenceMm / Math.max(totalBeadMm, 1e-6);
+    if (usesContactPacking) {
+      const packed = packContactArcLayout(
+        beadArcMm.map((arc) => arc * scale),
+        leadingPx.map((px) => px * scale),
+        trailingPx.map((px) => px * scale),
+        layoutCircumferenceMm,
+        startAngle,
+        0,
       );
-      arcSpans.push((arcMm / layoutCircumferenceMm) * 2 * Math.PI);
-      cursorMm += arcMm;
+      angles.push(...packed.angles);
+      arcSpans.push(...packed.arcSpans);
+    } else {
+      let cursorMm = 0;
+      for (let i = 0; i < n; i++) {
+        const arcMm = beadArcMm[i]! * scale;
+        const centerMm = cursorMm + arcMm / 2;
+        angles.push(
+          normalizeAngleRad(startAngle + (centerMm / layoutCircumferenceMm) * 2 * Math.PI),
+        );
+        arcSpans.push((arcMm / layoutCircumferenceMm) * 2 * Math.PI);
+        cursorMm += arcMm;
+      }
     }
   } else if (n === 1) {
     const mm = beadArcMm[0]!;

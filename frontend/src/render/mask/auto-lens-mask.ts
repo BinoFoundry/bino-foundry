@@ -128,12 +128,35 @@ function classifyPixels({ data, width, height }, opts) {
   return { lens, frame: frameCore, box };
 }
 
-/** Flood-fill lens from typical left/right lens centers inside frame bbox. */
-function seedFillLenses(data, width, height, lens, frame, box, opts) {
-  const seeds = [
-    [box.x + box.w * 0.34, box.y + box.h * 0.55],
-    [box.x + box.w * 0.66, box.y + box.h * 0.55],
+function estimateBackgroundLum(data, width, height) {
+  const samples = [
+    [2, 2],
+    [width - 3, 2],
+    [2, height - 3],
+    [width - 3, height - 3],
+    [Math.floor(width / 2), 2],
   ];
+  let sum = 0;
+  let count = 0;
+  for (const [x, y] of samples) {
+    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+    const i = (y * width + x) * 4;
+    sum += lum(data[i], data[i + 1], data[i + 2]);
+    count += 1;
+  }
+  return count ? sum / count : DEFAULTS.bgLumMin;
+}
+
+/** Flood-fill lens from multiple left/right seeds to survive atypical shapes. */
+function seedFillLenses(data, width, height, lens, frame, box, opts) {
+  const xs = [0.22, 0.34, 0.42, 0.58, 0.66, 0.78];
+  const ys = [0.42, 0.52, 0.62];
+  const seeds = [];
+  for (const fx of xs) {
+    for (const fy of ys) {
+      seeds.push([box.x + box.w * fx, box.y + box.h * fy]);
+    }
+  }
   const n = width * height;
   const visited = new Uint8Array(n);
   const rim = dilate(frame, width, height, opts.frameRimDilate);
@@ -166,6 +189,37 @@ function seedFillLenses(data, width, height, lens, frame, box, opts) {
       stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
     }
   }
+}
+
+/**
+ * Clear a vertical bridge corridor when a single blob straddles left + right,
+ * so left/right lenses do not remain merged across the nose bridge.
+ */
+export function splitMergedLensBridge(mask, width, height, bridgeRatio = 0.06) {
+  const midX = Math.floor(width / 2);
+  const halfBridge = Math.max(2, Math.round(width * bridgeRatio * 0.5));
+  let leftHits = 0;
+  let rightHits = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (!mask[idx]) continue;
+      if (x < midX - halfBridge) leftHits += 1;
+      else if (x > midX + halfBridge) rightHits += 1;
+    }
+  }
+  // Only carve when both halves already have substantial mass (likely one merged blob).
+  const minSide = width * height * 0.004;
+  if (leftHits < minSide || rightHits < minSide) return mask;
+
+  const out = mask.slice();
+  for (let y = 0; y < height; y++) {
+    for (let x = midX - halfBridge; x <= midX + halfBridge; x++) {
+      if (x < 0 || x >= width) continue;
+      out[y * width + x] = 0;
+    }
+  }
+  return out;
 }
 
 function countMaskPixels(mask) {
@@ -367,33 +421,334 @@ function maskToCanvas(mask, width, height) {
 }
 
 /**
- * Detect lens areas from a product photo on white (full frame render).
- * Returns a binary bitmap (1 = lens pixel).
+ * Flood from image borders through passable pixels (mask[idx] === 1 means wall).
+ * Returns visited exterior/background regions.
  */
-export function detectLensMaskBitmap(source, userOpts = {}) {
-  const opts = { ...DEFAULTS, ...userOpts };
-  const { data, width, height } = getImageDataFromSource(source);
-  const { lens, frame, box } = classifyPixels({ data, width, height }, opts);
+export function floodFromBorderThroughOpen(
+  wall: Uint8Array,
+  width: number,
+  height: number,
+): Uint8Array {
+  const exterior = new Uint8Array(wall.length);
+  const stack = [];
 
-  let grown = lens.slice();
-  seedFillLenses(data, width, height, grown, frame, box, opts);
-  grown = growLensByColor(data, width, height, grown, frame, box, opts);
+  const tryPush = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const idx = y * width + x;
+    if (exterior[idx] || wall[idx]) return;
+    exterior[idx] = 1;
+    stack.push(idx);
+  };
 
-  const minPixels = width * height * 0.015;
-  if (countMaskPixels(grown) < minPixels) {
-    const relaxed = { ...opts, frameLumMax: 22, colorGrowDist: 85 };
-    const retry = classifyPixels({ data, width, height }, relaxed).lens;
-    grown = retry.slice();
-    seedFillLenses(data, width, height, grown, frame, box, relaxed);
-    grown = growLensByColor(data, width, height, grown, frame, box, relaxed);
+  for (let x = 0; x < width; x++) {
+    tryPush(x, 0);
+    tryPush(x, height - 1);
+  }
+  for (let y = 0; y < height; y++) {
+    tryPush(0, y);
+    tryPush(width - 1, y);
   }
 
-  grown = morphCloseOpen(grown, width, height, opts.closeRadius, opts.openRadius);
-  grown = keepLargestComponents(grown, width, height, 2);
-  grown = addLensHighlights(grown, data, width, height, box, opts);
-  grown = constrainLensToInterior(grown, frame, data, width, height, opts);
-  grown = morphCloseOpen(grown, width, height, 1, 0);
-  return { bitmap: grown, width, height };
+  while (stack.length) {
+    const cur = stack.pop();
+    const x = cur % width;
+    const y = (cur / width) | 0;
+    tryPush(x + 1, y);
+    tryPush(x - 1, y);
+    tryPush(x, y + 1);
+    tryPush(x, y - 1);
+  }
+
+  return exterior;
+}
+
+/**
+ * Enclosed apertures: regions not reachable from the border when dark frame is a wall.
+ * These are the lens openings (and similar enclosed cavities), never the outer silhouette.
+ */
+function findEnclosedApertures(frameWall, width, height) {
+  const exterior = floodFromBorderThroughOpen(frameWall, width, height);
+  const aperture = new Uint8Array(frameWall.length);
+  for (let idx = 0; idx < aperture.length; idx++) {
+    if (!exterior[idx] && !frameWall[idx]) aperture[idx] = 1;
+  }
+  return aperture;
+}
+
+function componentTouchesBorder(labels, componentId, width, height) {
+  for (let x = 0; x < width; x++) {
+    if (labels[x] === componentId || labels[(height - 1) * width + x] === componentId) return true;
+  }
+  for (let y = 0; y < height; y++) {
+    if (labels[y * width] === componentId || labels[y * width + (width - 1)] === componentId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function labelComponentsDetailed(mask, width, height) {
+  const labels = new Int32Array(mask.length);
+  const components = [];
+  let next = 1;
+
+  for (let idx = 0; idx < mask.length; idx++) {
+    if (!mask[idx] || labels[idx]) continue;
+    const stack = [idx];
+    labels[idx] = next;
+    let size = 0;
+    let sumX = 0;
+    let sumY = 0;
+    let minX = width;
+    let minY = height;
+    let maxX = 0;
+    let maxY = 0;
+
+    while (stack.length) {
+      const cur = stack.pop();
+      size += 1;
+      const x = cur % width;
+      const y = (cur / width) | 0;
+      sumX += x;
+      sumY += y;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const ni = ny * width + nx;
+        if (!mask[ni] || labels[ni]) continue;
+        labels[ni] = next;
+        stack.push(ni);
+      }
+    }
+
+    components.push({
+      id: next,
+      size,
+      centroidX: sumX / size,
+      centroidY: sumY / size,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+      touchesBorder: componentTouchesBorder(labels, next, width, height),
+    });
+    next += 1;
+  }
+
+  return { labels, components };
+}
+
+function buildFrameWall(data, width, height, opts) {
+  const frameCore = new Uint8Array(width * height);
+  const labelY = height * (1 - opts.labelBandRatio);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (y >= labelY) continue;
+      const idx = y * width + x;
+      const i = idx * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+      if (a < 8) continue;
+      const l = lum(r, g, b);
+      const s = sat(r, g, b);
+      if (l <= opts.frameProtectLum && s <= opts.satMax + 25) {
+        frameCore[idx] = 1;
+      } else if (l <= opts.frameLumMax + 18 && s <= opts.satMax + 15) {
+        frameCore[idx] = 1;
+      }
+    }
+  }
+
+  const sealed = morphCloseOpen(frameCore, width, height, 3, 1);
+  return dilate(sealed, width, height, 1);
+}
+
+function scoreLensAperture(meta, width, height) {
+  const area = meta.size / (width * height);
+  // Strongly down-rank outer silhouette / full body, but do not hard-ban until extreme.
+  if (area > 0.45) return -1;
+  if (area < 0.002) return -1;
+
+  const aspect = meta.width / Math.max(1, meta.height);
+  if (aspect < 0.25 || aspect > 4.5) return 0.05;
+
+  const bboxArea = Math.max(1, meta.width * meta.height);
+  const fillRatio = meta.size / bboxArea;
+  // Near-solid AABBs spanning lots of the plate are usually frame cavities / silhouettes.
+  if (area > 0.22 && fillRatio > 0.94) return 0.04;
+
+  const cyNorm = meta.centroidY / height;
+  const sizeScore =
+    area >= 0.008 && area <= 0.14
+      ? 1
+      : area < 0.008
+        ? area / 0.008
+        : Math.max(0.05, 1 - (area - 0.14) / 0.35);
+  const aspectScore = aspect >= 0.6 && aspect <= 2.4 ? 1 : 0.45;
+  const verticalScore = cyNorm >= 0.18 && cyNorm <= 0.82 ? 1 : 0.45;
+  // Prefer organic openings (ellipse-like fill) over hard boxes.
+  const shapeScore =
+    fillRatio >= 0.58 && fillRatio <= 0.92
+      ? 1
+      : fillRatio > 0.92
+        ? 0.35
+        : Math.max(0.2, fillRatio / 0.58);
+  return sizeScore * 0.4 + aspectScore * 0.2 + verticalScore * 0.2 + shapeScore * 0.2;
+}
+
+function selectLensOpeningMask(aperture, width, height, keep = 2) {
+  const { labels, components } = labelComponentsDetailed(aperture, width, height);
+  const interior = components.filter((c) => !c.touchesBorder);
+  const scored = interior
+    .map((c) => ({ ...c, score: scoreLensAperture(c, width, height) }))
+    .filter((c) => c.score > 0)
+    .sort((a, b) => b.score - a.score || b.size - a.size);
+
+  const chosen = [];
+  for (const c of scored) {
+    if (chosen.length >= keep) break;
+    if (chosen.length === 1) {
+      const first = chosen[0];
+      const mid = width / 2;
+      const firstLeft = first.centroidX < mid;
+      const thisLeft = c.centroidX < mid;
+      if (
+        firstLeft === thisLeft &&
+        scored.some((o) => (o.centroidX < mid) !== firstLeft && o.score > 0)
+      ) {
+        continue;
+      }
+    }
+    chosen.push(c);
+  }
+
+  if (chosen.length < keep) {
+    for (const c of scored) {
+      if (chosen.some((x) => x.id === c.id)) continue;
+      chosen.push(c);
+      if (chosen.length >= keep) break;
+    }
+  }
+
+  // Last resort: any interior blobs by size (still better than empty polygons).
+  if (chosen.length < keep) {
+    const bySize = [...interior].sort((a, b) => b.size - a.size);
+    for (const c of bySize) {
+      if (chosen.some((x) => x.id === c.id)) continue;
+      chosen.push(c);
+      if (chosen.length >= keep) break;
+    }
+  }
+
+  // Prefer one opening per side when possible: keep the best on left and right by X.
+  if (chosen.length >= 2) {
+    chosen.sort((a, b) => a.centroidX - b.centroidX);
+  }
+
+  const keepIds = new Set(chosen.slice(0, keep).map((c) => c.id));
+  const out = new Uint8Array(aperture.length);
+  for (let idx = 0; idx < out.length; idx++) {
+    if (keepIds.has(labels[idx])) out[idx] = 1;
+  }
+  return out;
+}
+
+function refineApertureWithLensSeeds(data, aperture, frameWall, width, height, box, opts) {
+  const out = aperture.slice();
+  const xs = [0.28, 0.36, 0.64, 0.72];
+  const ys = [0.45, 0.55];
+  const visited = new Uint8Array(width * height);
+
+  for (const fx of xs) {
+    for (const fy of ys) {
+      const sx = Math.round(box.x + box.w * fx);
+      const sy = Math.round(box.y + box.h * fy);
+      const stack = [[sx, sy]];
+      let ref = null;
+      while (stack.length) {
+        const [x, y] = stack.pop();
+        if (x < 0 || y < 0 || x >= width || y >= height) continue;
+        const idx = y * width + x;
+        if (visited[idx] || frameWall[idx]) continue;
+        if (!inBox(x, y, box)) continue;
+
+        const i = idx * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const l = lum(r, g, b);
+        if (l >= opts.bgLumMin) continue;
+        if (l <= opts.frameProtectLum) continue;
+
+        if (!ref) ref = { r, g, b };
+        if (distRgb(r, g, b, ref.r, ref.g, ref.b) > opts.colorGrowDist + 20) continue;
+
+        visited[idx] = 1;
+        out[idx] = 1;
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+    }
+  }
+
+  // Never paint the frame wall as lens.
+  for (let idx = 0; idx < out.length; idx++) {
+    if (frameWall[idx]) out[idx] = 0;
+  }
+  return out;
+}
+
+/**
+ * Detect lens *openings* (enclosed cavities), never the outer sunglasses silhouette.
+ * Returns a binary bitmap (1 = lens opening pixel).
+ */
+export function detectLensMaskBitmap(source, userOpts = {}) {
+  const { data, width, height } = getImageDataFromSource(source);
+  const adaptiveBg = estimateBackgroundLum(data, width, height);
+  const opts = {
+    ...DEFAULTS,
+    bgLumMin: Math.min(DEFAULTS.bgLumMin, Math.max(220, adaptiveBg - 8)),
+    ...userOpts,
+  };
+
+  const box = getFrameBBox(data, width, height, opts);
+  const frameWall = buildFrameWall(data, width, height, opts);
+
+  // Primary: enclosed apertures carved out by the frame ring.
+  let apertures = findEnclosedApertures(frameWall, width, height);
+  // Light morphology — heavy close operations square off lens openings into boxes.
+  apertures = morphCloseOpen(apertures, width, height, 1, 1);
+
+  // Seed-refine only within frame barriers so fill cannot jump onto the outer body.
+  apertures = refineApertureWithLensSeeds(data, apertures, frameWall, width, height, box, opts);
+  apertures = morphCloseOpen(apertures, width, height, 1, 1);
+
+  // Bridge must never be part of either opening.
+  apertures = splitMergedLensBridge(apertures, width, height, 0.055);
+  apertures = selectLensOpeningMask(apertures, width, height, 2);
+
+  // Safety: strip frame wall again and tiny specks.
+  for (let idx = 0; idx < apertures.length; idx++) {
+    if (frameWall[idx]) apertures[idx] = 0;
+  }
+  apertures = morphCloseOpen(apertures, width, height, 1, 0);
+  apertures = selectLensOpeningMask(apertures, width, height, 2);
+
+  return { bitmap: apertures, width, height };
 }
 
 /**

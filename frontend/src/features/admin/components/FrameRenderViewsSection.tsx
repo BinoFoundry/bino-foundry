@@ -20,6 +20,7 @@ import {
   resolveOriginalPlate,
 } from "@/render/frame-plate/crop";
 import {
+  detectFrameLensMaskFromSource,
   detectFrameLensSideFromSource,
   hasAnyLensMask,
   isDualLensMaskValid,
@@ -43,7 +44,8 @@ const FrameMaskEditor = lazy(() =>
 type BusyAction =
   | { axis: FrameViewAxis; kind: "frame-auto" }
   | { axis: FrameViewAxis; kind: "detect-left" }
-  | { axis: FrameViewAxis; kind: "detect-right" };
+  | { axis: FrameViewAxis; kind: "detect-right" }
+  | { axis: FrameViewAxis; kind: "detect-both" };
 
 type ExpandedPanel = "frame" | "left" | "right";
 type ExpandedEditor = { axis: FrameViewAxis; panel: ExpandedPanel };
@@ -306,11 +308,36 @@ export const FrameRenderViewsSection = forwardRef<
         plateCropConfig: null,
         ...clearLensState(),
       });
-      setAxisNotice(
-        axis,
-        "Original saved. Adjust the frame or define lens areas — changes apply on Save frame.",
-        "success",
-      );
+
+      // Always apply best-effort dual polygons so the admin has editable points.
+      try {
+        const detection = detectFrameLensMaskFromSource(img);
+        if (detection.config && isDualLensMaskValid(detection.config)) {
+          commitMaskToView(axis, detection.config);
+          openEditor(axis, "left");
+          const conf = detection.confidence ?? 0;
+          setAxisNotice(
+            axis,
+            detection.message ??
+              (conf >= 0.7
+                ? "Original saved and both lenses detected — review overlays, then Save frame."
+                : "Original saved with starting lens polygons — adjust and save."),
+            conf >= 0.7 ? "success" : "warning",
+          );
+        } else {
+          setAxisNotice(
+            axis,
+            "Original saved. Use Auto Detect Both Lenses to add starting polygons.",
+            "success",
+          );
+        }
+      } catch {
+        setAxisNotice(
+          axis,
+          "Original saved. Use Auto Detect Both Lenses to add starting polygons.",
+          "success",
+        );
+      }
     } catch (err) {
       toast.error(isApiError(err) ? err.message : "Upload failed");
     } finally {
@@ -443,14 +470,11 @@ export const FrameRenderViewsSection = forwardRef<
           setEditSession((s) => ({ ...s, [sessionKey]: (s[sessionKey] ?? 0) + 1 }));
         }
 
-        const diag = detection.diagnostics
-          ? ` (${detection.diagnostics.pointCount} points, ${detection.diagnostics.imageSource})`
-          : "";
-        setAxisNotice(
-          axis,
-          `${LENS_SIDE_LABELS[side]} detected${diag} — review the overlay, then save changes.`,
-          "success",
-        );
+        const conf = detection.confidence ?? 0;
+        const fallbackMsg =
+          detection.message ??
+          `${LENS_SIDE_LABELS[side]} ready — review the overlay, then save changes.`;
+        setAxisNotice(axis, fallbackMsg, conf >= 0.7 ? "success" : "warning");
       } else {
         const diag = detection.diagnostics
           ? ` ${detection.diagnostics.imageWidth}×${detection.diagnostics.imageHeight}px, ${detection.diagnostics.regionCount} region(s) found.`
@@ -467,6 +491,60 @@ export const FrameRenderViewsSection = forwardRef<
         console.error(`[lens-detect:${side}] failed`, err);
       }
       setAxisNotice(axis, message, "warning");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleDetectBothLenses = async (axis: FrameViewAxis) => {
+    const view = getView(axis);
+    const original = resolveOriginalPlate(view);
+    if (!original.url) {
+      setAxisNotice(axis, "Upload a plate photo before running lens detection.", "warning");
+      return;
+    }
+
+    setBusyAction({ axis, kind: "detect-both" });
+    setAxisNotice(axis, "Detecting left and right lenses…", "warning");
+
+    try {
+      const plate = await getWorkingPlate(axis);
+      if (!plate.url) {
+        setAxisNotice(axis, "No plate image available for detection.", "warning");
+        return;
+      }
+      const img = await loadImageForProcessing(plate.url);
+      const detection = detectFrameLensMaskFromSource(img);
+
+      if (detection.config && isDualLensMaskValid(detection.config)) {
+        commitMaskToView(axis, detection.config);
+        openEditor(axis, "left");
+        const conf = detection.confidence ?? 0;
+        setAxisNotice(
+          axis,
+          detection.message ??
+            (conf >= 0.7
+              ? "Both lenses detected — review overlays, then Save frame."
+              : "Starting lens polygons ready — review and adjust before saving."),
+          conf >= 0.7 ? "success" : "warning",
+        );
+      } else if (detection.config && hasAnyLensMask(detection.config)) {
+        draftRef.current[axis] = detection.config;
+        setPreviewMasks((prev) => ({ ...prev, [axis]: detection.config }));
+        setAxisNotice(
+          axis,
+          detection.message ?? "Partial lens polygons added — finish the missing side, then save.",
+          "warning",
+        );
+      } else {
+        setAxisNotice(
+          axis,
+          detection.message ?? "Could not build lens polygons. Draw them manually.",
+          "warning",
+        );
+      }
+    } catch (err) {
+      setAxisNotice(axis, err instanceof Error ? err.message : "Lens detection failed.", "warning");
     } finally {
       setBusyAction(null);
     }
@@ -563,6 +641,22 @@ export const FrameRenderViewsSection = forwardRef<
 
             {hasPlate ? (
               <div className="space-y-4">
+                <div className="flex flex-wrap gap-2 px-0.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isBusy(axis, "detect-both")}
+                    onClick={() => void handleDetectBothLenses(axis)}
+                  >
+                    {isBusy(axis, "detect-both") ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    Auto Detect Both Lenses
+                  </Button>
+                </div>
                 <div
                   className={cn(
                     isFramePanelOpen && INLINE_SECTION_ACTIVE_CLASS,

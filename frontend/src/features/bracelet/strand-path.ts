@@ -223,8 +223,8 @@ function useElasticWeights(beads: StrandPathBeadInput[], layoutCircumferenceMm?:
 }
 
 /**
- * Place beads on a circular path.
- * With `layoutCircumferenceMm` + per-bead `beadMm`, uses elastic arc-length distribution.
+ * Place beads on a circular path with contiguous arc-length packing when
+ * `layoutCircumferenceMm` + per-bead weights are supplied.
  */
 export function computeStrandPathLayout(params: {
   beads: StrandPathBeadInput[];

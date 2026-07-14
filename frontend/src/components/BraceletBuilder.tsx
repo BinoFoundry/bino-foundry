@@ -29,6 +29,10 @@ import {
   fingerprintBraceletVisual,
 } from "@/features/designs/design-save-fingerprint";
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
+import {
+  clearStaleDesignUrl,
+  createRecoveringSaveDesign,
+} from "@/features/designs/recovering-save-design";
 import { BraceletBuilderLayout } from "@/layouts/BraceletBuilderLayout";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
@@ -190,6 +194,15 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     [designIdFromUrl, setSearchParams],
   );
 
+  const handleStaleDesignId = useCallback(() => {
+    clearStaleDesignUrl(designIdFromUrl, setSavedDesignId, setSearchParams);
+  }, [designIdFromUrl, setSearchParams]);
+
+  const saveDesignForAutoSave = useMemo(
+    () => createRecoveringSaveDesign(saveDesign, handleStaleDesignId),
+    [saveDesign, handleStaleDesignId],
+  );
+
   const wristConfirmed = builder.wristSizeConfirmed;
   const { containerRef, strandSize, containerSize } = useCanvasSize(isMobile, wristConfirmed);
   const canvasZoomRef = useRef<HTMLDivElement>(null);
@@ -257,7 +270,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     enabled: autoSaveEnabled,
     paused: autoSavePaused,
     designId: savedDesignId,
-    saveDesign,
+    saveDesign: saveDesignForAutoSave,
     onSaved: handleDesignSaved,
     getFingerprint: getBraceletFingerprint,
     getVisualFingerprint: getBraceletVisualFingerprint,
@@ -302,7 +315,14 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     (async () => {
       try {
         const detail = await designsApi.get(designIdFromUrl);
-        if (cancelled || detail.productType !== "bracelet" || !detail.bracelet) return;
+        if (cancelled) return;
+        if (detail.productType !== "bracelet" || !detail.bracelet) {
+          hydratedDesignRef.current = designIdFromUrl;
+          clearStaleDesignUrl(designIdFromUrl, setSavedDesignId, setSearchParams);
+          setHydrationDone(true);
+          toast.error(CUSTOMER_COPY.saveDesignFailed);
+          return;
+        }
         builder.loadFromSaved({
           twinning: detail.bracelet.twinning,
           wristSizeCmA: detail.bracelet.wristSizeCmA,
@@ -323,6 +343,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         setHydrationDone(true);
       } catch (err) {
         if (!cancelled) {
+          hydratedDesignRef.current = designIdFromUrl;
+          clearStaleDesignUrl(designIdFromUrl, setSavedDesignId, setSearchParams);
           setHydrationDone(true);
           toast.error(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
         }

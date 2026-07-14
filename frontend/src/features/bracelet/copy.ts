@@ -71,7 +71,7 @@ export const BRACELET_COPY = {
   overCapacityBanner:
     "This strand exceeds your wrist target. Remove pieces or select a larger wrist size before saving.",
   visualExpandedHint:
-    "Display expanded slightly to fit your beads — your wrist target and capacity are unchanged.",
+    "Beads are packed along your wrist size — unused length stays as open strand.",
   visualOverCanvasHint:
     "This layout needs more room on screen. Remove pieces, choose a larger wrist size, or zoom out.",
   wristChangeOverCapacity:

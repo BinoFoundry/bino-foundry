@@ -6,7 +6,7 @@ import { TEST_STRAND_RENDER_CATALOGUE } from "@/render/bead-crop/strand-render-t
 
 import { netContactLoopArcPx } from "@bino-foundry/shared/types";
 
-import { computeElasticBeadLayout } from "./strand-elastic-layout";
+import { computeElasticBeadLayout, adjacentIndexAngleDeltaRad } from "./strand-elastic-layout";
 import {
   adjacentPairsMeetGap,
   beadLayoutArcPx,
@@ -81,30 +81,36 @@ function assertCleanLayout(
     resolved.trailingOverlapPx,
   );
   const closedLoop = elastic.isOverCapacity || netArcPx >= circumferencePx * (1 - 1e-4);
+  // When over capacity the packer compresses arcs onto the wrist ring — clearance must use those arcs.
+  const clearanceArcPx = elastic.isOverCapacity
+    ? elastic.arcSpans.map((span) => span * resolved.radiusPx)
+    : resolved.beadArcPx;
   expect(
     adjacentPairsMeetGap(
       elastic.angles,
-      resolved.beadArcPx,
+      clearanceArcPx,
       resolved.radiusPx,
       pairGapPx,
       closedLoop,
-      resolved.leadingOverlapPx,
-      resolved.trailingOverlapPx,
+      elastic.isOverCapacity ? [] : resolved.leadingOverlapPx,
+      elastic.isOverCapacity ? [] : resolved.trailingOverlapPx,
     ),
   ).toBe(true);
   return resolved;
 }
 
 describe("computeResolvedRingRadiusPx", () => {
-  it("expands beyond wrist baseline when large rendered beads need more arc", () => {
+  it("keeps the wrist radius when large beads need more arc (compress, do not grow)", () => {
     const beads = Array.from({ length: 12 }, () => mockPlaced(12));
-    const { resolved, layout } = layoutForWrist(16, beads, 1.35);
-    expect(resolved.radiusPx).toBeGreaterThanOrEqual(layout.wristRadiusPx);
-    expect(resolved.expanded).toBe(true);
+    const { resolved, layout, elastic } = layoutForWrist(16, beads, 1.35);
+    expect(resolved.radiusPx).toBeCloseTo(layout.wristRadiusPx, 5);
+    expect(resolved.expanded).toBe(false);
+    expect(resolved.isOverWristCapacity).toBe(true);
+    expect(elastic.isOverCapacity).toBe(true);
     assertCleanLayout(16, beads, 1.35);
   });
 
-  it("never clamps below overlap-free radius when layout exceeds canvas", () => {
+  it("reports over-wrist-capacity without expanding when layout exceeds canvas", () => {
     const beads = Array.from({ length: 15 }, () => mockPlaced(12));
     const scaleFactor = 1;
     const center = 80;
@@ -129,9 +135,9 @@ describe("computeResolvedRingRadiusPx", () => {
     });
     const neededRadius =
       (layoutArcs.reduce((s, a) => s + a, 0) + beads.length * resolved.pairGapPx) / (2 * Math.PI);
-    expect(resolved.radiusPx).toBeGreaterThanOrEqual(neededRadius - 0.5);
-    expect(resolved.radiusPx).toBeGreaterThan(maxRadius);
-    expect(resolved.isVisualOverCanvas).toBe(true);
+    expect(resolved.radiusPx).toBeCloseTo(wristRadius, 5);
+    expect(resolved.isOverWristCapacity).toBe(true);
+    expect(neededRadius).toBeGreaterThan(wristRadius);
     assertCleanLayout(14, beads, scaleFactor, center);
   });
 
@@ -139,6 +145,24 @@ describe("computeResolvedRingRadiusPx", () => {
     const r14 = computeWristRingRadiusPx(200, 14, 1, 40, BOUNDS);
     const r19 = computeWristRingRadiusPx(200, 19, 1, 40, BOUNDS);
     expect(r19).toBeGreaterThan(r14);
+  });
+
+  it("clusters sparse beads contiguously leaving one empty unfinished arc", () => {
+    const beads = [8, 8, 8].map((mm) => mockPlaced(mm));
+    const { resolved, elastic } = layoutForWrist(16, beads);
+    expect(elastic.isOverCapacity).toBe(false);
+    expect(resolved.isOverWristCapacity).toBe(false);
+
+    for (let i = 0; i < beads.length - 1; i++) {
+      const delta = adjacentIndexAngleDeltaRad(elastic.angles, i);
+      const minSep = (elastic.arcSpans[i]! + elastic.arcSpans[i + 1]!) / 2;
+      expect(delta).toBeCloseTo(minSep, 4);
+    }
+
+    const wrapDelta = adjacentIndexAngleDeltaRad(elastic.angles, beads.length - 1);
+    const wrapMinSep =
+      (elastic.arcSpans[beads.length - 1]! + elastic.arcSpans[0]!) / 2;
+    expect(wrapDelta).toBeGreaterThan(wrapMinSep * 2);
   });
 });
 
@@ -253,7 +277,7 @@ describe("wrist sizes 14–19 cm", () => {
 });
 
 describe("resolveStrandRingLayout", () => {
-  it("uses wrist size as baseline only — visual layout may expand", () => {
+  it("uses wrist size as fixed ring radius — layout never grows the bracelet", () => {
     const beads = [10, 10, 10, 10].map((mm) => mockPlaced(mm));
     const result = resolveStrandRingLayout({
       placed: beads,
@@ -264,6 +288,7 @@ describe("resolveStrandRingLayout", () => {
       renderCatalogue: TEST_STRAND_RENDER_CATALOGUE,
     });
     expect(result).not.toBeNull();
-    expect(result!.resolved.radiusPx).toBeGreaterThanOrEqual(result!.wristRadiusPx);
+    expect(result!.resolved.radiusPx).toBeCloseTo(result!.wristRadiusPx, 5);
+    expect(result!.resolved.expanded).toBe(false);
   });
 });

@@ -36,6 +36,29 @@ describe("computeElasticBeadLayout", () => {
     expect(delta).toBeCloseTo(minSep, 4);
   });
 
+  it("leaves unfinished empty arc only between last and first bead", () => {
+    const layout = computeElasticBeadLayout(
+      [25, 25, 25],
+      200,
+      0,
+      0,
+      { leadingPx: [0, 0, 0], trailingPx: [0, 0, 0] },
+    );
+    expect(layout.isOverCapacity).toBe(false);
+    for (let i = 0; i < 2; i++) {
+      const delta = adjacentIndexAngleDeltaRad(layout.angles, i);
+      const minSep = (layout.arcSpans[i]! + layout.arcSpans[i + 1]!) / 2;
+      expect(delta).toBeCloseTo(minSep, 4);
+    }
+    const wrap = adjacentIndexAngleDeltaRad(layout.angles, 2);
+    const wrapSep = (layout.arcSpans[2]! + layout.arcSpans[0]!) / 2;
+    expect(wrap).toBeGreaterThan(wrapSep * 2);
+    const emptyFrac = (200 - 75) / 200;
+    const expectedWrap =
+      layout.arcSpans[2]! / 2 + emptyFrac * 2 * Math.PI + layout.arcSpans[0]! / 2;
+    expect(wrap).toBeCloseTo(expectedWrap, 4);
+  });
+
   it("keeps adjacent strand beads from overlapping on a mixed-size strand", () => {
     const layout = computeElasticBeadLayout([6, 10, 8, 12, 6], 160);
     expect(adjacentArcSectorsOverlap(layout.angles, layout.arcSpans)).toBe(false);

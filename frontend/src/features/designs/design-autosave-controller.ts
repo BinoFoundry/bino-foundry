@@ -32,7 +32,8 @@ export class DesignAutoSaveController {
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
-  private queued = false;
+  /** True when a newer edit arrived while a save was in flight — coalesce after success only. */
+  private coalesceAfterFlight = false;
   private paused = false;
   private interactionHold = false;
   private lastSavedFingerprint: string | null = null;
@@ -86,7 +87,7 @@ export class DesignAutoSaveController {
     }
     this.pendingFingerprint = null;
     this.pendingBuild = null;
-    this.queued = false;
+    this.coalesceAfterFlight = false;
     this.clearDebounce();
     this.onStatus("saved");
   }
@@ -94,7 +95,7 @@ export class DesignAutoSaveController {
   hasPendingChanges(): boolean {
     return (
       this.inFlight ||
-      this.queued ||
+      this.coalesceAfterFlight ||
       this.debounceTimer != null ||
       (this.pendingFingerprint != null && this.pendingFingerprint !== this.lastSavedFingerprint)
     );
@@ -103,7 +104,7 @@ export class DesignAutoSaveController {
   getStatus(): DesignAutoSaveStatus {
     if (!navigator.onLine && this.hasPendingChanges()) return "offline";
     if (this.inFlight) return "saving";
-    if (this.queued || this.debounceTimer != null) return "pending";
+    if (this.coalesceAfterFlight || this.debounceTimer != null) return "pending";
     if (this.pendingFingerprint && this.pendingFingerprint !== this.lastSavedFingerprint) {
       return "pending";
     }
@@ -120,7 +121,7 @@ export class DesignAutoSaveController {
     if (fingerprint === this.lastSavedFingerprint) {
       this.pendingFingerprint = null;
       this.pendingBuild = null;
-      this.queued = false;
+      this.coalesceAfterFlight = false;
       this.clearDebounce();
       if (!this.inFlight) this.onStatus(this.lastSavedFingerprint ? "saved" : "idle");
       return;
@@ -156,7 +157,7 @@ export class DesignAutoSaveController {
     if (this.paused) return null;
 
     if (this.inFlight) {
-      this.queued = true;
+      this.coalesceAfterFlight = true;
       return null;
     }
 
@@ -170,7 +171,6 @@ export class DesignAutoSaveController {
 
     if (!navigator.onLine) {
       this.onStatus("offline");
-      this.queued = true;
       return null;
     }
 
@@ -201,16 +201,14 @@ export class DesignAutoSaveController {
         return saved;
       }
       this.onStatus("error");
-      this.queued = true;
       return null;
     } catch {
       this.onStatus("error");
-      this.queued = true;
       return null;
     } finally {
       this.inFlight = false;
-      if (this.queued) {
-        this.queued = false;
+      if (this.coalesceAfterFlight) {
+        this.coalesceAfterFlight = false;
         if (this.pendingFingerprint && this.pendingFingerprint !== this.lastSavedFingerprint) {
           void this.runSave(force);
         }
