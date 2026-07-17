@@ -7,7 +7,7 @@
     "predev": "npm run build -w @bino-foundry/shared",
     "dev": "tsx watch src/server.ts",
     "prestart": "npm run build -w @bino-foundry/shared",
-    "build": "npm run build -w @bino-foundry/shared && tsc",
+    "build": "npm run build -w @bino-foundry/shared && node scripts/ensure-sharp.mjs && tsc",
     "start": "tsx src/server.ts",
     "start:prod": "node dist/server.js",
     "typecheck": "npm run build -w @bino-foundry/shared && tsc --noEmit",
