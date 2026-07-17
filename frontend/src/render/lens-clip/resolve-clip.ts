@@ -16,7 +16,10 @@ export function resolveLensClipConfig(view: {
     return view.clipConfig;
   }
   if (view.maskConfig && isMaskConfigValid(view.maskConfig)) {
-    return maskConfigToLensClipConfig(view.maskConfig);
+    return maskConfigToLensClipConfig(view.maskConfig, {
+      render: view.clipConfig?.render,
+      frameExclusions: view.clipConfig?.frameExclusions,
+    });
   }
   return null;
 }

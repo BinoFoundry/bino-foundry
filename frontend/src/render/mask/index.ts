@@ -7,6 +7,7 @@ export {
 export { PolygonEditor } from "./PolygonEditor";
 export { EditorTool } from "./editor-interaction";
 export {
+  createLensPolygon,
   createMaskConfig,
   defaultLensSet,
   ensureFrameLensSet,

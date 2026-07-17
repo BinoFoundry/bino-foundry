@@ -6,11 +6,62 @@ export interface LensClipShape {
   pathD: string;
 }
 
+/**
+ * Frame / hardware pieces that sit inside a lens opening (bridge, screws, logos).
+ * Drawn from the original plate above the synthetic lens — never merged into the clip path.
+ */
+export interface FrameExclusionShape {
+  id: string;
+  label: string;
+  pathD: string;
+  /** Optional association to a lens opening id (`left` / `right`). */
+  lensId?: string;
+}
+
+/**
+ * Frame-level optical / compositing settings stored on `clip_config.render`.
+ * Customer tint colours still come from `sunglasses_lens_tints`; these tune how the
+ * synthetic lens is painted inside the clipping polygons.
+ */
 export interface LensClipRenderSettings {
+  /**
+   * `replace` — knock out original lens pixels and paint a synthetic lens (default).
+   * `overlay` — legacy multiply/soft-light tint on top of the plate.
+   */
+  mode?: "replace" | "overlay";
+
+  /** Overall lens fill opacity (0–1). When unset, customer tint opacity is used. */
+  tintOpacity?: number;
+  /** Prefer customer tint gradient when true (default). */
+  gradientEnabled?: boolean;
+  /** Optional frame-level gradient colour overrides (hex). */
+  gradientTopColor?: string;
+  gradientBottomColor?: string;
+  /** Vertical mid-stop 0–100 (darker top → lighter bottom emphasis). */
+  gradientPosition?: number;
+
+  reflectionEnabled?: boolean;
+  reflectionOpacity?: number;
+  reflectionBlur?: number;
+
+  glossEnabled?: boolean;
+  glossIntensity?: number;
+
+  vignetteEnabled?: boolean;
+  vignetteStrength?: number;
+
+  polarizedEnabled?: boolean;
+  polarizedStrength?: number;
+
+  /** @deprecated Prefer `tintOpacity` — kept for older saved configs. */
   lensOpacity?: number;
-  tintBlendMode?: "multiply" | "screen" | "overlay" | "color";
+  /** @deprecated Overlay-mode only. */
+  tintBlendMode?: "multiply" | "screen" | "overlay" | "color" | "soft-light";
+  /** @deprecated Overlay-mode only. */
   highlightStrength?: number;
+  /** @deprecated Overlay-mode only. */
   highlightBlendMode?: "screen" | "overlay" | "soft-light";
+  /** @deprecated Overlay-mode only. */
   shadowStrength?: number;
 }
 
@@ -22,6 +73,8 @@ export interface LensClipConfig {
   imageWidth: number;
   imageHeight: number;
   lenses: LensClipShape[];
+  /** Frame overlays drawn above the synthetic lens (separate from lens openings). */
+  frameExclusions?: FrameExclusionShape[];
   render?: LensClipRenderSettings;
   updatedAt?: number;
 }
@@ -40,13 +93,24 @@ export function createLensClipConfig(
   imageHeight: number,
   lenses: LensClipShape[],
   render?: LensClipRenderSettings,
+  frameExclusions?: FrameExclusionShape[],
 ): LensClipConfig {
   return {
     version: LENS_CLIP_CONFIG_V1,
     imageWidth,
     imageHeight,
     lenses,
+    ...(frameExclusions?.length ? { frameExclusions } : {}),
     render,
     updatedAt: Date.now(),
   };
+}
+
+/** Prefer top-level `frameExclusions`; ignore legacy keys if present. */
+export function resolveFrameExclusionShapes(
+  clip: Pick<LensClipConfig, "frameExclusions"> | null | undefined,
+): FrameExclusionShape[] {
+  const list = clip?.frameExclusions;
+  if (!Array.isArray(list)) return [];
+  return list.filter((s) => typeof s?.pathD === "string" && s.pathD.trim().length > 8);
 }

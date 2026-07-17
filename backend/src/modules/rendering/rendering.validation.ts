@@ -6,10 +6,33 @@ const lensClipShapeSchema = z.object({
   pathD: z.string().min(8),
 });
 
+const frameExclusionShapeSchema = z.object({
+  id: z.string().min(1),
+  label: z.string(),
+  pathD: z.string().min(8),
+  lensId: z.string().min(1).optional(),
+});
+
 const lensClipRenderSchema = z
   .object({
+    mode: z.enum(["replace", "overlay"]).optional(),
+    tintOpacity: z.number().min(0).max(1).optional(),
+    gradientEnabled: z.boolean().optional(),
+    gradientTopColor: z.string().min(4).max(9).optional(),
+    gradientBottomColor: z.string().min(4).max(9).optional(),
+    gradientPosition: z.number().min(0).max(100).optional(),
+    reflectionEnabled: z.boolean().optional(),
+    reflectionOpacity: z.number().min(0).max(1).optional(),
+    reflectionBlur: z.number().min(0).max(1).optional(),
+    glossEnabled: z.boolean().optional(),
+    glossIntensity: z.number().min(0).max(1).optional(),
+    vignetteEnabled: z.boolean().optional(),
+    vignetteStrength: z.number().min(0).max(1).optional(),
+    polarizedEnabled: z.boolean().optional(),
+    polarizedStrength: z.number().min(0).max(1).optional(),
+    // Legacy overlay fields
     lensOpacity: z.number().min(0).max(1).optional(),
-    tintBlendMode: z.enum(["multiply", "screen", "overlay", "color"]).optional(),
+    tintBlendMode: z.enum(["multiply", "screen", "overlay", "color", "soft-light"]).optional(),
     highlightStrength: z.number().min(0).max(1).optional(),
     highlightBlendMode: z.enum(["screen", "overlay", "soft-light"]).optional(),
     shadowStrength: z.number().min(0).max(1).optional(),
@@ -43,6 +66,7 @@ export const lensClipConfigSchema = z.object({
   imageWidth: z.number().int().positive(),
   imageHeight: z.number().int().positive(),
   lenses: z.array(lensClipShapeSchema).min(1),
+  frameExclusions: z.array(frameExclusionShapeSchema).optional(),
   render: lensClipRenderSchema,
   updatedAt: z.number().optional(),
 });

@@ -35,7 +35,9 @@ import { isLensClipConfigValid } from "@bino-foundry/shared/types";
 
 import { LoadingState } from "@/components/common";
 import { FramePlateCropEditor } from "./FramePlateCropEditor";
+import { FrameExclusionRegionsEditor } from "./FrameExclusionRegionsEditor";
 import { InlineEditorPanel, INLINE_SECTION_ACTIVE_CLASS } from "./InlineEditorPanel";
+import { LensRenderingSettingsPanel } from "./LensRenderingSettingsPanel";
 
 const FrameMaskEditor = lazy(() =>
   import("./FrameMaskEditor").then((m) => ({ default: m.FrameMaskEditor })),
@@ -180,7 +182,11 @@ export const FrameRenderViewsSection = forwardRef<
 
   const commitMaskToView = (axis: FrameViewAxis, mask: MaskConfig | null) => {
     if (!mask || !isMaskConfigValid(mask)) return false;
-    const clipConfig = maskConfigToLensClipConfig(mask);
+    const existing = getView(axis).clipConfig;
+    const clipConfig = maskConfigToLensClipConfig(mask, {
+      render: existing?.render,
+      frameExclusions: existing?.frameExclusions,
+    });
     const clipReadyNow = Boolean(clipConfig && isLensClipConfigValid(clipConfig));
     draftRef.current[axis] = mask;
     setPreviewMasks((prev) => ({ ...prev, [axis]: mask }));
@@ -191,6 +197,37 @@ export const FrameRenderViewsSection = forwardRef<
       clipStatus: clipReadyNow && isDualLensMaskValid(mask) ? "ready" : "draft",
     });
     return true;
+  };
+
+  const patchClipRender = (axis: FrameViewAxis, render: import("@bino-foundry/shared/types").LensClipRenderSettings) => {
+    const view = getView(axis);
+    const clip = view.clipConfig;
+    if (!clip || !isLensClipConfigValid(clip)) {
+      toast.error("Configure left and right lens clips before adjusting lens rendering.");
+      return;
+    }
+    patchView(axis, {
+      clipConfig: { ...clip, render, updatedAt: Date.now() },
+    });
+  };
+
+  const patchFrameExclusions = (
+    axis: FrameViewAxis,
+    frameExclusions: import("@bino-foundry/shared/types").FrameExclusionShape[],
+  ) => {
+    const view = getView(axis);
+    const clip = view.clipConfig;
+    if (!clip || !isLensClipConfigValid(clip)) {
+      toast.error("Configure left and right lens clips before adding exclusions.");
+      return;
+    }
+    patchView(axis, {
+      clipConfig: {
+        ...clip,
+        frameExclusions: frameExclusions.length ? frameExclusions : undefined,
+        updatedAt: Date.now(),
+      },
+    });
   };
 
   const getWorkingPlate = useCallback(
@@ -911,6 +948,25 @@ export const FrameRenderViewsSection = forwardRef<
                     </InlineEditorPanel>
                   ) : null}
                 </div>
+
+                {isDualLensMaskValid(
+                  previewMasks[axis] ?? draftRef.current[axis] ?? resolveMaskConfigForEditor(view),
+                ) || (view.clipConfig && isLensClipConfigValid(view.clipConfig)) ? (
+                  <div className="space-y-4 border-t border-border/60 pt-4 px-0.5">
+                    <LensRenderingSettingsPanel
+                      value={view.clipConfig?.render}
+                      disabled={working}
+                      onChange={(render) => patchClipRender(axis, render)}
+                    />
+                    <LensExclusionEditorForView
+                      axis={axis}
+                      view={view}
+                      getWorkingPlate={getWorkingPlate}
+                      onChange={(exclusions) => patchFrameExclusions(axis, exclusions)}
+                      disabled={working}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>
@@ -919,6 +975,47 @@ export const FrameRenderViewsSection = forwardRef<
     </div>
   );
 });
+
+function LensExclusionEditorForView({
+  axis,
+  view,
+  getWorkingPlate,
+  onChange,
+  disabled,
+}: {
+  axis: FrameViewAxis;
+  view: FrameRenderView;
+  getWorkingPlate: (axis: FrameViewAxis) => Promise<{ url: string; width: number; height: number }>;
+  onChange: (exclusions: import("@bino-foundry/shared/types").FrameExclusionShape[]) => void;
+  disabled?: boolean;
+}) {
+  const [plate, setPlate] = useState<{ url: string; width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getWorkingPlate(axis).then((result) => {
+      if (!cancelled && result.url) setPlate(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [axis, getWorkingPlate, view.plateUrl, view.plateCropConfig, view.clipConfig?.updatedAt]);
+
+  if (!plate?.url) {
+    return <LoadingState label="Preparing plate for exclusions…" className="h-32" />;
+  }
+
+  return (
+    <FrameExclusionRegionsEditor
+      plateUrl={plate.url}
+      imageWidth={plate.width}
+      imageHeight={plate.height}
+      clipConfig={view.clipConfig}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
+}
 
 function LensEditorForView({
   axis,

@@ -30,7 +30,10 @@ export function mergeCropIntoView(view: FrameRenderView, config: BeadCropConfig)
 }
 
 export function mergeMaskIntoView(view: FrameRenderView, mask: MaskConfig): FrameRenderView {
-  const clipConfig = maskConfigToLensClipConfig(mask);
+  const clipConfig = maskConfigToLensClipConfig(mask, {
+    render: view.clipConfig?.render,
+    frameExclusions: view.clipConfig?.frameExclusions,
+  });
   const clipReadyNow = Boolean(clipConfig && isLensClipConfigValid(clipConfig));
   return {
     ...view,
