@@ -2,8 +2,8 @@ import { memo, useId, useMemo } from "react";
 
 import { usePlateContentBounds } from "@/render/image-bounds";
 import {
-  resolveFrameExclusionShapes,
-  type FrameExclusionShape,
+  normalizeLensClipConfig,
+  resolveLensExclusionShapes,
   type LensClipConfig,
   type LensClipShape,
 } from "@bino-foundry/shared/types";
@@ -51,10 +51,26 @@ function lensFillSpec(
   };
 }
 
+function LensClipPathDef({ uid, lens }: { uid: string; lens: LensClipShape }) {
+  const exclusions = resolveLensExclusionShapes(lens);
+  return (
+    <clipPath
+      key={`${uid}-clip-${lens.id}`}
+      id={`${uid}-clip-${lens.id}`}
+      clipPathUnits="userSpaceOnUse"
+      clipRule="evenodd"
+    >
+      <path d={lens.pathD} />
+      {exclusions.map((ex) => (
+        <path key={`${uid}-clip-${lens.id}-ex-${ex.id}`} d={ex.pathD} />
+      ))}
+    </clipPath>
+  );
+}
+
 function ReplaceLensLayers({
   uid,
   lenses,
-  exclusions,
   w,
   h,
   plateUrl,
@@ -64,7 +80,6 @@ function ReplaceLensLayers({
 }: {
   uid: string;
   lenses: LensClipShape[];
-  exclusions: FrameExclusionShape[];
   w: number;
   h: number;
   plateUrl: string;
@@ -95,9 +110,17 @@ function ReplaceLensLayers({
       <defs>
         <mask id={knockoutId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
           <rect x={0} y={0} width={w} height={h} fill="#fff" />
-          {lenses.map((lens) => (
-            <path key={`${knockoutId}-${lens.id}`} d={lens.pathD} fill="#000" />
-          ))}
+          {lenses.map((lens) => {
+            const exclusions = resolveLensExclusionShapes(lens);
+            return (
+              <g key={`${knockoutId}-${lens.id}`}>
+                <path d={lens.pathD} fill="#000" />
+                {exclusions.map((ex) => (
+                  <path key={`${knockoutId}-${lens.id}-ex-${ex.id}`} d={ex.pathD} fill="#fff" />
+                ))}
+              </g>
+            );
+          })}
         </mask>
 
         <SvgTintGradientDef id={tintId} spec={fillSpec} />
@@ -126,30 +149,14 @@ function ReplaceLensLayers({
         </linearGradient>
 
         {lenses.map((lens) => (
-          <clipPath
-            key={`${uid}-clip-${lens.id}`}
-            id={`${uid}-clip-${lens.id}`}
-            clipPathUnits="userSpaceOnUse"
-          >
-            <path d={lens.pathD} />
-          </clipPath>
-        ))}
-
-        {exclusions.map((ex) => (
-          <clipPath
-            key={`${uid}-excl-${ex.id}`}
-            id={`${uid}-excl-${ex.id}`}
-            clipPathUnits="userSpaceOnUse"
-          >
-            <path d={ex.pathD} />
-          </clipPath>
+          <LensClipPathDef key={`${uid}-clipdef-${lens.id}`} uid={uid} lens={lens} />
         ))}
       </defs>
 
-      {/* 1. Frame with original lens openings removed */}
+      {/* 1. Frame with original lens openings removed (exclusions restore plate pixels) */}
       <image {...plateImageProps} mask={`url(#${knockoutId})`} />
 
-      {/* 2–5. Synthetic lens + optical layers inside each polygon */}
+      {/* 2–6. Synthetic lens + optical layers inside lens polygon minus exclusions */}
       {lenses.map((lens) => (
         <g key={`${uid}-lens-${lens.id}`} clipPath={`url(#${uid}-clip-${lens.id})`}>
           <rect x={0} y={0} width={w} height={h} fill={`url(#${tintId})`} opacity={fillOpacity} />
@@ -206,13 +213,6 @@ function ReplaceLensLayers({
           ) : null}
         </g>
       ))}
-
-      {/* 6. Exclusion regions — original plate bits above the synthetic lens */}
-      {exclusions.map((ex) => (
-        <g key={`${uid}-exg-${ex.id}`} clipPath={`url(#${uid}-excl-${ex.id})`}>
-          <image {...plateImageProps} />
-        </g>
-      ))}
     </>
   );
 }
@@ -253,13 +253,7 @@ function OverlayLensLayers({
       <defs>
         <SvgTintGradientDef id={tintId} spec={tintSpec} />
         {lenses.map((lens) => (
-          <clipPath
-            key={`${uid}-clip-${lens.id}`}
-            id={`${uid}-clip-${lens.id}`}
-            clipPathUnits="userSpaceOnUse"
-          >
-            <path d={lens.pathD} />
-          </clipPath>
+          <LensClipPathDef key={`${uid}-clipdef-${lens.id}`} uid={uid} lens={lens} />
         ))}
       </defs>
 
@@ -328,15 +322,10 @@ function SvgClipCompositorViewInner({
   const plateH = plate?.height ?? 0;
   const { viewBox } = usePlateContentBounds(plate?.plateUrl, plateW, plateH);
 
-  const lenses = useMemo(
-    () => (plate?.clipConfig?.lenses ?? []).filter((l) => l.pathD?.trim()),
-    [plate?.clipConfig?.lenses],
-  );
-
-  const exclusions = useMemo(
-    () => resolveFrameExclusionShapes(plate?.clipConfig),
-    [plate?.clipConfig],
-  );
+  const lenses = useMemo(() => {
+    const clip = plate?.clipConfig ? normalizeLensClipConfig(plate.clipConfig) : null;
+    return (clip?.lenses ?? []).filter((l) => l.pathD?.trim());
+  }, [plate?.clipConfig]);
 
   if (!plate?.plateUrl) {
     return (
@@ -396,7 +385,6 @@ function SvgClipCompositorViewInner({
             <ReplaceLensLayers
               uid={uid}
               lenses={lenses}
-              exclusions={exclusions}
               w={w}
               h={h}
               plateUrl={plate.plateUrl}

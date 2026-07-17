@@ -1,15 +1,19 @@
 import { z } from "zod";
 
-const lensClipShapeSchema = z.object({
+const lensExclusionShapeSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
   pathD: z.string().min(8),
 });
 
-const frameExclusionShapeSchema = z.object({
+const lensClipShapeSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
   pathD: z.string().min(8),
+  exclusions: z.array(lensExclusionShapeSchema).optional(),
+});
+
+const frameExclusionShapeSchema = lensExclusionShapeSchema.extend({
   lensId: z.string().min(1).optional(),
 });
 
@@ -58,6 +62,12 @@ export const maskConfigSchema = z.object({
   imageWidth: z.number().int().positive(),
   imageHeight: z.number().int().positive(),
   lenses: z.array(lensPolygonSchema).min(1),
+  exclusions: z
+    .object({
+      left: z.array(lensPolygonSchema).optional(),
+      right: z.array(lensPolygonSchema).optional(),
+    })
+    .optional(),
   updatedAt: z.number().optional(),
 });
 

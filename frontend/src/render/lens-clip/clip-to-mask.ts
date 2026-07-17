@@ -1,9 +1,10 @@
-import type { LensClipConfig, LensClipShape } from "@bino-foundry/shared/types";
+import type { LensClipConfig, LensClipShape, LensExclusionShape } from "@bino-foundry/shared/types";
 import {
   createLensPolygon,
   createMaskConfig,
   ensureFrameLensSet,
   migrateAnchors,
+  normalizeExclusionsBySide,
   normalizeAnchor,
   type LensPolygon,
   type MaskConfig,
@@ -45,7 +46,7 @@ function pxToNorm(x: number, y: number, w: number, h: number): { x: number; y: n
 
 /** Reconstruct editor anchors from exported SVG path `d` (M/L/C/Z). */
 export function pathDToLensPolygon(
-  shape: LensClipShape,
+  shape: Pick<LensClipShape | LensExclusionShape, "id" | "label" | "pathD">,
   imageWidth: number,
   imageHeight: number,
 ): LensPolygon | null {
@@ -99,6 +100,22 @@ export function pathDToLensPolygon(
   return createLensPolygon(shape.id, shape.label, finalPoints);
 }
 
+function exclusionsFromClipShapes(clip: LensClipConfig) {
+  const left: LensPolygon[] = [];
+  const right: LensPolygon[] = [];
+
+  for (const lens of clip.lenses) {
+    for (const exclusion of lens.exclusions ?? []) {
+      const polygon = pathDToLensPolygon(exclusion, clip.imageWidth, clip.imageHeight);
+      if (!polygon) continue;
+      if (lens.id === "left") left.push(polygon);
+      else if (lens.id === "right") right.push(polygon);
+    }
+  }
+
+  return normalizeExclusionsBySide({ left, right });
+}
+
 /** Restore polygon editor state from saved LensClipConfig (when mask_config is absent). */
 export function lensClipConfigToMaskConfig(clip: LensClipConfig): MaskConfig | null {
   const lenses: LensPolygon[] = [];
@@ -110,5 +127,11 @@ export function lensClipConfigToMaskConfig(clip: LensClipConfig): MaskConfig | n
 
   if (!lenses.length) return null;
 
-  return createMaskConfig(clip.imageWidth, clip.imageHeight, ensureFrameLensSet(lenses));
+  const exclusions = exclusionsFromClipShapes(clip);
+  return createMaskConfig(
+    clip.imageWidth,
+    clip.imageHeight,
+    ensureFrameLensSet(lenses),
+    exclusions ?? undefined,
+  );
 }

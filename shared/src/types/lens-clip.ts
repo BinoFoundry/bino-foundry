@@ -4,16 +4,22 @@ export interface LensClipShape {
   label: string;
   /** SVG path `d` attribute (M/L/C/Z) in pixel coords for viewBox 0 0 imageWidth imageHeight */
   pathD: string;
+  /** Holes inside this lens opening — excluded from tint and all optical effects. */
+  exclusions?: LensExclusionShape[];
 }
 
-/**
- * Frame / hardware pieces that sit inside a lens opening (bridge, screws, logos).
- * Drawn from the original plate above the synthetic lens — never merged into the clip path.
- */
-export interface FrameExclusionShape {
+/** Polygon carved out of a lens opening so frame hardware stays untinted. */
+export interface LensExclusionShape {
   id: string;
   label: string;
   pathD: string;
+}
+
+/**
+ * @deprecated Legacy frame-level exclusions — migrated to {@link LensClipShape.exclusions}.
+ * Kept for reading older saved configs.
+ */
+export interface FrameExclusionShape extends LensExclusionShape {
   /** Optional association to a lens opening id (`left` / `right`). */
   lensId?: string;
 }
@@ -73,7 +79,10 @@ export interface LensClipConfig {
   imageWidth: number;
   imageHeight: number;
   lenses: LensClipShape[];
-  /** Frame overlays drawn above the synthetic lens (separate from lens openings). */
+  /**
+   * @deprecated Prefer per-lens {@link LensClipShape.exclusions}.
+   * Read for migration only.
+   */
   frameExclusions?: FrameExclusionShape[];
   render?: LensClipRenderSettings;
   updatedAt?: number;
@@ -93,24 +102,78 @@ export function createLensClipConfig(
   imageHeight: number,
   lenses: LensClipShape[],
   render?: LensClipRenderSettings,
-  frameExclusions?: FrameExclusionShape[],
 ): LensClipConfig {
   return {
     version: LENS_CLIP_CONFIG_V1,
     imageWidth,
     imageHeight,
     lenses,
-    ...(frameExclusions?.length ? { frameExclusions } : {}),
     render,
     updatedAt: Date.now(),
   };
 }
 
-/** Prefer top-level `frameExclusions`; ignore legacy keys if present. */
+function isUsablePathD(pathD: string | undefined): boolean {
+  return typeof pathD === "string" && pathD.trim().length > 8;
+}
+
+/** Exclusion holes stored on a single lens clip shape. */
+export function resolveLensExclusionShapes(
+  lens: Pick<LensClipShape, "exclusions"> | null | undefined,
+): LensExclusionShape[] {
+  const list = lens?.exclusions;
+  if (!Array.isArray(list)) return [];
+  return list.filter((s) => isUsablePathD(s?.pathD));
+}
+
+/** @deprecated Prefer {@link resolveLensExclusionShapes} on each lens. */
 export function resolveFrameExclusionShapes(
   clip: Pick<LensClipConfig, "frameExclusions"> | null | undefined,
 ): FrameExclusionShape[] {
   const list = clip?.frameExclusions;
   if (!Array.isArray(list)) return [];
-  return list.filter((s) => typeof s?.pathD === "string" && s.pathD.trim().length > 8);
+  return list.filter((s) => isUsablePathD(s?.pathD));
+}
+
+/**
+ * Migrate legacy root `frameExclusions` onto per-lens `exclusions` arrays.
+ * Strips deprecated keys from the returned config.
+ */
+export function normalizeLensClipConfig(clip: LensClipConfig): LensClipConfig {
+  const legacy = resolveFrameExclusionShapes(clip);
+  if (!legacy.length) {
+    return {
+      ...clip,
+      lenses: clip.lenses.map((lens) => {
+        const exclusions = resolveLensExclusionShapes(lens);
+        return exclusions.length ? { ...lens, exclusions } : lens;
+      }),
+    };
+  }
+
+  const lenses = clip.lenses.map((lens) => ({
+    ...lens,
+    exclusions: [...resolveLensExclusionShapes(lens)],
+  }));
+
+  for (const ex of legacy) {
+    const shape: LensExclusionShape = { id: ex.id, label: ex.label, pathD: ex.pathD };
+    if (ex.lensId) {
+      const lens = lenses.find((l) => l.id === ex.lensId);
+      if (lens) {
+        lens.exclusions = [...(lens.exclusions ?? []), shape];
+      }
+    } else {
+      for (const lens of lenses) {
+        lens.exclusions = [...(lens.exclusions ?? []), { ...shape, id: `${ex.id}-${lens.id}` }];
+      }
+    }
+  }
+
+  const { frameExclusions: _drop, ...rest } = clip;
+  return {
+    ...rest,
+    lenses,
+    updatedAt: clip.updatedAt ?? Date.now(),
+  };
 }

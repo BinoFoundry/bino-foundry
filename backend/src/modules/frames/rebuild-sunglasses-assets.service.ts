@@ -2,7 +2,7 @@ import {
   getBeadCropPoints,
   isBeadCropConfigValid,
   isLensClipConfigValid,
-  resolveFrameExclusionShapes,
+  normalizeLensClipConfig,
   type BeadCropConfig,
   type LensClipConfig,
 } from "@bino-foundry/shared/types";
@@ -85,20 +85,7 @@ function resolveOriginalUrl(view: ViewRow): string {
 
 function migrateClipConfig(clip: LensClipConfig | null): LensClipConfig | null {
   if (!clip || !isLensClipConfigValid(clip)) return clip;
-  const exclusions = resolveFrameExclusionShapes(clip);
-  if (!exclusions.length) return clip;
-  if ((clip.frameExclusions?.length ?? 0) > 0) return clip;
-
-  // Persist migrated exclusions at view level; drop writing legacy per-lens paths.
-  return {
-    ...clip,
-    frameExclusions: exclusions,
-    lenses: clip.lenses.map((lens) => {
-      const { exclusionPathDs: _drop, ...rest } = lens;
-      return rest;
-    }),
-    updatedAt: Date.now(),
-  };
+  return normalizeLensClipConfig(clip);
 }
 
 async function rebuildOneView(

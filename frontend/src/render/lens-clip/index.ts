@@ -1,12 +1,15 @@
 export {
   createLensClipConfig,
   isLensClipConfigValid,
+  normalizeLensClipConfig,
   resolveFrameExclusionShapes,
+  resolveLensExclusionShapes,
   LENS_CLIP_CONFIG_V1,
   type FrameExclusionShape,
   type LensClipConfig,
   type LensClipRenderSettings,
   type LensClipShape,
+  type LensExclusionShape,
 } from "@bino-foundry/shared/types";
 export { lensClipConfigToMaskConfig, pathDToLensPolygon } from "./clip-to-mask";
 export { maskConfigToLensClipConfig } from "./mask-to-clip";

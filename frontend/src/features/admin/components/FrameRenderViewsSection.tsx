@@ -35,9 +35,9 @@ import { isLensClipConfigValid } from "@bino-foundry/shared/types";
 
 import { LoadingState } from "@/components/common";
 import { FramePlateCropEditor } from "./FramePlateCropEditor";
-import { FrameExclusionRegionsEditor } from "./FrameExclusionRegionsEditor";
 import { InlineEditorPanel, INLINE_SECTION_ACTIVE_CLASS } from "./InlineEditorPanel";
 import { LensRenderingSettingsPanel } from "./LensRenderingSettingsPanel";
+import type { LensEditorMode } from "./FrameMaskEditor";
 
 const FrameMaskEditor = lazy(() =>
   import("./FrameMaskEditor").then((m) => ({ default: m.FrameMaskEditor })),
@@ -50,6 +50,10 @@ type BusyAction =
   | { axis: FrameViewAxis; kind: "detect-both" };
 
 type ExpandedPanel = "frame" | "left" | "right";
+
+function lensEditModeKey(axis: FrameViewAxis, side: FrameLensSide): string {
+  return `${axis}-${side}`;
+}
 type ExpandedEditor = { axis: FrameViewAxis; panel: ExpandedPanel };
 
 function emptyView(view: FrameViewAxis): FrameRenderView {
@@ -93,6 +97,7 @@ export const FrameRenderViewsSection = forwardRef<
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [expandedEditor, setExpandedEditor] = useState<ExpandedEditor | null>(null);
   const [editSession, setEditSession] = useState<Partial<Record<string, number>>>({});
+  const [lensEditMode, setLensEditMode] = useState<Partial<Record<string, LensEditorMode>>>({});
   const [notice, setNotice] = useState<Partial<Record<FrameViewAxis, string>>>({});
   const [noticeVariant, setNoticeVariant] = useState<Partial<Record<FrameViewAxis, "success" | "warning">>>({});
   const [previewMasks, setPreviewMasks] = useState<Partial<Record<FrameViewAxis, MaskConfig | null>>>({});
@@ -185,7 +190,7 @@ export const FrameRenderViewsSection = forwardRef<
     const existing = getView(axis).clipConfig;
     const clipConfig = maskConfigToLensClipConfig(mask, {
       render: existing?.render,
-      frameExclusions: existing?.frameExclusions,
+      existingClip: existing,
     });
     const clipReadyNow = Boolean(clipConfig && isLensClipConfigValid(clipConfig));
     draftRef.current[axis] = mask;
@@ -208,25 +213,6 @@ export const FrameRenderViewsSection = forwardRef<
     }
     patchView(axis, {
       clipConfig: { ...clip, render, updatedAt: Date.now() },
-    });
-  };
-
-  const patchFrameExclusions = (
-    axis: FrameViewAxis,
-    frameExclusions: import("@bino-foundry/shared/types").FrameExclusionShape[],
-  ) => {
-    const view = getView(axis);
-    const clip = view.clipConfig;
-    if (!clip || !isLensClipConfigValid(clip)) {
-      toast.error("Configure left and right lens clips before adding exclusions.");
-      return;
-    }
-    patchView(axis, {
-      clipConfig: {
-        ...clip,
-        frameExclusions: frameExclusions.length ? frameExclusions : undefined,
-        updatedAt: Date.now(),
-      },
     });
   };
 
@@ -587,12 +573,31 @@ export const FrameRenderViewsSection = forwardRef<
     }
   };
 
-  const handleEditorChange = useCallback((axis: FrameViewAxis, mask: MaskConfig | null) => {
-    draftRef.current[axis] = mask;
-    if (mask && hasAnyLensMask(mask)) {
-      setPreviewMasks((prev) => ({ ...prev, [axis]: mask }));
-    }
-  }, []);
+  const handleEditorChange = useCallback(
+    (axis: FrameViewAxis, mask: MaskConfig | null) => {
+      draftRef.current[axis] = mask;
+      if (mask && hasAnyLensMask(mask)) {
+        setPreviewMasks((prev) => ({ ...prev, [axis]: mask }));
+        if (isMaskConfigValid(mask)) {
+          const existing = getView(axis).clipConfig;
+          const clipConfig = maskConfigToLensClipConfig(mask, {
+            render: existing?.render,
+            existingClip: existing,
+          });
+          patchView(axis, {
+            maskConfig: mask,
+            maskStatus: isDualLensMaskValid(mask) ? "ready" : "draft",
+            clipConfig,
+            clipStatus:
+              clipConfig && isLensClipConfigValid(clipConfig) && isDualLensMaskValid(mask)
+                ? "ready"
+                : "draft",
+          });
+        }
+      }
+    },
+    [getView, patchView],
+  );
 
   const saveLensEditor = (axis: FrameViewAxis, side: FrameLensSide) => {
     const mask = draftRef.current[axis];
@@ -810,9 +815,39 @@ export const FrameRenderViewsSection = forwardRef<
                   {isLeftPanelOpen ? (
                     <InlineEditorPanel
                       title="Left lens path editor"
-                      description="You are editing the left lens mask. Draw a closed path on the plate."
+                      description="Edit the left lens polygon or carve exclusion holes for frame hardware inside the lens."
                       toolbar={
                         <>
+                          <div className="mr-2 flex items-center gap-3 border-r border-border pr-3 text-[11px]">
+                            <label className="flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={`${axis}-left-mode`}
+                                checked={(lensEditMode[lensEditModeKey(axis, "left")] ?? "polygon") === "polygon"}
+                                onChange={() =>
+                                  setLensEditMode((prev) => ({
+                                    ...prev,
+                                    [lensEditModeKey(axis, "left")]: "polygon",
+                                  }))
+                                }
+                              />
+                              Lens polygon
+                            </label>
+                            <label className="flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={`${axis}-left-mode`}
+                                checked={lensEditMode[lensEditModeKey(axis, "left")] === "exclusions"}
+                                onChange={() =>
+                                  setLensEditMode((prev) => ({
+                                    ...prev,
+                                    [lensEditModeKey(axis, "left")]: "exclusions",
+                                  }))
+                                }
+                              />
+                              Exclusion areas
+                            </label>
+                          </div>
                           <Button
                             type="button"
                             size="sm"
@@ -847,6 +882,7 @@ export const FrameRenderViewsSection = forwardRef<
                           side="left"
                           view={view}
                           editSession={editSession[`${axis}-left`] ?? 0}
+                          editMode={lensEditMode[lensEditModeKey(axis, "left")] ?? "polygon"}
                           getWorkingPlate={getWorkingPlate}
                           initialMask={
                             previewMasks[axis] ??
@@ -899,9 +935,39 @@ export const FrameRenderViewsSection = forwardRef<
                   {isRightPanelOpen ? (
                     <InlineEditorPanel
                       title="Right lens path editor"
-                      description="You are editing the right lens mask. Draw a closed path on the plate."
+                      description="Edit the right lens polygon or carve exclusion holes for frame hardware inside the lens."
                       toolbar={
                         <>
+                          <div className="mr-2 flex items-center gap-3 border-r border-border pr-3 text-[11px]">
+                            <label className="flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={`${axis}-right-mode`}
+                                checked={(lensEditMode[lensEditModeKey(axis, "right")] ?? "polygon") === "polygon"}
+                                onChange={() =>
+                                  setLensEditMode((prev) => ({
+                                    ...prev,
+                                    [lensEditModeKey(axis, "right")]: "polygon",
+                                  }))
+                                }
+                              />
+                              Lens polygon
+                            </label>
+                            <label className="flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={`${axis}-right-mode`}
+                                checked={lensEditMode[lensEditModeKey(axis, "right")] === "exclusions"}
+                                onChange={() =>
+                                  setLensEditMode((prev) => ({
+                                    ...prev,
+                                    [lensEditModeKey(axis, "right")]: "exclusions",
+                                  }))
+                                }
+                              />
+                              Exclusion areas
+                            </label>
+                          </div>
                           <Button
                             type="button"
                             size="sm"
@@ -936,6 +1002,7 @@ export const FrameRenderViewsSection = forwardRef<
                           side="right"
                           view={view}
                           editSession={editSession[`${axis}-right`] ?? 0}
+                          editMode={lensEditMode[lensEditModeKey(axis, "right")] ?? "polygon"}
                           getWorkingPlate={getWorkingPlate}
                           initialMask={
                             previewMasks[axis] ??
@@ -958,13 +1025,6 @@ export const FrameRenderViewsSection = forwardRef<
                       disabled={working}
                       onChange={(render) => patchClipRender(axis, render)}
                     />
-                    <LensExclusionEditorForView
-                      axis={axis}
-                      view={view}
-                      getWorkingPlate={getWorkingPlate}
-                      onChange={(exclusions) => patchFrameExclusions(axis, exclusions)}
-                      disabled={working}
-                    />
                   </div>
                 ) : null}
               </div>
@@ -976,52 +1036,12 @@ export const FrameRenderViewsSection = forwardRef<
   );
 });
 
-function LensExclusionEditorForView({
-  axis,
-  view,
-  getWorkingPlate,
-  onChange,
-  disabled,
-}: {
-  axis: FrameViewAxis;
-  view: FrameRenderView;
-  getWorkingPlate: (axis: FrameViewAxis) => Promise<{ url: string; width: number; height: number }>;
-  onChange: (exclusions: import("@bino-foundry/shared/types").FrameExclusionShape[]) => void;
-  disabled?: boolean;
-}) {
-  const [plate, setPlate] = useState<{ url: string; width: number; height: number } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void getWorkingPlate(axis).then((result) => {
-      if (!cancelled && result.url) setPlate(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [axis, getWorkingPlate, view.plateUrl, view.plateCropConfig, view.clipConfig?.updatedAt]);
-
-  if (!plate?.url) {
-    return <LoadingState label="Preparing plate for exclusions…" className="h-32" />;
-  }
-
-  return (
-    <FrameExclusionRegionsEditor
-      plateUrl={plate.url}
-      imageWidth={plate.width}
-      imageHeight={plate.height}
-      clipConfig={view.clipConfig}
-      onChange={onChange}
-      disabled={disabled}
-    />
-  );
-}
-
 function LensEditorForView({
   axis,
   side,
   view,
   editSession,
+  editMode = "polygon",
   getWorkingPlate,
   initialMask,
   onChange,
@@ -1031,6 +1051,7 @@ function LensEditorForView({
   side: FrameLensSide;
   view: FrameRenderView;
   editSession: number;
+  editMode?: LensEditorMode;
   getWorkingPlate: (axis: FrameViewAxis) => Promise<{ url: string; width: number; height: number }>;
   initialMask?: MaskConfig | null;
   onChange: (config: MaskConfig | null) => void;
@@ -1076,11 +1097,12 @@ function LensEditorForView({
 
   return (
     <FrameMaskEditor
-      key={`${editorPlateKey(view)}|${side}`}
+      key={`${editorPlateKey(view)}|${side}|${editMode}`}
       plateUrl={plate.url}
       width={plate.width}
       height={plate.height}
       focusedLensId={side}
+      editMode={editMode}
       initialMask={initialMask}
       lensRevision={editSession}
       onChange={onChange}

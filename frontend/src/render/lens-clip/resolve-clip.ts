@@ -18,7 +18,7 @@ export function resolveLensClipConfig(view: {
   if (view.maskConfig && isMaskConfigValid(view.maskConfig)) {
     return maskConfigToLensClipConfig(view.maskConfig, {
       render: view.clipConfig?.render,
-      frameExclusions: view.clipConfig?.frameExclusions,
+      existingClip: view.clipConfig,
     });
   }
   return null;

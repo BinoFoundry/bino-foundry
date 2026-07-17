@@ -20,10 +20,18 @@
 
 /**
  * @typedef {{
+ *   left?: LensPolygon[],
+ *   right?: LensPolygon[]
+ * }} LensExclusionsBySide
+ */
+
+/**
+ * @typedef {{
  *   version: number,
  *   imageWidth: number,
  *   imageHeight: number,
  *   lenses: LensPolygon[],
+ *   exclusions?: LensExclusionsBySide,
  *   updatedAt: number
  * }} MaskConfig
  */
@@ -59,7 +67,8 @@ export function migrateAnchors(points) {
  * @param {LensPolygon[]} lenses
  * @returns {MaskConfig}
  */
-export function createMaskConfig(width, height, lenses) {
+export function createMaskConfig(width, height, lenses, exclusions) {
+  const normalizedExclusions = normalizeExclusionsBySide(exclusions);
   return {
     version: MASK_CONFIG_VERSION,
     imageWidth: width,
@@ -69,7 +78,30 @@ export function createMaskConfig(width, height, lenses) {
       label: l.label,
       points: migrateAnchors(l.points),
     })),
+    ...(normalizedExclusions ? { exclusions: normalizedExclusions } : {}),
     updatedAt: Date.now(),
+  };
+}
+
+/** @param {LensExclusionsBySide | null | undefined} exclusions */
+export function normalizeExclusionsBySide(exclusions) {
+  if (!exclusions || typeof exclusions !== "object") return null;
+  const left = exclusions.left?.map(normalizeExclusionPolygon).filter(Boolean) ?? [];
+  const right = exclusions.right?.map(normalizeExclusionPolygon).filter(Boolean) ?? [];
+  if (!left.length && !right.length) return null;
+  return {
+    ...(left.length ? { left } : {}),
+    ...(right.length ? { right } : {}),
+  };
+}
+
+/** @param {LensPolygon} polygon */
+function normalizeExclusionPolygon(polygon) {
+  if (!polygon?.id) return null;
+  return {
+    id: polygon.id,
+    label: polygon.label || "Exclusion",
+    points: migrateAnchors(polygon.points ?? []),
   };
 }
 
