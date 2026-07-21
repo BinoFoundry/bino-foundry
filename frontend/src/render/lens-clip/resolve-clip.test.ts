@@ -16,6 +16,27 @@ describe("resolveLensClipConfig", () => {
     expect(result?.lenses).toHaveLength(1);
   });
 
+  it("normalizes legacy frameExclusions into the canonical frame-level list", () => {
+    const result = resolveLensClipConfig({
+      clipConfig: {
+        version: 1,
+        imageWidth: 100,
+        imageHeight: 100,
+        lenses: [
+          { id: "left", label: "Left", pathD: "M0 0 L50 0 L50 50 Z" },
+          { id: "right", label: "Right", pathD: "M50 0 L100 0 L100 50 Z" },
+        ],
+        frameExclusions: [
+          { id: "bridge", label: "Bridge", pathD: "M20 0 L30 0 L30 10 Z", lensId: "left" },
+        ],
+      },
+    });
+
+    expect(result?.lenses[0]?.exclusions).toBeUndefined();
+    expect(result?.frameExclusions).toHaveLength(1);
+    expect(result?.frameExclusions?.[0]?.id).toBe("bridge");
+  });
+
   it("returns null when no clip data", () => {
     expect(resolveLensClipConfig({})).toBeNull();
   });

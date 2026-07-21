@@ -1,4 +1,4 @@
-import { isLensClipConfigValid, type LensClipConfig } from "@bino-foundry/shared/types";
+import { isLensClipConfigValid, normalizeLensClipConfig, type LensClipConfig } from "@bino-foundry/shared/types";
 import type { FrameRenderView } from "@/types/frame-rendering";
 import type { MaskConfig } from "@/render/mask/mask-types";
 import { isMaskConfigValid } from "@/render/mask/mask-types";
@@ -13,7 +13,7 @@ export function resolveLensClipConfig(view: {
   height?: number;
 }): LensClipConfig | null {
   if (view.clipConfig && isLensClipConfigValid(view.clipConfig)) {
-    return view.clipConfig;
+    return normalizeLensClipConfig(view.clipConfig);
   }
   if (view.maskConfig && isMaskConfigValid(view.maskConfig)) {
     return maskConfigToLensClipConfig(view.maskConfig, {

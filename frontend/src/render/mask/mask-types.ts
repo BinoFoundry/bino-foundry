@@ -31,9 +31,13 @@
  *   imageWidth: number,
  *   imageHeight: number,
  *   lenses: LensPolygon[],
+ *   frameExclusions?: LensPolygon[],
  *   exclusions?: LensExclusionsBySide,
  *   updatedAt: number
  * }} MaskConfig
+ *
+ * `frameExclusions` is the canonical frame-level exclusion list (independent of left/right).
+ * `exclusions` (by-side) is legacy and only read for backward compatibility.
  */
 
 export const MASK_CONFIG_VERSION = 2;
@@ -65,10 +69,19 @@ export function migrateAnchors(points) {
  * @param {number} width
  * @param {number} height
  * @param {LensPolygon[]} lenses
+ * @param {LensExclusionsBySide | null | undefined} [exclusions] Legacy by-side exclusions.
+ * @param {LensPolygon[] | null | undefined} [frameExclusions] Frame-level exclusions.
  * @returns {MaskConfig}
  */
-export function createMaskConfig(width, height, lenses, exclusions) {
+export function createMaskConfig(
+  width,
+  height,
+  lenses,
+  exclusions = undefined,
+  frameExclusions = undefined,
+) {
   const normalizedExclusions = normalizeExclusionsBySide(exclusions);
+  const normalizedFrameExclusions = normalizeFrameExclusions(frameExclusions);
   return {
     version: MASK_CONFIG_VERSION,
     imageWidth: width,
@@ -78,9 +91,44 @@ export function createMaskConfig(width, height, lenses, exclusions) {
       label: l.label,
       points: migrateAnchors(l.points),
     })),
+    ...(normalizedFrameExclusions ? { frameExclusions: normalizedFrameExclusions } : {}),
     ...(normalizedExclusions ? { exclusions: normalizedExclusions } : {}),
     updatedAt: Date.now(),
   };
+}
+
+/**
+ * Normalize a flat frame-level exclusion list.
+ * @param {LensPolygon[] | null | undefined} list
+ * @returns {LensPolygon[] | null}
+ */
+export function normalizeFrameExclusions(list) {
+  if (!Array.isArray(list)) return null;
+  const normalized = list.map(normalizeExclusionPolygon).filter(Boolean);
+  return normalized.length ? normalized : null;
+}
+
+/**
+ * Merge frame-level exclusions with legacy by-side exclusions into one flat list.
+ * @param {MaskConfig | null | undefined} mask
+ * @returns {LensPolygon[]}
+ */
+export function resolveMaskFrameExclusions(mask) {
+  if (!mask || typeof mask !== "object") return [];
+  const out = [];
+  const seen = new Set();
+  const push = (polygon) => {
+    const normalized = normalizeExclusionPolygon(polygon);
+    if (!normalized) return;
+    let id = normalized.id;
+    while (seen.has(id)) id = `${id}-${out.length}`;
+    seen.add(id);
+    out.push({ ...normalized, id });
+  };
+  for (const polygon of mask.frameExclusions ?? []) push(polygon);
+  for (const polygon of mask.exclusions?.left ?? []) push(polygon);
+  for (const polygon of mask.exclusions?.right ?? []) push(polygon);
+  return out;
 }
 
 /** @param {LensExclusionsBySide | null | undefined} exclusions */

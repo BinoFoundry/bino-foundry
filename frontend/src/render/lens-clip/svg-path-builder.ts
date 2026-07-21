@@ -36,23 +36,15 @@ export function lensesToClipShapes(
   lenses: LensPolygon[],
   imageWidth: number,
   imageHeight: number,
-  exclusionsBySide?: { left?: LensPolygon[]; right?: LensPolygon[] } | null,
 ): LensClipShape[] {
+  // Exclusions are frame-level (see LensClipConfig.frameExclusions); lenses hold only the
+  // opening path. Frame parts are restored by an overlay at render time.
   return lenses
-    .map((lens) => {
-      const pathD = lensPolygonToPathD(lens, imageWidth, imageHeight);
-      const sideExclusions =
-        lens.id === "left" || lens.id === "right"
-          ? (exclusionsBySide?.[lens.id] ?? [])
-          : [];
-      const exclusions = exclusionPolygonsToShapes(sideExclusions, imageWidth, imageHeight);
-      return {
-        id: lens.id,
-        label: lens.label,
-        pathD,
-        ...(exclusions.length ? { exclusions } : {}),
-      };
-    })
+    .map((lens) => ({
+      id: lens.id,
+      label: lens.label,
+      pathD: lensPolygonToPathD(lens, imageWidth, imageHeight),
+    }))
     .filter((l) => l.pathD.length > 0);
 }
 

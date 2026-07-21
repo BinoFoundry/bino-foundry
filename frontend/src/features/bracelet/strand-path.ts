@@ -7,6 +7,7 @@ import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
 import { resolveStrandRenderProfileBySlug } from "@/render/bead-crop/strand-render-profile";
 
+import { balancedFractionsForSequence } from "./balanced-strand-layout";
 import { computeElasticBeadLayout } from "./strand-elastic-layout";
 
 /** Default ring start — top of canvas (12 o'clock). */
@@ -15,6 +16,12 @@ export const STRAND_PATH_START_ANGLE = -Math.PI / 2;
 /** Normalize any radian angle to (-π, π]. */
 export function normalizePathAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+/** Midpoint between two angles along their shortest arc. */
+function midpointPathAngle(a: number, b: number): number {
+  const delta = normalizePathAngle(b - a);
+  return normalizePathAngle(a + delta / 2);
 }
 
 export interface StrandPathBeadInput {
@@ -37,6 +44,24 @@ export interface StrandPathBeadLayout {
   rotationDeg: number;
 }
 
+export interface SequentialStrandBeadInput {
+  index: number;
+  /** Capacity occupancy mapped onto the ring (px). */
+  occupancyPx: number;
+  /** Half of the actual rendered tangential silhouette (px). */
+  visualRadiusPx: number;
+  /** Optional per-bead contact adjustment (px); paired with the adjacent bead. */
+  contactAdjustmentPx?: number;
+}
+
+export interface SequentialStrandPathLayout {
+  beads: StrandPathBeadLayout[];
+  insertionAngles: number[];
+  /** Linear arc occupied from the first bead's leading edge to the last trailing edge. */
+  occupiedArcPx: number;
+  isOverCapacity: boolean;
+}
+
 /** Cartesian position from polar coordinates (screen space, y-down). */
 export function polarToCartesian(
   centerX: number,
@@ -47,6 +72,318 @@ export function polarToCartesian(
   return {
     x: centerX + radius * Math.cos(theta),
     y: centerY + radius * Math.sin(theta),
+  };
+}
+
+/**
+ * One ordered placement walk for every bead type.
+ *
+ * The first bead remains anchored at `startAngle`. Each following centre depends only on
+ * the previous centre and the resolved footprints of that adjacent pair:
+ *
+ *   next = previous + previousRadius + currentRadius + pairContactAdjustment
+ *
+ * Occupancy remains a minimum half-footprint so capacity and rendering cannot diverge.
+ * Visual radius may enlarge that footprint to prevent rendered silhouettes overlapping.
+ * Inputs are consumed in array order; this function never sorts, groups, redistributes,
+ * or branches on bead metadata.
+ */
+export function computeSequentialStrandPathLayout(params: {
+  beads: SequentialStrandBeadInput[];
+  centerX: number;
+  centerY: number;
+  radius: number;
+  startAngle?: number;
+}): SequentialStrandPathLayout {
+  const {
+    beads,
+    centerX,
+    centerY,
+    radius,
+    startAngle = STRAND_PATH_START_ANGLE,
+  } = params;
+  const circumferencePx = 2 * Math.PI * Math.max(radius, 1e-6);
+  if (!beads.length || radius <= 0) {
+    return {
+      beads: [],
+      insertionAngles: [startAngle],
+      occupiedArcPx: 0,
+      isOverCapacity: false,
+    };
+  }
+
+  const footprintRadii = beads.map((bead) =>
+    Math.max(
+      Math.max(0, bead.occupancyPx) / 2,
+      Math.max(0, bead.visualRadiusPx),
+    ),
+  );
+  const centerOffsetsPx = new Array<number>(beads.length).fill(0);
+
+  for (let i = 1; i < beads.length; i++) {
+    const previous = beads[i - 1]!;
+    const current = beads[i]!;
+    const pairAdjustmentPx =
+      ((previous.contactAdjustmentPx ?? 0) + (current.contactAdjustmentPx ?? 0)) / 2;
+    const requiredDistancePx = Math.max(
+      0,
+      footprintRadii[i - 1]! + footprintRadii[i]! + pairAdjustmentPx,
+    );
+    centerOffsetsPx[i] = centerOffsetsPx[i - 1]! + requiredDistancePx;
+  }
+
+  const layouts = beads.map((bead, i) => {
+    const angle = normalizePathAngle(
+      startAngle + (centerOffsetsPx[i]! / circumferencePx) * 2 * Math.PI,
+    );
+    const arcSpan = (footprintRadii[i]! * 2 / circumferencePx) * 2 * Math.PI;
+    const { x, y } = polarToCartesian(centerX, centerY, radius, angle);
+    return {
+      index: bead.index,
+      angle,
+      arcSpan,
+      x,
+      y,
+      rotationDeg: tangentRotationDeg(angle),
+    };
+  });
+
+  const firstLeadingEdgePx = -footprintRadii[0]!;
+  const lastIndex = beads.length - 1;
+  const lastTrailingEdgePx =
+    centerOffsetsPx[lastIndex]! + footprintRadii[lastIndex]!;
+  const occupiedArcPx = lastTrailingEdgePx - firstLeadingEdgePx;
+  const closureMidpointPx =
+    (lastTrailingEdgePx + circumferencePx + firstLeadingEdgePx) / 2;
+  const closureAngle = normalizePathAngle(
+    startAngle + (closureMidpointPx / circumferencePx) * 2 * Math.PI,
+  );
+  const insertionAngles = [closureAngle];
+
+  for (let i = 1; i < beads.length; i++) {
+    const previousTrailingEdge =
+      centerOffsetsPx[i - 1]! + footprintRadii[i - 1]!;
+    const currentLeadingEdge =
+      centerOffsetsPx[i]! - footprintRadii[i]!;
+    const midpointPx = (previousTrailingEdge + currentLeadingEdge) / 2;
+    insertionAngles.push(
+      normalizePathAngle(
+        startAngle + (midpointPx / circumferencePx) * 2 * Math.PI,
+      ),
+    );
+  }
+  insertionAngles.push(closureAngle);
+
+  return {
+    beads: layouts,
+    insertionAngles,
+    occupiedArcPx,
+    isOverCapacity: occupiedArcPx > circumferencePx + 1e-6,
+  };
+}
+
+/**
+ * Symmetric top-out placement using the same resolved footprint for every bead.
+ *
+ * Logical array order is preserved in the returned array, while visual positions alternate:
+ * index 0 at the top, odd indices grow clockwise/right, even indices grow
+ * counter-clockwise/left. Each side is an independent linked chain, so adding a bead only
+ * advances the corresponding side and never redistributes existing positions.
+ */
+export function computeSymmetricStrandPathLayout(params: {
+  beads: SequentialStrandBeadInput[];
+  centerX: number;
+  centerY: number;
+  radius: number;
+  startAngle?: number;
+}): SequentialStrandPathLayout {
+  const {
+    beads,
+    centerX,
+    centerY,
+    radius,
+    startAngle = STRAND_PATH_START_ANGLE,
+  } = params;
+  const circumferencePx = 2 * Math.PI * Math.max(radius, 1e-6);
+  if (!beads.length || radius <= 0) {
+    return {
+      beads: [],
+      insertionAngles: [startAngle],
+      occupiedArcPx: 0,
+      isOverCapacity: false,
+    };
+  }
+
+  const footprintRadii = beads.map((bead) =>
+    Math.max(
+      Math.max(0, bead.occupancyPx) / 2,
+      Math.max(0, bead.visualRadiusPx),
+    ),
+  );
+  const centerOffsetsPx = new Array<number>(beads.length).fill(0);
+
+  for (let i = 1; i < beads.length; i++) {
+    const previousOnSide = i <= 2 ? 0 : i - 2;
+    const previous = beads[previousOnSide]!;
+    const current = beads[i]!;
+    const naturalContactPx =
+      footprintRadii[previousOnSide]! + footprintRadii[i]!;
+    const pairAdjustmentPx =
+      ((previous.contactAdjustmentPx ?? 0) + (current.contactAdjustmentPx ?? 0)) / 2;
+    // Contact adjustment may add intentional clearance, but must never pull actual
+    // rendered silhouettes through one another.
+    const requiredDistancePx = Math.max(
+      naturalContactPx,
+      naturalContactPx + pairAdjustmentPx,
+    );
+    const direction = i % 2 === 1 ? 1 : -1;
+    centerOffsetsPx[i] =
+      centerOffsetsPx[previousOnSide]! + direction * requiredDistancePx;
+  }
+
+  const layouts = beads.map((bead, i) => {
+    const angle = normalizePathAngle(
+      startAngle + (centerOffsetsPx[i]! / circumferencePx) * 2 * Math.PI,
+    );
+    const arcSpan = (footprintRadii[i]! * 2 / circumferencePx) * 2 * Math.PI;
+    const { x, y } = polarToCartesian(centerX, centerY, radius, angle);
+    return {
+      index: bead.index,
+      angle,
+      arcSpan,
+      x,
+      y,
+      rotationDeg: tangentRotationDeg(angle),
+    };
+  });
+
+  const leadingEdges = centerOffsetsPx.map(
+    (offset, i) => offset - footprintRadii[i]!,
+  );
+  const trailingEdges = centerOffsetsPx.map(
+    (offset, i) => offset + footprintRadii[i]!,
+  );
+  const minLeadingEdgePx = Math.min(...leadingEdges);
+  const maxTrailingEdgePx = Math.max(...trailingEdges);
+  const occupiedArcPx = maxTrailingEdgePx - minLeadingEdgePx;
+  const closureMidpointPx =
+    (maxTrailingEdgePx + circumferencePx + minLeadingEdgePx) / 2;
+  const closureAngle = normalizePathAngle(
+    startAngle + (closureMidpointPx / circumferencePx) * 2 * Math.PI,
+  );
+  const insertionAngles = [closureAngle];
+
+  for (let i = 1; i < layouts.length; i++) {
+    insertionAngles.push(
+      midpointPathAngle(layouts[i - 1]!.angle, layouts[i]!.angle),
+    );
+  }
+  insertionAngles.push(closureAngle);
+
+  return {
+    beads: layouts,
+    insertionAngles,
+    occupiedArcPx,
+    isOverCapacity: occupiedArcPx > circumferencePx + 1e-6,
+  };
+}
+
+/**
+ * Balanced radial placement — the original "fill the largest gap" behaviour.
+ *
+ * Logical array order is preserved exactly (never sorted, grouped, or reordered by type).
+ * Each logical index is mapped to the angular fraction it would occupy if beads were added
+ * one at a time, each new bead taking the widest open gap. With the 12 o'clock start this
+ * yields the direction priority:
+ *
+ *   top → bottom → right → left → top-right → bottom-right → top-left → bottom-left → …
+ *
+ * so the bracelet expands evenly in every direction instead of walking around clockwise.
+ * Every bead type flows through this same pipeline; the only per-bead differences are the
+ * resolved footprint values (occupancy / visual radius), which drive `arcSpan` and overlap
+ * detection but never a different placement formula.
+ */
+export function computeBalancedRadialStrandPathLayout(params: {
+  beads: SequentialStrandBeadInput[];
+  centerX: number;
+  centerY: number;
+  radius: number;
+  startAngle?: number;
+}): SequentialStrandPathLayout {
+  const {
+    beads,
+    centerX,
+    centerY,
+    radius,
+    startAngle = STRAND_PATH_START_ANGLE,
+  } = params;
+  const circumferencePx = 2 * Math.PI * Math.max(radius, 1e-6);
+  if (!beads.length || radius <= 0) {
+    return {
+      beads: [],
+      insertionAngles: [startAngle],
+      occupiedArcPx: 0,
+      isOverCapacity: false,
+    };
+  }
+
+  const footprintRadii = beads.map((bead) =>
+    Math.max(
+      Math.max(0, bead.occupancyPx) / 2,
+      Math.max(0, bead.visualRadiusPx),
+    ),
+  );
+  // Angular fraction per logical index from the balanced "widest gap" fill order.
+  const fractions = balancedFractionsForSequence(beads.length);
+
+  const layouts = beads.map((bead, i) => {
+    const angle = normalizePathAngle(startAngle + fractions[i]! * 2 * Math.PI);
+    const arcSpan = ((footprintRadii[i]! * 2) / circumferencePx) * 2 * Math.PI;
+    const { x, y } = polarToCartesian(centerX, centerY, radius, angle);
+    return {
+      index: bead.index,
+      angle,
+      arcSpan,
+      x,
+      y,
+      rotationDeg: tangentRotationDeg(angle),
+    };
+  });
+
+  // Widest empty gap (in fraction space) — where the next bead would land.
+  const sortedFractions = [...fractions].sort((a, b) => a - b);
+  let widestGap = -Infinity;
+  let widestGapMidFraction = fractions[0]! + 0.5;
+  for (let i = 0; i < sortedFractions.length; i++) {
+    const current = sortedFractions[i]!;
+    const next =
+      i + 1 < sortedFractions.length ? sortedFractions[i + 1]! : sortedFractions[0]! + 1;
+    const gap = next - current;
+    if (gap > widestGap) {
+      widestGap = gap;
+      widestGapMidFraction = current + gap / 2;
+    }
+  }
+  const closureAngle = normalizePathAngle(
+    startAngle + widestGapMidFraction * 2 * Math.PI,
+  );
+
+  // Sequence-gap insertion angles keep the same (n + 1) contract the drop resolver expects.
+  const insertionAngles = [closureAngle];
+  for (let i = 1; i < layouts.length; i++) {
+    insertionAngles.push(
+      midpointPathAngle(layouts[i - 1]!.angle, layouts[i]!.angle),
+    );
+  }
+  insertionAngles.push(closureAngle);
+
+  const totalFootprintPx = footprintRadii.reduce((sum, r) => sum + r * 2, 0);
+
+  return {
+    beads: layouts,
+    insertionAngles,
+    occupiedArcPx: totalFootprintPx,
+    isOverCapacity: totalFootprintPx > circumferencePx + 1e-6,
   };
 }
 

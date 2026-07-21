@@ -100,8 +100,9 @@ function assertCleanLayout(
 }
 
 describe("computeResolvedRingRadiusPx", () => {
-  it("keeps the wrist radius when large beads need more arc (compress, do not grow)", () => {
-    const beads = Array.from({ length: 12 }, () => mockPlaced(12));
+  it("keeps the wrist radius when beads exceed capacity mm (compress, do not grow)", () => {
+    // 20 × 12mm = 240mm > 160mm wrist — over capacity by catalogue mm (matches capacity panel).
+    const beads = Array.from({ length: 20 }, () => mockPlaced(12));
     const { resolved, layout, elastic } = layoutForWrist(16, beads, 1.35);
     expect(resolved.radiusPx).toBeCloseTo(layout.wristRadiusPx, 5);
     expect(resolved.expanded).toBe(false);
@@ -195,10 +196,13 @@ describe("contact geometry layout", () => {
     expect(spacerArc).toBeLessThan(crystalArc);
   });
 
-  it("uses junction overlaps for charm + crystal pairs", () => {
+  it("charm + crystal occupy pure sizeMm arcs with no junction overlaps", () => {
+    // Pure occupancy model: beads sit edge-to-edge (contiguous), no overlap tucking, and
+    // the charm's arc is proportional to its sizeMm just like the crystal.
     const { resolved } = layoutForWrist(16, [mockPlaced(10, "charm"), mockPlaced(8)]);
-    expect(resolved.leadingOverlapPx[0]).toBeGreaterThan(0);
-    expect(resolved.trailingOverlapPx[0]).toBeGreaterThan(0);
+    expect(resolved.leadingOverlapPx[0]).toBe(0);
+    expect(resolved.trailingOverlapPx[0]).toBe(0);
+    expect(resolved.beadArcPx[0]! / resolved.beadArcPx[1]!).toBeCloseTo(10 / 8, 5);
   });
 });
 

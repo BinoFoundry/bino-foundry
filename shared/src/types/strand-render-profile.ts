@@ -31,7 +31,10 @@ export interface StrandRenderProfile {
    * Layout spacing uses this — not bitmap dimensions. Slight negatives are allowed for tuning.
    */
   contactWidth: number;
-  /** Inline beads use full slot contact; dangling charms use attachment-point width only. */
+  /**
+   * Visual attachment style. Occupancy always follows catalogue sizeMm × contact tuning —
+   * dangling only affects shell anchor / hang, never a separate angle algorithm.
+   */
   layoutMode: StrandLayoutMode;
   /**
    * Fine spacing adjustment (fraction of slot width).
@@ -156,7 +159,10 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
   charm: {
     strandOccupancy: 1,
     layoutMode: "dangling",
-    contactWidth: 0.08,
+    // Layout occupancy is always catalogue sizeMm (see beadOccupancyArcPx) — contactWidth
+    // no longer scales the arc, so no value here can collapse a full bracelet. Dangling is
+    // purely visual (loop anchor / hang).
+    contactWidth: 1,
     leadingOverlap: 0.03,
     trailingOverlap: 0.03,
     anchorPreset: "loop",
@@ -212,8 +218,8 @@ function clampContactSpacingStored(value: number): number {
 
 /**
  * Convert stored contactWidth to an additive tuning delta on natural touch (1 = neutral span).
- * Legacy DB seeds use occupancy (1 = full visible tangent; charms use 0.08, etc.).
- * Admin tuning uses 0 = neutral, negative = tighter, positive = looser.
+ * Neutral is 1 (full catalogue sizeMm on the wrist ring). Values below 1 tighten;
+ * values above 1 loosen. Admin tuning may also use 0 as a neutral synonym via offsets.
  */
 export function contactWidthStoredToTuningDelta(stored: number): number {
   if (Math.abs(stored - 1) < 0.001) return 0;

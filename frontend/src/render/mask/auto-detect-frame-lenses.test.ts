@@ -10,6 +10,7 @@ import {
   isLensSideValid,
   LENS_DUAL_DETECT_FAILED_MESSAGE,
   LENS_SIDE_DETECT_FAILED,
+  mergeLensSideIntoMask,
 } from "./auto-detect-frame-lenses";
 import { splitMergedLensBridge } from "./auto-lens-mask";
 import {
@@ -83,6 +84,42 @@ describe("auto-detect-frame-lenses", () => {
 
   it("exposes dual-lens fallback copy", () => {
     expect(LENS_DUAL_DETECT_FAILED_MESSAGE).toContain("both lens areas");
+  });
+
+  it("preserves frame exclusion polygons when merging a single lens side", () => {
+    const exclusion = createLensPolygon("excl-bridge", "Bridge", [
+      { x: 0.22, y: 0.42, curved: false, handleIn: null, handleOut: null },
+      { x: 0.28, y: 0.42, curved: false, handleIn: null, handleOut: null },
+      { x: 0.25, y: 0.5, curved: false, handleIn: null, handleOut: null },
+    ]);
+    const existing = createMaskConfig(
+      400,
+      200,
+      [
+        createLensPolygon("left", "Left lens", [
+          { x: 0.2, y: 0.4, curved: false, handleIn: null, handleOut: null },
+          { x: 0.35, y: 0.35, curved: false, handleIn: null, handleOut: null },
+          { x: 0.35, y: 0.65, curved: false, handleIn: null, handleOut: null },
+        ]),
+        createLensPolygon("right", "Right lens", [
+          { x: 0.65, y: 0.4, curved: false, handleIn: null, handleOut: null },
+          { x: 0.8, y: 0.35, curved: false, handleIn: null, handleOut: null },
+          { x: 0.8, y: 0.65, curved: false, handleIn: null, handleOut: null },
+        ]),
+      ],
+      { left: [exclusion] },
+    );
+
+    const merged = mergeLensSideIntoMask(existing, 400, 200, "right", [
+      { x: 0.66, y: 0.41, curved: false, handleIn: null, handleOut: null },
+      { x: 0.81, y: 0.36, curved: false, handleIn: null, handleOut: null },
+      { x: 0.81, y: 0.66, curved: false, handleIn: null, handleOut: null },
+    ]);
+
+    expect(merged.frameExclusions).toHaveLength(1);
+    expect(merged.frameExclusions?.[0]?.id).toBe("excl-bridge");
+    expect(isLensSideValid(merged, "left")).toBe(true);
+    expect(isLensSideValid(merged, "right")).toBe(true);
   });
 
   it("validates each lens side independently", () => {

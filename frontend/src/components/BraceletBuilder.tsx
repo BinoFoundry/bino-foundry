@@ -108,6 +108,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const catalogue = useCatalogue();
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [savingDesign, setSavingDesign] = useState(false);
   const [savedDesignId, setSavedDesignId] = useState<string | null>(designIdFromUrl);
   const [hydrationDone, setHydrationDone] = useState(!designIdFromUrl);
   const baselineSetRef = useRef(false);
@@ -127,20 +128,20 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     placedCount: builder.pricing.placedCount,
   });
 
-  const autoSaveEnabled =
-    Boolean(user) &&
+  const canConfigureSave =
     builder.wristSizeConfirmed &&
     builder.pricing.placedCount > 0 &&
     !builder.isOverCapacity &&
     !builder.hasUnavailableBeads;
+  const autoSaveEnabled = Boolean(user) && canConfigureSave;
 
   const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
 
   const braceletPayload = useMemo(() => {
-    if (!autoSaveEnabled) return null;
+    if (!canConfigureSave) return null;
     return builder.toSavedPayload("saved");
   }, [
-    autoSaveEnabled,
+    canConfigureSave,
     builder.placedBeadsA,
     builder.placedBeadsB,
     builder.twinning,
@@ -418,6 +419,56 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     hasPendingChanges,
   ]);
 
+  const handleSaveDesign = useCallback(async () => {
+    if (builder.pricing.placedCount === 0) {
+      toast.error(CUSTOMER_COPY.saveDesignNeedBeads);
+      return;
+    }
+    if (builder.isOverCapacity) {
+      toast.error(BRACELET_COPY.saveBlockedOverCapacity);
+      return;
+    }
+    if (builder.hasUnavailableBeads) {
+      toast.error(BRACELET_COPY.checkoutBlockedUnavailable);
+      return;
+    }
+
+    setSavingDesign(true);
+    try {
+      if (user && savedDesignId && hasPendingChanges()) {
+        const saved = await flush();
+        if (saved) toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+        return;
+      }
+
+      const request = await buildBraceletRequest({ includeThumbnail: true });
+      if (!request) return;
+
+      // Unauthenticated: saveDesign stores a pending save and opens the auth modal;
+      // the pending-design listener resumes the save after sign-in.
+      const saved = await saveDesign(request, { designId: savedDesignId ?? undefined });
+      if (saved) {
+        handleDesignSaved(saved);
+        toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+      }
+    } catch (err) {
+      toast.error(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
+    } finally {
+      setSavingDesign(false);
+    }
+  }, [
+    user,
+    savedDesignId,
+    hasPendingChanges,
+    flush,
+    buildBraceletRequest,
+    saveDesign,
+    handleDesignSaved,
+    builder.pricing.placedCount,
+    builder.isOverCapacity,
+    builder.hasUnavailableBeads,
+  ]);
+
   const saveDisabled =
     builder.pricing.placedCount === 0 || builder.isOverCapacity || builder.hasUnavailableBeads;
 
@@ -428,6 +479,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     onSelectPreparation: builder.selectPreparation,
     onPreparationQuantityChange: builder.setPreparationQuantity,
     onAddToCart: () => void handleAddToCart(),
+    onSaveDesign: () => void handleSaveDesign(),
+    savingDesign,
     saveDisabled,
     autoSaveStatus,
     autoSaveVisible: builder.wristSizeConfirmed,

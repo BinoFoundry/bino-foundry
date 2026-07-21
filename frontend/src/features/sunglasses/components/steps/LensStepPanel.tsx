@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollMoreHint } from "@/components/common";
@@ -45,6 +46,7 @@ interface LensStepPanelProps {
   onPolarizedChange: (value: boolean) => void;
   onSelectTint: (tintId: string) => void;
   onContinue?: () => void;
+  saveStatus?: ReactNode;
 }
 
 const TintSwatch = memo(function TintSwatch({
@@ -203,6 +205,7 @@ export function LensStepPanel({
   onPolarizedChange,
   onSelectTint,
   onContinue,
+  saveStatus,
 }: LensStepPanelProps) {
   const polarizedSurcharge = polarizedOption?.priceSurcharge ?? 0;
   const [activeTab, setActiveTab] = useState<TintTab>(() =>
@@ -342,7 +345,8 @@ export function LensStepPanel({
             ) : null}
 
             {onContinue ? (
-              <div className="border-t border-border/60 px-2.5 pb-3 pt-3 sm:px-3 sm:pb-4 sm:pt-4">
+              <div className="space-y-2 border-t border-border/60 px-2.5 pb-3 pt-3 sm:px-3 sm:pb-4 sm:pt-4">
+                {saveStatus}
                 <Button type="button" className="w-full" size="lg" onClick={onContinue}>
                   Continue
                   <ChevronRight className="ml-2 h-4 w-4" />

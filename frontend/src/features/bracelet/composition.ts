@@ -1,7 +1,5 @@
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 
-import { findBalancedInsertIndex } from "./balanced-strand-layout";
-
 /** Guide ring slot count when the strand is empty (display only). */
 export const EMPTY_GUIDE_SLOT_COUNT = 8;
 
@@ -53,9 +51,14 @@ export function strandCircumferenceMm(placed: PlacedBead[], guideMm: number): nu
   return sorted.reduce((sum, b) => sum + placedBeadSizeMm(b), 0);
 }
 
-/** Balanced angular gap — next bead fills the largest open sector on the ring. */
+/**
+ * Auto-place index for contiguous sequential packing.
+ * Always append so chronological insertion order is preserved (A → B → C → D).
+ * Do not redistribute into balanced angular gaps — that reshuffles neighbors and
+ * fights the linked-chain renderer.
+ */
 export function findBestInsertIndex(placed: PlacedBead[], _newMm?: number): number {
-  return findBalancedInsertIndex(normalizeFromSlots(placed).length);
+  return normalizeFromSlots(placed).length;
 }
 
 export function insertBeadAt(
@@ -69,9 +72,9 @@ export function insertBeadAt(
   return normalizeSequence(next);
 }
 
+/** Append the bead after the current sequence (preserves insertion order). */
 export function insertBeadWithAutoLayout(placed: PlacedBead[], bead: PlacedBead): PlacedBead[] {
-  const idx = findBestInsertIndex(placed, placedBeadSizeMm(bead));
-  return insertBeadAt(placed, idx, bead);
+  return insertBeadAt(placed, findBestInsertIndex(placed), bead);
 }
 
 export function removeBeadAt(placed: PlacedBead[], index: number): PlacedBead[] {

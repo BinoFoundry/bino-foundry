@@ -60,21 +60,52 @@ export interface ContactArcPx {
   trailingOverlapPx: number;
 }
 
+export type StrandContactProfileFields = Pick<
+  StrandRenderProfile,
+  | "contactWidth"
+  | "contactOffset"
+  | "spacingAdjustment"
+  | "leadingOverlap"
+  | "trailingOverlap"
+  | "collisionPadding"
+>;
+
 /**
+ * Capacity-consistent contact arc along the wrist ring.
+ *
+ * Occupied length matches the mm charged by the capacity panel:
+ *   baseArcPx = (sizeMm / wristCircumferenceMm) × ringCircumferencePx
+ *   contactArcPx = baseArcPx × effectiveContactWidth(profile)
+ *
+ * Same formula for every bead type — crystals, spacers, charms, future types.
+ * Contact width / adjustment remain data-driven tuning on top of the mm base.
+ */
+export function contactArcPxFromCapacityMm(
+  sizeMm: number,
+  wristCircumferenceMm: number,
+  ringCircumferencePx: number,
+  profile: StrandContactProfileFields,
+  scaleFactor = 1,
+): ContactArcPx {
+  const wristMm = Math.max(wristCircumferenceMm, 1e-6);
+  const circPx = Math.max(ringCircumferencePx, 1e-6);
+  const baseArcPx = (Math.max(0, sizeMm) / wristMm) * circPx;
+  const sf = Math.max(0.5, scaleFactor);
+  const spanMultiplier = effectiveStrandContactWidth(profile);
+  return {
+    contactArcPx: baseArcPx * spanMultiplier + (profile.collisionPadding ?? 0) * sf,
+    leadingOverlapPx: profile.leadingOverlap * baseArcPx,
+    trailingOverlapPx: profile.trailingOverlap * baseArcPx,
+  };
+}
+
+/**
+ * @deprecated Prefer {@link contactArcPxFromCapacityMm} so layout occupancy matches capacity mm.
  * Convert visible tangent width to layout contact arc (px along strand).
- * Natural touch = slotWidthPx (visible diameter); contact width/adjustment scale that span.
  */
 export function contactArcPxFromSlotWidth(
   slotWidthPx: number,
-  profile: Pick<
-    StrandRenderProfile,
-    | "contactWidth"
-    | "contactOffset"
-    | "spacingAdjustment"
-    | "leadingOverlap"
-    | "trailingOverlap"
-    | "collisionPadding"
-  >,
+  profile: StrandContactProfileFields,
   scaleFactor = 1,
 ): ContactArcPx {
   const naturalTangentPx = Math.max(0, slotWidthPx);

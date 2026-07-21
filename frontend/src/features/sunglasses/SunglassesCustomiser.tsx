@@ -50,12 +50,16 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
   const hydratedDesignRef = useRef<string | null>(null);
 
   const tintId = state.selectedTintEntry?.id;
-  const autoSaveEnabled = Boolean(user && tintId && !state.hasUnavailableFrame);
+  const [savingDesign, setSavingDesign] = useState(false);
+  // Save is configurable whenever a tint is chosen — independent of auth so the
+  // Save button can trigger the login flow and resume the save afterwards.
+  const canConfigureSave = Boolean(tintId && !state.hasUnavailableFrame);
+  const autoSaveEnabled = Boolean(user && canConfigureSave);
 
   const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
 
   const sunglassesPayload = useMemo(() => {
-    if (!autoSaveEnabled || !tintId) return null;
+    if (!canConfigureSave || !tintId) return null;
     return {
       frameId: state.frameSku.id,
       lensTintId: tintId,
@@ -66,7 +70,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
       title: `${state.frameSku.name} sunglasses`,
     };
   }, [
-    autoSaveEnabled,
+    canConfigureSave,
     tintId,
     state.frameSku.id,
     state.frameSku.name,
@@ -293,6 +297,56 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
     setCheckoutOpen(true);
   }, [user, openAuth, flow, savedDesignId, flush, hasPendingChanges, state.hasUnavailableFrame]);
 
+  const handleSaveDesign = useCallback(async () => {
+    if (state.hasUnavailableFrame || isUnavailableFrame(state.frameSku)) {
+      toast.message(SUNGLASSES_COPY.checkoutBlockedUnavailableFrame);
+      flow.goTo("frame");
+      return;
+    }
+    if (!sunglassesPayload) {
+      toast.message(SUNGLASSES_COPY.saveDesignNeedsTint);
+      flow.goTo("lens");
+      return;
+    }
+
+    setSavingDesign(true);
+    try {
+      // Authenticated with queued autosave work — flush the debounced controller.
+      if (user && savedDesignId && hasPendingChanges()) {
+        const saved = await flush();
+        if (saved) toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+        return;
+      }
+
+      const request = await buildSunglassesRequest({ includeThumbnail: true });
+      if (!request) return;
+
+      // When unauthenticated, saveDesign stores a pending save and opens the auth
+      // modal; the pending-design listener resumes the save after sign-in.
+      const saved = await saveDesign(request, { designId: savedDesignId ?? undefined });
+      if (saved) {
+        handleDesignSaved(saved);
+        toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+      }
+    } catch (err) {
+      toast.error(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
+    } finally {
+      setSavingDesign(false);
+    }
+  }, [
+    user,
+    sunglassesPayload,
+    savedDesignId,
+    hasPendingChanges,
+    flush,
+    buildSunglassesRequest,
+    saveDesign,
+    handleDesignSaved,
+    flow,
+    state.hasUnavailableFrame,
+    state.frameSku,
+  ]);
+
   if (sunglassesCatalog.isHydrating && sunglassesCatalog.lensTints.length === 0) {
     return <LoadingState label="Loading sunglasses options…" className="h-full" />;
   }
@@ -339,6 +393,8 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
             state={state}
             currencyCode={currencyCode}
             onAddToCart={handleAddToCart}
+            onSaveDesign={handleSaveDesign}
+            savingDesign={savingDesign}
             autoSaveStatus={autoSaveStatus}
             autoSaveVisible
             signedIn={Boolean(user)}

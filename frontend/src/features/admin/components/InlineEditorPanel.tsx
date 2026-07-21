@@ -15,6 +15,8 @@ interface InlineEditorPanelProps {
   description?: string;
   /** Contextual tools (auto-detect, reset) — only visible while this editor is open. */
   toolbar?: ReactNode;
+  /** Transient confirmation rendered beside the save action. */
+  saveFeedback?: ReactNode;
   onSave: () => void;
   onCancel: () => void;
   saveDisabled?: boolean;
@@ -28,6 +30,7 @@ export function InlineEditorPanel({
   title,
   description,
   toolbar,
+  saveFeedback,
   onSave,
   onCancel,
   saveDisabled = false,
@@ -50,6 +53,11 @@ export function InlineEditorPanel({
         <Button type="button" size="sm" disabled={saveDisabled} onClick={onSave}>
           {saveLabel}
         </Button>
+        {saveFeedback ? (
+          <div className="flex items-center text-xs text-status-success" role="status" aria-live="polite">
+            {saveFeedback}
+          </div>
+        ) : null}
         <Button type="button" size="sm" variant="outline" onClick={onCancel}>
           Cancel
         </Button>

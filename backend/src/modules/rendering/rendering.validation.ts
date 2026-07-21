@@ -21,21 +21,32 @@ const lensClipRenderSchema = z
   .object({
     mode: z.enum(["replace", "overlay"]).optional(),
     tintOpacity: z.number().min(0).max(1).optional(),
+    lensOpacity: z.number().min(0).max(1).optional(),
+    frameExclusionOpacity: z.number().min(0).max(1).optional(),
+    baseTintOpacity: z.number().min(0).max(1).optional(),
+    transparency: z.number().min(0).max(1).optional(),
+    brightness: z.number().min(0.25).max(2).optional(),
+    contrast: z.number().min(0).max(2).optional(),
+    saturation: z.number().min(0).max(2).optional(),
     gradientEnabled: z.boolean().optional(),
     gradientTopColor: z.string().min(4).max(9).optional(),
     gradientBottomColor: z.string().min(4).max(9).optional(),
     gradientPosition: z.number().min(0).max(100).optional(),
+    gradientStrength: z.number().min(0).max(1).optional(),
     reflectionEnabled: z.boolean().optional(),
+    reflectionStrength: z.number().min(0).max(1).optional(),
     reflectionOpacity: z.number().min(0).max(1).optional(),
+    reflectionAngle: z.number().min(0).max(360).optional(),
     reflectionBlur: z.number().min(0).max(1).optional(),
     glossEnabled: z.boolean().optional(),
     glossIntensity: z.number().min(0).max(1).optional(),
+    glossStrength: z.number().min(0).max(1).optional(),
     vignetteEnabled: z.boolean().optional(),
     vignetteStrength: z.number().min(0).max(1).optional(),
+    edgeFade: z.number().min(0).max(1).optional(),
     polarizedEnabled: z.boolean().optional(),
     polarizedStrength: z.number().min(0).max(1).optional(),
     // Legacy overlay fields
-    lensOpacity: z.number().min(0).max(1).optional(),
     tintBlendMode: z.enum(["multiply", "screen", "overlay", "color", "soft-light"]).optional(),
     highlightStrength: z.number().min(0).max(1).optional(),
     highlightBlendMode: z.enum(["screen", "overlay", "soft-light"]).optional(),
@@ -62,6 +73,9 @@ export const maskConfigSchema = z.object({
   imageWidth: z.number().int().positive(),
   imageHeight: z.number().int().positive(),
   lenses: z.array(lensPolygonSchema).min(1),
+  // Canonical frame-level exclusions (independent of left/right).
+  frameExclusions: z.array(lensPolygonSchema).optional(),
+  // Legacy by-side exclusions, read for backward compatibility only.
   exclusions: z
     .object({
       left: z.array(lensPolygonSchema).optional(),

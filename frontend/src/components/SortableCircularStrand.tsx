@@ -25,6 +25,7 @@ import {
   getBeadSlotDimensions,
   getGuideSlotDimensions,
   getMaxSlotExtent,
+  getBeadStrandTangentContactPx,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
   getStrandBeadRasterSize,
@@ -35,20 +36,18 @@ import {
 } from "@/render/bead-crop";
 import { normalizeFromSlots, strandCircumferenceMm } from "@/features/bracelet/composition";
 import {
-  computeMaxRingRadiusPx,
   computeStrandRingStrokePx,
   computeWristRingRadiusPx,
   type WristSizeBounds,
 } from "@/features/bracelet/strand-ring";
 import {
-  computeElasticBeadLayout,
   resolveDropTargetFromLayout,
   type LayoutAngleSector,
 } from "@/features/bracelet/strand-elastic-layout";
 import { resolveBeadIndexUnderPointer } from "@/features/bracelet/strand-reorder-hit-test";
+import { wristCircumferenceMm } from "@/features/bracelet/capacity";
 import {
-  beadContactLayoutArrays,
-  computeResolvedRingRadiusPx,
+  beadOccupancyArcPx,
 } from "@/features/bracelet/strand-ring-geometry";
 import {
   computeStrandAdjacencySpacingDebug,
@@ -61,7 +60,7 @@ import type { LibraryDragPayload } from "@/components/BeadLibrary";
 import { BEAD_LIBRARY_DRAG_TYPE, isLibraryDragEvent } from "@/features/bracelet/interaction";
 import {
   computeBeadShellPosition,
-  computeStrandPathLayout,
+  computeBalancedRadialStrandPathLayout,
   pointerAngleOnCanvas,
   strandRotationDeg,
   STRAND_PATH_START_ANGLE,
@@ -609,56 +608,49 @@ const SortableCircularStrand = ({
         bounds,
         ringStrokeHalf,
       );
-      const maxRadiusPx = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
 
       let radius = wristRadius;
       let layoutSectors: LayoutAngleSector[] = [];
       let insertionAngles: number[] = [];
 
       if (!isStrandEmpty) {
-        const contactArrays = beadContactLayoutArrays(
-          sizingResults,
-          renderProfiles,
-          scaleFactor,
+        const ringCircumferencePx = 2 * Math.PI * wristRadius;
+        const wristMm = wristCircumferenceMm(wristSize);
+        const occupancyMm = normalized.map((placed) => placedBeadSizeMm(placed));
+        const occupancy = beadOccupancyArcPx(occupancyMm, wristMm, ringCircumferencePx);
+        const renderDims = prelimDims.map((slotDim, i) =>
+          strandLayoutShellDimensions(slotDim, renderProfiles[i]!),
         );
-
-        const resolved = computeResolvedRingRadiusPx({
-          beadLayoutArcPx: contactArrays.contactArcPx,
-          leadingOverlapPx: contactArrays.leadingOverlapPx,
-          trailingOverlapPx: contactArrays.trailingOverlapPx,
-          wristRadiusPx: wristRadius,
-          maxRadiusPx,
-          scaleFactor,
-          pairGapPx: 0,
+        const visualDiametersPx = sizingResults.map((sizing, i) => {
+          const slotWidth = Math.max(prelimDims[i]!.width, 1e-6);
+          const renderScale = renderDims[i]!.width / slotWidth;
+          return getBeadStrandTangentContactPx(sizing) * renderScale;
+        });
+        const contactAdjustmentsPx = renderProfiles.map((profile, i) => {
+          const proportionalAdjustment =
+            (profile.contactOffset + profile.spacingAdjustment) * visualDiametersPx[i]!;
+          return proportionalAdjustment + profile.collisionPadding * scaleFactor;
         });
 
-        radius = resolved.radiusPx;
-        const ringCircumferencePx = 2 * Math.PI * radius;
-        const elastic = computeElasticBeadLayout(
-          resolved.beadArcPx,
-          ringCircumferencePx,
-          pathStartAngle,
-          resolved.pairGapPx,
-          {
-            leadingPx: resolved.leadingOverlapPx,
-            trailingPx: resolved.trailingOverlapPx,
-          },
-        );
-        insertionAngles = elastic.insertionAngles;
-
-        const pathLayout = computeStrandPathLayout({
-          beads: normalized.map((_, i) => ({ index: i, beadMm: resolved.beadArcPx[i] })),
-          layoutCircumferenceMm: ringCircumferencePx,
+        // One type-agnostic balanced-radial fill for every bead. Logical order is never
+        // changed; each logical index is mapped to its "widest gap" angular slot, so the
+        // strand expands top → bottom → right → left → diagonals instead of clockwise.
+        // Footprints only size each bead's arc span (collision/hit-testing), never a
+        // different placement formula.
+        const sequential = computeBalancedRadialStrandPathLayout({
+          beads: normalized.map((_, i) => ({
+            index: i,
+            occupancyPx: occupancy.contactArcPx[i]!,
+            visualRadiusPx: visualDiametersPx[i]! / 2,
+            contactAdjustmentPx: contactAdjustmentsPx[i]!,
+          })),
           centerX: center,
           centerY: center,
-          radius,
+          radius: wristRadius,
           startAngle: pathStartAngle,
-          minGapPx: resolved.pairGapPx,
-          contactOverlaps: {
-            leadingPx: resolved.leadingOverlapPx,
-            trailingPx: resolved.trailingOverlapPx,
-          },
         });
+        const pathLayout = sequential.beads;
+        insertionAngles = sequential.insertionAngles;
 
         layoutSectors = pathLayout.map((path) => ({
           index: path.index,
@@ -667,13 +659,45 @@ const SortableCircularStrand = ({
         }));
 
         if (isStrandSpacingDebugEnabled()) {
+          const usedLength = occupancyMm.reduce((a, b) => a + b, 0);
+          const targetLength = wristMm;
+          const totalAngularLength =
+            (sequential.occupiedArcPx / ringCircumferencePx) * 2 * Math.PI;
+          let accumMm = 0;
+          for (let i = 0; i < occupancyMm.length; i++) {
+            const calculatedAnglePerBead = (occupancyMm[i]! / targetLength) * 2 * Math.PI;
+            accumMm += occupancyMm[i]!;
+            const angleDeg = ((pathLayout[i]!.angle * 180) / Math.PI + 360) % 360;
+            console.log(
+              [
+                `[strand-occupancy] bead ${i}`,
+                `type=${normalized[i]!.bead?.beadTypeSlug ?? "?"}`,
+                `resolvedOccupancy=${occupancyMm[i]!.toFixed(2)}mm`,
+                `resolvedVisualRadius=${(visualDiametersPx[i]! / 2).toFixed(2)}px`,
+                `resolvedContactAdjustment=${contactAdjustmentsPx[i]!.toFixed(2)}px`,
+                `calculatedAnglePerBead=${((calculatedAnglePerBead * 180) / Math.PI).toFixed(2)}deg`,
+                `accumUsed=${accumMm.toFixed(2)}mm`,
+                `angleDeg=${angleDeg.toFixed(1)}`,
+              ].join(" | "),
+            );
+          }
+          console.log(
+            `[strand-occupancy] usedLength=${usedLength.toFixed(1)}mm`,
+            `targetLength=${targetLength.toFixed(1)}mm`,
+            `remainingLength=${Math.max(0, targetLength - usedLength).toFixed(1)}mm`,
+            `totalAngularLength=${((totalAngularLength * 180) / Math.PI).toFixed(1)}deg`,
+            `fillRatio=${Math.min(usedLength / targetLength, 1).toFixed(3)}`,
+            `visualOverCapacity=${sequential.isOverCapacity}`,
+          );
           logStrandAdjacencySpacing(
             computeStrandAdjacencySpacingDebug({
               sizingResults,
               profiles: renderProfiles,
-              contactArcPx: contactArrays.contactArcPx,
-              leadingOverlapPx: contactArrays.leadingOverlapPx,
-              trailingOverlapPx: contactArrays.trailingOverlapPx,
+              contactArcPx: occupancy.contactArcPx.map((arc, i) =>
+                Math.max(arc, visualDiametersPx[i]!),
+              ),
+              leadingOverlapPx: occupancy.leadingOverlapPx,
+              trailingOverlapPx: occupancy.trailingOverlapPx,
               angles: pathLayout.map((path) => path.angle),
               radiusPx: radius,
               beadPositions: pathLayout.map((path) => ({ x: path.x, y: path.y })),
@@ -685,7 +709,7 @@ const SortableCircularStrand = ({
           const beadSize = placedBeadSizeMm(placed);
           const slotDim = prelimDims[i]!;
           const profile = renderProfiles[i]!;
-          const renderDim = strandLayoutShellDimensions(slotDim, profile);
+          const renderDim = renderDims[i]!;
           const path = pathLayout[i]!;
           const shellPos = computeBeadShellPosition(path.x, path.y, path.angle, slotDim, profile);
           return {
@@ -703,7 +727,9 @@ const SortableCircularStrand = ({
             beadSize,
             slotDim,
             renderDim,
-            zIndex: 20 + profile.zPriority,
+            // DOM/stacking order follows the sequence exactly; type-level zPriority must
+            // never make an earlier charm paint above a later crystal.
+            zIndex: 20 + i,
             layoutDim: slotDim,
             emptyDim: slotDim,
             isInsertionSlot: false,

@@ -80,6 +80,9 @@ export function computeSequenceLayoutAngles(
 
 export {
   computeStrandPathLayout,
+  computeSequentialStrandPathLayout,
+  computeSymmetricStrandPathLayout,
+  computeBalancedRadialStrandPathLayout,
   polarToCartesian,
   evenBeadAngleRad,
   evenBeadAngleStepRad,
@@ -105,6 +108,8 @@ export {
   type StrandDropTarget,
   type StrandPathBeadInput,
   type StrandPathBeadLayout,
+  type SequentialStrandBeadInput,
+  type SequentialStrandPathLayout,
 } from "./strand-path";
 
 export function computeWeightedSlotAngles(

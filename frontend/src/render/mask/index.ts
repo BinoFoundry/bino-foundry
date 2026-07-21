@@ -13,6 +13,8 @@ export {
   ensureFrameLensSet,
   isMaskConfigValid,
   migrateAnchors,
+  normalizeFrameExclusions,
+  resolveMaskFrameExclusions,
   MASK_CONFIG_VERSION,
   type LensPolygon,
   type MaskConfig,

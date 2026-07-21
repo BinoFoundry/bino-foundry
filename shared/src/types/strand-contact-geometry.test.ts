@@ -1,11 +1,51 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  contactArcPxFromCapacityMm,
   contactArcPxFromSlotWidth,
   netContactLoopArcPx,
 } from "./strand-contact-geometry.js";
 
 describe("strand contact geometry", () => {
+  it("maps catalogue sizeMm onto the wrist ring (capacity-consistent)", () => {
+    const result = contactArcPxFromCapacityMm(
+      8,
+      160,
+      1000,
+      {
+        contactWidth: 1,
+        contactOffset: 0,
+        spacingAdjustment: 0,
+        leadingOverlap: 0,
+        trailingOverlap: 0,
+        collisionPadding: 0,
+      },
+      1,
+    );
+    expect(result.contactArcPx).toBeCloseTo(50, 5);
+  });
+
+  it("applies the same capacity formula for charm-like and crystal-like profiles", () => {
+    const crystal = contactArcPxFromCapacityMm(8, 160, 1000, {
+      contactWidth: 1,
+      contactOffset: 0,
+      spacingAdjustment: 0,
+      leadingOverlap: 0,
+      trailingOverlap: 0,
+      collisionPadding: 0,
+    });
+    const charm = contactArcPxFromCapacityMm(8, 160, 1000, {
+      contactWidth: 1,
+      contactOffset: 0,
+      spacingAdjustment: 0,
+      leadingOverlap: 0.03,
+      trailingOverlap: 0.03,
+      collisionPadding: 0,
+    });
+    // Same sizeMm + neutral contact width → same occupied arc (no type branch).
+    expect(charm.contactArcPx).toBeCloseTo(crystal.contactArcPx, 5);
+  });
+
   it("computes contact arc from slot width only", () => {
     const result = contactArcPxFromSlotWidth(
       40,

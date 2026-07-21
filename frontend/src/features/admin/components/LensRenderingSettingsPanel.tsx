@@ -83,30 +83,60 @@ export function LensRenderingSettingsPanel({
       LensClipRenderSettings,
       | "mode"
       | "tintOpacity"
+      | "lensOpacity"
+      | "frameExclusionOpacity"
+      | "transparency"
+      | "brightness"
+      | "contrast"
+      | "saturation"
       | "gradientEnabled"
       | "gradientPosition"
+      | "gradientStrength"
       | "reflectionEnabled"
+      | "reflectionStrength"
       | "reflectionOpacity"
+      | "reflectionAngle"
       | "reflectionBlur"
       | "glossEnabled"
-      | "glossIntensity"
+      | "glossStrength"
+      | "highlightStrength"
       | "vignetteEnabled"
-      | "vignetteStrength"
+      | "edgeFade"
       | "polarizedEnabled"
       | "polarizedStrength"
     >
   > = {
     mode: value?.mode ?? DEFAULT_LENS_CLIP_RENDER.mode,
-    tintOpacity: value?.tintOpacity ?? value?.lensOpacity ?? DEFAULT_LENS_CLIP_RENDER.tintOpacity,
+    tintOpacity: value?.tintOpacity ?? DEFAULT_LENS_CLIP_RENDER.tintOpacity,
+    lensOpacity:
+      value?.lensOpacity ??
+      (value?.transparency == null
+        ? DEFAULT_LENS_CLIP_RENDER.lensOpacity
+        : 1 - value.transparency),
+    frameExclusionOpacity:
+      value?.frameExclusionOpacity ?? DEFAULT_LENS_CLIP_RENDER.frameExclusionOpacity,
+    transparency:
+      value?.transparency ??
+      (value?.baseTintOpacity == null
+        ? DEFAULT_LENS_CLIP_RENDER.transparency
+        : 1 - value.baseTintOpacity),
+    brightness: value?.brightness ?? DEFAULT_LENS_CLIP_RENDER.brightness,
+    contrast: value?.contrast ?? DEFAULT_LENS_CLIP_RENDER.contrast,
+    saturation: value?.saturation ?? DEFAULT_LENS_CLIP_RENDER.saturation,
     gradientEnabled: value?.gradientEnabled ?? DEFAULT_LENS_CLIP_RENDER.gradientEnabled,
     gradientPosition: value?.gradientPosition ?? DEFAULT_LENS_CLIP_RENDER.gradientPosition,
+    gradientStrength: value?.gradientStrength ?? DEFAULT_LENS_CLIP_RENDER.gradientStrength,
     reflectionEnabled: value?.reflectionEnabled ?? DEFAULT_LENS_CLIP_RENDER.reflectionEnabled,
+    reflectionStrength: value?.reflectionStrength ?? DEFAULT_LENS_CLIP_RENDER.reflectionStrength,
     reflectionOpacity: value?.reflectionOpacity ?? DEFAULT_LENS_CLIP_RENDER.reflectionOpacity,
+    reflectionAngle: value?.reflectionAngle ?? DEFAULT_LENS_CLIP_RENDER.reflectionAngle,
     reflectionBlur: value?.reflectionBlur ?? DEFAULT_LENS_CLIP_RENDER.reflectionBlur,
     glossEnabled: value?.glossEnabled ?? DEFAULT_LENS_CLIP_RENDER.glossEnabled,
-    glossIntensity: value?.glossIntensity ?? DEFAULT_LENS_CLIP_RENDER.glossIntensity,
+    glossStrength:
+      value?.glossStrength ?? value?.glossIntensity ?? DEFAULT_LENS_CLIP_RENDER.glossStrength,
+    highlightStrength: value?.highlightStrength ?? DEFAULT_LENS_CLIP_RENDER.highlightStrength,
     vignetteEnabled: value?.vignetteEnabled ?? DEFAULT_LENS_CLIP_RENDER.vignetteEnabled,
-    vignetteStrength: value?.vignetteStrength ?? DEFAULT_LENS_CLIP_RENDER.vignetteStrength,
+    edgeFade: value?.edgeFade ?? value?.vignetteStrength ?? DEFAULT_LENS_CLIP_RENDER.edgeFade,
     polarizedEnabled: value?.polarizedEnabled ?? DEFAULT_LENS_CLIP_RENDER.polarizedEnabled,
     polarizedStrength: value?.polarizedStrength ?? DEFAULT_LENS_CLIP_RENDER.polarizedStrength,
   };
@@ -120,45 +150,53 @@ export function LensRenderingSettingsPanel({
       <div>
         <p className="type-label text-muted-foreground">Lens rendering</p>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          Replace mode knocks out the photo lenses and paints a synthetic lens inside your clip
-          polygons. Tint colours still come from the customer tint catalogue.
+          The source lens is removed completely, then a synthetic glass material is painted
+          inside the clip. Source lens colour never contributes to the replacement.
         </p>
       </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={disabled}
-          className={cn(
-            "flex-1 rounded-md border px-2 py-1.5 text-xs",
-            merged.mode === "replace"
-              ? "border-foreground bg-background font-medium"
-              : "border-border text-muted-foreground",
-          )}
-          onClick={() => patch({ mode: "replace" })}
-        >
-          Replace lens
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          className={cn(
-            "flex-1 rounded-md border px-2 py-1.5 text-xs",
-            merged.mode === "overlay"
-              ? "border-foreground bg-background font-medium"
-              : "border-border text-muted-foreground",
-          )}
-          onClick={() => patch({ mode: "overlay" })}
-        >
-          Legacy overlay
-        </button>
-      </div>
+      <SliderRow
+        label="Lens opacity"
+        value={merged.lensOpacity}
+        disabled={disabled}
+        onChange={(lensOpacity) => patch({ mode: "replace", lensOpacity })}
+      />
 
       <SliderRow
-        label="Tint opacity multiplier"
+        label="Frame exclusion opacity"
+        value={merged.frameExclusionOpacity}
+        disabled={disabled}
+        onChange={(frameExclusionOpacity) => patch({ frameExclusionOpacity })}
+      />
+
+      <SliderRow
+        label="Tint strength"
         value={merged.tintOpacity}
         disabled={disabled}
         onChange={(tintOpacity) => patch({ tintOpacity })}
+      />
+
+      <SliderRow
+        label="Brightness"
+        value={merged.brightness}
+        min={0.25}
+        max={2}
+        disabled={disabled}
+        onChange={(brightness) => patch({ brightness })}
+      />
+      <SliderRow
+        label="Contrast"
+        value={merged.contrast}
+        max={2}
+        disabled={disabled}
+        onChange={(contrast) => patch({ contrast })}
+      />
+      <SliderRow
+        label="Saturation"
+        value={merged.saturation}
+        max={2}
+        disabled={disabled}
+        onChange={(saturation) => patch({ saturation })}
       />
 
       <ToggleRow
@@ -168,15 +206,23 @@ export function LensRenderingSettingsPanel({
         onCheckedChange={(gradientEnabled) => patch({ gradientEnabled })}
       />
       {merged.gradientEnabled ? (
-        <SliderRow
-          label="Gradient mid position"
-          value={merged.gradientPosition}
-          min={0}
-          max={100}
-          step={1}
-          disabled={disabled}
-          onChange={(gradientPosition) => patch({ gradientPosition })}
-        />
+        <>
+          <SliderRow
+            label="Gradient mid position"
+            value={merged.gradientPosition}
+            min={0}
+            max={100}
+            step={1}
+            disabled={disabled}
+            onChange={(gradientPosition) => patch({ gradientPosition })}
+          />
+          <SliderRow
+            label="Gradient strength"
+            value={merged.gradientStrength}
+            disabled={disabled}
+            onChange={(gradientStrength) => patch({ gradientStrength })}
+          />
+        </>
       ) : null}
 
       <ToggleRow
@@ -188,10 +234,25 @@ export function LensRenderingSettingsPanel({
       {merged.reflectionEnabled ? (
         <>
           <SliderRow
+            label="Reflection strength"
+            value={merged.reflectionStrength}
+            disabled={disabled}
+            onChange={(reflectionStrength) => patch({ reflectionStrength })}
+          />
+          <SliderRow
             label="Reflection opacity"
             value={merged.reflectionOpacity}
             disabled={disabled}
             onChange={(reflectionOpacity) => patch({ reflectionOpacity })}
+          />
+          <SliderRow
+            label="Reflection angle"
+            value={merged.reflectionAngle}
+            min={0}
+            max={360}
+            step={1}
+            disabled={disabled}
+            onChange={(reflectionAngle) => patch({ reflectionAngle })}
           />
           <SliderRow
             label="Reflection blur"
@@ -209,12 +270,20 @@ export function LensRenderingSettingsPanel({
         onCheckedChange={(glossEnabled) => patch({ glossEnabled })}
       />
       {merged.glossEnabled ? (
-        <SliderRow
-          label="Gloss intensity"
-          value={merged.glossIntensity}
-          disabled={disabled}
-          onChange={(glossIntensity) => patch({ glossIntensity })}
-        />
+        <>
+          <SliderRow
+            label="Glass highlight"
+            value={merged.glossStrength}
+            disabled={disabled}
+            onChange={(glossStrength) => patch({ glossStrength })}
+          />
+          <SliderRow
+            label="Specular highlight"
+            value={merged.highlightStrength}
+            disabled={disabled}
+            onChange={(highlightStrength) => patch({ highlightStrength })}
+          />
+        </>
       ) : null}
 
       <ToggleRow
@@ -225,10 +294,10 @@ export function LensRenderingSettingsPanel({
       />
       {merged.vignetteEnabled ? (
         <SliderRow
-          label="Vignette strength"
-          value={merged.vignetteStrength}
+          label="Edge fade"
+          value={merged.edgeFade}
           disabled={disabled}
-          onChange={(vignetteStrength) => patch({ vignetteStrength })}
+          onChange={(edgeFade) => patch({ edgeFade })}
         />
       ) : null}
 

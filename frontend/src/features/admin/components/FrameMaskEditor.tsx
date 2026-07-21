@@ -12,6 +12,7 @@ import {
   defaultLensSet,
   ensureFrameLensSet,
   isMaskConfigValid,
+  resolveMaskFrameExclusions,
   type FrameLensSide,
   LENS_SIDE_LABELS,
   type LensPolygon,
@@ -27,16 +28,17 @@ interface FrameMaskEditorProps {
   initialMask?: MaskConfig | null;
   /** Bump when initialMask paths change externally (auto-detect). */
   lensRevision?: number;
-  /** When set, editor focuses on one lens path only (left or right). */
+  /** When set, editor focuses on one lens path only (left or right). Polygon mode only. */
   focusedLensId?: FrameLensSide;
-  /** Lens polygon vs per-lens exclusion holes. */
+  /** Lens polygon editing vs frame-level exclusion polygons. */
   editMode?: LensEditorMode;
   onChange?: (config: MaskConfig | null) => void;
   className?: string;
 }
 
-function getSideExclusions(mask: MaskConfig | null | undefined, side: FrameLensSide): LensPolygon[] {
-  return mask?.exclusions?.[side] ?? [];
+/** Frame-level exclusion polygons (independent of left/right). */
+function getFrameExclusions(mask: MaskConfig | null | undefined): LensPolygon[] {
+  return resolveMaskFrameExclusions(mask);
 }
 
 /** Lens clip path editor (polygon/curve tools → persisted as SVG clip paths). */
@@ -61,11 +63,41 @@ export function FrameMaskEditor({
   const [activeExclusionIndex, setActiveExclusionIndex] = useState(0);
   const [exclusionRevision, setExclusionRevision] = useState(0);
 
+  // Frame exclusions are LOCAL editor state, seeded once from the incoming mask. They are the
+  // source of truth while editing so the canvas is never torn down by the parent echoing back a
+  // filtered mask (empty in-progress polygons would otherwise disappear mid-draw). We emit
+  // upward on every change but never re-derive the list from props.
+  const [exclusionList, setExclusionListState] = useState<LensPolygon[]>(() =>
+    getFrameExclusions(initialMaskRef.current),
+  );
+  const exclusionListRef = useRef(exclusionList);
+  const setExclusionList = useCallback((next: LensPolygon[]) => {
+    exclusionListRef.current = next;
+    setExclusionListState(next);
+  }, []);
+
+  const emitExclusions = useCallback((list: LensPolygon[]) => {
+    const mask = initialMaskRef.current;
+    const baseLenses = ensureFrameLensSet(mask?.lenses ?? defaultLensSet());
+    const config = createMaskConfig(
+      mask?.imageWidth ?? 0,
+      mask?.imageHeight ?? 0,
+      baseLenses,
+      undefined,
+      // Empty in-progress polygons are dropped from the emitted mask (they carry no path),
+      // but stay in local state so the user can keep drawing them.
+      list.filter((ex) => ex.points?.length),
+    );
+    onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
+  }, []);
+
   const mergeFocusedEdit = useCallback((edited: LensPolygon[], imgW: number, imgH: number): MaskConfig => {
     const focus = focusedLensIdRef.current;
     const editedLens = edited[0];
+    // Carry frame-level exclusions through lens polygon edits so they are never lost.
+    const frameExclusions = getFrameExclusions(initialMaskRef.current);
     if (!focus || !editedLens) {
-      return createMaskConfig(imgW, imgH, edited);
+      return createMaskConfig(imgW, imgH, edited, undefined, frameExclusions);
     }
 
     const base = ensureFrameLensSet(initialMaskRef.current?.lenses ?? defaultLensSet());
@@ -74,134 +106,98 @@ export function FrameMaskEditor({
         ? { ...lens, points: editedLens.points, label: LENS_SIDE_LABELS[focus] }
         : lens,
     );
-    return createMaskConfig(imgW, imgH, merged, initialMaskRef.current?.exclusions);
+    return createMaskConfig(imgW, imgH, merged, undefined, frameExclusions);
   }, []);
-
-  const mergeFocusedExclusionEdit = useCallback(
-    (edited: LensPolygon[], imgW: number, imgH: number, activeIndex: number): MaskConfig => {
-      const focus = focusedLensIdRef.current;
-      const editedExclusion = edited[0];
-      const baseMask = initialMaskRef.current;
-      const baseLenses = ensureFrameLensSet(baseMask?.lenses ?? defaultLensSet());
-      const sideExclusions = [...getSideExclusions(baseMask, focus ?? "left")];
-
-      if (focus && editedExclusion) {
-        if (sideExclusions.length === 0) {
-          sideExclusions.push(editedExclusion);
-        } else {
-          const idx = Math.min(activeIndex, sideExclusions.length - 1);
-          sideExclusions[idx] = {
-            ...sideExclusions[idx]!,
-            id: editedExclusion.id,
-            label: editedExclusion.label || sideExclusions[idx]!.label,
-            points: editedExclusion.points,
-          };
-        }
-      }
-
-      const exclusions = {
-        ...(baseMask?.exclusions ?? {}),
-        ...(focus ? { [focus]: sideExclusions.filter((ex) => ex.points?.length) } : {}),
-      };
-
-      return createMaskConfig(imgW, imgH, baseLenses, exclusions);
-    },
-    [],
-  );
 
   const handleLensesChange = useCallback(
     (lenses: LensPolygon[], meta: { imgW: number; imgH: number }) => {
-      const mode = editModeRef.current;
-      const config =
-        mode === "exclusions" && focusedLensIdRef.current
-          ? mergeFocusedExclusionEdit(lenses, meta.imgW, meta.imgH, activeExclusionIndex)
-          : focusedLensIdRef.current
-            ? mergeFocusedEdit(lenses, meta.imgW, meta.imgH)
-            : createMaskConfig(meta.imgW, meta.imgH, lenses, initialMaskRef.current?.exclusions);
+      if (editModeRef.current === "exclusions") {
+        const editedPolygon = lenses[0];
+        const next = [...exclusionListRef.current];
+        if (editedPolygon) {
+          if (next.length === 0) {
+            next.push(editedPolygon);
+          } else {
+            const idx = Math.min(activeExclusionIndex, next.length - 1);
+            next[idx] = {
+              ...next[idx]!,
+              id: editedPolygon.id,
+              label: editedPolygon.label || next[idx]!.label,
+              points: editedPolygon.points,
+            };
+          }
+        }
+        setExclusionList(next);
+        emitExclusions(next);
+        return;
+      }
 
-      const valid =
-        mode === "exclusions"
-          ? Boolean(config && isMaskConfigValid(config))
-          : isMaskConfigValid(config);
-      onChangeRef.current?.(valid ? config : null);
+      const config = focusedLensIdRef.current
+        ? mergeFocusedEdit(lenses, meta.imgW, meta.imgH)
+        : createMaskConfig(
+            meta.imgW,
+            meta.imgH,
+            lenses,
+            undefined,
+            getFrameExclusions(initialMaskRef.current),
+          );
+
+      onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
     },
-    [activeExclusionIndex, mergeFocusedEdit, mergeFocusedExclusionEdit],
+    [activeExclusionIndex, emitExclusions, mergeFocusedEdit, setExclusionList],
   );
 
   const focusedLabel = focusedLensId ? LENS_SIDE_LABELS[focusedLensId] : undefined;
-  const sideExclusions = focusedLensId ? getSideExclusions(initialMask, focusedLensId) : [];
   const activeExclusion =
-    sideExclusions[activeExclusionIndex] ??
+    exclusionList[activeExclusionIndex] ??
     createLensPolygon(
-      `excl-${focusedLensId ?? "lens"}-${Date.now()}`,
+      `frame-exclusion-${Date.now()}`,
       `Exclusion ${activeExclusionIndex + 1}`,
       [],
     );
 
   const addExclusion = () => {
-    if (!focusedLensId || !initialMaskRef.current) return;
-    const nextExclusion = createLensPolygon(
-      `excl-${focusedLensId}-${Date.now()}`,
-      `Exclusion ${sideExclusions.length + 1}`,
-      [],
-    );
-    const exclusions = {
-      ...(initialMaskRef.current.exclusions ?? {}),
-      [focusedLensId]: [...sideExclusions, nextExclusion],
-    };
-    const config = createMaskConfig(
-      initialMaskRef.current.imageWidth,
-      initialMaskRef.current.imageHeight,
-      ensureFrameLensSet(initialMaskRef.current.lenses),
-      exclusions,
-    );
-    setActiveExclusionIndex(sideExclusions.length);
+    const next = [
+      ...exclusionListRef.current,
+      createLensPolygon(
+        `frame-exclusion-${Date.now()}`,
+        `Exclusion ${exclusionListRef.current.length + 1}`,
+        [],
+      ),
+    ];
+    // Bump the revision only on add — this remounts the canvas onto the new polygon. It never
+    // fires while drawing, so the canvas stays put between clicks.
+    setExclusionList(next);
+    setActiveExclusionIndex(next.length - 1);
     setExclusionRevision((r) => r + 1);
-    onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
+    emitExclusions(next);
   };
 
   const removeActiveExclusion = () => {
-    if (!focusedLensId || !initialMaskRef.current || !sideExclusions.length) return;
-    const nextList = sideExclusions.filter((_, i) => i !== activeExclusionIndex);
-    const exclusions = {
-      ...(initialMaskRef.current.exclusions ?? {}),
-      [focusedLensId]: nextList,
-    };
-    const config = createMaskConfig(
-      initialMaskRef.current.imageWidth,
-      initialMaskRef.current.imageHeight,
-      ensureFrameLensSet(initialMaskRef.current.lenses),
-      exclusions,
-    );
-    setActiveExclusionIndex(Math.max(0, Math.min(activeExclusionIndex, nextList.length - 1)));
+    if (!exclusionListRef.current.length) return;
+    const next = exclusionListRef.current.filter((_, i) => i !== activeExclusionIndex);
+    setExclusionList(next);
+    setActiveExclusionIndex(Math.max(0, Math.min(activeExclusionIndex, next.length - 1)));
     setExclusionRevision((r) => r + 1);
-    onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
+    emitExclusions(next);
   };
 
   const renameActiveExclusion = (label: string) => {
-    if (!focusedLensId || !initialMaskRef.current || !sideExclusions.length) return;
-    const nextList = sideExclusions.map((ex, i) =>
+    if (!exclusionListRef.current.length) return;
+    const next = exclusionListRef.current.map((ex, i) =>
       i === activeExclusionIndex ? { ...ex, label } : ex,
     );
-    const exclusions = {
-      ...(initialMaskRef.current.exclusions ?? {}),
-      [focusedLensId]: nextList,
-    };
-    const config = createMaskConfig(
-      initialMaskRef.current.imageWidth,
-      initialMaskRef.current.imageHeight,
-      ensureFrameLensSet(initialMaskRef.current.lenses),
-      exclusions,
-    );
-    onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
+    setExclusionList(next);
+    emitExclusions(next);
   };
 
-  if (editMode === "exclusions" && focusedLensId) {
+  if (editMode === "exclusions") {
     return (
       <div className={cn("space-y-3", className)}>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Draw polygons for frame parts inside the {focusedLabel?.toLowerCase()} opening. Excluded
-          areas stay untinted — the original frame shows through.
+          Draw polygons for frame parts inside the lens openings (bridge, screws, inner rim,
+          support bars). These restore the original frame above the rendered lens, so they stay
+          fully visible regardless of tint.
         </p>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -213,7 +209,7 @@ export function FrameMaskEditor({
             type="button"
             size="sm"
             variant="ghost"
-            disabled={sideExclusions.length === 0}
+            disabled={exclusionList.length === 0}
             onClick={removeActiveExclusion}
           >
             <Trash2 className="mr-1.5 h-3.5 w-3.5" />
@@ -221,9 +217,9 @@ export function FrameMaskEditor({
           </Button>
         </div>
 
-        {sideExclusions.length > 0 ? (
+        {exclusionList.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {sideExclusions.map((ex, i) => (
+            {exclusionList.map((ex, i) => (
               <button
                 key={ex.id}
                 type="button"
@@ -244,11 +240,11 @@ export function FrameMaskEditor({
           </div>
         ) : (
           <p className="text-[11px] text-muted-foreground">
-            No exclusion areas yet — add one to begin.
+            No frame exclusions yet — add one to begin.
           </p>
         )}
 
-        {sideExclusions.length > 0 ? (
+        {exclusionList.length > 0 ? (
           <>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Label</Label>
@@ -267,11 +263,11 @@ export function FrameMaskEditor({
               onLensesChange={handleLensesChange}
               showLensTabs={false}
               singlePathLabel={activeExclusion.label || "Exclusion"}
-              previewLabel={`${focusedLabel} exclusion`}
+              previewLabel="Frame exclusion"
               showThumbnailPreview={false}
               lensRevision={exclusionRevision + lensRevision}
               handlesLabel="Control points"
-              helpText="Draw closed exclusion polygons inside the lens opening · Shift+click edge to insert · Del removes selected point"
+              helpText="Draw closed exclusion polygons over frame parts · Shift+click edge to insert · Del removes selected point"
             />
           </>
         ) : null}

@@ -62,17 +62,19 @@ describe("auto layout", () => {
     expect(next[0].position).toBe(0);
   });
 
-  it("places second bead opposite first", () => {
+  it("appends subsequent beads to preserve chronological insertion order", () => {
     const one = [bead(0, 8)];
     expect(findBestInsertIndex(one, 8)).toBe(1);
     const two = insertBeadWithAutoLayout(one, bead(99, 8));
     expect(two.map((b) => b.position)).toEqual([0, 1]);
+    expect(two.map((b) => b.bead.id)).toEqual(["b-0-8", "b-99-8"]);
   });
 
-  it("respects mixed mm when picking gap", () => {
+  it("never splices into the middle of an existing sequence", () => {
     const placed = [bead(0, 12), bead(1, 4)];
-    const idx = findBestInsertIndex(placed, 8);
-    expect(idx).toBeGreaterThanOrEqual(0);
-    expect(idx).toBeLessThanOrEqual(2);
+    expect(findBestInsertIndex(placed, 8)).toBe(2);
+    const next = insertBeadWithAutoLayout(placed, bead(99, 8));
+    expect(next.map((b) => b.bead.id)).toEqual(["b-0-12", "b-1-4", "b-99-8"]);
+    expect(next.map((b) => b.position)).toEqual([0, 1, 2]);
   });
 });

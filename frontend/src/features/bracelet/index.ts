@@ -83,6 +83,9 @@ export {
 export {
   computeResolvedRingRadiusPx,
   beadArcPxOnRing,
+  beadContactArcPxFromCapacity,
+  beadContactLayoutArrays,
+  beadOccupancyArcPx,
   beadLayoutArcPx,
   beadLayoutArcPxFromSizing,
   beadStrandFootprintPx,

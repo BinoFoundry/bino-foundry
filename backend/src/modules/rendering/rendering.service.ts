@@ -1,8 +1,22 @@
+import {
+  isLensClipConfigValid,
+  normalizeLensClipConfig,
+  type LensClipConfig,
+} from "@bino-foundry/shared/types";
+
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { NotFoundError, ValidationError } from "../../lib/errors.js";
 import { isClipConfigValid } from "../../lib/clip-validation.js";
 import type { UpsertFrameViewDTO } from "./rendering.validation.js";
+
+function normalizeStoredClipConfig(
+  clipConfig: UpsertFrameViewDTO["clipConfig"],
+): LensClipConfig | null {
+  if (!clipConfig) return null;
+  if (!isLensClipConfigValid(clipConfig)) return clipConfig;
+  return normalizeLensClipConfig(clipConfig);
+}
 
 export type FrameViewAxis = "front" | "side" | "three_quarter";
 
@@ -92,7 +106,7 @@ export class RenderingService {
       original_image_width: payload.originalImageWidth ?? null,
       original_image_height: payload.originalImageHeight ?? null,
       plate_crop_config: payload.plateCropConfig ?? null,
-      clip_config: payload.clipConfig ?? null,
+      clip_config: normalizeStoredClipConfig(payload.clipConfig),
       clip_status: clipStatus,
       mask_config: payload.maskConfig ?? null,
       mask_status: payload.maskStatus ?? clipStatus,

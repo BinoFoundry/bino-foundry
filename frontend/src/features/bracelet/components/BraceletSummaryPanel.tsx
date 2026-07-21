@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, ShoppingBag } from "lucide-react";
+import { Bookmark, ChevronDown, ChevronUp, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -31,6 +31,8 @@ interface BraceletSummaryPanelProps {
   collapsible?: boolean;
   defaultOpen?: boolean;
   onAddToCart?: () => void;
+  onSaveDesign?: () => void;
+  savingDesign?: boolean;
   saveDisabled?: boolean;
   autoSaveStatus?: DesignAutoSaveStatus;
   autoSaveVisible?: boolean;
@@ -67,6 +69,8 @@ export function BraceletSummaryPanel({
   collapsible = false,
   defaultOpen = true,
   onAddToCart,
+  onSaveDesign,
+  savingDesign = false,
   saveDisabled = false,
   autoSaveStatus = "idle",
   autoSaveVisible = false,
@@ -136,6 +140,19 @@ export function BraceletSummaryPanel({
           visible={autoSaveVisible}
           signedIn={signedIn}
         />
+        {onSaveDesign ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            size="default"
+            disabled={saveDisabled || savingDesign}
+            onClick={onSaveDesign}
+          >
+            <Bookmark className="mr-2 h-3.5 w-3.5" />
+            {savingDesign ? BUILDER_COPY.savingDesign : BUILDER_COPY.saveDesign}
+          </Button>
+        ) : null}
         <Button type="button" className="w-full" size="default" disabled={saveDisabled} onClick={handleAddToCart}>
           <ShoppingBag className="mr-2 h-3.5 w-3.5" />
           {BRACELET_COPY.addToCart}

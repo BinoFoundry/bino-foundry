@@ -13,6 +13,7 @@ import {
   createLensPolygon,
   createMaskConfig,
   migrateAnchors,
+  resolveMaskFrameExclusions,
   type LensPolygon,
   type MaskConfig,
   type PathAnchor,
@@ -87,7 +88,15 @@ export function mergeLensSideIntoMask(
       fromExisting?.points ?? [],
     );
   });
-  return createMaskConfig(width, height, lenses);
+  // Keep frame-level exclusion polygons when only one lens opening is replaced.
+  const frameExclusions = resolveMaskFrameExclusions(existing);
+  return createMaskConfig(
+    width,
+    height,
+    lenses,
+    undefined,
+    frameExclusions.length ? frameExclusions : undefined,
+  );
 }
 
 function pointsToAnchors(

@@ -22,6 +22,7 @@ export const SUNGLASSES_COPY = {
   unavailableFramePrompt: "Please choose another frame.",
   checkoutBlockedUnavailableFrame:
     "Replace the unavailable frame before adding this design to your cart.",
+  saveDesignNeedsTint: "Choose a lens tint before saving your design.",
   addOnsSectionTitle: "Add-Ons",
   summaryTint: "Tint",
   summaryPolarized: "Polarised",

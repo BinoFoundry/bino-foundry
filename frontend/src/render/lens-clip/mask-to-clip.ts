@@ -5,29 +5,26 @@ import {
   type LensClipRenderSettings,
 } from "@bino-foundry/shared/types";
 import type { MaskConfig } from "@/render/mask/mask-types";
-import { migrateAnchors, type LensPolygon } from "@/render/mask/mask-types";
+import {
+  migrateAnchors,
+  resolveMaskFrameExclusions,
+  type LensPolygon,
+} from "@/render/mask/mask-types";
 
-import { lensesToClipShapes } from "./svg-path-builder";
+import { exclusionPolygonsToShapes, lensesToClipShapes } from "./svg-path-builder";
 
 export type MaskToClipPreserve = {
   render?: LensClipRenderSettings;
   existingClip?: LensClipConfig | null;
 };
 
-function preserveExclusionsFromExistingClip(
-  shapes: ReturnType<typeof lensesToClipShapes>,
-  existingClip?: LensClipConfig | null,
-) {
-  if (!existingClip) return shapes;
-  return shapes.map((shape) => {
-    if (shape.exclusions?.length) return shape;
-    const existing = existingClip.lenses.find((lens) => lens.id === shape.id);
-    if (!existing?.exclusions?.length) return shape;
-    return { ...shape, exclusions: existing.exclusions };
-  });
-}
-
-/** Convert MaskConfig v2 (editor anchors) → LensClipConfig v1 (SVG paths). */
+/**
+ * Convert MaskConfig v2 (editor anchors) → LensClipConfig v1 (SVG paths).
+ *
+ * The mask is authoritative for frame exclusions — it always carries the current list (see
+ * FrameMaskEditor, which threads exclusions through every edit), so callers that intend to
+ * preserve exclusions must include them in the mask.
+ */
 export function maskConfigToLensClipConfig(
   mask: MaskConfig,
   preserve?: MaskToClipPreserve | null,
@@ -37,12 +34,21 @@ export function maskConfigToLensClipConfig(
     points: migrateAnchors(l.points),
   })) as LensPolygon[];
 
-  const shapes = preserveExclusionsFromExistingClip(
-    lensesToClipShapes(lenses, mask.imageWidth, mask.imageHeight, mask.exclusions),
-    preserve?.existingClip,
+  const shapes = lensesToClipShapes(lenses, mask.imageWidth, mask.imageHeight);
+  const frameExclusions = exclusionPolygonsToShapes(
+    resolveMaskFrameExclusions(mask),
+    mask.imageWidth,
+    mask.imageHeight,
+  );
+
+  const config = createLensClipConfig(
+    mask.imageWidth,
+    mask.imageHeight,
+    shapes,
+    preserve?.render,
   );
 
   return normalizeLensClipConfig(
-    createLensClipConfig(mask.imageWidth, mask.imageHeight, shapes, preserve?.render),
+    frameExclusions.length ? { ...config, frameExclusions } : config,
   );
 }

@@ -21,6 +21,8 @@ interface SunglassesConfigColumnProps {
   state: CustomiserState;
   currencyCode: string;
   onAddToCart?: () => void;
+  onSaveDesign?: () => void;
+  savingDesign?: boolean;
   autoSaveStatus?: DesignAutoSaveStatus;
   autoSaveVisible?: boolean;
   signedIn?: boolean;
@@ -39,6 +41,8 @@ export function SunglassesConfigColumn({
   state,
   currencyCode,
   onAddToCart,
+  onSaveDesign,
+  savingDesign = false,
   autoSaveStatus = "idle",
   autoSaveVisible = false,
   signedIn = false,
@@ -57,15 +61,7 @@ export function SunglassesConfigColumn({
       )}
     >
       <div className="hidden shrink-0 border-b border-border/60 px-4 py-3 sm:px-5 lg:block">
-        <div className="flex items-center justify-between gap-3">
-          <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
-          <BuilderSaveStatus
-            status={autoSaveStatus}
-            visible={autoSaveVisible}
-            signedIn={signedIn}
-            className="shrink-0 justify-end"
-          />
-        </div>
+        <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -91,20 +87,36 @@ export function SunglassesConfigColumn({
               state={state}
               currencyCode={currencyCode}
               showFooter={false}
+              saveStatus={
+                <BuilderSaveStatus
+                  status={autoSaveStatus}
+                  visible={autoSaveVisible}
+                  signedIn={signedIn}
+                />
+              }
             />
 
             {((!flow.isLast && flow.step !== "lens") || flow.isLast) && (
               <div className="mt-8 border-t border-border/70 pt-6">
                 {!flow.isLast && flow.step !== "lens" ? (
-                  <Button type="button" className="w-full" size="lg" onClick={flow.goNext}>
-                    Continue
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  <div className="space-y-2">
+                    <BuilderSaveStatus
+                      status={autoSaveStatus}
+                      visible={autoSaveVisible}
+                      signedIn={signedIn}
+                    />
+                    <Button type="button" className="w-full" size="lg" onClick={flow.goNext}>
+                      Continue
+                      <ChevronRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
                 ) : (
                   <SunglassesConfigurationSummary
                     totalPrice={totalPrice}
                     currencyCode={currencyCode}
                     onAddToCart={onAddToCart}
+                    onSaveDesign={onSaveDesign}
+                    savingDesign={savingDesign}
                     autoSaveStatus={autoSaveStatus}
                     autoSaveVisible={autoSaveVisible}
                     signedIn={signedIn}

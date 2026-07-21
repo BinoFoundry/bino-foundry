@@ -4,11 +4,14 @@ export interface LensClipShape {
   label: string;
   /** SVG path `d` attribute (M/L/C/Z) in pixel coords for viewBox 0 0 imageWidth imageHeight */
   pathD: string;
-  /** Holes inside this lens opening — excluded from tint and all optical effects. */
+  /**
+   * @deprecated Exclusions are now frame-level ({@link LensClipConfig.frameExclusions}).
+   * Read only for migrating older per-lens saved configs.
+   */
   exclusions?: LensExclusionShape[];
 }
 
-/** Polygon carved out of a lens opening so frame hardware stays untinted. */
+/** A single exclusion polygon path (frame hardware silhouette). */
 export interface LensExclusionShape {
   id: string;
   label: string;
@@ -16,11 +19,12 @@ export interface LensExclusionShape {
 }
 
 /**
- * @deprecated Legacy frame-level exclusions — migrated to {@link LensClipShape.exclusions}.
- * Kept for reading older saved configs.
+ * Frame-level exclusion polygon. These are FRAME components (bridge, screws, inner rim,
+ * support bars) that sit inside the lens opening and must stay visible above the rendered
+ * lens. They belong to the frame, not to either lens, so `lensId` is optional/legacy only.
  */
 export interface FrameExclusionShape extends LensExclusionShape {
-  /** Optional association to a lens opening id (`left` / `right`). */
+  /** @deprecated Legacy association to a lens opening id — no longer used for rendering. */
   lensId?: string;
 }
 
@@ -32,12 +36,31 @@ export interface FrameExclusionShape extends LensExclusionShape {
 export interface LensClipRenderSettings {
   /**
    * `replace` — knock out original lens pixels and paint a synthetic lens (default).
-   * `overlay` — legacy multiply/soft-light tint on top of the plate.
+   * `overlay` is accepted only for reading legacy data; rendering always uses replacement.
    */
   mode?: "replace" | "overlay";
 
-  /** Overall lens fill opacity (0–1). When unset, customer tint opacity is used. */
+  /** Strength of the selected tint inside the replacement material (0–1). */
   tintOpacity?: number;
+  /**
+   * Overall opacity of the NEW replacement lens material (0–1). This never controls or
+   * reveals original lens pixels: the source lens area is removed before this is painted.
+   */
+  lensOpacity?: number;
+  /** Opacity of restored frame-exclusion pixels (0–1), independent of lens opacity. */
+  frameExclusionOpacity?: number;
+  /**
+   * Opacity of the solid lens base painted beneath the tint (0–1).
+   * Keeps the lens reading as real glass instead of a translucent hole, and makes
+   * the same tint look identical across frames (no background bleed-through).
+   */
+  baseTintOpacity?: number;
+  /** Amount of background transmission through the synthetic glass (0–1). */
+  transparency?: number;
+  /** Optical colour adjustments; 1 is neutral. */
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
   /** Prefer customer tint gradient when true (default). */
   gradientEnabled?: boolean;
   /** Optional frame-level gradient colour overrides (hex). */
@@ -45,22 +68,28 @@ export interface LensClipRenderSettings {
   gradientBottomColor?: string;
   /** Vertical mid-stop 0–100 (darker top → lighter bottom emphasis). */
   gradientPosition?: number;
+  /** Strength of the gradient layer over the translucent glass base (0–1). */
+  gradientStrength?: number;
 
   reflectionEnabled?: boolean;
+  reflectionStrength?: number;
   reflectionOpacity?: number;
+  reflectionAngle?: number;
   reflectionBlur?: number;
 
   glossEnabled?: boolean;
   glossIntensity?: number;
+  /** Preferred name for gloss intensity; `glossIntensity` remains compatible. */
+  glossStrength?: number;
 
   vignetteEnabled?: boolean;
   vignetteStrength?: number;
+  /** Preferred name for edge vignette strength; `vignetteStrength` remains compatible. */
+  edgeFade?: number;
 
   polarizedEnabled?: boolean;
   polarizedStrength?: number;
 
-  /** @deprecated Prefer `tintOpacity` — kept for older saved configs. */
-  lensOpacity?: number;
   /** @deprecated Overlay-mode only. */
   tintBlendMode?: "multiply" | "screen" | "overlay" | "color" | "soft-light";
   /** @deprecated Overlay-mode only. */
@@ -80,8 +109,9 @@ export interface LensClipConfig {
   imageHeight: number;
   lenses: LensClipShape[];
   /**
-   * @deprecated Prefer per-lens {@link LensClipShape.exclusions}.
-   * Read for migration only.
+   * Frame-level exclusion polygons. Rendered as an overlay of the original frame ABOVE the
+   * synthetic lens, so frame hardware inside the opening stays visible. Independent of the
+   * lens clip; empty/absent means the lens fills the whole opening (legacy behaviour).
    */
   frameExclusions?: FrameExclusionShape[];
   render?: LensClipRenderSettings;
@@ -126,54 +156,57 @@ export function resolveLensExclusionShapes(
   return list.filter((s) => isUsablePathD(s?.pathD));
 }
 
-/** @deprecated Prefer {@link resolveLensExclusionShapes} on each lens. */
+/**
+ * The merged frame-level exclusion list.
+ *
+ * Collects canonical root `frameExclusions` plus any legacy per-lens `exclusions[]`
+ * (from older saved configs) into a single flat list so callers never need to know
+ * where the data was stored. IDs are de-duplicated.
+ */
 export function resolveFrameExclusionShapes(
-  clip: Pick<LensClipConfig, "frameExclusions"> | null | undefined,
+  clip: Pick<LensClipConfig, "frameExclusions" | "lenses"> | null | undefined,
 ): FrameExclusionShape[] {
-  const list = clip?.frameExclusions;
-  if (!Array.isArray(list)) return [];
-  return list.filter((s) => isUsablePathD(s?.pathD));
+  if (!clip) return [];
+  const out: FrameExclusionShape[] = [];
+  const seen = new Set<string>();
+
+  const push = (shape: LensExclusionShape | FrameExclusionShape | undefined, lensId?: string) => {
+    if (!isUsablePathD(shape?.pathD)) return;
+    let id = shape!.id || `frame-exclusion-${out.length}`;
+    while (seen.has(id)) id = `${id}-${out.length}`;
+    seen.add(id);
+    out.push({ id, label: shape!.label || "Frame exclusion", pathD: shape!.pathD });
+  };
+
+  for (const shape of clip.frameExclusions ?? []) push(shape, shape.lensId);
+  for (const lens of clip.lenses ?? []) {
+    for (const shape of resolveLensExclusionShapes(lens)) push(shape, lens.id);
+  }
+
+  return out;
 }
 
 /**
- * Migrate legacy root `frameExclusions` onto per-lens `exclusions` arrays.
- * Strips deprecated keys from the returned config.
+ * Normalize to the canonical frame-level shape: gather every exclusion (root + legacy
+ * per-lens) into root `frameExclusions` and strip per-lens `exclusions`. Frames without
+ * any exclusions are returned unchanged (aside from dropping empty keys).
  */
 export function normalizeLensClipConfig(clip: LensClipConfig): LensClipConfig {
-  const legacy = resolveFrameExclusionShapes(clip);
-  if (!legacy.length) {
-    return {
-      ...clip,
-      lenses: clip.lenses.map((lens) => {
-        const exclusions = resolveLensExclusionShapes(lens);
-        return exclusions.length ? { ...lens, exclusions } : lens;
-      }),
-    };
+  const frameExclusions = resolveFrameExclusionShapes(clip);
+  const lenses = clip.lenses.map((lens) => {
+    if (!lens.exclusions) return lens;
+    const { exclusions: _drop, ...rest } = lens;
+    return rest;
+  });
+
+  const { frameExclusions: _dropRoot, ...rest } = clip;
+  if (!frameExclusions.length) {
+    return { ...rest, lenses };
   }
-
-  const lenses = clip.lenses.map((lens) => ({
-    ...lens,
-    exclusions: [...resolveLensExclusionShapes(lens)],
-  }));
-
-  for (const ex of legacy) {
-    const shape: LensExclusionShape = { id: ex.id, label: ex.label, pathD: ex.pathD };
-    if (ex.lensId) {
-      const lens = lenses.find((l) => l.id === ex.lensId);
-      if (lens) {
-        lens.exclusions = [...(lens.exclusions ?? []), shape];
-      }
-    } else {
-      for (const lens of lenses) {
-        lens.exclusions = [...(lens.exclusions ?? []), { ...shape, id: `${ex.id}-${lens.id}` }];
-      }
-    }
-  }
-
-  const { frameExclusions: _drop, ...rest } = clip;
   return {
     ...rest,
     lenses,
+    frameExclusions,
     updatedAt: clip.updatedAt ?? Date.now(),
   };
 }

@@ -5,13 +5,13 @@ import {
   getMaxSlotExtent,
   getBeadStrandTangentContactPx,
   resolveBeadSlotSizing,
-  resolveStrandRenderConfigForBead,
   type BeadSlotDimensions,
   type BeadSlotSizingCatalogueContext,
   type BeadSlotSizingResult,
   type StrandRenderCatalogueContext,
 } from "@/render/bead-crop";
 import {
+  contactArcPxFromCapacityMm,
   contactArcPxFromSlotWidth,
   contactGeometryFromProfile,
   netContactLoopArcPx,
@@ -21,6 +21,7 @@ import {
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
 import { normalizeFromSlots } from "./composition";
+import { wristCircumferenceMm } from "./capacity";
 
 import { computeMaxRingRadiusPx, computeWristRingRadiusPx, type WristSizeBounds } from "./strand-ring";
 import { STRAND_LAYOUT_BASELINE_PX } from "./strand-viewport";
@@ -50,7 +51,41 @@ export type { ContactArcPx, StrandLayoutGeometry };
 export { contactGeometryFromProfile };
 
 /**
- * Tangential contact arc from visible strand silhouette — not wrapper or PNG padding.
+ * @deprecated The render pipeline no longer uses contact-width tuning for layout — see
+ * {@link beadOccupancyArcPx}. Occupancy is purely catalogue sizeMm mapped onto the ring so
+ * the rendered arc always matches the capacity panel. Retained only as a geometry helper.
+ *
+ * Capacity-consistent contact arc for one bead.
+ * Occupied length = catalogue sizeMm mapped onto the wrist ring, then tuned by
+ * resolved contact width / adjustment from the database profile hierarchy.
+ */
+export function beadContactArcPxFromCapacity(
+  sizeMm: number,
+  wristCircumferenceMmValue: number,
+  ringCircumferencePx: number,
+  profile: Pick<
+    StrandRenderProfile,
+    | "contactWidth"
+    | "contactOffset"
+    | "spacingAdjustment"
+    | "leadingOverlap"
+    | "trailingOverlap"
+    | "collisionPadding"
+  >,
+  scaleFactor = 1,
+): ContactArcPx {
+  return contactArcPxFromCapacityMm(
+    sizeMm,
+    wristCircumferenceMmValue,
+    ringCircumferencePx,
+    profile,
+    scaleFactor,
+  );
+}
+
+/**
+ * @deprecated Prefer {@link beadContactArcPxFromCapacity} — layout occupancy must
+ * match capacity mm, not the visible silhouette (charms were collapsing the ring).
  */
 export function beadContactArcPxFromSizing(
   sizing: Pick<
@@ -150,17 +185,55 @@ export function beadLayoutArcPxFromSizing(
   ).contactArcPx;
 }
 
-/** Build per-bead contact arc + overlap arrays for the layout packer. */
+const NEUTRAL_CONTACT_PROFILE = {
+  contactWidth: 1,
+  contactOffset: 0,
+  spacingAdjustment: 0,
+  leadingOverlap: 0,
+  trailingOverlap: 0,
+  collisionPadding: 0,
+} as const;
+
+export interface BeadOccupancyArcs {
+  /** Per-bead arc length (px) = resolved occupancy mm mapped onto the ring. */
+  contactArcPx: number[];
+  leadingOverlapPx: number[];
+  trailingOverlapPx: number[];
+}
+
+/**
+ * Pure occupancy arcs — the ONLY layout model.
+ *
+ *   arcPx[i] = (resolvedOccupancyMm[i] / wristCircumferenceMm) × ringCircumferencePx
+ *
+ * Every bead type (crystal, spacer, charm, pendant, connector, future types) uses this
+ * identical formula. There is no per-type branch and no contact-width multiplier — a bead
+ * occupies exactly its resolved mm of circumference. This keeps the rendered arc in lockstep
+ * with the capacity panel (used mm / target mm), so a 100%-full strand fills the whole ring
+ * regardless of the bead-type mix. Overlaps are always zero (beads sit edge-to-edge).
+ */
+export function beadOccupancyArcPx(
+  resolvedOccupancyMm: number[],
+  wristCircumferenceMmValue: number,
+  ringCircumferencePx: number,
+): BeadOccupancyArcs {
+  const wristMm = Math.max(wristCircumferenceMmValue, 1e-6);
+  const circPx = Math.max(ringCircumferencePx, 1e-6);
+  const contactArcPx = resolvedOccupancyMm.map(
+    (mm) => (Math.max(0, mm) / wristMm) * circPx,
+  );
+  const zeros = resolvedOccupancyMm.map(() => 0);
+  return { contactArcPx, leadingOverlapPx: zeros, trailingOverlapPx: [...zeros] };
+}
+
+/**
+ * @deprecated Superseded by {@link beadOccupancyArcPx}. The layout walk consumes only the
+ * resolved occupancy (sizeMm); contact-width tuning is no longer applied to positioning.
+ *
+ * Build per-bead contact arc + overlap arrays from capacity mm (matches used-length panel).
+ */
 export function beadContactLayoutArrays(
-  sizingResults: Pick<
-    BeadSlotSizingResult,
-    | "dimensions"
-    | "visibleContentWidthPx"
-    | "visibleContentDiameterPx"
-    | "actualVisibleDiameterPx"
-    | "isRoundVisualBead"
-    | "exportFillRatio"
-  >[],
+  sizeMmList: number[],
   profiles: Pick<
     StrandRenderProfile,
     | "contactWidth"
@@ -170,6 +243,8 @@ export function beadContactLayoutArrays(
     | "trailingOverlap"
     | "collisionPadding"
   >[],
+  wristCircumferenceMmValue: number,
+  ringCircumferencePx: number,
   scaleFactor = 1,
 ): {
   contactArcPx: number[];
@@ -180,17 +255,12 @@ export function beadContactLayoutArrays(
   const leadingOverlapPx: number[] = [];
   const trailingOverlapPx: number[] = [];
 
-  for (let i = 0; i < sizingResults.length; i++) {
-    const contact = beadContactArcPxFromSizing(
-      sizingResults[i]!,
-      profiles[i] ?? {
-        contactWidth: 1,
-        contactOffset: 0,
-        spacingAdjustment: 0,
-        leadingOverlap: 0,
-        trailingOverlap: 0,
-        collisionPadding: 0,
-      },
+  for (let i = 0; i < sizeMmList.length; i++) {
+    const contact = beadContactArcPxFromCapacity(
+      sizeMmList[i]!,
+      wristCircumferenceMmValue,
+      ringCircumferencePx,
+      profiles[i] ?? NEUTRAL_CONTACT_PROFILE,
       scaleFactor,
     );
     contactArcPx.push(contact.contactArcPx);
@@ -351,14 +421,14 @@ export function resolveStrandRingLayout(params: {
     bounds,
   );
   const maxRadiusPx = computeMaxRingRadiusPx(center, scaleFactor, maxExtent);
-  const profiles = normalized.map((p) =>
-    resolveStrandRenderConfigForBead(p.bead, renderCatalogue),
-  );
-  const contactArrays = beadContactLayoutArrays(sizingResults, profiles, scaleFactor);
+  const ringCircumferencePx = 2 * Math.PI * Math.max(1, wristRadiusPx);
+  const wristMm = wristCircumferenceMm(wristSizeCm);
+  const occupancyMm = normalized.map((p) => placedBeadSizeMm(p));
+  const occupancy = beadOccupancyArcPx(occupancyMm, wristMm, ringCircumferencePx);
   const resolved = computeResolvedRingRadiusPx({
-    beadLayoutArcPx: contactArrays.contactArcPx,
-    leadingOverlapPx: contactArrays.leadingOverlapPx,
-    trailingOverlapPx: contactArrays.trailingOverlapPx,
+    beadLayoutArcPx: occupancy.contactArcPx,
+    leadingOverlapPx: occupancy.leadingOverlapPx,
+    trailingOverlapPx: occupancy.trailingOverlapPx,
     wristRadiusPx,
     maxRadiusPx,
     scaleFactor,

@@ -39,6 +39,7 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
       strandRender: {
         layoutMode: "dangling",
         strandOccupancy: 1,
+        // Deliberately the original "buggy" seed — the pure occupancy model must ignore it.
         contactWidth: 0.08,
         leadingOverlap: 0.03,
         trailingOverlap: 0.03,

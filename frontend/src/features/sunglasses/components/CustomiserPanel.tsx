@@ -29,6 +29,7 @@ interface CustomiserPanelProps {
   currencyCode?: string;
   /** Hide back/continue footer when navigation lives in the summary panel. */
   showFooter?: boolean;
+  saveStatus?: ReactNode;
   onRequestQuote?: () => void;
 }
 
@@ -40,6 +41,7 @@ export function CustomiserPanel({
   className,
   currencyCode = DEFAULT_SITE_GENERAL_SETTINGS.currencyCode,
   showFooter = true,
+  saveStatus,
   onRequestQuote: onRequestQuoteExternal,
 }: CustomiserPanelProps) {
   const {
@@ -117,6 +119,7 @@ export function CustomiserPanel({
         onPolarizedChange={(value) => setOption(POLARIZED_CODE, value)}
         onSelectTint={selectTintById}
         onContinue={flow.goNext}
+        saveStatus={saveStatus}
       />
     ),
     rx: (

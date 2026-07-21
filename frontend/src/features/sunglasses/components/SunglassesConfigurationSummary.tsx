@@ -1,4 +1,4 @@
-import { ShoppingBag } from "lucide-react";
+import { Bookmark, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ interface SunglassesConfigurationSummaryProps {
   totalPrice: number;
   currencyCode: string;
   onAddToCart?: () => void;
+  onSaveDesign?: () => void;
+  savingDesign?: boolean;
   autoSaveStatus?: DesignAutoSaveStatus;
   autoSaveVisible?: boolean;
   signedIn?: boolean;
@@ -93,6 +95,8 @@ export function SunglassesConfigurationSummary({
   totalPrice,
   currencyCode = DEFAULT_SITE_GENERAL_SETTINGS.currencyCode,
   onAddToCart,
+  onSaveDesign,
+  savingDesign = false,
   autoSaveStatus = "idle",
   autoSaveVisible = false,
   signedIn = false,
@@ -119,6 +123,19 @@ export function SunglassesConfigurationSummary({
       <Separator />
 
       <div className="space-y-2">
+        {onSaveDesign ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            size="lg"
+            onClick={onSaveDesign}
+            disabled={savingDesign}
+          >
+            <Bookmark className="mr-2 h-4 w-4" />
+            {savingDesign ? BUILDER_COPY.savingDesign : BUILDER_COPY.saveDesign}
+          </Button>
+        ) : null}
         <BuilderSaveStatus
           status={autoSaveStatus}
           visible={autoSaveVisible}
