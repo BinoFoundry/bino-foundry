@@ -21,6 +21,7 @@ import type {
 const EMPTY_CATALOG: SunglassesCatalogSnapshot = {
   lensTints: [],
   builderOptions: [],
+  lensRenderPresets: [],
   lensDisclaimer: "",
 };
 

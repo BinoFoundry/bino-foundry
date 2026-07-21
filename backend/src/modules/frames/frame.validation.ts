@@ -34,6 +34,8 @@ export const frameCreateDto = z.object({
   isActive: z.boolean().optional(),
   availabilityStatusCode: z.string().min(1).optional(),
   displayOrder: z.coerce.number().int().optional(),
+  lensRenderPresetId: z.string().uuid().nullable().optional(),
+  useLensRenderPreset: z.boolean().optional(),
   frameImages: z.array(z.string()).optional(),
   lensColors: z.array(lensColorSchema).optional(),
   renderViews: z.array(renderViewSchema).optional(),

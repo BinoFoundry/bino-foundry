@@ -11,6 +11,7 @@ import { FRAME_VIEW_AXES } from "@/types/frame-rendering";
 import { prepareRenderViewsForSave } from "@/lib/prepare-frame-views-for-save";
 import { serializeRenderViewsForApi } from "@/lib/frame-render-views";
 import { useCatalogue } from "@/state/catalogue";
+import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 
 import { Button } from "../ui/button";
 
@@ -40,6 +41,12 @@ function normalizeViews(views?: FrameRenderView[]): FrameRenderView[] {
 
 export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   const cat = useCatalogue();
+  const sunglassesCatalog = useSunglassesCatalog();
+  const defaultPresetId =
+    sunglassesCatalog.lensRenderPresets.find((p) => p.isDefault)?.id ??
+    sunglassesCatalog.lensRenderPresets[0]?.id ??
+    null;
+
   const blank: FrameEntry = {
     id: "",
     name: "",
@@ -48,10 +55,18 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     isActive: true,
     availabilityStatusCode: "ACTIVE",
     displayOrder: 0,
+    lensRenderPresetId: defaultPresetId,
+    useLensRenderPreset: true,
     renderViews: normalizeViews(),
   };
 
-  const [form, setForm] = useState<FrameEntry>(initial ?? blank);
+  const [form, setForm] = useState<FrameEntry>({
+    ...blank,
+    ...initial,
+    lensRenderPresetId: initial?.lensRenderPresetId ?? defaultPresetId,
+    useLensRenderPreset: initial?.useLensRenderPreset !== false,
+    renderViews: normalizeViews(initial?.renderViews),
+  });
   const [renderViews, setRenderViews] = useState<FrameRenderView[]>(
     normalizeViews(initial?.renderViews),
   );
@@ -188,7 +203,17 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
 
       <div ref={viewsBlockRef} className="space-y-2">
         {viewsError ? <p className="text-xs text-destructive">{viewsError}</p> : null}
-        <FrameRenderViewsSection ref={viewsSectionRef} views={renderViews} onChange={setRenderViews} />
+        <FrameRenderViewsSection
+          ref={viewsSectionRef}
+          views={renderViews}
+          onChange={setRenderViews}
+          lensRenderPresetId={form.lensRenderPresetId ?? null}
+          useLensRenderPreset={form.useLensRenderPreset !== false}
+          lensRenderPresets={sunglassesCatalog.lensRenderPresets}
+          onLensRenderAssignmentChange={({ lensRenderPresetId, useLensRenderPreset }) => {
+            setForm((f) => ({ ...f, lensRenderPresetId, useLensRenderPreset }));
+          }}
+        />
       </div>
 
       <div className="flex justify-end gap-2 border-t border-border pt-4">

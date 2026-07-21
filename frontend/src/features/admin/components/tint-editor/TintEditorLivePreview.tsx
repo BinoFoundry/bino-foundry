@@ -7,6 +7,7 @@ import { isFrameViewClipReady } from "@/render/lens-clip";
 import { lensTintEntryToGradient } from "@/render/tint/lens-tint-spec";
 import { TintRenderPreview } from "@/render/tint/TintRenderPreview";
 import { useCatalogue } from "@/state/catalogue";
+import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 import type { FrameEntry } from "@/data/glasses";
 import type { FrameViewAxis } from "@/types/frame-rendering";
 import type { LensTintEntry } from "@/types/sunglasses-catalog";
@@ -34,6 +35,7 @@ interface TintEditorLivePreviewProps {
 
 export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
   const { frames } = useCatalogue();
+  const sunglassesCatalog = useSunglassesCatalog();
   const previewFrames = useMemo(() => framesWithClipReady(frames), [frames]);
   const [frameId, setFrameId] = useState<string>("");
   const [view, setView] = useState<FrameViewAxis>("front");
@@ -65,11 +67,14 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
         name: selectedFrame.name,
         price: selectedFrame.price,
         renderViews: selectedFrame.renderViews,
+        lensRenderPresetId: selectedFrame.lensRenderPresetId,
+        useLensRenderPreset: selectedFrame.useLensRenderPreset,
       },
       tint: tintGradient,
       options: {},
+      lensRenderPresets: sunglassesCatalog.lensRenderPresets,
     });
-  }, [selectedFrame, tintGradient]);
+  }, [selectedFrame, tintGradient, sunglassesCatalog.lensRenderPresets]);
 
   const clearLensConfig = useMemo(() => {
     if (!selectedFrame || !showCompare) return null;
@@ -79,6 +84,8 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
         name: selectedFrame.name,
         price: selectedFrame.price,
         renderViews: selectedFrame.renderViews,
+        lensRenderPresetId: selectedFrame.lensRenderPresetId,
+        useLensRenderPreset: selectedFrame.useLensRenderPreset,
       },
       tint: {
         ...tintGradient,
@@ -88,8 +95,9 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
         opacity: 0.08,
       },
       options: {},
+      lensRenderPresets: sunglassesCatalog.lensRenderPresets,
     });
-  }, [selectedFrame, showCompare, tintGradient]);
+  }, [selectedFrame, showCompare, tintGradient, sunglassesCatalog.lensRenderPresets]);
 
   const usesRealCompositor = compositorConfig?.renderMode === "svg-clip";
 

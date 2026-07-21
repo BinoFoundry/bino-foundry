@@ -34,6 +34,8 @@ export interface FrameExclusionShape extends LensExclusionShape {
  * synthetic lens is painted inside the clipping polygons.
  */
 export interface LensClipRenderSettings {
+  /** Admin scope for opacity controls. Defaults to `global` for legacy configs. */
+  renderScope?: "global" | "front" | "side";
   /**
    * `replace` — knock out original lens pixels and paint a synthetic lens (default).
    * `overlay` is accepted only for reading legacy data; rendering always uses replacement.
@@ -42,6 +44,13 @@ export interface LensClipRenderSettings {
 
   /** Strength of the selected tint inside the replacement material (0–1). */
   tintOpacity?: number;
+  /**
+   * Final SVG opacity applied directly to every tint path (0–1). Controls perceived lens
+   * thickness/density without changing the selected tint colour or gradient reference.
+   */
+  tintLayerOpacity?: number;
+  /** @deprecated Legacy multiplier; read only when migrating settings saved by v000064. */
+  tintFilterOpacity?: number;
   /**
    * Overall opacity of the generated optical material (0–1). Source hue is removed; only
    * normalized luminance/detail may be retained beneath the generated tint.
@@ -95,6 +104,22 @@ export interface LensClipRenderSettings {
   edgeDarkness?: number;
   /** Inner rim width as a fraction of the shorter source-image dimension (0–0.05). */
   edgeWidth?: number;
+
+  /**
+   * Global transparency of the synthetic lens (0–1). Higher reveals more of the scene
+   * rendered behind the lens (the transparent, knocked-out opening) — never the original
+   * lens texture, which is discarded entirely.
+   */
+  backgroundVisibility?: number;
+  /**
+   * Thins the coloured lens body so the background shows through the tint (0–1). Affects
+   * the rendered scene behind the lens only; never reveals original lens pixels.
+   */
+  environmentTransparency?: number;
+  /** Density reinforcement toward the lens centre (0–1). Independent of tint opacity. */
+  centerDensity?: number;
+  /** Outer-edge thickness darkening (0–1). Independent of tint opacity. */
+  edgeDensity?: number;
 
   polarizedEnabled?: boolean;
   polarizedStrength?: number;

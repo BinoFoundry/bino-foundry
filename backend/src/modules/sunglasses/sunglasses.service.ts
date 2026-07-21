@@ -1,6 +1,7 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { NotFoundError } from "../../lib/errors.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
+import { lensRenderPresetService } from "./lens-render-preset.service.js";
 import type {
   BuilderOptionCreateDTO,
   BuilderOptionUpdateDTO,
@@ -64,26 +65,29 @@ async function readLensDisclaimer(): Promise<string> {
 
 export class SunglassesCatalogService {
   async getCatalog() {
-    const [lensTints, builderOptions, lensDisclaimer] = await Promise.all([
+    const [lensTints, builderOptions, lensDisclaimer, lensRenderPresets] = await Promise.all([
       this.listLensTints(false),
       this.listBuilderOptions(false),
       readLensDisclaimer(),
+      lensRenderPresetService.list(false),
     ]);
 
     return {
       lensTints: lensTints.filter((t) => t.isActive),
       builderOptions: builderOptions.filter((o) => o.isActive),
+      lensRenderPresets: lensRenderPresets.filter((p) => p.isActive),
       lensDisclaimer,
     };
   }
 
   async getAdminCatalog() {
-    const [lensTints, builderOptions, lensDisclaimer] = await Promise.all([
+    const [lensTints, builderOptions, lensDisclaimer, lensRenderPresets] = await Promise.all([
       this.listLensTints(true),
       this.listBuilderOptions(true),
       readLensDisclaimer(),
+      lensRenderPresetService.list(true),
     ]);
-    return { lensTints, builderOptions, lensDisclaimer };
+    return { lensTints, builderOptions, lensRenderPresets, lensDisclaimer };
   }
 
   async listLensTints(includeInactive: boolean) {

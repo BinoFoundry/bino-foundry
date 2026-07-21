@@ -164,8 +164,9 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
         frameSku,
         tint: render.config.tint,
         options: render.config.options,
+        lensRenderPresets: sunglassesCatalog.lensRenderPresets,
       }),
-    [frameSku, render.config.tint, render.config.options],
+    [frameSku, render.config.tint, render.config.options, sunglassesCatalog.lensRenderPresets],
   );
 
   const totalPrice = useMemo(

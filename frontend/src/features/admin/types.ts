@@ -12,6 +12,7 @@ export type AdminSection =
   | "wrist-sizes"
   | "how-we-prepare"
   | "sunglasses-config"
+  | "lens-render-presets"
   | "general-settings";
 
 export interface AdminNavItem {

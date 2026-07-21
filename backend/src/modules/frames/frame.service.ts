@@ -62,6 +62,8 @@ function mapFrameRow(
     isActive: row.is_active !== false,
     availabilityStatusCode: String(row.availability_status_code ?? "ACTIVE"),
     displayOrder: Number(row.display_order ?? 0),
+    lensRenderPresetId: row.lens_render_preset_id ? String(row.lens_render_preset_id) : null,
+    useLensRenderPreset: row.use_lens_render_preset !== false,
     frameImages: Array.isArray(images) ? images : [],
     lensColors: Array.isArray(lens) ? lens : [],
     renderViews: views,
@@ -256,6 +258,12 @@ export class FrameService {
       display_order: payload.displayOrder ?? 0,
       is_active: payload.isActive ?? true,
       availability_status_code: availabilityStatusCode,
+      ...(payload.lensRenderPresetId !== undefined && {
+        lens_render_preset_id: payload.lensRenderPresetId,
+      }),
+      ...(payload.useLensRenderPreset !== undefined && {
+        use_lens_render_preset: payload.useLensRenderPreset,
+      }),
     };
 
     const { data, error } = await supabase.from("frames").insert(insertRow).select("*").single();
@@ -285,6 +293,12 @@ export class FrameService {
       ...(payload.description !== undefined && { description: payload.description.trim() }),
       ...(payload.isActive !== undefined && { is_active: payload.isActive }),
       ...(payload.displayOrder !== undefined && { display_order: payload.displayOrder }),
+      ...(payload.lensRenderPresetId !== undefined && {
+        lens_render_preset_id: payload.lensRenderPresetId,
+      }),
+      ...(payload.useLensRenderPreset !== undefined && {
+        use_lens_render_preset: payload.useLensRenderPreset,
+      }),
       marketing_copy: mc,
     };
 

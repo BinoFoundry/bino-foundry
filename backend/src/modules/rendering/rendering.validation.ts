@@ -17,45 +17,56 @@ const frameExclusionShapeSchema = lensExclusionShapeSchema.extend({
   lensId: z.string().min(1).optional(),
 });
 
-const lensClipRenderSchema = z
-  .object({
-    mode: z.enum(["replace", "overlay"]).optional(),
-    tintOpacity: z.number().min(0).max(1).optional(),
-    lensOpacity: z.number().min(0).max(1).optional(),
-    lensTransmission: z.number().min(0).max(1).optional(),
-    frameExclusionOpacity: z.number().min(0).max(1).optional(),
-    baseTintOpacity: z.number().min(0).max(1).optional(),
-    transparency: z.number().min(0).max(1).optional(),
-    brightness: z.number().min(0.25).max(2).optional(),
-    contrast: z.number().min(0).max(2).optional(),
-    saturation: z.number().min(0).max(2).optional(),
-    gradientEnabled: z.boolean().optional(),
-    gradientTopColor: z.string().min(4).max(9).optional(),
-    gradientBottomColor: z.string().min(4).max(9).optional(),
-    gradientPosition: z.number().min(0).max(100).optional(),
-    gradientStrength: z.number().min(0).max(1).optional(),
-    reflectionEnabled: z.boolean().optional(),
-    reflectionStrength: z.number().min(0).max(1).optional(),
-    reflectionOpacity: z.number().min(0).max(1).optional(),
-    reflectionAngle: z.number().min(0).max(360).optional(),
-    reflectionBlur: z.number().min(0).max(1).optional(),
-    glossEnabled: z.boolean().optional(),
-    glossIntensity: z.number().min(0).max(1).optional(),
-    glossStrength: z.number().min(0).max(1).optional(),
-    vignetteEnabled: z.boolean().optional(),
-    vignetteStrength: z.number().min(0).max(1).optional(),
-    edgeFade: z.number().min(0).max(1).optional(),
-    edgeDarkness: z.number().min(0).max(1).optional(),
-    edgeWidth: z.number().min(0).max(0.05).optional(),
-    polarizedEnabled: z.boolean().optional(),
-    polarizedStrength: z.number().min(0).max(1).optional(),
-    // Legacy overlay fields
-    tintBlendMode: z.enum(["multiply", "screen", "overlay", "color", "soft-light"]).optional(),
-    highlightStrength: z.number().min(0).max(1).optional(),
-    highlightBlendMode: z.enum(["screen", "overlay", "soft-light"]).optional(),
-    shadowStrength: z.number().min(0).max(1).optional(),
-  })
-  .optional();
+const lensClipRenderFields = {
+  renderScope: z.enum(["global", "front", "side"]).optional(),
+  mode: z.enum(["replace", "overlay"]).optional(),
+  tintOpacity: z.number().min(0).max(1).optional(),
+  tintLayerOpacity: z.number().min(0).max(1).optional(),
+  // Legacy setting written by migration v000064-era clients.
+  tintFilterOpacity: z.number().min(0).max(1).optional(),
+  lensOpacity: z.number().min(0).max(1).optional(),
+  lensTransmission: z.number().min(0).max(1).optional(),
+  frameExclusionOpacity: z.number().min(0).max(1).optional(),
+  baseTintOpacity: z.number().min(0).max(1).optional(),
+  transparency: z.number().min(0).max(1).optional(),
+  brightness: z.number().min(0.25).max(2).optional(),
+  contrast: z.number().min(0).max(2).optional(),
+  saturation: z.number().min(0).max(2).optional(),
+  gradientEnabled: z.boolean().optional(),
+  gradientTopColor: z.string().min(4).max(9).optional(),
+  gradientBottomColor: z.string().min(4).max(9).optional(),
+  gradientPosition: z.number().min(0).max(100).optional(),
+  gradientStrength: z.number().min(0).max(1).optional(),
+  reflectionEnabled: z.boolean().optional(),
+  reflectionStrength: z.number().min(0).max(1).optional(),
+  reflectionOpacity: z.number().min(0).max(1).optional(),
+  reflectionAngle: z.number().min(0).max(360).optional(),
+  reflectionBlur: z.number().min(0).max(1).optional(),
+  glossEnabled: z.boolean().optional(),
+  glossIntensity: z.number().min(0).max(1).optional(),
+  glossStrength: z.number().min(0).max(1).optional(),
+  vignetteEnabled: z.boolean().optional(),
+  vignetteStrength: z.number().min(0).max(1).optional(),
+  edgeFade: z.number().min(0).max(1).optional(),
+  edgeDarkness: z.number().min(0).max(1).optional(),
+  edgeWidth: z.number().min(0).max(0.05).optional(),
+  backgroundVisibility: z.number().min(0).max(1).optional(),
+  environmentTransparency: z.number().min(0).max(1).optional(),
+  centerDensity: z.number().min(0).max(1).optional(),
+  edgeDensity: z.number().min(0).max(1).optional(),
+  polarizedEnabled: z.boolean().optional(),
+  polarizedStrength: z.number().min(0).max(1).optional(),
+  // Legacy overlay fields
+  tintBlendMode: z.enum(["multiply", "screen", "overlay", "color", "soft-light"]).optional(),
+  highlightStrength: z.number().min(0).max(1).optional(),
+  highlightBlendMode: z.enum(["screen", "overlay", "soft-light"]).optional(),
+  shadowStrength: z.number().min(0).max(1).optional(),
+};
+
+/** Non-optional object schema for preset settings JSON. */
+export const lensClipRenderSettingsSchema = z.object(lensClipRenderFields);
+
+const lensClipRenderSchema = lensClipRenderSettingsSchema.optional();
 
 const pathAnchorSchema = z.object({
   x: z.number().min(0).max(1),

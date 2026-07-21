@@ -25,15 +25,17 @@ export function computeReflectionBlurPx(
 }
 
 /**
- * Replace-lens compositor contract (bottom → top).
- * Knockout removes the original coloured lens from the plate. Synthetic achromatic glass +
- * catalogue tint are painted from scratch; exclusions restore full-colour frame hardware last.
+ * Layered lens compositor contract (bottom → top).
+ * The original lens plate always stays in the customer stack for real glass texture,
+ * lighting, and depth. Admin preview may temporarily hide that layer for comparison.
+ * Parameters only tune opacities — they never replace this pipeline.
  */
 export const REPLACE_LENS_PIPELINE_STEPS = [
-  "knockout-plate",
-  "synthetic-body",
+  "knockout-frame-plate",
+  "original-lens",
+  "tint-layer",
+  "density-modifiers",
   "surface-reflection",
-  "gloss-highlight",
   "edge-rim",
   "frame-exclusions",
 ] as const;

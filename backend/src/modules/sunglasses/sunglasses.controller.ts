@@ -4,6 +4,12 @@ import { asyncHandler } from "../../lib/async-handler.js";
 import { sendCreated, sendJson } from "../../lib/http-response.js";
 import { validateBody } from "../../lib/validation.js";
 import { sunglassesCatalogService } from "./sunglasses.service.js";
+import { lensRenderPresetService } from "./lens-render-preset.service.js";
+import {
+  lensRenderPresetCreateDto,
+  lensRenderPresetIdParam,
+  lensRenderPresetUpdateDto,
+} from "./lens-render-preset.validation.js";
 import {
   builderOptionCreateDto,
   builderOptionIdParam,
@@ -61,6 +67,31 @@ async function removeBuilderOption(req: Request, res: Response): Promise<void> {
   sendJson(res, await sunglassesCatalogService.removeBuilderOption(id));
 }
 
+async function listLensRenderPresets(_req: Request, res: Response): Promise<void> {
+  sendJson(res, await lensRenderPresetService.list(true));
+}
+
+async function createLensRenderPreset(req: Request, res: Response): Promise<void> {
+  const dto = validateBody(lensRenderPresetCreateDto, req.body);
+  sendCreated(res, await lensRenderPresetService.create(dto));
+}
+
+async function updateLensRenderPreset(req: Request, res: Response): Promise<void> {
+  const { id } = lensRenderPresetIdParam.parse(req.params);
+  const dto = validateBody(lensRenderPresetUpdateDto, req.body);
+  sendJson(res, await lensRenderPresetService.update(id, dto));
+}
+
+async function duplicateLensRenderPreset(req: Request, res: Response): Promise<void> {
+  const { id } = lensRenderPresetIdParam.parse(req.params);
+  sendCreated(res, await lensRenderPresetService.duplicate(id));
+}
+
+async function removeLensRenderPreset(req: Request, res: Response): Promise<void> {
+  const { id } = lensRenderPresetIdParam.parse(req.params);
+  sendJson(res, await lensRenderPresetService.remove(id));
+}
+
 export const sunglassesHandlers = {
   getCatalog: asyncHandler(getCatalog),
   getAdminCatalog: asyncHandler(getAdminCatalog),
@@ -72,4 +103,9 @@ export const sunglassesHandlers = {
   createBuilderOption: asyncHandler(createBuilderOption),
   updateBuilderOption: asyncHandler(updateBuilderOption),
   removeBuilderOption: asyncHandler(removeBuilderOption),
+  listLensRenderPresets: asyncHandler(listLensRenderPresets),
+  createLensRenderPreset: asyncHandler(createLensRenderPreset),
+  updateLensRenderPreset: asyncHandler(updateLensRenderPreset),
+  duplicateLensRenderPreset: asyncHandler(duplicateLensRenderPreset),
+  removeLensRenderPreset: asyncHandler(removeLensRenderPreset),
 };

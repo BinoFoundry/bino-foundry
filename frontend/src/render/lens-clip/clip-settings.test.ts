@@ -105,6 +105,31 @@ describe("resolveLensClipRenderSettings", () => {
     expect(resolved.tintOpacity).toBe(DEFAULT_LENS_CLIP_RENDER.tintOpacity);
   });
 
+  it("applies tint layer opacity directly and honours overrides", () => {
+    expect(resolveLensClipRenderSettings(null).tintLayerOpacity).toBe(0.42978);
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [{ id: "l", label: "L", pathD: "M0 0 L10 0 L10 10 Z" }],
+      render: { tintLayerOpacity: 0.4 },
+    });
+    expect(resolved.tintLayerOpacity).toBe(0.4);
+    // Perceived-thickness control must not alter the selected tint strength.
+    expect(resolved.tintOpacity).toBe(DEFAULT_LENS_CLIP_RENDER.tintOpacity);
+  });
+
+  it("migrates the legacy tint filter multiplier onto the direct layer opacity", () => {
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [{ id: "l", label: "L", pathD: "M0 0 L10 0 L10 10 Z" }],
+      render: { tintFilterOpacity: 0.5 },
+    });
+    expect(resolved.tintLayerOpacity).toBeCloseTo(0.21489);
+  });
+
   it("keeps glass transmission independent from surface opacity", () => {
     const resolved = resolveLensClipRenderSettings({
       version: 1,

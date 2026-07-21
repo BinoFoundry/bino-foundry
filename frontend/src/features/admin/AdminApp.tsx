@@ -13,6 +13,7 @@ import { WristSizesAdminPage } from "./modules/products/WristSizesAdminPage";
 import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
 import { FramesAdminPage } from "./modules/products/FramesAdminPage";
 import { UsersAdminPage } from "./modules/users/UsersAdminPage";
+import { LensRenderingPresetsAdminPage } from "./modules/sunglasses/LensRenderingPresetsAdminPage";
 import type { AdminSection } from "./types";
 
 const ADMIN_SECTIONS = new Set<AdminSection>([
@@ -26,6 +27,7 @@ const ADMIN_SECTIONS = new Set<AdminSection>([
   "how-we-prepare",
   "general-settings",
   "sunglasses-config",
+  "lens-render-presets",
 ]);
 
 function parseAdminSection(raw: string | null): AdminSection {
@@ -63,6 +65,8 @@ function AdminSectionView({
       return <GeneralSettingsPage />;
     case "sunglasses-config":
       return <SunglassesConfigPage />;
+    case "lens-render-presets":
+      return <LensRenderingPresetsAdminPage />;
     default:
       return <AdminDashboardPage onNavigate={onNavigate} />;
   }

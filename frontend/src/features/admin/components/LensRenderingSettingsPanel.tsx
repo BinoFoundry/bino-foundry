@@ -13,6 +13,7 @@ interface LensRenderingSettingsPanelProps {
 
 function SliderRow({
   label,
+  description,
   value,
   onChange,
   disabled,
@@ -21,6 +22,7 @@ function SliderRow({
   step = 0.01,
 }: {
   label: string;
+  description: string;
   value: number;
   onChange: (n: number) => void;
   disabled?: boolean;
@@ -34,6 +36,7 @@ function SliderRow({
         <Label className="text-xs text-muted-foreground">{label}</Label>
         <span className="tabular-nums text-[10px] text-muted-foreground">{value.toFixed(2)}</span>
       </div>
+      <p className="text-[10px] leading-snug text-muted-foreground">{description}</p>
       <input
         type="range"
         min={min}
@@ -62,29 +65,35 @@ export function LensRenderingSettingsPanel({
     Pick<
       LensClipRenderSettings,
       | "mode"
+      | "tintLayerOpacity"
       | "lensOpacity"
-      | "lensTransmission"
-      | "frameExclusionOpacity"
-      | "reflectionStrength"
-      | "reflectionBlur"
+      | "reflectionOpacity"
       | "edgeDarkness"
+      | "backgroundVisibility"
+      | "environmentTransparency"
+      | "centerDensity"
+      | "edgeDensity"
     >
   > = {
     mode: value?.mode ?? DEFAULT_LENS_CLIP_RENDER.mode,
+    tintLayerOpacity:
+      value?.tintLayerOpacity ??
+      (value?.tintFilterOpacity == null
+        ? DEFAULT_LENS_CLIP_RENDER.tintLayerOpacity
+        : DEFAULT_LENS_CLIP_RENDER.tintLayerOpacity * value.tintFilterOpacity),
     lensOpacity:
       value?.lensOpacity ??
       (value?.transparency == null
         ? DEFAULT_LENS_CLIP_RENDER.lensOpacity
         : 1 - value.transparency),
-    lensTransmission:
-      value?.lensTransmission ??
-      value?.transparency ??
-      DEFAULT_LENS_CLIP_RENDER.lensTransmission,
-    frameExclusionOpacity:
-      value?.frameExclusionOpacity ?? DEFAULT_LENS_CLIP_RENDER.frameExclusionOpacity,
-    reflectionStrength: value?.reflectionStrength ?? DEFAULT_LENS_CLIP_RENDER.reflectionStrength,
-    reflectionBlur: value?.reflectionBlur ?? DEFAULT_LENS_CLIP_RENDER.reflectionBlur,
+    reflectionOpacity: value?.reflectionOpacity ?? DEFAULT_LENS_CLIP_RENDER.reflectionOpacity,
     edgeDarkness: value?.edgeDarkness ?? DEFAULT_LENS_CLIP_RENDER.edgeDarkness,
+    backgroundVisibility:
+      value?.backgroundVisibility ?? DEFAULT_LENS_CLIP_RENDER.backgroundVisibility,
+    environmentTransparency:
+      value?.environmentTransparency ?? DEFAULT_LENS_CLIP_RENDER.environmentTransparency,
+    centerDensity: value?.centerDensity ?? DEFAULT_LENS_CLIP_RENDER.centerDensity,
+    edgeDensity: value?.edgeDensity ?? DEFAULT_LENS_CLIP_RENDER.edgeDensity,
   };
 
   const patch = (partial: Partial<LensClipRenderSettings>) => {
@@ -96,55 +105,77 @@ export function LensRenderingSettingsPanel({
       <div>
         <p className="type-label text-muted-foreground">Lens rendering</p>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          Original lens colour is fully removed. The selected catalogue tint is the only colour
-          source; lighting, reflection, and edge depth are generated automatically.
+          Starting values from a preset. Sliders stay editable — changing any value on a frame
+          switches that frame to Custom Settings.
         </p>
       </div>
 
       <SliderRow
+        label="Tint layer opacity"
+        description="Controls the coloured tint layer. Lower values create a lighter lens; higher values create a stronger tint."
+        value={merged.tintLayerOpacity}
+        disabled={disabled}
+        onChange={(tintLayerOpacity) => patch({ tintLayerOpacity })}
+      />
+
+      <SliderRow
         label="Lens opacity"
+        description="Controls overall lens transparency. Lower values keep more background and internal frame detail visible."
         value={merged.lensOpacity}
         disabled={disabled}
         onChange={(lensOpacity) => patch({ mode: "replace", lensOpacity })}
       />
 
       <SliderRow
-        label="Lens transmission"
-        value={merged.lensTransmission}
+        label="Reflection opacity"
+        description="Controls only lens reflection visibility. Higher values create a glossier premium appearance."
+        value={merged.reflectionOpacity}
         disabled={disabled}
-        onChange={(lensTransmission) => patch({ lensTransmission })}
-      />
-
-      <SliderRow
-        label="Frame exclusion opacity"
-        value={merged.frameExclusionOpacity}
-        disabled={disabled}
-        onChange={(frameExclusionOpacity) => patch({ frameExclusionOpacity })}
-      />
-
-      <SliderRow
-        label="Reflection strength"
-        value={merged.reflectionStrength}
-        disabled={disabled}
-        onChange={(reflectionStrength) =>
-          patch({ reflectionEnabled: reflectionStrength > 0, reflectionStrength })
+        onChange={(reflectionOpacity) =>
+          patch({ reflectionEnabled: reflectionOpacity > 0, reflectionOpacity })
         }
       />
 
       <SliderRow
-        label="Reflection blur"
-        value={merged.reflectionBlur}
-        disabled={disabled}
-        onChange={(reflectionBlur) => patch({ reflectionBlur })}
-      />
-
-      <SliderRow
-        label="Edge darkness"
+        label="Edge opacity"
+        description="Controls only the thin darker rim around the lens edge to improve depth perception."
         value={merged.edgeDarkness}
         disabled={disabled}
         onChange={(edgeDarkness) =>
           patch({ vignetteEnabled: edgeDarkness > 0, edgeDarkness })
         }
+      />
+
+      <SliderRow
+        label="Background visibility"
+        description="How much of the scene behind the lens is visible through the synthetic glass. Never reveals the original lens texture — only background elements rendered behind the lens."
+        value={merged.backgroundVisibility}
+        disabled={disabled}
+        onChange={(backgroundVisibility) => patch({ backgroundVisibility })}
+      />
+
+      <SliderRow
+        label="Environment transparency"
+        description="How transparent the synthetic lens is, affecting the rendered scene behind the lens. Must not reveal the original lens pixels."
+        value={merged.environmentTransparency}
+        disabled={disabled}
+        onChange={(environmentTransparency) => patch({ environmentTransparency })}
+      />
+
+      <SliderRow
+        label="Edge density"
+        description="Makes the outer edges of the lens slightly darker to simulate real lens thickness. Independent of tint opacity."
+        value={merged.edgeDensity}
+        disabled={disabled}
+        onChange={(edgeDensity) => patch({ edgeDensity })}
+      />
+
+      <SliderRow
+        label="Center density"
+        description="Controls the density of the centre of the lens to match premium sunglass optics. Independent of tint opacity."
+        value={merged.centerDensity}
+        disabled={disabled}
+        onChange={(centerDensity) => patch({ centerDensity })}
       />
     </div>
   );

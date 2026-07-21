@@ -85,6 +85,13 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     icon: Sun,
     group: "sunglasses",
   },
+  {
+    id: "lens-render-presets",
+    label: "Lens rendering presets",
+    description: "Optical material presets with live preview",
+    icon: Glasses,
+    group: "sunglasses",
+  },
 ];
 
 export const ADMIN_NAV_GROUPS: { id: AdminNavItem["group"]; label: string }[] = [

@@ -20,4 +20,12 @@ export {
   resolveLensClipRenderSettings,
   type ResolvedLensClipRender,
 } from "./clip-settings";
+export {
+  applyLensRenderHierarchyToFrameViews,
+  buildSparseFrameRenderOverride,
+  frameLensRenderSource,
+  resolveAssignedLensRenderPreset,
+  resolveFrameLensRenderSettings,
+  withResolvedLensRender,
+} from "./lens-render-hierarchy";
 export { lensPolygonToPathD, lensesToClipShapes } from "./svg-path-builder";

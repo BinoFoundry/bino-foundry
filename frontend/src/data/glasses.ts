@@ -16,6 +16,10 @@ export interface FrameEntry {
   isActive?: boolean;
   availabilityStatusCode?: string;
   displayOrder?: number;
+  /** Assigned lens rendering preset (DB). Null → default preset → code defaults. */
+  lensRenderPresetId?: string | null;
+  /** When true (default), inherit preset values; when false, sparse clip_config.render overrides apply. */
+  useLensRenderPreset?: boolean;
   metadata?: CatalogItemMetadata & Record<string, unknown>;
   /** @deprecated Use renderViews (front/side masked plates). */
   frameImages?: string[];

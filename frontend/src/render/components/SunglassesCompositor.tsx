@@ -18,7 +18,13 @@ export interface SunglassesCompositorProps {
   /** Fill parent height instead of fixed aspect ratio (builder dual preview). */
   fillHeight?: boolean;
   compactLabel?: boolean;
+  /**
+   * Admin preview only. When false, hides the original-lens layer for comparison.
+   * Omit / true for customer rendering — original lens always stays in the stack.
+   */
+  showOriginalLens?: boolean;
 }
+
 
 /**
  * Sunglasses preview — SVG clipPath tint on photo plates, or vector demo stack fallback.
@@ -33,6 +39,7 @@ export function SunglassesCompositor({
   emptyMessage,
   fillHeight = false,
   compactLabel = false,
+  showOriginalLens = true,
 }: SunglassesCompositorProps) {
   const instanceId = useId().replace(/:/g, "");
   const stack = useMemo(() => buildCompositorStack(config, view), [config, view]);
@@ -66,6 +73,7 @@ export function SunglassesCompositor({
         className={className}
         fillHeight={fillHeight}
         compactLabel={compactLabel}
+        showOriginalLens={showOriginalLens}
       />
     );
   }

@@ -34,7 +34,13 @@ export interface SvgClipCompositorViewProps {
   className?: string;
   fillHeight?: boolean;
   compactLabel?: boolean;
+  /**
+   * Admin preview only. When false, hides the original-lens plate layer for A/B comparison.
+   * Customer rendering must leave this undefined/true — the original lens always stays in the stack.
+   */
+  showOriginalLens?: boolean;
 }
+
 
 function lensFillSpec(
   tintSpec: NormalizedTintRenderSpec,
@@ -115,7 +121,7 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
   plateUrl,
   tintSpec,
   render,
-  fillOpacity,
+  showOriginalLens = true,
 }: {
   uid: string;
   lenses: LensClipShape[];
@@ -125,26 +131,33 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
   plateUrl: string;
   tintSpec: NormalizedTintRenderSpec;
   render: ResolvedLensClipRender;
-  fillOpacity: number;
+  showOriginalLens?: boolean;
 }) {
   const fillSpec = lensFillSpec(tintSpec, render);
   const tintId = `${uid}-tint`;
   const knockoutId = `${uid}-knockout`;
-  const glassBaseId = `${uid}-glass-base`;
   const depthId = `${uid}-depth`;
-  const vignetteId = `${uid}-vignette`;
+  const centerDensityId = `${uid}-center-density`;
+  const edgeDensityId = `${uid}-edge-density`;
   const reflectionId = `${uid}-reflection`;
   const reflectionBlurId = `${uid}-reflection-blur`;
-  const glossId = `${uid}-gloss`;
-  const specularId = `${uid}-specular`;
   const polarizedId = `${uid}-polarized`;
-  // Knockout removes the original coloured lens from the plate. The synthetic material is
-  // painted from scratch; the source plate is never sampled inside the clip opening.
+  // Layered pipeline (unchanged contract): original lens underneath → tint → density →
+  // reflection → edge → frame exclusions. Parameters only tune opacities; they never
+  // remove the original lens from the customer stack.
   const { bodyOpacity, edgeWidthPx, reflectionBlurPx } = resolveLensGlassMaterialParams(
     render,
     w,
     h,
   );
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+  // How strongly the original plate texture reads through under the tint layers.
+  const originalLensOpacity = clamp01(
+    render.lensTransmission * (1 - render.backgroundVisibility * 0.65),
+  );
+  const tintAlpha = clamp01(render.tintLayerOpacity * (1 - render.environmentTransparency));
+  // bodyOpacity already folds lensOpacity + transmission; do not multiply lensOpacity again.
+  const layerGroupOpacity = clamp01(bodyOpacity);
 
   const plateImageProps = {
     href: plateUrl,
@@ -161,7 +174,7 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
       <defs>
         <mask id={knockoutId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
           <rect x={0} y={0} width={w} height={h} fill="#fff" />
-          {/* Remove the full lens opening; frame parts are restored on top via overlay. */}
+          {/* Punch lens openings from the frame plate; original lens is redrawn inside the clip. */}
           {lenses.map((lens) => (
             <path key={`${knockoutId}-${lens.id}`} d={lens.pathD} fill="#000" />
           ))}
@@ -169,25 +182,25 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
 
         <SvgTintGradientDef id={tintId} spec={fillSpec} />
 
-        {/* Achromatic glass substrate — luminance and vertical depth only, never a hue.
-            The selected tint is the single chromatic source, so the same tint renders the
-            same colour on every frame regardless of the original lens colour. */}
-        <linearGradient id={glassBaseId} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity={0.3} />
-          <stop offset="48%" stopColor="#e6e6e6" stopOpacity={0.08} />
-          <stop offset="100%" stopColor="#9a9a9a" stopOpacity={0.14} />
-        </linearGradient>
-
+        {/* Vertical density gradient — subtle top→bottom depth, no colour of its own. */}
         <linearGradient id={depthId} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#fff" stopOpacity={0.22} />
-          <stop offset="44%" stopColor="#fff" stopOpacity={0.02} />
-          <stop offset="70%" stopColor="#07111b" stopOpacity={0.03} />
-          <stop offset="100%" stopColor="#07111b" stopOpacity={0.2} />
+          <stop offset="0%" stopColor="#fff" stopOpacity={0.16} />
+          <stop offset="46%" stopColor="#fff" stopOpacity={0.02} />
+          <stop offset="72%" stopColor="#07111b" stopOpacity={0.04} />
+          <stop offset="100%" stopColor="#07111b" stopOpacity={0.22} />
         </linearGradient>
 
-        <radialGradient id={vignetteId} cx="50%" cy="45%" r="72%">
-          <stop offset="72%" stopColor="#000" stopOpacity={0} />
-          <stop offset="100%" stopColor="#000" stopOpacity={1} />
+        {/* Center density — reinforces tint toward the middle for premium optics. */}
+        <radialGradient id={centerDensityId} cx="50%" cy="48%" r="62%">
+          <stop offset="0%" stopColor="#070d12" stopOpacity={0.55} />
+          <stop offset="55%" stopColor="#070d12" stopOpacity={0.14} />
+          <stop offset="100%" stopColor="#070d12" stopOpacity={0} />
+        </radialGradient>
+
+        {/* Edge density — broad outer darkening simulating lens thickness. */}
+        <radialGradient id={edgeDensityId} cx="50%" cy="48%" r="70%">
+          <stop offset="62%" stopColor="#05090d" stopOpacity={0} />
+          <stop offset="100%" stopColor="#05090d" stopOpacity={0.9} />
         </radialGradient>
 
         <linearGradient
@@ -198,34 +211,12 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
           y2="100%"
           gradientTransform={`rotate(${render.reflectionAngle} .5 .5)`}
         >
-          <stop offset="0%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="18%" stopColor="#fff" stopOpacity={0.08} />
-          <stop offset="34%" stopColor="#fff" stopOpacity={0.52} />
-          <stop offset="52%" stopColor="#fff" stopOpacity={0.15} />
-          <stop offset="72%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="100%" stopColor="#fff" stopOpacity={0} />
-        </linearGradient>
-
-        <radialGradient id={glossId} cx="30%" cy="18%" r="42%">
-          <stop offset="0%" stopColor="#fff" stopOpacity={0.48} />
-          <stop offset="50%" stopColor="#fff" stopOpacity={0.08} />
-          <stop offset="100%" stopColor="#fff" stopOpacity={0} />
-        </radialGradient>
-
-        <linearGradient
-          id={specularId}
-          x1="0%"
-          y1="0%"
-          x2="100%"
-          y2="100%"
-          gradientTransform={`rotate(${render.reflectionAngle - 12} .5 .5)`}
-        >
-          <stop offset="0%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="30%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="42%" stopColor="#fff" stopOpacity={0.38} />
-          <stop offset="52%" stopColor="#fff" stopOpacity={0.06} />
-          <stop offset="64%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="100%" stopColor="#fff" stopOpacity={0} />
+          {/* Soft, neutral, cool-grey glass reflection — no bright white streaks. */}
+          <stop offset="0%" stopColor="#e9eef2" stopOpacity={0} />
+          <stop offset="30%" stopColor="#e9eef2" stopOpacity={0.06} />
+          <stop offset="50%" stopColor="#dbe3e8" stopOpacity={0.12} />
+          <stop offset="70%" stopColor="#dbe3e8" stopOpacity={0.05} />
+          <stop offset="100%" stopColor="#dbe3e8" stopOpacity={0} />
         </linearGradient>
 
         <linearGradient id={polarizedId} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -252,19 +243,31 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
         ))}
       </defs>
 
-      {/* 1. Frame with the full lens openings removed. */}
+      {/* 1. Frame body (lens openings punched out). */}
       <image {...plateImageProps} mask={`url(#${knockoutId})`} />
 
-      {/* 2–6. Synthetic lens + optical layers inside each lens opening. */}
+      {/* 2–6. Original lens + optical layers inside each opening (customer always includes original). */}
       {lenses.map((lens) => (
         <g
           key={`${uid}-lens-${lens.id}`}
           clipPath={`url(#${uid}-clip-${lens.id})`}
         >
-          {/* Synthetic glass body — achromatic substrate + catalogue tint only. */}
-          <g opacity={bodyOpacity}>
-            <path d={lens.pathD} fill={`url(#${glassBaseId})`} opacity={0.22} />
-            <path d={lens.pathD} fill={`url(#${tintId})`} opacity={fillOpacity} />
+          {/* Original lens — real reflections, gradients, glass texture, lighting, depth. */}
+          {showOriginalLens ? (
+            <image {...plateImageProps} opacity={originalLensOpacity} />
+          ) : null}
+
+          {/* Tint + density modifiers on top of the original (real sunglass tinting). */}
+          <g opacity={layerGroupOpacity}>
+            <path d={lens.pathD} fill={`url(#${tintId})`} opacity={tintAlpha} />
+
+            {render.centerDensity > 0 ? (
+              <path
+                d={lens.pathD}
+                fill={`url(#${centerDensityId})`}
+                opacity={render.centerDensity}
+              />
+            ) : null}
 
             {render.gradientEnabled ? (
               <path
@@ -274,41 +277,26 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
               />
             ) : null}
 
-            {render.vignetteEnabled ? (
+            {render.edgeDensity > 0 ? (
               <path
                 d={lens.pathD}
-                fill={`url(#${vignetteId})`}
-                opacity={render.edgeFade * 0.28}
+                fill={`url(#${edgeDensityId})`}
+                opacity={render.edgeDensity}
               />
             ) : null}
           </g>
 
-          {/* Surface reflection remains visible even on highly transmissive glass. */}
+          {/* Soft glass reflection — no gloss/specular plastic highlight. */}
           {render.reflectionEnabled ? (
             <path
               d={lens.pathD}
               fill={`url(#${reflectionId})`}
-              opacity={render.reflectionOpacity * render.reflectionStrength}
+              opacity={Math.min(0.35, render.reflectionOpacity)}
               filter={reflectionBlurPx > 0 ? `url(#${reflectionBlurId})` : undefined}
             />
           ) : null}
 
-          {render.glossEnabled ? (
-            <>
-              <path
-                d={lens.pathD}
-                fill={`url(#${glossId})`}
-                opacity={render.glossStrength}
-              />
-              <path
-                d={lens.pathD}
-                fill={`url(#${specularId})`}
-                opacity={render.highlightStrength}
-              />
-            </>
-          ) : null}
-
-          {/* Two restrained inner strokes suggest polished optical thickness without a halo. */}
+          {/* Thin edge rim for optical thickness. */}
           {render.vignetteEnabled ? (
             <>
               <path
@@ -361,6 +349,7 @@ function SvgClipCompositorViewInner({
   className,
   fillHeight = false,
   compactLabel = false,
+  showOriginalLens = true,
 }: SvgClipCompositorViewProps) {
   const uid = useId().replace(/:/g, "");
   const tintSpec = useMemo(() => normalizeTintRenderSpec(tint), [tint]);
@@ -369,11 +358,6 @@ function SvgClipCompositorViewInner({
   const render = useMemo(
     () => resolveLensClipRenderSettings(plate?.clipConfig),
     [plate?.clipConfig],
-  );
-
-  const fillOpacity = useMemo(
-    () => Math.max(0.05, Math.min(1, tintSpec.opacity * render.tintOpacity)),
-    [tintSpec.opacity, render.tintOpacity],
   );
 
   const plateW = plate?.width ?? 0;
@@ -441,7 +425,7 @@ function SvgClipCompositorViewInner({
               plateUrl={plate.plateUrl}
               tintSpec={tintSpec}
               render={render}
-              fillOpacity={fillOpacity}
+              showOriginalLens={showOriginalLens}
             />
           )}
         </svg>
@@ -472,6 +456,7 @@ export const SvgClipCompositorView = memo(
     prev.label === next.label &&
     prev.fillHeight === next.fillHeight &&
     prev.compactLabel === next.compactLabel &&
+    prev.showOriginalLens === next.showOriginalLens &&
     prev.plate?.clipConfig === next.plate?.clipConfig &&
     prev.plate?.width === next.plate?.width &&
     prev.plate?.height === next.plate?.height,

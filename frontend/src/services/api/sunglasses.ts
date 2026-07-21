@@ -1,6 +1,7 @@
 import type {
   BuilderOptionEntry,
   LensTintEntry,
+  LensRenderingPreset,
   SunglassesCatalogSnapshot,
 } from "@/types/sunglasses-catalog";
 
@@ -49,5 +50,42 @@ export const sunglassesApi = {
     return apiRequest<{ message: string }>(`/sunglasses/options/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
+  },
+
+  listLensRenderPresets(): Promise<LensRenderingPreset[]> {
+    return apiRequest<LensRenderingPreset[]>("/sunglasses/lens-render-presets");
+  },
+
+  createLensRenderPreset(
+    payload: Omit<LensRenderingPreset, "id" | "createdAt" | "updatedAt">,
+  ): Promise<LensRenderingPreset> {
+    return apiRequest<LensRenderingPreset>("/sunglasses/lens-render-presets", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  updateLensRenderPreset(
+    id: string,
+    payload: Partial<Omit<LensRenderingPreset, "id">>,
+  ): Promise<LensRenderingPreset> {
+    return apiRequest<LensRenderingPreset>(
+      `/sunglasses/lens-render-presets/${encodeURIComponent(id)}`,
+      { method: "PUT", body: payload },
+    );
+  },
+
+  duplicateLensRenderPreset(id: string): Promise<LensRenderingPreset> {
+    return apiRequest<LensRenderingPreset>(
+      `/sunglasses/lens-render-presets/${encodeURIComponent(id)}/duplicate`,
+      { method: "POST" },
+    );
+  },
+
+  deleteLensRenderPreset(id: string): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>(
+      `/sunglasses/lens-render-presets/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
   },
 };

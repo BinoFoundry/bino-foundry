@@ -6,6 +6,7 @@ export type ResolvedLensClipRender = Required<
     LensClipRenderSettings,
     | "mode"
     | "tintOpacity"
+    | "tintLayerOpacity"
     | "lensOpacity"
     | "lensTransmission"
     | "frameExclusionOpacity"
@@ -30,6 +31,10 @@ export type ResolvedLensClipRender = Required<
     | "edgeFade"
     | "edgeDarkness"
     | "edgeWidth"
+    | "backgroundVisibility"
+    | "environmentTransparency"
+    | "centerDensity"
+    | "edgeDensity"
     | "polarizedEnabled"
     | "polarizedStrength"
   >
@@ -46,6 +51,8 @@ export type ResolvedLensClipRender = Required<
 export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   mode: "replace",
   tintOpacity: 0.78,
+  // Preserve the pre-configuration renderer output exactly (displayed as 0.43 in Admin).
+  tintLayerOpacity: 0.42978,
   lensOpacity: 0.9,
   lensTransmission: 0.42,
   frameExclusionOpacity: 1,
@@ -72,6 +79,10 @@ export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   edgeFade: 0.12,
   edgeDarkness: 0.24,
   edgeWidth: 0.006,
+  backgroundVisibility: 0,
+  environmentTransparency: 0,
+  centerDensity: 0,
+  edgeDensity: 0.18,
   polarizedEnabled: false,
   polarizedStrength: 0.12,
   tintBlendMode: "multiply",
@@ -112,9 +123,16 @@ export function resolveLensClipRenderSettings(
   };
 
   const tintOpacity = clamp01(
-    overrides?.tintOpacity ??
-      fromConfig?.tintOpacity ??
+    overrides?.tintOpacity ?? fromConfig?.tintOpacity,
     DEFAULT_LENS_CLIP_RENDER.tintOpacity,
+  );
+  const tintLayerOpacity = clamp01(
+    overrides?.tintLayerOpacity ??
+      fromConfig?.tintLayerOpacity ??
+      (fromConfig?.tintFilterOpacity == null
+        ? undefined
+        : DEFAULT_LENS_CLIP_RENDER.tintLayerOpacity * fromConfig.tintFilterOpacity),
+    DEFAULT_LENS_CLIP_RENDER.tintLayerOpacity,
   );
   const configuredLensOpacity = overrides?.lensOpacity ?? fromConfig?.lensOpacity;
   const configuredLensTransmission =
@@ -152,6 +170,7 @@ export function resolveLensClipRenderSettings(
     // Legacy overlay configs are intentionally upgraded to physical replacement at runtime.
     mode: "replace",
     tintOpacity,
+    tintLayerOpacity,
     lensOpacity,
     lensTransmission,
     frameExclusionOpacity: clamp01(
@@ -182,6 +201,16 @@ export function resolveLensClipRenderSettings(
     edgeFade,
     edgeDarkness: clamp01(merged.edgeDarkness, DEFAULT_LENS_CLIP_RENDER.edgeDarkness),
     edgeWidth: clampRange(merged.edgeWidth, DEFAULT_LENS_CLIP_RENDER.edgeWidth, 0, 0.05),
+    backgroundVisibility: clamp01(
+      merged.backgroundVisibility,
+      DEFAULT_LENS_CLIP_RENDER.backgroundVisibility,
+    ),
+    environmentTransparency: clamp01(
+      merged.environmentTransparency,
+      DEFAULT_LENS_CLIP_RENDER.environmentTransparency,
+    ),
+    centerDensity: clamp01(merged.centerDensity, DEFAULT_LENS_CLIP_RENDER.centerDensity),
+    edgeDensity: clamp01(merged.edgeDensity, DEFAULT_LENS_CLIP_RENDER.edgeDensity),
     polarizedEnabled: Boolean(merged.polarizedEnabled),
     polarizedStrength: clamp01(merged.polarizedStrength, DEFAULT_LENS_CLIP_RENDER.polarizedStrength),
     tintBlendMode: merged.tintBlendMode ?? DEFAULT_LENS_CLIP_RENDER.tintBlendMode,

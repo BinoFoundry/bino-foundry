@@ -1,7 +1,10 @@
+import type { LensClipRenderSettings, LensRenderingPreset } from "@bino-foundry/shared/types";
+
 import type { FrameOption } from "@/lib/luxe-data";
 import { FRAME_BASE_PRICE } from "@/lib/luxe-data";
+import type { FrameEntry } from "@/data/glasses";
 import type { FrameRenderView } from "@/types/frame-rendering";
-import { isFrameViewClipReady } from "@/render/lens-clip";
+import { applyLensRenderHierarchyToFrameViews, isFrameViewClipReady } from "@/render/lens-clip";
 import type {
   SunglassesCompositorConfig,
   SunglassesRenderOptions,
@@ -9,9 +12,17 @@ import type {
 } from "../types";
 
 export interface CustomiserSelection {
-  frameSku: Pick<FrameOption, "id" | "name" | "price" | "renderViews">;
+  frameSku: Pick<
+    FrameOption,
+    "id" | "name" | "price" | "renderViews"
+  > &
+    Partial<Pick<FrameEntry, "lensRenderPresetId" | "useLensRenderPreset">>;
   tint: TintGradient;
   options: SunglassesRenderOptions;
+  /** Database presets — when provided, material settings resolve via Override → Preset → Default. */
+  lensRenderPresets?: LensRenderingPreset[];
+  /** Live draft settings (preset editor). When set, stamped onto every view without Save. */
+  renderSettingsOverride?: LensClipRenderSettings | null;
 }
 
 /** Views with plate + ready SVG clip paths. */
@@ -25,11 +36,47 @@ export function buildClipViewsMap(views: FrameRenderView[] | undefined) {
   return Object.keys(map).length > 0 ? map : undefined;
 }
 
+function stampRenderOverride(
+  views: FrameRenderView[],
+  override: LensClipRenderSettings,
+): FrameRenderView[] {
+  return views.map((view) => {
+    if (!view.clipConfig) return view;
+    return {
+      ...view,
+      clipConfig: {
+        ...view.clipConfig,
+        render: { ...view.clipConfig.render, ...override },
+      },
+    };
+  });
+}
+
 /**
  * Customiser config: SVG clipPath tint on photo plates when ready, else SVG lens-only demo.
+ * Applies the lens-render hierarchy so preset edits propagate without per-frame duplication.
  */
 export function buildCustomiserCompositorConfig(selection: CustomiserSelection): SunglassesCompositorConfig {
-  const clipViews = buildClipViewsMap(selection.frameSku.renderViews);
+  let views = selection.frameSku.renderViews ?? [];
+
+  if (selection.renderSettingsOverride) {
+    views = stampRenderOverride(views, selection.renderSettingsOverride);
+  } else if (selection.lensRenderPresets?.length) {
+    views = applyLensRenderHierarchyToFrameViews(
+      {
+        id: selection.frameSku.id,
+        name: selection.frameSku.name,
+        price: selection.frameSku.price ?? 0,
+        description: "",
+        lensRenderPresetId: selection.frameSku.lensRenderPresetId,
+        useLensRenderPreset: selection.frameSku.useLensRenderPreset,
+        renderViews: views,
+      },
+      selection.lensRenderPresets,
+    );
+  }
+
+  const clipViews = buildClipViewsMap(views);
   const base = {
     basePrice: selection.frameSku.price ?? FRAME_BASE_PRICE,
     frameLabel: selection.frameSku.name,

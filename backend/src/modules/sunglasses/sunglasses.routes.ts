@@ -18,5 +18,11 @@ export function createSunglassesRoutes(): Router {
   router.put("/options/:id", sunglassesHandlers.updateBuilderOption);
   router.delete("/options/:id", sunglassesHandlers.removeBuilderOption);
 
+  router.get("/lens-render-presets", sunglassesHandlers.listLensRenderPresets);
+  router.post("/lens-render-presets", sunglassesHandlers.createLensRenderPreset);
+  router.put("/lens-render-presets/:id", sunglassesHandlers.updateLensRenderPreset);
+  router.post("/lens-render-presets/:id/duplicate", sunglassesHandlers.duplicateLensRenderPreset);
+  router.delete("/lens-render-presets/:id", sunglassesHandlers.removeLensRenderPreset);
+
   return router;
 }

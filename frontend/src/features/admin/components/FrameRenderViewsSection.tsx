@@ -33,12 +33,17 @@ import {
   type MaskConfig,
 } from "@/render/mask";
 import { isLensClipConfigValid } from "@bino-foundry/shared/types";
+import type { LensClipRenderSettings, LensRenderingPreset } from "@bino-foundry/shared/types";
 
 import { LoadingState } from "@/components/common";
 import { FramePlateCropEditor } from "./FramePlateCropEditor";
 import { InlineEditorPanel, INLINE_SECTION_ACTIVE_CLASS } from "./InlineEditorPanel";
 import { LensRenderingSettingsPanel } from "./LensRenderingSettingsPanel";
 import type { LensEditorMode } from "./FrameMaskEditor";
+import {
+  resolveAssignedLensRenderPreset,
+  resolveFrameLensRenderSettings,
+} from "@/render/lens-clip/lens-render-hierarchy";
 
 const FrameMaskEditor = lazy(() =>
   import("./FrameMaskEditor").then((m) => ({ default: m.FrameMaskEditor })),
@@ -67,6 +72,40 @@ function emptyView(view: FrameViewAxis): FrameRenderView {
   };
 }
 
+/** Views whose lens clip is complete enough to accept render settings. */
+function viewsWithValidClip(views: FrameRenderView[]): FrameRenderView[] {
+  return FRAME_VIEW_AXES.map(
+    (axis) => views.find((v) => v.view === axis) ?? emptyView(axis),
+  ).filter((v) => v.clipConfig && isLensClipConfigValid(v.clipConfig));
+}
+
+type LensRenderingScope = NonNullable<LensClipRenderSettings["renderScope"]>;
+
+function resolveRenderingScope(views: FrameRenderView[]): LensRenderingScope {
+  for (const view of viewsWithValidClip(views)) {
+    const scope = view.clipConfig?.render?.renderScope;
+    if (scope) return scope;
+  }
+  return "global";
+}
+
+/** Remove only admin opacity overrides so an out-of-scope view resolves renderer defaults. */
+function withDefaultOpacitySettings(
+  render: LensClipRenderSettings | undefined,
+  renderScope: LensRenderingScope,
+): LensClipRenderSettings {
+  const next = { ...render, renderScope };
+  delete next.tintLayerOpacity;
+  delete next.tintFilterOpacity;
+  delete next.lensOpacity;
+  delete next.baseTintOpacity;
+  delete next.transparency;
+  delete next.reflectionOpacity;
+  delete next.highlightStrength;
+  delete next.edgeDarkness;
+  return next;
+}
+
 function lensStatusLine(mask: MaskConfig | null): string {
   if (!mask) return "left lens pending · right lens pending";
   const left = isLensSideValid(mask, "left") ? "ready" : "pending";
@@ -77,6 +116,13 @@ function lensStatusLine(mask: MaskConfig | null): string {
 interface FrameRenderViewsSectionProps {
   views: FrameRenderView[];
   onChange: (views: FrameRenderView[]) => void;
+  lensRenderPresetId?: string | null;
+  useLensRenderPreset?: boolean;
+  lensRenderPresets?: LensRenderingPreset[];
+  onLensRenderAssignmentChange?: (next: {
+    lensRenderPresetId: string | null;
+    useLensRenderPreset: boolean;
+  }) => void;
 }
 
 export type FrameRenderViewsSectionHandle = {
@@ -90,7 +136,17 @@ export type FrameRenderViewsSectionHandle = {
 export const FrameRenderViewsSection = forwardRef<
   FrameRenderViewsSectionHandle,
   FrameRenderViewsSectionProps
->(function FrameRenderViewsSection({ views, onChange }, ref) {
+>(function FrameRenderViewsSection(
+  {
+    views,
+    onChange,
+    lensRenderPresetId = null,
+    useLensRenderPreset = true,
+    lensRenderPresets = [],
+    onLensRenderAssignmentChange,
+  },
+  ref,
+) {
   const [uploading, setUploading] = useState<FrameViewAxis | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [expandedEditor, setExpandedEditor] = useState<ExpandedEditor | null>(null);
@@ -107,6 +163,9 @@ export const FrameRenderViewsSection = forwardRef<
     useRef<Partial<Record<FrameViewAxis, ReturnType<typeof setTimeout>>>>({});
   const frameCropEditorRef = useRef<FramePlateCropEditorHandle>(null);
   const [framePathReady, setFramePathReady] = useState(false);
+  const [renderingScope, setRenderingScope] = useState<LensRenderingScope>(() =>
+    resolveRenderingScope(views),
+  );
 
   useImperativeHandle(
     ref,
@@ -167,6 +226,10 @@ export const FrameRenderViewsSection = forwardRef<
     }
   }, [views]);
 
+  useEffect(() => {
+    setRenderingScope(resolveRenderingScope(views));
+  }, [views]);
+
   const getView = useCallback(
     (axis: FrameViewAxis) => views.find((v) => v.view === axis) ?? emptyView(axis),
     [views],
@@ -214,7 +277,7 @@ export const FrameRenderViewsSection = forwardRef<
     return true;
   };
 
-  const patchClipRender = (axis: FrameViewAxis, render: import("@bino-foundry/shared/types").LensClipRenderSettings) => {
+  const patchClipRender = (axis: FrameViewAxis, render: LensClipRenderSettings) => {
     const view = getView(axis);
     const clip = view.clipConfig;
     if (!clip || !isLensClipConfigValid(clip)) {
@@ -224,6 +287,48 @@ export const FrameRenderViewsSection = forwardRef<
     patchView(axis, {
       clipConfig: { ...clip, render, updatedAt: Date.now() },
     });
+  };
+
+  const applyRenderingScope = (
+    scope: LensRenderingScope,
+    customRender?: LensClipRenderSettings,
+  ) => {
+    const now = Date.now();
+    const next = FRAME_VIEW_AXES.map((v) => {
+      const current = views.find((x) => x.view === v) ?? emptyView(v);
+      if (current.clipConfig && isLensClipConfigValid(current.clipConfig)) {
+        const isCustomView = scope === "global" || v === scope;
+        const render = isCustomView
+          ? { ...(customRender ?? current.clipConfig.render), renderScope: scope }
+          : withDefaultOpacitySettings(current.clipConfig.render, scope);
+        return {
+          ...current,
+          clipConfig: { ...current.clipConfig, render, updatedAt: now },
+          view: v,
+        };
+      }
+      return current;
+    });
+    onChange(next);
+  };
+
+  const handleRenderChange = (axis: FrameViewAxis, render: LensClipRenderSettings) => {
+    const scopedRender = { ...render, renderScope: renderingScope };
+    if (renderingScope === "global") {
+      applyRenderingScope("global", scopedRender);
+    } else {
+      patchClipRender(axis, scopedRender);
+    }
+  };
+
+  const changeRenderingScope = (scope: LensRenderingScope) => {
+    setRenderingScope(scope);
+    const clipViews = viewsWithValidClip(views);
+    const sourceAxis = scope === "side" ? "side" : "front";
+    const source =
+      clipViews.find((view) => view.view === sourceAxis)?.clipConfig?.render ??
+      clipViews[0]?.clipConfig?.render;
+    applyRenderingScope(scope, source);
   };
 
   const getWorkingPlate = useCallback(
@@ -1057,25 +1162,220 @@ export const FrameRenderViewsSection = forwardRef<
                   ) : null}
                 </div>
 
-                {isDualLensMaskValid(
-                  previewMasks[axis] ?? draftRef.current[axis] ?? resolveMaskConfigForEditor(view),
-                ) || (view.clipConfig && isLensClipConfigValid(view.clipConfig)) ? (
-                  <div className="space-y-4 border-t border-border/60 pt-4 px-0.5">
-                    <LensRenderingSettingsPanel
-                      value={view.clipConfig?.render}
-                      disabled={working}
-                      onChange={(render) => patchClipRender(axis, render)}
-                    />
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </section>
         );
       })}
+
+      <LensRenderingSection
+        views={views}
+        disabled={Boolean(busyAction) || uploading !== null}
+        scope={renderingScope}
+        onScopeChange={changeRenderingScope}
+        onChange={handleRenderChange}
+        lensRenderPresetId={lensRenderPresetId}
+        useLensRenderPreset={useLensRenderPreset}
+        lensRenderPresets={lensRenderPresets}
+        onLensRenderAssignmentChange={onLensRenderAssignmentChange}
+      />
     </div>
   );
 });
+
+/**
+ * Lens-rendering controls: pick a starting preset, then freely tune sliders.
+ * Any slider edit switches the frame to Custom Settings (presets never lock).
+ */
+function LensRenderingSection({
+  views,
+  disabled,
+  scope,
+  onScopeChange,
+  onChange,
+  lensRenderPresetId,
+  useLensRenderPreset,
+  lensRenderPresets,
+  onLensRenderAssignmentChange,
+}: {
+  views: FrameRenderView[];
+  disabled: boolean;
+  scope: LensRenderingScope;
+  onScopeChange: (scope: LensRenderingScope) => void;
+  onChange: (axis: FrameViewAxis, render: LensClipRenderSettings) => void;
+  lensRenderPresetId: string | null;
+  useLensRenderPreset: boolean;
+  lensRenderPresets: LensRenderingPreset[];
+  onLensRenderAssignmentChange?: (next: {
+    lensRenderPresetId: string | null;
+    useLensRenderPreset: boolean;
+  }) => void;
+}) {
+  const clipViews = viewsWithValidClip(views);
+  if (!clipViews.length) return null;
+  const frontView = clipViews.find((view) => view.view === "front");
+  const sideView = clipViews.find((view) => view.view === "side");
+  const activeView =
+    scope === "front"
+      ? frontView
+      : scope === "side"
+        ? sideView
+        : frontView ?? sideView ?? clipViews[0];
+
+  const activePresets = lensRenderPresets.filter(
+    (p) => p.isActive || p.id === lensRenderPresetId,
+  );
+  const assignedPreset = resolveAssignedLensRenderPreset(
+    { lensRenderPresetId, useLensRenderPreset },
+    activePresets,
+  );
+  const resolved = resolveFrameLensRenderSettings(
+    { lensRenderPresetId, useLensRenderPreset },
+    activeView?.clipConfig?.render,
+    activePresets,
+  );
+
+  const panelValue: LensClipRenderSettings = {
+    tintLayerOpacity: resolved.tintLayerOpacity,
+    lensOpacity: resolved.lensOpacity,
+    reflectionOpacity: resolved.reflectionOpacity,
+    edgeDarkness: resolved.edgeDarkness,
+    backgroundVisibility: resolved.backgroundVisibility,
+    environmentTransparency: resolved.environmentTransparency,
+    centerDensity: resolved.centerDensity,
+    edgeDensity: resolved.edgeDensity,
+  };
+
+  const applyCustomSettings = (render: LensClipRenderSettings) => {
+    if (!activeView) return;
+    onLensRenderAssignmentChange?.({
+      lensRenderPresetId: lensRenderPresetId ?? assignedPreset?.id ?? null,
+      useLensRenderPreset: false,
+    });
+    onChange(activeView.view, { ...render, renderScope: scope });
+  };
+
+  const selectPreset = (presetId: string | null) => {
+    onLensRenderAssignmentChange?.({
+      lensRenderPresetId: presetId,
+      useLensRenderPreset: true,
+    });
+    if (activeView?.clipConfig) {
+      onChange(activeView.view, { renderScope: scope });
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-border bg-muted/20 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">Lens rendering</h4>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Pick a starting preset, then adjust any slider. Editing a slider switches this frame to
+            Custom Settings.
+          </p>
+        </div>
+        <span
+          className={cn(
+            "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+            useLensRenderPreset
+              ? "border-border bg-background text-muted-foreground"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+          )}
+        >
+          {useLensRenderPreset
+            ? `Using preset${assignedPreset ? `: ${assignedPreset.name}` : ""}`
+            : "Custom settings"}
+        </span>
+      </div>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-xs">
+          <span className="font-medium text-foreground">Rendering preset</span>
+          <select
+            className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
+            disabled={disabled || !onLensRenderAssignmentChange}
+            value={lensRenderPresetId ?? assignedPreset?.id ?? ""}
+            onChange={(e) => selectPreset(e.target.value || null)}
+          >
+            {activePresets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+                {preset.isDefault ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs">
+          <input
+            type="checkbox"
+            className="mt-0.5 accent-foreground"
+            checked={useLensRenderPreset}
+            disabled={disabled || !onLensRenderAssignmentChange}
+            onChange={(e) => {
+              const nextUse = e.target.checked;
+              if (nextUse) {
+                selectPreset(lensRenderPresetId ?? assignedPreset?.id ?? null);
+                return;
+              }
+              // Switch to custom while keeping current resolved values as the starting point.
+              applyCustomSettings(panelValue);
+            }}
+          />
+          <span>
+            <span className="font-medium text-foreground">Use Global Preset</span>
+            <span className="mt-0.5 block text-muted-foreground">
+              On: inherit the selected preset. Off: this frame stores its own Custom Settings.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      {!useLensRenderPreset ? (
+        <fieldset className="mb-4 space-y-2" disabled={disabled}>
+          <legend className="mb-2 text-xs font-medium text-foreground">Custom scope</legend>
+          {([
+            ["global", "Global (recommended)", true],
+            ["front", "Front View Only", Boolean(frontView)],
+            ["side", "Side View Only", Boolean(sideView)],
+          ] as const).map(([value, label, available]) => (
+            <label
+              key={value}
+              className={cn(
+                "flex items-center gap-2 text-xs",
+                available ? "text-foreground" : "text-muted-foreground opacity-60",
+              )}
+            >
+              <input
+                type="radio"
+                name="lens-rendering-scope"
+                value={value}
+                checked={scope === value}
+                disabled={disabled || !available}
+                onChange={() => onScopeChange(value)}
+                className="h-4 w-4 accent-foreground"
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
+
+      {activeView ? (
+        <LensRenderingSettingsPanel
+          value={panelValue}
+          disabled={disabled}
+          onChange={applyCustomSettings}
+        />
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Configure the selected view&apos;s lens clip before adjusting its rendering.
+        </p>
+      )}
+    </section>
+  );
+}
 
 function LensEditorForView({
   axis,

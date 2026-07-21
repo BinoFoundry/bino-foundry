@@ -37,9 +37,11 @@ describe("lens-glass-material", () => {
     expect(params.reflectionBlurPx).toBeCloseTo(2.088);
   });
 
-  it("documents replace-lens layer order with exclusions last", () => {
+  it("documents layered lens order with original lens and exclusions last", () => {
+    expect(REPLACE_LENS_PIPELINE_STEPS[0]).toBe("knockout-frame-plate");
+    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("original-lens");
+    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("tint-layer");
     expect(REPLACE_LENS_PIPELINE_STEPS.at(-1)).toBe("frame-exclusions");
-    expect(REPLACE_LENS_PIPELINE_STEPS[0]).toBe("knockout-plate");
     expect(DEFAULT_LENS_CLIP_RENDER.lensTransmission).toBeGreaterThan(0);
   });
 });

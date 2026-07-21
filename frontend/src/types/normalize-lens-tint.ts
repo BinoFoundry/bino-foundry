@@ -34,5 +34,6 @@ export function normalizeSunglassesCatalog(data: SunglassesCatalogSnapshot): Sun
   return {
     ...data,
     lensTints: data.lensTints.map(normalizeLensTintEntry),
+    lensRenderPresets: Array.isArray(data.lensRenderPresets) ? data.lensRenderPresets : [],
   };
 }
