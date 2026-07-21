@@ -45,6 +45,7 @@ describe("resolveLensClipRenderSettings", () => {
       lenses: [],
       render: {
         transparency: 0.6,
+        lensTransmission: 0.48,
         brightness: 1.2,
         contrast: 1.1,
         saturation: 0.8,
@@ -53,10 +54,13 @@ describe("resolveLensClipRenderSettings", () => {
         reflectionAngle: 405,
         glossStrength: 0.4,
         edgeFade: 0.2,
+        edgeDarkness: 0.3,
+        edgeWidth: 0.008,
       },
     });
 
     expect(resolved.baseTintOpacity).toBeCloseTo(0.4);
+    expect(resolved.lensTransmission).toBe(0.48);
     expect(resolved.brightness).toBe(1.2);
     expect(resolved.contrast).toBe(1.1);
     expect(resolved.saturation).toBe(0.8);
@@ -65,6 +69,8 @@ describe("resolveLensClipRenderSettings", () => {
     expect(resolved.reflectionAngle).toBe(45);
     expect(resolved.glossStrength).toBe(0.4);
     expect(resolved.edgeFade).toBe(0.2);
+    expect(resolved.edgeDarkness).toBe(0.3);
+    expect(resolved.edgeWidth).toBe(0.008);
   });
 
   it("honours frame render overrides and tint opacity override", () => {
@@ -97,6 +103,18 @@ describe("resolveLensClipRenderSettings", () => {
     });
     expect(resolved.lensOpacity).toBe(0.55);
     expect(resolved.tintOpacity).toBe(DEFAULT_LENS_CLIP_RENDER.tintOpacity);
+  });
+
+  it("keeps glass transmission independent from surface opacity", () => {
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [{ id: "l", label: "L", pathD: "M0 0 L10 0 L10 10 Z" }],
+      render: { lensOpacity: 0.92, lensTransmission: 0.58 },
+    });
+    expect(resolved.lensOpacity).toBe(0.92);
+    expect(resolved.lensTransmission).toBe(0.58);
   });
 
   it("keeps frame exclusion opacity independent from lens opacity", () => {

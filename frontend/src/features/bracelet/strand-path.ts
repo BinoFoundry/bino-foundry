@@ -289,19 +289,18 @@ export function computeSymmetricStrandPathLayout(params: {
 }
 
 /**
- * Balanced radial placement — the original "fill the largest gap" behaviour.
+ * Occupancy-aware balanced radial placement.
  *
- * Logical array order is preserved exactly (never sorted, grouped, or reordered by type).
- * Each logical index is mapped to the angular fraction it would occupy if beads were added
- * one at a time, each new bead taking the widest open gap. With the 12 o'clock start this
- * yields the direction priority:
+ * Logical array order is preserved exactly. Beads are added one at a time by finding the
+ * largest FREE arc (after subtracting the already-placed bead footprints) and centring the
+ * next footprint in that gap. With the 12 o'clock start this naturally yields:
  *
- *   top → bottom → right → left → top-right → bottom-right → top-left → bottom-left → …
+ *   top → bottom → right → left → top-right → bottom-right → bottom-left → top-left → …
  *
- * so the bracelet expands evenly in every direction instead of walking around clockwise.
- * Every bead type flows through this same pipeline; the only per-bead differences are the
- * resolved footprint values (occupancy / visual radius), which drive `arcSpan` and overlap
- * detection but never a different placement formula.
+ * Unlike fixed angular fractions, free-gap placement accounts for physical occupancy. The
+ * sum of all remaining gaps is always `circumference - Σ footprint`, so a strand whose
+ * occupied length equals its capacity closes with no residual arc. No spacing, capacity,
+ * contact, scaling, or collision values are changed here.
  */
 export function computeBalancedRadialStrandPathLayout(params: {
   beads: SequentialStrandBeadInput[];
@@ -333,11 +332,53 @@ export function computeBalancedRadialStrandPathLayout(params: {
       Math.max(0, bead.visualRadiusPx),
     ),
   );
-  // Angular fraction per logical index from the balanced "widest gap" fill order.
+  // Direction order comes from recursive largest-gap bisection; no angle list is hardcoded.
   const fractions = balancedFractionsForSequence(beads.length);
+  const angularOrder = fractions
+    .map((fraction, index) => ({ fraction, index }))
+    .sort((a, b) => a.fraction - b.fraction);
+  const totalFootprintPx = footprintRadii.reduce((sum, radiusPx) => sum + radiusPx * 2, 0);
+  const remainingFreePx = Math.max(0, circumferencePx - totalFootprintPx);
+
+  // Preserve the balanced target angles while there is room. As occupancy grows, distribute
+  // only the genuinely remaining free circumference between those target gaps. When full,
+  // every free gap becomes zero and the same footprints close contiguously around the ring.
+  const desiredFreeGapsPx = angularOrder.map((current, orderIndex) => {
+    const next = angularOrder[(orderIndex + 1) % angularOrder.length]!;
+    const fractionGap =
+      orderIndex + 1 < angularOrder.length
+        ? next.fraction - current.fraction
+        : 1 - current.fraction + next.fraction;
+    const centerArcPx = fractionGap * circumferencePx;
+    return Math.max(
+      0,
+      centerArcPx -
+        footprintRadii[current.index]! -
+        footprintRadii[next.index]!,
+    );
+  });
+  const desiredFreeTotalPx = desiredFreeGapsPx.reduce((sum, gapPx) => sum + gapPx, 0);
+  const freeGapsPx = desiredFreeGapsPx.map((gapPx) =>
+    desiredFreeTotalPx > 1e-9
+      ? (gapPx / desiredFreeTotalPx) * remainingFreePx
+      : remainingFreePx / angularOrder.length,
+  );
+
+  const centerOffsetsPx = new Array<number>(beads.length).fill(0);
+  for (let orderIndex = 1; orderIndex < angularOrder.length; orderIndex++) {
+    const previous = angularOrder[orderIndex - 1]!;
+    const current = angularOrder[orderIndex]!;
+    centerOffsetsPx[current.index] =
+      centerOffsetsPx[previous.index]! +
+      footprintRadii[previous.index]! +
+      freeGapsPx[orderIndex - 1]! +
+      footprintRadii[current.index]!;
+  }
 
   const layouts = beads.map((bead, i) => {
-    const angle = normalizePathAngle(startAngle + fractions[i]! * 2 * Math.PI);
+    const angle = normalizePathAngle(
+      startAngle + (centerOffsetsPx[i]! / circumferencePx) * 2 * Math.PI,
+    );
     const arcSpan = ((footprintRadii[i]! * 2) / circumferencePx) * 2 * Math.PI;
     const { x, y } = polarToCartesian(centerX, centerY, radius, angle);
     return {
@@ -350,23 +391,9 @@ export function computeBalancedRadialStrandPathLayout(params: {
     };
   });
 
-  // Widest empty gap (in fraction space) — where the next bead would land.
-  const sortedFractions = [...fractions].sort((a, b) => a - b);
-  let widestGap = -Infinity;
-  let widestGapMidFraction = fractions[0]! + 0.5;
-  for (let i = 0; i < sortedFractions.length; i++) {
-    const current = sortedFractions[i]!;
-    const next =
-      i + 1 < sortedFractions.length ? sortedFractions[i + 1]! : sortedFractions[0]! + 1;
-    const gap = next - current;
-    if (gap > widestGap) {
-      widestGap = gap;
-      widestGapMidFraction = current + gap / 2;
-    }
-  }
-  const closureAngle = normalizePathAngle(
-    startAngle + widestGapMidFraction * 2 * Math.PI,
-  );
+  const nextFractions = balancedFractionsForSequence(beads.length + 1);
+  const closureFraction = nextFractions[beads.length] ?? 0;
+  const closureAngle = normalizePathAngle(startAngle + closureFraction * 2 * Math.PI);
 
   // Sequence-gap insertion angles keep the same (n + 1) contract the drop resolver expects.
   const insertionAngles = [closureAngle];
@@ -376,8 +403,6 @@ export function computeBalancedRadialStrandPathLayout(params: {
     );
   }
   insertionAngles.push(closureAngle);
-
-  const totalFootprintPx = footprintRadii.reduce((sum, r) => sum + r * 2, 0);
 
   return {
     beads: layouts,

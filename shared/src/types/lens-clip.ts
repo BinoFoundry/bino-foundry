@@ -43,10 +43,15 @@ export interface LensClipRenderSettings {
   /** Strength of the selected tint inside the replacement material (0–1). */
   tintOpacity?: number;
   /**
-   * Overall opacity of the NEW replacement lens material (0–1). This never controls or
-   * reveals original lens pixels: the source lens area is removed before this is painted.
+   * Overall opacity of the generated optical material (0–1). Source hue is removed; only
+   * normalized luminance/detail may be retained beneath the generated tint.
    */
   lensOpacity?: number;
+  /**
+   * Fraction of background light transmitted through the generated lens (0–1).
+   * Surface reflections remain visible independently, as they would on real glass.
+   */
+  lensTransmission?: number;
   /** Opacity of restored frame-exclusion pixels (0–1), independent of lens opacity. */
   frameExclusionOpacity?: number;
   /**
@@ -55,7 +60,7 @@ export interface LensClipRenderSettings {
    * the same tint look identical across frames (no background bleed-through).
    */
   baseTintOpacity?: number;
-  /** Amount of background transmission through the synthetic glass (0–1). */
+  /** Amount of neutralized optical/background detail transmitted through the glass (0–1). */
   transparency?: number;
   /** Optical colour adjustments; 1 is neutral. */
   brightness?: number;
@@ -86,6 +91,10 @@ export interface LensClipRenderSettings {
   vignetteStrength?: number;
   /** Preferred name for edge vignette strength; `vignetteStrength` remains compatible. */
   edgeFade?: number;
+  /** Darkness of the subtle inner lens rim / optical thickness (0–1). */
+  edgeDarkness?: number;
+  /** Inner rim width as a fraction of the shorter source-image dimension (0–0.05). */
+  edgeWidth?: number;
 
   polarizedEnabled?: boolean;
   polarizedStrength?: number;

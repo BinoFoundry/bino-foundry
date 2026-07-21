@@ -626,23 +626,20 @@ const SortableCircularStrand = ({
           const renderScale = renderDims[i]!.width / slotWidth;
           return getBeadStrandTangentContactPx(sizing) * renderScale;
         });
-        const contactAdjustmentsPx = renderProfiles.map((profile, i) => {
-          const proportionalAdjustment =
-            (profile.contactOffset + profile.spacingAdjustment) * visualDiametersPx[i]!;
-          return proportionalAdjustment + profile.collisionPadding * scaleFactor;
-        });
 
-        // One type-agnostic balanced-radial fill for every bead. Logical order is never
-        // changed; each logical index is mapped to its "widest gap" angular slot, so the
-        // strand expands top → bottom → right → left → diagonals instead of clockwise.
-        // Footprints only size each bead's arc span (collision/hit-testing), never a
-        // different placement formula.
+        // Single shared source of truth: beads are packed contiguously using the SAME
+        // occupancy the capacity panel sums (sizeMm → arc). Each bead's footprint is exactly
+        // its occupancy arc, so cumulative placement equals Σ occupancyMm and a 100%-full
+        // strand tiles the whole ring with no empty arc. Occupancy-aware largest-gap insertion
+        // grows top → bottom → right → left, then recursively fills the remaining free arcs.
+        // No contact-width multiplier, minimum separation, or visual-silhouette enlargement is
+        // applied here — those would make rendered occupancy diverge from reported used length.
         const sequential = computeBalancedRadialStrandPathLayout({
           beads: normalized.map((_, i) => ({
             index: i,
             occupancyPx: occupancy.contactArcPx[i]!,
-            visualRadiusPx: visualDiametersPx[i]! / 2,
-            contactAdjustmentPx: contactAdjustmentsPx[i]!,
+            visualRadiusPx: occupancy.contactArcPx[i]! / 2,
+            contactAdjustmentPx: 0,
           })),
           centerX: center,
           centerY: center,
@@ -659,35 +656,44 @@ const SortableCircularStrand = ({
         }));
 
         if (isStrandSpacingDebugEnabled()) {
-          const usedLength = occupancyMm.reduce((a, b) => a + b, 0);
+          const capacityUsedMm = occupancyMm.reduce((a, b) => a + b, 0);
           const targetLength = wristMm;
+          // Derive the occupied length straight from the rendered layout (px → mm) so the
+          // number logged here is exactly what is drawn, not a parallel estimate.
+          const pxToMm = targetLength / Math.max(ringCircumferencePx, 1e-6);
+          const renderedOccupiedMm = sequential.occupiedArcPx * pxToMm;
           const totalAngularLength =
             (sequential.occupiedArcPx / ringCircumferencePx) * 2 * Math.PI;
+          const beadCount = occupancyMm.length;
+          const averageSpacingMm = beadCount ? renderedOccupiedMm / beadCount : 0;
           let accumMm = 0;
           for (let i = 0; i < occupancyMm.length; i++) {
-            const calculatedAnglePerBead = (occupancyMm[i]! / targetLength) * 2 * Math.PI;
+            const effectiveDiameterMm = occupancyMm[i]!;
             accumMm += occupancyMm[i]!;
             const angleDeg = ((pathLayout[i]!.angle * 180) / Math.PI + 360) % 360;
             console.log(
               [
                 `[strand-occupancy] bead ${i}`,
                 `type=${normalized[i]!.bead?.beadTypeSlug ?? "?"}`,
-                `resolvedOccupancy=${occupancyMm[i]!.toFixed(2)}mm`,
-                `resolvedVisualRadius=${(visualDiametersPx[i]! / 2).toFixed(2)}px`,
-                `resolvedContactAdjustment=${contactAdjustmentsPx[i]!.toFixed(2)}px`,
-                `calculatedAnglePerBead=${((calculatedAnglePerBead * 180) / Math.PI).toFixed(2)}deg`,
+                `effectiveDiameter=${effectiveDiameterMm.toFixed(2)}mm`,
+                `arcSpan=${((pathLayout[i]!.arcSpan * 180) / Math.PI).toFixed(2)}deg`,
                 `accumUsed=${accumMm.toFixed(2)}mm`,
                 `angleDeg=${angleDeg.toFixed(1)}`,
               ].join(" | "),
             );
           }
           console.log(
-            `[strand-occupancy] usedLength=${usedLength.toFixed(1)}mm`,
-            `targetLength=${targetLength.toFixed(1)}mm`,
-            `remainingLength=${Math.max(0, targetLength - usedLength).toFixed(1)}mm`,
-            `totalAngularLength=${((totalAngularLength * 180) / Math.PI).toFixed(1)}deg`,
-            `fillRatio=${Math.min(usedLength / targetLength, 1).toFixed(3)}`,
-            `visualOverCapacity=${sequential.isOverCapacity}`,
+            [
+              `[strand-occupancy] braceletCircumference=${targetLength.toFixed(1)}mm`,
+              `occupiedLength(render)=${renderedOccupiedMm.toFixed(1)}mm`,
+              `occupiedLength(capacity)=${capacityUsedMm.toFixed(1)}mm`,
+              `remainingLength=${Math.max(0, targetLength - renderedOccupiedMm).toFixed(1)}mm`,
+              `beads=${beadCount}`,
+              `averageBeadSpacing=${averageSpacingMm.toFixed(2)}mm`,
+              `totalRenderedArc=${((totalAngularLength * 180) / Math.PI).toFixed(1)}deg`,
+              `fillRatio=${Math.min(renderedOccupiedMm / targetLength, 1).toFixed(3)}`,
+              `overCapacity=${sequential.isOverCapacity}`,
+            ].join(" | "),
           );
           logStrandAdjacencySpacing(
             computeStrandAdjacencySpacingDebug({

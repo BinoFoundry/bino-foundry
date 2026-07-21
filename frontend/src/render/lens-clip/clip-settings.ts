@@ -7,6 +7,7 @@ export type ResolvedLensClipRender = Required<
     | "mode"
     | "tintOpacity"
     | "lensOpacity"
+    | "lensTransmission"
     | "frameExclusionOpacity"
     | "baseTintOpacity"
     | "transparency"
@@ -27,6 +28,8 @@ export type ResolvedLensClipRender = Required<
     | "vignetteEnabled"
     | "vignetteStrength"
     | "edgeFade"
+    | "edgeDarkness"
+    | "edgeWidth"
     | "polarizedEnabled"
     | "polarizedStrength"
   >
@@ -42,34 +45,37 @@ export type ResolvedLensClipRender = Required<
 
 export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   mode: "replace",
-  tintOpacity: 0.82,
-  lensOpacity: 0.65,
+  tintOpacity: 0.78,
+  lensOpacity: 0.9,
+  lensTransmission: 0.42,
   frameExclusionOpacity: 1,
-  baseTintOpacity: 0.58,
-  transparency: 0.35,
-  brightness: 1.04,
-  contrast: 1.08,
-  saturation: 1.05,
+  baseTintOpacity: 0.9,
+  transparency: 0.42,
+  brightness: 1.02,
+  contrast: 1.04,
+  saturation: 0.98,
   gradientEnabled: true,
   gradientTopColor: null,
   gradientBottomColor: null,
   gradientPosition: 45,
-  gradientStrength: 0.72,
+  gradientStrength: 0.24,
   reflectionEnabled: true,
-  reflectionStrength: 0.75,
-  reflectionOpacity: 0.26,
-  reflectionAngle: 18,
-  reflectionBlur: 0.4,
+  reflectionStrength: 0.42,
+  reflectionOpacity: 0.2,
+  reflectionAngle: 22,
+  reflectionBlur: 0.58,
   glossEnabled: true,
   glossIntensity: 0.3,
-  glossStrength: 0.3,
+  glossStrength: 0.14,
   vignetteEnabled: true,
   vignetteStrength: 0.28,
-  edgeFade: 0.28,
+  edgeFade: 0.12,
+  edgeDarkness: 0.24,
+  edgeWidth: 0.006,
   polarizedEnabled: false,
   polarizedStrength: 0.12,
   tintBlendMode: "multiply",
-  highlightStrength: 0.38,
+  highlightStrength: 0.12,
   highlightBlendMode: "screen",
   shadowStrength: 0.06,
 };
@@ -111,6 +117,8 @@ export function resolveLensClipRenderSettings(
     DEFAULT_LENS_CLIP_RENDER.tintOpacity,
   );
   const configuredLensOpacity = overrides?.lensOpacity ?? fromConfig?.lensOpacity;
+  const configuredLensTransmission =
+    overrides?.lensTransmission ?? fromConfig?.lensTransmission;
   const configuredTransparency = overrides?.transparency ?? fromConfig?.transparency;
   const configuredLegacyBaseOpacity =
     overrides?.baseTintOpacity ?? fromConfig?.baseTintOpacity;
@@ -121,6 +129,10 @@ export function resolveLensClipRenderSettings(
         : 1 - clamp01(configuredTransparency, DEFAULT_LENS_CLIP_RENDER.transparency)
       : clamp01(configuredLensOpacity, DEFAULT_LENS_CLIP_RENDER.lensOpacity);
   const transparency = 1 - lensOpacity;
+  const lensTransmission = clamp01(
+    configuredLensTransmission ?? configuredTransparency,
+    DEFAULT_LENS_CLIP_RENDER.lensTransmission,
+  );
   const glossStrength = clamp01(
     overrides?.glossStrength ??
       overrides?.glossIntensity ??
@@ -141,6 +153,7 @@ export function resolveLensClipRenderSettings(
     mode: "replace",
     tintOpacity,
     lensOpacity,
+    lensTransmission,
     frameExclusionOpacity: clamp01(
       merged.frameExclusionOpacity,
       DEFAULT_LENS_CLIP_RENDER.frameExclusionOpacity,
@@ -167,6 +180,8 @@ export function resolveLensClipRenderSettings(
     vignetteEnabled: merged.vignetteEnabled !== false,
     vignetteStrength: edgeFade,
     edgeFade,
+    edgeDarkness: clamp01(merged.edgeDarkness, DEFAULT_LENS_CLIP_RENDER.edgeDarkness),
+    edgeWidth: clampRange(merged.edgeWidth, DEFAULT_LENS_CLIP_RENDER.edgeWidth, 0, 0.05),
     polarizedEnabled: Boolean(merged.polarizedEnabled),
     polarizedStrength: clamp01(merged.polarizedStrength, DEFAULT_LENS_CLIP_RENDER.polarizedStrength),
     tintBlendMode: merged.tintBlendMode ?? DEFAULT_LENS_CLIP_RENDER.tintBlendMode,

@@ -22,6 +22,7 @@ const lensClipRenderSchema = z
     mode: z.enum(["replace", "overlay"]).optional(),
     tintOpacity: z.number().min(0).max(1).optional(),
     lensOpacity: z.number().min(0).max(1).optional(),
+    lensTransmission: z.number().min(0).max(1).optional(),
     frameExclusionOpacity: z.number().min(0).max(1).optional(),
     baseTintOpacity: z.number().min(0).max(1).optional(),
     transparency: z.number().min(0).max(1).optional(),
@@ -44,6 +45,8 @@ const lensClipRenderSchema = z
     vignetteEnabled: z.boolean().optional(),
     vignetteStrength: z.number().min(0).max(1).optional(),
     edgeFade: z.number().min(0).max(1).optional(),
+    edgeDarkness: z.number().min(0).max(1).optional(),
+    edgeWidth: z.number().min(0).max(0.05).optional(),
     polarizedEnabled: z.boolean().optional(),
     polarizedStrength: z.number().min(0).max(1).optional(),
     // Legacy overlay fields

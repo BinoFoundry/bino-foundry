@@ -357,16 +357,23 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     expect(layout.beads[3]!.angle).toBeCloseTo(angleAtFraction(0.75), 6); // left
   });
 
-  it("uses identical placement regardless of bead type/footprint", () => {
-    const uniform = computeBalancedRadialStrandPathLayout({
+  it("recursively fills the largest gaps without a hardcoded angle list", () => {
+    const layout = computeBalancedRadialStrandPathLayout({
       ...base,
-      beads: Array.from({ length: 5 }, (_, index) => ({
+      beads: Array.from({ length: 8 }, (_, index) => ({
         index,
         occupancyPx: 10,
         visualRadiusPx: 5,
       })),
     });
-    // Mixed footprints (e.g. crystals + charms) must not change any angle.
+
+    const expectedFractions = [0, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875];
+    expectedFractions.forEach((fraction, index) => {
+      expect(layout.beads[index]!.angle).toBeCloseTo(angleAtFraction(fraction), 6);
+    });
+  });
+
+  it("uses resolved footprints while preserving the balanced sequence", () => {
     const mixed = computeBalancedRadialStrandPathLayout({
       ...base,
       beads: [
@@ -378,9 +385,9 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       ],
     });
 
-    for (let i = 0; i < 5; i++) {
-      expect(mixed.beads[i]!.angle).toBeCloseTo(uniform.beads[i]!.angle, 6);
-    }
+    expect(mixed.beads.map((bead) => bead.index)).toEqual([0, 1, 2, 3, 4]);
+    expect(mixed.occupiedArcPx).toBeCloseTo(10 + 28 + 6 + 18 + 10, 6);
+    expect(mixed.isOverCapacity).toBe(false);
   });
 
   it("sizes arc spans from the resolved footprint", () => {
@@ -395,6 +402,34 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     // arcSpan = footprintDiameter / circumference * 2π; visual radius wins when larger.
     expect(layout.beads[0]!.arcSpan).toBeCloseTo((10 / circumference) * 2 * Math.PI, 6);
     expect(layout.beads[1]!.arcSpan).toBeCloseTo((24 / circumference) * 2 * Math.PI, 6);
+  });
+
+  it("closes with no residual gap when occupied length equals circumference", () => {
+    const circumference = 2 * Math.PI * base.radius;
+    const beadWidth = circumference / 30;
+    const layout = computeBalancedRadialStrandPathLayout({
+      ...base,
+      beads: Array.from({ length: 30 }, (_, index) => ({
+        index,
+        occupancyPx: beadWidth,
+        visualRadiusPx: beadWidth / 2,
+      })),
+    });
+
+    const sortedAngles = layout.beads
+      .map((bead) => {
+        const offset = bead.angle - base.startAngle;
+        return ((offset % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      })
+      .sort((a, b) => a - b);
+    for (let i = 0; i < sortedAngles.length; i++) {
+      const current = sortedAngles[i]!;
+      const next =
+        i + 1 < sortedAngles.length ? sortedAngles[i + 1]! : sortedAngles[0]! + 2 * Math.PI;
+      expect((next - current) * base.radius).toBeCloseTo(beadWidth, 5);
+    }
+    expect(layout.occupiedArcPx).toBeCloseTo(circumference, 5);
+    expect(layout.isOverCapacity).toBe(false);
   });
 });
 

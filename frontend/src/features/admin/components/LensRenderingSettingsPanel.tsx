@@ -1,7 +1,6 @@
 import type { LensClipRenderSettings } from "@bino-foundry/shared/types";
 
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { DEFAULT_LENS_CLIP_RENDER } from "@/render/lens-clip/clip-settings";
 
@@ -49,28 +48,9 @@ function SliderRow({
   );
 }
 
-function ToggleRow({
-  label,
-  checked,
-  onCheckedChange,
-  disabled,
-}: {
-  label: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
-    </div>
-  );
-}
-
 /**
- * Frame-level synthetic lens optics (stored on clip_config.render).
- * Customer tint colours still come from the tint catalogue.
+ * High-level material controls stored on clip_config.render.
+ * Lighting, gradients, Fresnel width, highlights, and colour neutralization are automatic.
  */
 export function LensRenderingSettingsPanel({
   value,
@@ -82,63 +62,29 @@ export function LensRenderingSettingsPanel({
     Pick<
       LensClipRenderSettings,
       | "mode"
-      | "tintOpacity"
       | "lensOpacity"
+      | "lensTransmission"
       | "frameExclusionOpacity"
-      | "transparency"
-      | "brightness"
-      | "contrast"
-      | "saturation"
-      | "gradientEnabled"
-      | "gradientPosition"
-      | "gradientStrength"
-      | "reflectionEnabled"
       | "reflectionStrength"
-      | "reflectionOpacity"
-      | "reflectionAngle"
       | "reflectionBlur"
-      | "glossEnabled"
-      | "glossStrength"
-      | "highlightStrength"
-      | "vignetteEnabled"
-      | "edgeFade"
-      | "polarizedEnabled"
-      | "polarizedStrength"
+      | "edgeDarkness"
     >
   > = {
     mode: value?.mode ?? DEFAULT_LENS_CLIP_RENDER.mode,
-    tintOpacity: value?.tintOpacity ?? DEFAULT_LENS_CLIP_RENDER.tintOpacity,
     lensOpacity:
       value?.lensOpacity ??
       (value?.transparency == null
         ? DEFAULT_LENS_CLIP_RENDER.lensOpacity
         : 1 - value.transparency),
+    lensTransmission:
+      value?.lensTransmission ??
+      value?.transparency ??
+      DEFAULT_LENS_CLIP_RENDER.lensTransmission,
     frameExclusionOpacity:
       value?.frameExclusionOpacity ?? DEFAULT_LENS_CLIP_RENDER.frameExclusionOpacity,
-    transparency:
-      value?.transparency ??
-      (value?.baseTintOpacity == null
-        ? DEFAULT_LENS_CLIP_RENDER.transparency
-        : 1 - value.baseTintOpacity),
-    brightness: value?.brightness ?? DEFAULT_LENS_CLIP_RENDER.brightness,
-    contrast: value?.contrast ?? DEFAULT_LENS_CLIP_RENDER.contrast,
-    saturation: value?.saturation ?? DEFAULT_LENS_CLIP_RENDER.saturation,
-    gradientEnabled: value?.gradientEnabled ?? DEFAULT_LENS_CLIP_RENDER.gradientEnabled,
-    gradientPosition: value?.gradientPosition ?? DEFAULT_LENS_CLIP_RENDER.gradientPosition,
-    gradientStrength: value?.gradientStrength ?? DEFAULT_LENS_CLIP_RENDER.gradientStrength,
-    reflectionEnabled: value?.reflectionEnabled ?? DEFAULT_LENS_CLIP_RENDER.reflectionEnabled,
     reflectionStrength: value?.reflectionStrength ?? DEFAULT_LENS_CLIP_RENDER.reflectionStrength,
-    reflectionOpacity: value?.reflectionOpacity ?? DEFAULT_LENS_CLIP_RENDER.reflectionOpacity,
-    reflectionAngle: value?.reflectionAngle ?? DEFAULT_LENS_CLIP_RENDER.reflectionAngle,
     reflectionBlur: value?.reflectionBlur ?? DEFAULT_LENS_CLIP_RENDER.reflectionBlur,
-    glossEnabled: value?.glossEnabled ?? DEFAULT_LENS_CLIP_RENDER.glossEnabled,
-    glossStrength:
-      value?.glossStrength ?? value?.glossIntensity ?? DEFAULT_LENS_CLIP_RENDER.glossStrength,
-    highlightStrength: value?.highlightStrength ?? DEFAULT_LENS_CLIP_RENDER.highlightStrength,
-    vignetteEnabled: value?.vignetteEnabled ?? DEFAULT_LENS_CLIP_RENDER.vignetteEnabled,
-    edgeFade: value?.edgeFade ?? value?.vignetteStrength ?? DEFAULT_LENS_CLIP_RENDER.edgeFade,
-    polarizedEnabled: value?.polarizedEnabled ?? DEFAULT_LENS_CLIP_RENDER.polarizedEnabled,
-    polarizedStrength: value?.polarizedStrength ?? DEFAULT_LENS_CLIP_RENDER.polarizedStrength,
+    edgeDarkness: value?.edgeDarkness ?? DEFAULT_LENS_CLIP_RENDER.edgeDarkness,
   };
 
   const patch = (partial: Partial<LensClipRenderSettings>) => {
@@ -150,8 +96,8 @@ export function LensRenderingSettingsPanel({
       <div>
         <p className="type-label text-muted-foreground">Lens rendering</p>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          The source lens is removed completely, then a synthetic glass material is painted
-          inside the clip. Source lens colour never contributes to the replacement.
+          Original lens colour is fully removed. The selected catalogue tint is the only colour
+          source; lighting, reflection, and edge depth are generated automatically.
         </p>
       </div>
 
@@ -163,6 +109,13 @@ export function LensRenderingSettingsPanel({
       />
 
       <SliderRow
+        label="Lens transmission"
+        value={merged.lensTransmission}
+        disabled={disabled}
+        onChange={(lensTransmission) => patch({ lensTransmission })}
+      />
+
+      <SliderRow
         label="Frame exclusion opacity"
         value={merged.frameExclusionOpacity}
         disabled={disabled}
@@ -170,151 +123,29 @@ export function LensRenderingSettingsPanel({
       />
 
       <SliderRow
-        label="Tint strength"
-        value={merged.tintOpacity}
+        label="Reflection strength"
+        value={merged.reflectionStrength}
         disabled={disabled}
-        onChange={(tintOpacity) => patch({ tintOpacity })}
+        onChange={(reflectionStrength) =>
+          patch({ reflectionEnabled: reflectionStrength > 0, reflectionStrength })
+        }
       />
 
       <SliderRow
-        label="Brightness"
-        value={merged.brightness}
-        min={0.25}
-        max={2}
+        label="Reflection blur"
+        value={merged.reflectionBlur}
         disabled={disabled}
-        onChange={(brightness) => patch({ brightness })}
+        onChange={(reflectionBlur) => patch({ reflectionBlur })}
       />
+
       <SliderRow
-        label="Contrast"
-        value={merged.contrast}
-        max={2}
+        label="Edge darkness"
+        value={merged.edgeDarkness}
         disabled={disabled}
-        onChange={(contrast) => patch({ contrast })}
+        onChange={(edgeDarkness) =>
+          patch({ vignetteEnabled: edgeDarkness > 0, edgeDarkness })
+        }
       />
-      <SliderRow
-        label="Saturation"
-        value={merged.saturation}
-        max={2}
-        disabled={disabled}
-        onChange={(saturation) => patch({ saturation })}
-      />
-
-      <ToggleRow
-        label="Gradient"
-        checked={merged.gradientEnabled}
-        disabled={disabled}
-        onCheckedChange={(gradientEnabled) => patch({ gradientEnabled })}
-      />
-      {merged.gradientEnabled ? (
-        <>
-          <SliderRow
-            label="Gradient mid position"
-            value={merged.gradientPosition}
-            min={0}
-            max={100}
-            step={1}
-            disabled={disabled}
-            onChange={(gradientPosition) => patch({ gradientPosition })}
-          />
-          <SliderRow
-            label="Gradient strength"
-            value={merged.gradientStrength}
-            disabled={disabled}
-            onChange={(gradientStrength) => patch({ gradientStrength })}
-          />
-        </>
-      ) : null}
-
-      <ToggleRow
-        label="Reflection"
-        checked={merged.reflectionEnabled}
-        disabled={disabled}
-        onCheckedChange={(reflectionEnabled) => patch({ reflectionEnabled })}
-      />
-      {merged.reflectionEnabled ? (
-        <>
-          <SliderRow
-            label="Reflection strength"
-            value={merged.reflectionStrength}
-            disabled={disabled}
-            onChange={(reflectionStrength) => patch({ reflectionStrength })}
-          />
-          <SliderRow
-            label="Reflection opacity"
-            value={merged.reflectionOpacity}
-            disabled={disabled}
-            onChange={(reflectionOpacity) => patch({ reflectionOpacity })}
-          />
-          <SliderRow
-            label="Reflection angle"
-            value={merged.reflectionAngle}
-            min={0}
-            max={360}
-            step={1}
-            disabled={disabled}
-            onChange={(reflectionAngle) => patch({ reflectionAngle })}
-          />
-          <SliderRow
-            label="Reflection blur"
-            value={merged.reflectionBlur}
-            disabled={disabled}
-            onChange={(reflectionBlur) => patch({ reflectionBlur })}
-          />
-        </>
-      ) : null}
-
-      <ToggleRow
-        label="Gloss"
-        checked={merged.glossEnabled}
-        disabled={disabled}
-        onCheckedChange={(glossEnabled) => patch({ glossEnabled })}
-      />
-      {merged.glossEnabled ? (
-        <>
-          <SliderRow
-            label="Glass highlight"
-            value={merged.glossStrength}
-            disabled={disabled}
-            onChange={(glossStrength) => patch({ glossStrength })}
-          />
-          <SliderRow
-            label="Specular highlight"
-            value={merged.highlightStrength}
-            disabled={disabled}
-            onChange={(highlightStrength) => patch({ highlightStrength })}
-          />
-        </>
-      ) : null}
-
-      <ToggleRow
-        label="Edge vignette"
-        checked={merged.vignetteEnabled}
-        disabled={disabled}
-        onCheckedChange={(vignetteEnabled) => patch({ vignetteEnabled })}
-      />
-      {merged.vignetteEnabled ? (
-        <SliderRow
-          label="Edge fade"
-          value={merged.edgeFade}
-          disabled={disabled}
-          onChange={(edgeFade) => patch({ edgeFade })}
-        />
-      ) : null}
-
-      <ToggleRow
-        label="Polarized sheen"
-        checked={merged.polarizedEnabled}
-        disabled={disabled}
-        onCheckedChange={(polarizedEnabled) => patch({ polarizedEnabled })}
-      />
-      {merged.polarizedEnabled ? (
-        <SliderRow
-          label="Polarized strength"
-          value={merged.polarizedStrength}
-          disabled={disabled}
-          onChange={(polarizedStrength) => patch({ polarizedStrength })}
-        />
-      ) : null}
     </div>
   );
 }
