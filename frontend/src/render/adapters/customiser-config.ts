@@ -21,6 +21,8 @@ export interface CustomiserSelection {
   options: SunglassesRenderOptions;
   /** Database presets — when provided, material settings resolve via Override → Preset → Default. */
   lensRenderPresets?: LensRenderingPreset[];
+  /** Single database-backed fallback beneath every preset and frame override. */
+  lensRenderSystemDefaults?: LensClipRenderSettings | null;
   /** Live draft settings (preset editor). When set, stamped onto every view without Save. */
   renderSettingsOverride?: LensClipRenderSettings | null;
 }
@@ -61,7 +63,10 @@ export function buildCustomiserCompositorConfig(selection: CustomiserSelection):
 
   if (selection.renderSettingsOverride) {
     views = stampRenderOverride(views, selection.renderSettingsOverride);
-  } else if (selection.lensRenderPresets?.length) {
+  } else if (
+    selection.lensRenderPresets?.length ||
+    selection.lensRenderSystemDefaults
+  ) {
     views = applyLensRenderHierarchyToFrameViews(
       {
         id: selection.frameSku.id,
@@ -73,6 +78,7 @@ export function buildCustomiserCompositorConfig(selection: CustomiserSelection):
         renderViews: views,
       },
       selection.lensRenderPresets,
+      selection.lensRenderSystemDefaults,
     );
   }
 

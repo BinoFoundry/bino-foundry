@@ -210,6 +210,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
           lensRenderPresetId={form.lensRenderPresetId ?? null}
           useLensRenderPreset={form.useLensRenderPreset !== false}
           lensRenderPresets={sunglassesCatalog.lensRenderPresets}
+          lensRenderSystemDefaults={sunglassesCatalog.lensRenderSystemDefaults}
           onLensRenderAssignmentChange={({ lensRenderPresetId, useLensRenderPreset }) => {
             setForm((f) => ({ ...f, lensRenderPresetId, useLensRenderPreset }));
           }}

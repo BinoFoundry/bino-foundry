@@ -19,6 +19,8 @@ export function createSunglassesRoutes(): Router {
   router.delete("/options/:id", sunglassesHandlers.removeBuilderOption);
 
   router.get("/lens-render-presets", sunglassesHandlers.listLensRenderPresets);
+  router.get("/lens-render-system-defaults", sunglassesHandlers.getLensRenderSystemDefaults);
+  router.put("/lens-render-system-defaults", sunglassesHandlers.updateLensRenderSystemDefaults);
   router.post("/lens-render-presets", sunglassesHandlers.createLensRenderPreset);
   router.put("/lens-render-presets/:id", sunglassesHandlers.updateLensRenderPreset);
   router.post("/lens-render-presets/:id/duplicate", sunglassesHandlers.duplicateLensRenderPreset);

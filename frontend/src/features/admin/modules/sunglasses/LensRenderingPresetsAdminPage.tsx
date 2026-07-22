@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Settings2 } from "lucide-react";
 import {
   LENS_RENDER_SYSTEM_DEFAULTS,
   pickLensRenderPresetSettings,
@@ -7,7 +7,6 @@ import {
   type LensRenderingPreset,
 } from "@bino-foundry/shared/types";
 
-import { AdminDeleteConfirm } from "@/features/admin/components/AdminDeleteConfirm";
 import { LensRenderingSettingsPanel } from "@/features/admin/components/LensRenderingSettingsPanel";
 import { LensRenderPresetLivePreview } from "@/features/admin/components/LensRenderPresetLivePreview";
 import { Button } from "@/components/ui/button";
@@ -18,27 +17,6 @@ import { sunglassesApi } from "@/services/api/sunglasses";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 import { DEFAULT_LENS_CLIP_RENDER } from "@/render/lens-clip/clip-settings";
 
-function blankPreset(): Omit<LensRenderingPreset, "id" | "createdAt" | "updatedAt"> {
-  return {
-    code: "",
-    name: "",
-    description: "",
-    settings: { ...LENS_RENDER_SYSTEM_DEFAULTS },
-    displayOrder: 0,
-    isActive: true,
-    isDefault: false,
-  };
-}
-
-function slugifyCode(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 64);
-}
-
 export function LensRenderingPresetsAdminPage() {
   const catalog = useSunglassesCatalog();
   const [presets, setPresets] = useState<LensRenderingPreset[]>([]);
@@ -47,8 +25,11 @@ export function LensRenderingPresetsAdminPage() {
   const [editing, setEditing] = useState<
     (Partial<LensRenderingPreset> & { settings: LensClipRenderSettings }) | null
   >(null);
+  const [editingSystemDefault, setEditingSystemDefault] = useState(false);
+  const [systemDefaults, setSystemDefaults] = useState<LensClipRenderSettings>({
+    ...LENS_RENDER_SYSTEM_DEFAULTS,
+  });
   const [saving, setSaving] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [previewTintHex, setPreviewTintHex] = useState("#8F1830");
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
 
@@ -56,8 +37,15 @@ export function LensRenderingPresetsAdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const list = await sunglassesApi.listLensRenderPresets();
+      const [list, defaults] = await Promise.all([
+        sunglassesApi.listLensRenderPresets(),
+        sunglassesApi.getLensRenderSystemDefaults(),
+      ]);
       setPresets(list);
+      setSystemDefaults({
+        ...LENS_RENDER_SYSTEM_DEFAULTS,
+        ...pickLensRenderPresetSettings(defaults),
+      });
       await catalog.refreshAdminFromApi();
     } catch (err) {
       setError(isApiError(err) ? err.message : "Failed to load lens rendering presets");
@@ -73,38 +61,54 @@ export function LensRenderingPresetsAdminPage() {
   const visiblePresets = useMemo(
     () =>
       presets.filter(
-        (p) => p.isActive || p.isSystem || p.id === editing?.id || p.id === confirmDeleteId,
+        (p) => p.isActive && p.isSystem,
       ),
-    [presets, editing?.id, confirmDeleteId],
+    [presets],
   );
 
   const draftSettings = useMemo(() => {
-    if (!editing) return { ...DEFAULT_LENS_CLIP_RENDER };
+    if (!editing) return { ...DEFAULT_LENS_CLIP_RENDER, ...systemDefaults };
     return {
       ...DEFAULT_LENS_CLIP_RENDER,
+      ...systemDefaults,
       ...pickLensRenderPresetSettings(editing.settings),
     };
-  }, [editing]);
+  }, [editing, systemDefaults]);
 
   const openEdit = (preset: LensRenderingPreset) => {
     setSaveFeedback(null);
+    setEditingSystemDefault(false);
     setEditing({
       ...preset,
       settings: {
-        ...LENS_RENDER_SYSTEM_DEFAULTS,
+        ...systemDefaults,
         ...pickLensRenderPresetSettings(preset.settings),
       },
     });
   };
 
   const handleSave = async () => {
-    if (!editing?.name?.trim()) return;
+    if (!editing) return;
+    if (!editingSystemDefault && !editing.name?.trim()) return;
     setSaving(true);
     setSaveFeedback(null);
     try {
-      const code = editing.code?.trim() || slugifyCode(editing.name);
+      if (editingSystemDefault) {
+        const saved = await sunglassesApi.updateLensRenderSystemDefaults(
+          pickLensRenderPresetSettings(editing.settings),
+        );
+        setSystemDefaults({
+          ...LENS_RENDER_SYSTEM_DEFAULTS,
+          ...pickLensRenderPresetSettings(saved),
+        });
+        setEditing((prev) => (prev ? { ...prev, settings: saved } : prev));
+        setSaveFeedback("Saved");
+        await catalog.refreshAdminFromApi();
+        window.setTimeout(() => setSaveFeedback(null), 2000);
+        return;
+      }
       const payload = {
-        code,
+        code: editing.code!,
         name: editing.name.trim(),
         description: editing.description?.trim() ?? "",
         settings: pickLensRenderPresetSettings(editing.settings),
@@ -113,48 +117,14 @@ export function LensRenderingPresetsAdminPage() {
         isDefault: Boolean(editing.isDefault),
       };
 
-      if (editing.id) {
-        await sunglassesApi.updateLensRenderPreset(editing.id, payload);
-        setSaveFeedback("Saved");
-      } else {
-        const created = await sunglassesApi.createLensRenderPreset(payload);
-        setEditing({
-          ...created,
-          settings: {
-            ...LENS_RENDER_SYSTEM_DEFAULTS,
-            ...pickLensRenderPresetSettings(created.settings),
-          },
-        });
-        setSaveFeedback("Created");
-      }
+      await sunglassesApi.updateLensRenderPreset(editing.id!, payload);
+      setSaveFeedback("Saved");
       await refresh();
       window.setTimeout(() => setSaveFeedback(null), 2000);
     } catch (err) {
       setError(isApiError(err) ? err.message : "Failed to save preset");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDuplicate = async (id: string) => {
-    try {
-      const copy = await sunglassesApi.duplicateLensRenderPreset(id);
-      await refresh();
-      openEdit(copy);
-    } catch (err) {
-      setError(isApiError(err) ? err.message : "Failed to duplicate preset");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await sunglassesApi.deleteLensRenderPreset(id);
-      setConfirmDeleteId(null);
-      if (editing?.id === id) setEditing(null);
-      await refresh();
-    } catch (err) {
-      setError(isApiError(err) ? err.message : "Failed to delete preset");
-      setConfirmDeleteId(null);
     }
   };
 
@@ -172,20 +142,10 @@ export function LensRenderingPresetsAdminPage() {
         <div>
           <h2 className="text-base font-semibold text-foreground">Lens Rendering Presets</h2>
           <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
-            Four built-in starting points (Clear, Light Tint, Classic Tint, Dark Tint). Edit any
-            preset freely; create more later if needed. Built-in presets cannot be deleted.
+            System Default is the platform fallback. Four editable database presets inherit from
+            it; Classic Tint remains the default for frames.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing({ ...blankPreset(), settings: { ...LENS_RENDER_SYSTEM_DEFAULTS } });
-            setSaveFeedback(null);
-          }}
-        >
-          <Plus className="mr-1 h-3.5 w-3.5" />
-          New preset
-        </Button>
       </div>
 
       {error ? (
@@ -197,6 +157,25 @@ export function LensRenderingPresetsAdminPage() {
       <div className="grid min-h-0 flex-1 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="admin-scroll-pane border-b border-border lg:border-b-0 lg:border-r">
           <ul className="divide-y divide-border">
+            <li>
+              <button
+                type="button"
+                className={`flex w-full items-center gap-2 px-3 py-3 text-left ${
+                  editingSystemDefault ? "bg-muted/50" : ""
+                }`}
+                onClick={() => {
+                  setEditingSystemDefault(true);
+                  setEditing({ name: "System Default", settings: { ...systemDefaults } });
+                  setSaveFeedback(null);
+                }}
+              >
+                <Settings2 className="h-4 w-4 shrink-0" />
+                <span>
+                  <span className="block text-sm font-medium text-foreground">System Default</span>
+                  <span className="block text-[11px] text-muted-foreground">Global fallback</span>
+                </span>
+              </button>
+            </li>
             {visiblePresets.map((preset) => (
               <li key={preset.id}>
                 <div
@@ -211,10 +190,8 @@ export function LensRenderingPresetsAdminPage() {
                   >
                     <p className="truncate text-sm font-medium text-foreground">{preset.name}</p>
                     <p className="truncate text-[11px] text-muted-foreground">
-                      {preset.code}
-                      {preset.isSystem ? " · Built-in" : ""}
+                      Database preset
                       {preset.isDefault ? " · Default" : ""}
-                      {!preset.isActive ? " · Inactive" : ""}
                     </p>
                   </button>
                   <div className="flex shrink-0 gap-0.5">
@@ -228,37 +205,8 @@ export function LensRenderingPresetsAdminPage() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      title="Duplicate"
-                      onClick={() => void handleDuplicate(preset.id)}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive"
-                      title={preset.isSystem ? "Built-in presets cannot be deleted" : "Delete"}
-                      disabled={Boolean(preset.isSystem) || preset.isDefault}
-                      onClick={() => setConfirmDeleteId(preset.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
                   </div>
                 </div>
-                {confirmDeleteId === preset.id ? (
-                  <div className="px-3 pb-3">
-                    <AdminDeleteConfirm
-                      onConfirm={() => void handleDelete(preset.id)}
-                      onCancel={() => setConfirmDeleteId(null)}
-                    />
-                  </div>
-                ) : null}
               </li>
             ))}
           </ul>
@@ -267,13 +215,14 @@ export function LensRenderingPresetsAdminPage() {
         <div className="admin-scroll-pane min-h-0 p-4 sm:p-6">
           {!editing ? (
             <p className="text-sm text-muted-foreground">
-              Select a preset to edit, or create a new one. Slider changes update the live preview
-              immediately — Save commits to the database.
+              Select System Default or one of the four presets. Changes update the real-frame
+              preview immediately; Save only persists them.
             </p>
           ) : (
             <div className="grid gap-6 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
               <div className="space-y-4">
                 <div className="grid gap-3">
+                  {!editingSystemDefault ? (
                   <label className="space-y-1 text-xs">
                     <span className="font-medium text-foreground">Name</span>
                     <input
@@ -285,7 +234,6 @@ export function LensRenderingPresetsAdminPage() {
                             ? {
                                 ...prev,
                                 name: e.target.value,
-                                code: prev.id ? prev.code : slugifyCode(e.target.value),
                               }
                             : prev,
                         )
@@ -293,60 +241,14 @@ export function LensRenderingPresetsAdminPage() {
                       placeholder="e.g. Dark Sunglasses"
                     />
                   </label>
-                  <label className="space-y-1 text-xs">
-                    <span className="font-medium text-foreground">Code</span>
-                    <input
-                      className="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm"
-                      value={editing.code ?? ""}
-                      onChange={(e) =>
-                        setEditing((prev) => (prev ? { ...prev, code: e.target.value } : prev))
-                      }
-                      disabled={Boolean(editing.id) || Boolean(editing.isSystem)}
-                    />
-                    {editing.isSystem ? (
-                      <p className="text-[10px] text-muted-foreground">
-                        Built-in preset code is fixed; you can still rename and edit values.
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium text-foreground">System Default</p>
+                      <p className="text-xs text-muted-foreground">
+                        Ultimate fallback for every rendering property.
                       </p>
-                    ) : null}
-                  </label>
-                  <label className="space-y-1 text-xs">
-                    <span className="font-medium text-foreground">Description</span>
-                    <textarea
-                      className="min-h-[60px] w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
-                      value={editing.description ?? ""}
-                      onChange={(e) =>
-                        setEditing((prev) =>
-                          prev ? { ...prev, description: e.target.value } : prev,
-                        )
-                      }
-                    />
-                  </label>
-                  <div className="flex flex-wrap gap-4 text-xs">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={editing.isActive !== false}
-                        onChange={(e) =>
-                          setEditing((prev) =>
-                            prev ? { ...prev, isActive: e.target.checked } : prev,
-                          )
-                        }
-                      />
-                      Active
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(editing.isDefault)}
-                        onChange={(e) =>
-                          setEditing((prev) =>
-                            prev ? { ...prev, isDefault: e.target.checked } : prev,
-                          )
-                        }
-                      />
-                      Default for new frames
-                    </label>
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 <LensRenderingSettingsPanel
@@ -363,17 +265,24 @@ export function LensRenderingPresetsAdminPage() {
                   <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                     Close
                   </Button>
-                  <Button type="button" disabled={saving || !editing.name?.trim()} onClick={() => void handleSave()}>
+                  <Button
+                    type="button"
+                    disabled={saving || (!editingSystemDefault && !editing.name?.trim())}
+                    onClick={() => void handleSave()}
+                  >
                     {saving ? "Saving…" : "Save"}
                   </Button>
                 </div>
               </div>
 
-              <LensRenderPresetLivePreview
-                draftSettings={draftSettings}
-                previewTintHex={previewTintHex}
-                onPreviewTintChange={setPreviewTintHex}
-              />
+              <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+                <LensRenderPresetLivePreview
+                  draftSettings={draftSettings}
+                  systemDefaults={systemDefaults}
+                  previewTintHex={previewTintHex}
+                  onPreviewTintChange={setPreviewTintHex}
+                />
+              </div>
             </div>
           )}
         </div>

@@ -130,6 +130,24 @@ export function StrandRenderConfigPanel({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
+        {mode === "system" ? (
+          <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
+            <input
+              type="number"
+              step="0.1"
+              min={90}
+              max={110}
+              disabled={readOnly}
+              className={adminFieldClass()}
+              value={Number((value.layoutScale * 100).toFixed(2))}
+              onChange={(e) => onChange({ layoutScale: Number(e.target.value) / 100 })}
+            />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Global positioning calibration (100% = measured rendered contact diameter). Does not
+              resize bead images.
+            </p>
+          </Field>
+        ) : null}
         <Field
           label="Contact width"
           source={provenance?.contactWidth}

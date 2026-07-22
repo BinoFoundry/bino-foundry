@@ -73,8 +73,14 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
       tint: tintGradient,
       options: {},
       lensRenderPresets: sunglassesCatalog.lensRenderPresets,
+      lensRenderSystemDefaults: sunglassesCatalog.lensRenderSystemDefaults,
     });
-  }, [selectedFrame, tintGradient, sunglassesCatalog.lensRenderPresets]);
+  }, [
+    selectedFrame,
+    tintGradient,
+    sunglassesCatalog.lensRenderPresets,
+    sunglassesCatalog.lensRenderSystemDefaults,
+  ]);
 
   const clearLensConfig = useMemo(() => {
     if (!selectedFrame || !showCompare) return null;
@@ -96,8 +102,15 @@ export function TintEditorLivePreview({ form }: TintEditorLivePreviewProps) {
       },
       options: {},
       lensRenderPresets: sunglassesCatalog.lensRenderPresets,
+      lensRenderSystemDefaults: sunglassesCatalog.lensRenderSystemDefaults,
     });
-  }, [selectedFrame, showCompare, tintGradient, sunglassesCatalog.lensRenderPresets]);
+  }, [
+    selectedFrame,
+    showCompare,
+    tintGradient,
+    sunglassesCatalog.lensRenderPresets,
+    sunglassesCatalog.lensRenderSystemDefaults,
+  ]);
 
   const usesRealCompositor = compositorConfig?.renderMode === "svg-clip";
 

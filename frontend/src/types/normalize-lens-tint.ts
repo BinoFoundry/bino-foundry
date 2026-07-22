@@ -2,6 +2,7 @@ import {
   DEFAULT_CLASSIC_LENS_TINT_RENDER,
   DEFAULT_LENS_TINT_RENDER,
   GRADIENT_DIRECTIONS,
+  LENS_RENDER_SYSTEM_DEFAULTS,
   type GradientDirection,
 } from "@bino-foundry/shared/types";
 
@@ -35,5 +36,12 @@ export function normalizeSunglassesCatalog(data: SunglassesCatalogSnapshot): Sun
     ...data,
     lensTints: data.lensTints.map(normalizeLensTintEntry),
     lensRenderPresets: Array.isArray(data.lensRenderPresets) ? data.lensRenderPresets : [],
+    lensMaterialProfiles: Array.isArray(data.lensMaterialProfiles)
+      ? data.lensMaterialProfiles
+      : [],
+    lensRenderSystemDefaults: {
+      ...LENS_RENDER_SYSTEM_DEFAULTS,
+      ...(data.lensRenderSystemDefaults ?? {}),
+    },
   };
 }

@@ -65,29 +65,56 @@ async function readLensDisclaimer(): Promise<string> {
 
 export class SunglassesCatalogService {
   async getCatalog() {
-    const [lensTints, builderOptions, lensDisclaimer, lensRenderPresets] = await Promise.all([
+    const [
+      lensTints,
+      builderOptions,
+      lensDisclaimer,
+      lensRenderPresets,
+      lensRenderSystemDefaults,
+      lensMaterialProfiles,
+    ] = await Promise.all([
       this.listLensTints(false),
       this.listBuilderOptions(false),
       readLensDisclaimer(),
       lensRenderPresetService.list(false),
+      lensRenderPresetService.getSystemDefaults(),
+      lensRenderPresetService.listMaterialProfiles(false),
     ]);
 
     return {
       lensTints: lensTints.filter((t) => t.isActive),
       builderOptions: builderOptions.filter((o) => o.isActive),
       lensRenderPresets: lensRenderPresets.filter((p) => p.isActive),
+      lensRenderSystemDefaults,
+      lensMaterialProfiles,
       lensDisclaimer,
     };
   }
 
   async getAdminCatalog() {
-    const [lensTints, builderOptions, lensDisclaimer, lensRenderPresets] = await Promise.all([
+    const [
+      lensTints,
+      builderOptions,
+      lensDisclaimer,
+      lensRenderPresets,
+      lensRenderSystemDefaults,
+      lensMaterialProfiles,
+    ] = await Promise.all([
       this.listLensTints(true),
       this.listBuilderOptions(true),
       readLensDisclaimer(),
       lensRenderPresetService.list(true),
+      lensRenderPresetService.getSystemDefaults(),
+      lensRenderPresetService.listMaterialProfiles(true),
     ]);
-    return { lensTints, builderOptions, lensRenderPresets, lensDisclaimer };
+    return {
+      lensTints,
+      builderOptions,
+      lensRenderPresets,
+      lensRenderSystemDefaults,
+      lensMaterialProfiles,
+      lensDisclaimer,
+    };
   }
 
   async listLensTints(includeInactive: boolean) {

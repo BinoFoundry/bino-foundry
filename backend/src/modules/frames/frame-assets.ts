@@ -8,7 +8,7 @@ function collectRenderViewUrls(urls: Set<string>, view: Record<string, unknown>)
   pushCatalogAssetUrl(urls, view.plate_url);
   pushCatalogAssetUrl(urls, view.original_plate_url);
 
-  const cropConfig = view.plate_crop_config;
+  const cropConfig = view.plate_crop_config ?? (view as { plateCropConfig?: unknown }).plateCropConfig;
   if (cropConfig && typeof cropConfig === "object" && !Array.isArray(cropConfig)) {
     const crop = cropConfig as {
       originalUrl?: string;
@@ -42,7 +42,10 @@ export function collectFrameAssetUrls(
     if (Array.isArray(mc.render_views)) {
       for (const view of mc.render_views) {
         if (view && typeof view === "object") {
-          const v = view as { plateUrl?: string; originalPlateUrl?: string };
+          const v = view as {
+            plateUrl?: string;
+            originalPlateUrl?: string;
+          };
           pushCatalogAssetUrl(urls, v.plateUrl);
           pushCatalogAssetUrl(urls, v.originalPlateUrl);
         }

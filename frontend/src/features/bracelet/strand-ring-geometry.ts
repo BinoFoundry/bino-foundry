@@ -227,6 +227,21 @@ export function beadOccupancyArcPx(
 }
 
 /**
+ * Positioning-only contact diameter.
+ * The measured rendered tangent diameter comes from bead metadata/crop sizing; layoutScale is
+ * global calibration. This value is shared by centre positioning and collision diagnostics.
+ * It never changes nominal capacity mm or rendered image dimensions.
+ */
+export function effectiveLayoutDiameterPx(
+  measuredRenderedDiameterPx: number,
+  layoutScale = 1,
+): number {
+  const measured = Math.max(0, measuredRenderedDiameterPx);
+  const scale = Math.max(0.9, Math.min(1.1, layoutScale));
+  return measured * scale;
+}
+
+/**
  * @deprecated Superseded by {@link beadOccupancyArcPx}. The layout walk consumes only the
  * resolved occupancy (sizeMm); contact-width tuning is no longer applied to positioning.
  *

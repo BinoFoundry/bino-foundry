@@ -41,6 +41,17 @@ describe("wrist-target capacity", () => {
     expect(strandRemainingMm(16, placed)).toBe(142);
   });
 
+  it("fills an 18 cm bracelet exactly with 30 × 6 mm beads", () => {
+    const placed = Array.from({ length: 30 }, (_, i) => bead(i, 6));
+    const metrics = buildStrandFitMetrics(18, placed);
+    expect(wristCircumferenceMm(18)).toBe(180);
+    expect(strandUsedMm(placed)).toBe(180);
+    expect(metrics.capacityPercent).toBe(100);
+    expect(metrics.isOverCapacity).toBe(false);
+    expect(metrics.remainingMm).toBe(0);
+    expect(canPlaceBeadSize(18, placed, 6)).toBe(false);
+  });
+
   it("blocks placement when bead exceeds remaining target space", () => {
     const placed = Array.from({ length: 16 }, (_, i) => bead(i, 10));
     expect(strandRemainingMm(16, placed)).toBe(0);

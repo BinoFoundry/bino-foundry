@@ -9,7 +9,11 @@ import { flushFrameRenderViews } from "@/features/admin/lib/frame-render-flush";
 import { isApiError, uploadApi } from "@/services/api";
 import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES, FRAME_VIEW_LABELS } from "@/types/frame-rendering";
-import { editorPlateKey, maskConfigToLensClipConfig, resolveMaskConfigForEditor } from "@/render/lens-clip";
+import {
+  editorPlateKey,
+  maskConfigToLensClipConfig,
+  resolveMaskConfigForEditor,
+} from "@/render/lens-clip";
 import { loadImage, loadImageForProcessing } from "@/render/bead-crop/image-loader";
 import { isBeadCropConfigValid, type BeadCropConfig } from "@bino-foundry/shared/types";
 import {
@@ -41,6 +45,7 @@ import { InlineEditorPanel, INLINE_SECTION_ACTIVE_CLASS } from "./InlineEditorPa
 import { LensRenderingSettingsPanel } from "./LensRenderingSettingsPanel";
 import type { LensEditorMode } from "./FrameMaskEditor";
 import {
+  buildSparseFrameRenderOverride,
   resolveAssignedLensRenderPreset,
   resolveFrameLensRenderSettings,
 } from "@/render/lens-clip/lens-render-hierarchy";
@@ -119,6 +124,7 @@ interface FrameRenderViewsSectionProps {
   lensRenderPresetId?: string | null;
   useLensRenderPreset?: boolean;
   lensRenderPresets?: LensRenderingPreset[];
+  lensRenderSystemDefaults?: LensClipRenderSettings | null;
   onLensRenderAssignmentChange?: (next: {
     lensRenderPresetId: string | null;
     useLensRenderPreset: boolean;
@@ -143,6 +149,7 @@ export const FrameRenderViewsSection = forwardRef<
     lensRenderPresetId = null,
     useLensRenderPreset = true,
     lensRenderPresets = [],
+    lensRenderSystemDefaults,
     onLensRenderAssignmentChange,
   },
   ref,
@@ -1177,16 +1184,14 @@ export const FrameRenderViewsSection = forwardRef<
         lensRenderPresetId={lensRenderPresetId}
         useLensRenderPreset={useLensRenderPreset}
         lensRenderPresets={lensRenderPresets}
+        lensRenderSystemDefaults={lensRenderSystemDefaults}
         onLensRenderAssignmentChange={onLensRenderAssignmentChange}
       />
     </div>
   );
 });
 
-/**
- * Lens-rendering controls: pick a starting preset, then freely tune sliders.
- * Any slider edit switches the frame to Custom Settings (presets never lock).
- */
+/** Lens-rendering controls with explicit read-only preset and sparse frame-override modes. */
 function LensRenderingSection({
   views,
   disabled,
@@ -1196,6 +1201,7 @@ function LensRenderingSection({
   lensRenderPresetId,
   useLensRenderPreset,
   lensRenderPresets,
+  lensRenderSystemDefaults,
   onLensRenderAssignmentChange,
 }: {
   views: FrameRenderView[];
@@ -1206,6 +1212,7 @@ function LensRenderingSection({
   lensRenderPresetId: string | null;
   useLensRenderPreset: boolean;
   lensRenderPresets: LensRenderingPreset[];
+  lensRenderSystemDefaults?: LensClipRenderSettings | null;
   onLensRenderAssignmentChange?: (next: {
     lensRenderPresetId: string | null;
     useLensRenderPreset: boolean;
@@ -1233,17 +1240,46 @@ function LensRenderingSection({
     { lensRenderPresetId, useLensRenderPreset },
     activeView?.clipConfig?.render,
     activePresets,
+    lensRenderSystemDefaults,
   );
 
   const panelValue: LensClipRenderSettings = {
+    automaticMaterialBehavior: resolved.automaticMaterialBehavior,
+    originalLensColorInfluence: resolved.originalLensColorInfluence,
+    materialInfluence: resolved.materialInfluence,
+    baseBrightness: resolved.baseBrightness,
+    baseGamma: resolved.baseGamma,
+    glassAbsorption: resolved.glassAbsorption,
+    glassDiffusion: resolved.glassDiffusion,
+    glassDepth: resolved.glassDepth,
     tintLayerOpacity: resolved.tintLayerOpacity,
     lensOpacity: resolved.lensOpacity,
+    lensTransmission: resolved.lensTransmission,
+    reflectionEnabled: resolved.reflectionEnabled,
     reflectionOpacity: resolved.reflectionOpacity,
+    reflectionStrength: resolved.reflectionStrength,
+    reflectionBlur: resolved.reflectionBlur,
+    reflectionPosition: resolved.reflectionPosition,
+    reflectionOffsetX: resolved.reflectionOffsetX,
+    reflectionOffsetY: resolved.reflectionOffsetY,
+    reflectionScale: resolved.reflectionScale,
+    reflectionAngle: resolved.reflectionAngle,
+    internalReflectionEnabled: resolved.internalReflectionEnabled,
+    internalReflectionOpacity: resolved.internalReflectionOpacity,
+    internalReflectionSoftness: resolved.internalReflectionSoftness,
+    internalReflectionScale: resolved.internalReflectionScale,
+    internalReflectionAngle: resolved.internalReflectionAngle,
+    fresnelEnabled: resolved.fresnelEnabled,
+    fresnelStrength: resolved.fresnelStrength,
+    fresnelWidth: resolved.fresnelWidth,
+    fresnelSoftness: resolved.fresnelSoftness,
     edgeDarkness: resolved.edgeDarkness,
     backgroundVisibility: resolved.backgroundVisibility,
     environmentTransparency: resolved.environmentTransparency,
     centerDensity: resolved.centerDensity,
     edgeDensity: resolved.edgeDensity,
+    edgeSoftness: resolved.edgeSoftness,
+    edgeOpacity: resolved.edgeOpacity,
   };
 
   const applyCustomSettings = (render: LensClipRenderSettings) => {
@@ -1252,7 +1288,22 @@ function LensRenderingSection({
       lensRenderPresetId: lensRenderPresetId ?? assignedPreset?.id ?? null,
       useLensRenderPreset: false,
     });
-    onChange(activeView.view, { ...render, renderScope: scope });
+    const sparse = buildSparseFrameRenderOverride(
+      assignedPreset?.settings,
+      render,
+      lensRenderSystemDefaults,
+    );
+    onChange(activeView.view, { ...sparse, renderScope: scope });
+  };
+
+  const selectRenderingMode = (usePreset: boolean) => {
+    if (!activeView) return;
+    onLensRenderAssignmentChange?.({
+      lensRenderPresetId: lensRenderPresetId ?? assignedPreset?.id ?? null,
+      useLensRenderPreset: usePreset,
+    });
+    // Entering override starts with no differences, so untouched properties keep inheriting.
+    onChange(activeView.view, { renderScope: scope });
   };
 
   const selectPreset = (presetId: string | null) => {
@@ -1271,8 +1322,8 @@ function LensRenderingSection({
         <div>
           <h4 className="text-sm font-semibold text-foreground">Lens rendering</h4>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Pick a starting preset, then adjust any slider. Editing a slider switches this frame to
-            Custom Settings.
+            Preset mode stays linked to the database record. Override mode stores sparse values for
+            this frame while untouched properties continue to inherit.
           </p>
         </div>
         <span
@@ -1288,6 +1339,40 @@ function LensRenderingSection({
             : "Custom settings"}
         </span>
       </div>
+
+      <fieldset className="mb-4 space-y-2" disabled={disabled || !onLensRenderAssignmentChange}>
+        <legend className="mb-1 text-xs font-medium text-foreground">Rendering Mode</legend>
+        <label className="flex items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs">
+          <input
+            type="radio"
+            name="lens-rendering-mode"
+            className="mt-0.5 accent-foreground"
+            checked={useLensRenderPreset}
+            onChange={() => selectRenderingMode(true)}
+          />
+          <span>
+            <span className="font-medium text-foreground">Use Preset (Recommended)</span>
+            <span className="mt-0.5 block text-muted-foreground">
+              Values are read-only and remain linked to the selected preset.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs">
+          <input
+            type="radio"
+            name="lens-rendering-mode"
+            className="mt-0.5 accent-foreground"
+            checked={!useLensRenderPreset}
+            onChange={() => selectRenderingMode(false)}
+          />
+          <span>
+            <span className="font-medium text-foreground">Override Rendering</span>
+            <span className="mt-0.5 block text-muted-foreground">
+              Store only this frame&apos;s differences; all other values inherit from the preset.
+            </span>
+          </span>
+        </label>
+      </fieldset>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <label className="space-y-1 text-xs">
@@ -1305,30 +1390,6 @@ function LensRenderingSection({
               </option>
             ))}
           </select>
-        </label>
-
-        <label className="flex items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs">
-          <input
-            type="checkbox"
-            className="mt-0.5 accent-foreground"
-            checked={useLensRenderPreset}
-            disabled={disabled || !onLensRenderAssignmentChange}
-            onChange={(e) => {
-              const nextUse = e.target.checked;
-              if (nextUse) {
-                selectPreset(lensRenderPresetId ?? assignedPreset?.id ?? null);
-                return;
-              }
-              // Switch to custom while keeping current resolved values as the starting point.
-              applyCustomSettings(panelValue);
-            }}
-          />
-          <span>
-            <span className="font-medium text-foreground">Use Global Preset</span>
-            <span className="mt-0.5 block text-muted-foreground">
-              On: inherit the selected preset. Off: this frame stores its own Custom Settings.
-            </span>
-          </span>
         </label>
       </div>
 
@@ -1365,7 +1426,7 @@ function LensRenderingSection({
       {activeView ? (
         <LensRenderingSettingsPanel
           value={panelValue}
-          disabled={disabled}
+          disabled={disabled || useLensRenderPreset}
           onChange={applyCustomSettings}
         />
       ) : (

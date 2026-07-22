@@ -21,6 +21,11 @@ export {
   type ResolvedLensClipRender,
 } from "./clip-settings";
 export {
+  resolveGlassMaterialFilterParams,
+  type GlassMaterialFilterParams,
+} from "./glass-material-filter";
+export { GlassMaterialFilterDef } from "./GlassMaterialFilterDef";
+export {
   applyLensRenderHierarchyToFrameViews,
   buildSparseFrameRenderOverride,
   frameLensRenderSource,

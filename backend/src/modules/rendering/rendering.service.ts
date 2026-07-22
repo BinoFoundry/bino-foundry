@@ -165,13 +165,14 @@ export class RenderingService {
   async removeView(frameId: string, viewAxis: FrameViewAxis): Promise<{ message: string }> {
     await this.assertFrameExists(frameId);
     const supabase = getSupabaseServiceRole();
+
     const { error } = await supabase
       .from("frame_render_views")
       .delete()
       .eq("frame_id", frameId)
       .eq("view_axis", viewAxis);
-
     assertNoDbError(error);
+
     return { message: "View removed" };
   }
 }

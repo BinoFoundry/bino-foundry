@@ -27,6 +27,7 @@ function mapView(row: Record<string, unknown>): FrameRenderView {
     originalPlateUrl: row.originalPlateUrl ? String(row.originalPlateUrl) : undefined,
     originalWidth: row.originalWidth != null ? Number(row.originalWidth) : undefined,
     originalHeight: row.originalHeight != null ? Number(row.originalHeight) : undefined,
+    plateCropConfig: (row.plateCropConfig as FrameRenderView["plateCropConfig"]) ?? undefined,
     clipConfig: (row.clipConfig as LensClipConfig | null) ?? null,
     clipStatus: (row.clipStatus as "draft" | "ready") ?? "draft",
     maskConfig: (row.maskConfig as MaskConfig | null) ?? null,
@@ -58,20 +59,7 @@ export const renderingApi = {
         body: payload,
       },
     );
-    return mapView({
-      id: row.id,
-      view: row.view,
-      plateUrl: row.plateUrl,
-      width: row.width,
-      height: row.height,
-      originalPlateUrl: row.originalPlateUrl,
-      originalWidth: row.originalWidth,
-      originalHeight: row.originalHeight,
-      clipConfig: row.clipConfig,
-      clipStatus: row.clipStatus,
-      maskConfig: row.maskConfig,
-      maskStatus: row.maskStatus,
-    });
+    return mapView(row);
   },
 
   removeView(frameId: string, viewAxis: FrameViewAxis): Promise<{ message: string }> {

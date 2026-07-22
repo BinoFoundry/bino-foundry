@@ -22,6 +22,11 @@ export type StrandLayoutMode = "inline" | "dangling";
  * The renderer reads these values only — never asset category slugs.
  */
 export interface StrandRenderProfile {
+  /**
+   * Global contact-layout calibration applied to the measured rendered tangent diameter.
+   * Positioning only: never changes bitmap/CSS size. 1 = 100%.
+   */
+  layoutScale: number;
   /** Inline on occupied arc, or between two neighbours (connectors). */
   attachmentStyle: StrandAttachmentStyle;
   /** Fraction of tangent width occupied on the strand (1 = one bead width). @deprecated Use contactWidth */
@@ -102,6 +107,7 @@ export function strandContactSpacingMin(absMax = STRAND_CONTACT_SPACING_MAX): nu
 export const STRAND_EFFECTIVE_CONTACT_WIDTH_MIN = 0;
 
 export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
+  layoutScale: 1,
   attachmentStyle: "inline",
   strandOccupancy: 1,
   contactWidth: 1,
@@ -267,6 +273,7 @@ export function mergeStrandRenderProfile(
     merged.anchorX = coords.anchorX;
     merged.anchorY = coords.anchorY;
   }
+  merged.layoutScale = Math.max(0.9, Math.min(1.1, merged.layoutScale));
   merged.strandOccupancy = Math.max(0.05, Math.min(2, merged.strandOccupancy));
   merged.contactWidth = clampContactSpacingStored(merged.contactWidth);
   merged.contactOffset = clampContactSpacingStored(merged.contactOffset);
@@ -286,6 +293,7 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const partial: Partial<StrandRenderProfile> = {};
+  if (typeof o.layoutScale === "number") partial.layoutScale = o.layoutScale;
   if (typeof o.strandOccupancy === "number") partial.strandOccupancy = o.strandOccupancy;
   if (typeof o.contactWidth === "number") partial.contactWidth = o.contactWidth;
   if (o.layoutMode === "inline" || o.layoutMode === "dangling") {

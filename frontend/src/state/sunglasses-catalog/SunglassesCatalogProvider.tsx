@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { sunglassesApi } from "@/services/api/sunglasses";
+import { LENS_RENDER_SYSTEM_DEFAULTS } from "@bino-foundry/shared/types";
 import { isApiError } from "@/services/api/errors";
 import { normalizeSunglassesCatalog } from "@/types/normalize-lens-tint";
 import type {
@@ -22,6 +23,8 @@ const EMPTY_CATALOG: SunglassesCatalogSnapshot = {
   lensTints: [],
   builderOptions: [],
   lensRenderPresets: [],
+  lensRenderSystemDefaults: { ...LENS_RENDER_SYSTEM_DEFAULTS },
+  lensMaterialProfiles: [],
   lensDisclaimer: "",
 };
 

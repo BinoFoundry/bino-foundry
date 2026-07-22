@@ -37,6 +37,11 @@ export interface LensClipRenderSettings {
   /** Admin scope for opacity controls. Defaults to `global` for legacy configs. */
   renderScope?: "global" | "front" | "side";
   /**
+   * Derive optical depth, reflection, density, and transparency from tintLayerOpacity.
+   * Defaults to true. When false, every stored material value is used exactly as configured.
+   */
+  automaticMaterialBehavior?: boolean;
+  /**
    * `replace` — knock out original lens pixels and paint a synthetic lens (default).
    * `overlay` is accepted only for reading legacy data; rendering always uses replacement.
    */
@@ -71,6 +76,30 @@ export interface LensClipRenderSettings {
   baseTintOpacity?: number;
   /** Amount of neutralized optical/background detail transmitted through the glass (0–1). */
   transparency?: number;
+  /** @deprecated Replaced by materialInfluence. Accepted only for legacy data. */
+  glassMaterialStrength?: number;
+  /**
+   * Original source-lens chroma retained before tinting (0–100).
+   * 0 keeps luminance only; 100 preserves the source hue/saturation for intentional colour mixing.
+   */
+  originalLensColorInfluence?: number;
+  /**
+   * Amount of original lens luminance structure preserved beneath the selected tint (0–100).
+   * Drives blend weights (`color` vs `multiply`) and is not an opacity or chroma control.
+   */
+  materialInfluence?: number;
+  /** Manual pre-tint brightness adjustment of the original lens (-100 to +100). */
+  baseBrightness?: number;
+  /** @deprecated Original lens chroma is always removed. Accepted only for legacy data. */
+  baseSaturation?: number;
+  /** Manual pre-tint tonal response of the original lens (0.50–2.50). */
+  baseGamma?: number;
+  /** Manual light absorption within the glass body (0–100%). */
+  glassAbsorption?: number;
+  /** Manual softness of light spreading through the glass (0–100%). */
+  glassDiffusion?: number;
+  /** Manual perceived optical thickness/depth of the lens (0–100%). */
+  glassDepth?: number;
   /** Optical colour adjustments; 1 is neutral. */
   brightness?: number;
   contrast?: number;
@@ -78,18 +107,43 @@ export interface LensClipRenderSettings {
   /** Prefer customer tint gradient when true (default). */
   gradientEnabled?: boolean;
   /** Optional frame-level gradient colour overrides (hex). */
-  gradientTopColor?: string;
-  gradientBottomColor?: string;
+  gradientTopColor?: string | null;
+  gradientBottomColor?: string | null;
   /** Vertical mid-stop 0–100 (darker top → lighter bottom emphasis). */
   gradientPosition?: number;
   /** Strength of the gradient layer over the translucent glass base (0–1). */
   gradientStrength?: number;
 
   reflectionEnabled?: boolean;
+  /** Highlight strength within the independent reflection layer (0–1). */
   reflectionStrength?: number;
+  /** Overall reflection-layer visibility (0–1). */
   reflectionOpacity?: number;
+  /** Reflection rotation in degrees. */
   reflectionAngle?: number;
+  /** Blur / edge softness (0–1). */
   reflectionBlur?: number;
+  /** @deprecated Signed diagonal offset; use reflectionOffsetX / reflectionOffsetY. */
+  reflectionPosition?: number;
+  /** Horizontal reflection offset (-100 to 100). */
+  reflectionOffsetX?: number;
+  /** Vertical reflection offset (-100 to 100). */
+  reflectionOffsetY?: number;
+  /** Reflection highlight size multiplier (0.5–1.75). */
+  reflectionScale?: number;
+
+  /** Extremely subtle light bounce within the glass body. */
+  internalReflectionEnabled?: boolean;
+  internalReflectionOpacity?: number;
+  internalReflectionSoftness?: number;
+  internalReflectionScale?: number;
+  internalReflectionAngle?: number;
+
+  /** Natural edge-angle brightness response, rendered as a feathered fill rather than a stroke. */
+  fresnelEnabled?: boolean;
+  fresnelStrength?: number;
+  fresnelWidth?: number;
+  fresnelSoftness?: number;
 
   glossEnabled?: boolean;
   glossIntensity?: number;
@@ -120,6 +174,10 @@ export interface LensClipRenderSettings {
   centerDensity?: number;
   /** Outer-edge thickness darkening (0–1). Independent of tint opacity. */
   edgeDensity?: number;
+  /** Feathering of the denser perimeter transition (0–1). */
+  edgeSoftness?: number;
+  /** Overall visibility of edge absorption (0–1). */
+  edgeOpacity?: number;
 
   polarizedEnabled?: boolean;
   polarizedStrength?: number;

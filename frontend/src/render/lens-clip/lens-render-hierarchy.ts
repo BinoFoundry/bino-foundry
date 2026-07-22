@@ -39,6 +39,7 @@ export function resolveFrameLensRenderSettings(
   frame: FrameLensRenderAssignment,
   viewRender: LensClipRenderSettings | null | undefined,
   presets: LensRenderingPreset[],
+  systemDefaults?: LensClipRenderSettings | null,
 ): ReturnType<typeof resolveLensRenderConfig> {
   const preset = resolveAssignedLensRenderPreset(frame, presets);
   const usePreset = frame.useLensRenderPreset !== false;
@@ -46,6 +47,7 @@ export function resolveFrameLensRenderSettings(
     systemDefaults: {
       ...LENS_RENDER_SYSTEM_DEFAULTS,
       ...pickLensRenderPresetSettings(DEFAULT_LENS_CLIP_RENDER),
+      ...pickLensRenderPresetSettings(systemDefaults),
     },
     preset: preset?.settings ?? null,
     frameOverride: usePreset ? null : pickLensRenderPresetSettings(viewRender),
@@ -72,11 +74,17 @@ export function withResolvedLensRender(
 export function applyLensRenderHierarchyToFrameViews(
   frame: FrameEntry,
   presets: LensRenderingPreset[],
+  systemDefaults?: LensClipRenderSettings | null,
 ): FrameRenderView[] {
   const views = frame.renderViews ?? [];
   return views.map((view) => {
     if (!view.clipConfig) return view;
-    const material = resolveFrameLensRenderSettings(frame, view.clipConfig.render, presets);
+    const material = resolveFrameLensRenderSettings(
+      frame,
+      view.clipConfig.render,
+      presets,
+      systemDefaults,
+    );
     const { provenance: _p, source: _s, ...settings } = material;
     return {
       ...view,
@@ -89,18 +97,21 @@ export function frameLensRenderSource(
   frame: FrameLensRenderAssignment,
   viewRender: LensClipRenderSettings | null | undefined,
   presets: LensRenderingPreset[],
+  systemDefaults?: LensClipRenderSettings | null,
 ): LensRenderConfigSource {
-  return resolveFrameLensRenderSettings(frame, viewRender, presets).source;
+  return resolveFrameLensRenderSettings(frame, viewRender, presets, systemDefaults).source;
 }
 
 /** Persist only sparse diffs when the frame opts out of full preset inheritance. */
 export function buildSparseFrameRenderOverride(
   presetSettings: LensClipRenderSettings | null | undefined,
   edited: LensClipRenderSettings,
+  systemDefaults?: LensClipRenderSettings | null,
 ): LensClipRenderSettings {
   return pruneLensRenderOverride(
     {
       ...LENS_RENDER_SYSTEM_DEFAULTS,
+      ...pickLensRenderPresetSettings(systemDefaults),
       ...pickLensRenderPresetSettings(presetSettings),
     },
     edited,

@@ -86,6 +86,7 @@ export {
   beadContactArcPxFromCapacity,
   beadContactLayoutArrays,
   beadOccupancyArcPx,
+  effectiveLayoutDiameterPx,
   beadLayoutArcPx,
   beadLayoutArcPxFromSizing,
   beadStrandFootprintPx,

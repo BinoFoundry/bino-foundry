@@ -1,4 +1,10 @@
-import type { GradientDirection, LensTintCategory, LensRenderingPreset } from "@bino-foundry/shared/types";
+import type {
+  GradientDirection,
+  LensClipRenderSettings,
+  LensMaterialProfile,
+  LensTintCategory,
+  LensRenderingPreset,
+} from "@bino-foundry/shared/types";
 
 export type { GradientDirection, LensTintCategory, LensRenderingPreset };
 
@@ -35,5 +41,7 @@ export interface SunglassesCatalogSnapshot {
   lensTints: LensTintEntry[];
   builderOptions: BuilderOptionEntry[];
   lensRenderPresets: LensRenderingPreset[];
+  lensRenderSystemDefaults: LensClipRenderSettings;
+  lensMaterialProfiles: LensMaterialProfile[];
   lensDisclaimer: string;
 }

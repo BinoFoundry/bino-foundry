@@ -18,6 +18,7 @@ export interface ResolvedStrandRenderConfig extends StrandRenderProfile {
 }
 
 export const STRAND_RENDER_PROFILE_KEYS = [
+  "layoutScale",
   "attachmentStyle",
   "strandOccupancy",
   "contactWidth",

@@ -4,6 +4,7 @@ import type {
   LensRenderingPreset,
   SunglassesCatalogSnapshot,
 } from "@/types/sunglasses-catalog";
+import type { LensClipRenderSettings } from "@bino-foundry/shared/types";
 
 import { apiRequest } from "./client";
 
@@ -54,6 +55,19 @@ export const sunglassesApi = {
 
   listLensRenderPresets(): Promise<LensRenderingPreset[]> {
     return apiRequest<LensRenderingPreset[]>("/sunglasses/lens-render-presets");
+  },
+
+  getLensRenderSystemDefaults(): Promise<LensClipRenderSettings> {
+    return apiRequest<LensClipRenderSettings>("/sunglasses/lens-render-system-defaults");
+  },
+
+  updateLensRenderSystemDefaults(
+    settings: LensClipRenderSettings,
+  ): Promise<LensClipRenderSettings> {
+    return apiRequest<LensClipRenderSettings>("/sunglasses/lens-render-system-defaults", {
+      method: "PUT",
+      body: settings,
+    });
   },
 
   createLensRenderPreset(

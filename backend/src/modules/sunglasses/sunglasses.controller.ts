@@ -5,6 +5,7 @@ import { sendCreated, sendJson } from "../../lib/http-response.js";
 import { validateBody } from "../../lib/validation.js";
 import { sunglassesCatalogService } from "./sunglasses.service.js";
 import { lensRenderPresetService } from "./lens-render-preset.service.js";
+import { lensClipRenderSettingsSchema } from "../rendering/rendering.validation.js";
 import {
   lensRenderPresetCreateDto,
   lensRenderPresetIdParam,
@@ -71,6 +72,15 @@ async function listLensRenderPresets(_req: Request, res: Response): Promise<void
   sendJson(res, await lensRenderPresetService.list(true));
 }
 
+async function getLensRenderSystemDefaults(_req: Request, res: Response): Promise<void> {
+  sendJson(res, await lensRenderPresetService.getSystemDefaults());
+}
+
+async function updateLensRenderSystemDefaults(req: Request, res: Response): Promise<void> {
+  const dto = validateBody(lensClipRenderSettingsSchema, req.body);
+  sendJson(res, await lensRenderPresetService.updateSystemDefaults(dto));
+}
+
 async function createLensRenderPreset(req: Request, res: Response): Promise<void> {
   const dto = validateBody(lensRenderPresetCreateDto, req.body);
   sendCreated(res, await lensRenderPresetService.create(dto));
@@ -104,6 +114,8 @@ export const sunglassesHandlers = {
   updateBuilderOption: asyncHandler(updateBuilderOption),
   removeBuilderOption: asyncHandler(removeBuilderOption),
   listLensRenderPresets: asyncHandler(listLensRenderPresets),
+  getLensRenderSystemDefaults: asyncHandler(getLensRenderSystemDefaults),
+  updateLensRenderSystemDefaults: asyncHandler(updateLensRenderSystemDefaults),
   createLensRenderPreset: asyncHandler(createLensRenderPreset),
   updateLensRenderPreset: asyncHandler(updateLensRenderPreset),
   duplicateLensRenderPreset: asyncHandler(duplicateLensRenderPreset),

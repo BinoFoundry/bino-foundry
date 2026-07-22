@@ -7,6 +7,7 @@ import {
   computeSymmetricStrandPathLayout,
   computeBalancedRadialStrandPathLayout,
   computeStrandPathLayout,
+  easeOutCubic,
   evenBeadAngleRad,
   evenBeadAngleStepRad,
   insertionIndexFromPointerAngle,
@@ -14,9 +15,11 @@ import {
   radialInwardRotationDeg,
   radialOutwardRotationDeg,
   resolveStrandDropTarget,
+  solveClosedTangentRingRadiusPx,
   strandRotationDeg,
   tangentRotationDeg,
 } from "./strand-path";
+import { balancedFractionsForSequence } from "./balanced-strand-layout";
 import { resolveStrandRenderConfigForType } from "@/render/bead-crop/strand-render-profile";
 import { TEST_STRAND_RENDER_CATALOGUE } from "@/render/bead-crop/strand-render-test-catalogue";
 
@@ -317,13 +320,13 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     startAngle: -Math.PI / 2,
   };
 
-  const angleAtFraction = (fraction: number) =>
-    Math.atan2(
-      Math.sin(base.startAngle + fraction * 2 * Math.PI),
-      Math.cos(base.startAngle + fraction * 2 * Math.PI),
-    );
+  /** Angular walk order from balanced insertion (top → … clockwise). */
+  const angularOrderFor = (count: number) =>
+    balancedFractionsForSequence(count)
+      .map((fraction, index) => ({ fraction, index }))
+      .sort((a, b) => a.fraction - b.fraction);
 
-  it("fills top → bottom → right by direction priority without reordering", () => {
+  it("preserves logical indices and anchors the first bead at the top", () => {
     const layout = computeBalancedRadialStrandPathLayout({
       ...base,
       beads: Array.from({ length: 3 }, (_, index) => ({
@@ -333,44 +336,81 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       })),
     });
 
-    // Logical order is preserved exactly.
     expect(layout.beads.map((bead) => bead.index)).toEqual([0, 1, 2]);
-    // Bead 0 → top (fraction 0), bead 1 → bottom (0.5), bead 2 → right (0.25).
-    expect(layout.beads[0]!.angle).toBeCloseTo(angleAtFraction(0), 6);
-    expect(layout.beads[1]!.angle).toBeCloseTo(angleAtFraction(0.5), 6);
-    expect(layout.beads[2]!.angle).toBeCloseTo(angleAtFraction(0.25), 6);
+    expect(layout.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
   });
 
-  it("keeps top/bottom/right/left order for four beads", () => {
+  it("walks balanced angular order: top → right → bottom for three beads", () => {
+    const diameter = 10;
+    const layout = computeBalancedRadialStrandPathLayout({
+      ...base,
+      beads: Array.from({ length: 3 }, (_, index) => ({
+        index,
+        occupancyPx: diameter,
+        visualRadiusPx: diameter / 2,
+      })),
+    });
+
+    // Angular order for balanced insert: 0 (top), 2 (right), 1 (bottom).
+    expect(layout.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
+    expect(Math.hypot(
+      layout.beads[0]!.x - layout.beads[2]!.x,
+      layout.beads[0]!.y - layout.beads[2]!.y,
+    )).toBeCloseTo(diameter, 4);
+    expect(Math.hypot(
+      layout.beads[2]!.x - layout.beads[1]!.x,
+      layout.beads[2]!.y - layout.beads[1]!.y,
+    )).toBeCloseTo(diameter, 4);
+  });
+
+  it("keeps top/right/bottom/left neighbour order for four beads in contact", () => {
+    const diameter = 10;
     const layout = computeBalancedRadialStrandPathLayout({
       ...base,
       beads: Array.from({ length: 4 }, (_, index) => ({
         index,
-        occupancyPx: 10,
-        visualRadiusPx: 5,
+        occupancyPx: diameter,
+        visualRadiusPx: diameter / 2,
       })),
     });
 
-    expect(layout.beads[0]!.angle).toBeCloseTo(angleAtFraction(0), 6); // top
-    expect(layout.beads[1]!.angle).toBeCloseTo(angleAtFraction(0.5), 6); // bottom
-    expect(layout.beads[2]!.angle).toBeCloseTo(angleAtFraction(0.25), 6); // right
-    expect(layout.beads[3]!.angle).toBeCloseTo(angleAtFraction(0.75), 6); // left
+    // Angular order: 0 → 2 → 1 → 3 (top → right → bottom → left).
+    for (const { a, b } of [
+      { a: 0, b: 2 },
+      { a: 2, b: 1 },
+      { a: 1, b: 3 },
+    ]) {
+      expect(
+        Math.hypot(
+          layout.beads[a]!.x - layout.beads[b]!.x,
+          layout.beads[a]!.y - layout.beads[b]!.y,
+        ),
+      ).toBeCloseTo(diameter, 4);
+    }
   });
 
-  it("recursively fills the largest gaps without a hardcoded angle list", () => {
+  it("recursively fills largest-gap direction order while packing contact", () => {
+    const diameter = 8;
     const layout = computeBalancedRadialStrandPathLayout({
       ...base,
       beads: Array.from({ length: 8 }, (_, index) => ({
         index,
-        occupancyPx: 10,
-        visualRadiusPx: 5,
+        occupancyPx: diameter,
+        visualRadiusPx: diameter / 2,
       })),
     });
 
-    const expectedFractions = [0, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875];
-    expectedFractions.forEach((fraction, index) => {
-      expect(layout.beads[index]!.angle).toBeCloseTo(angleAtFraction(fraction), 6);
-    });
+    const expectedOrder = angularOrderFor(8).map((entry) => entry.index);
+    for (let i = 0; i < expectedOrder.length - 1; i++) {
+      const a = expectedOrder[i]!;
+      const b = expectedOrder[i + 1]!;
+      expect(
+        Math.hypot(
+          layout.beads[a]!.x - layout.beads[b]!.x,
+          layout.beads[a]!.y - layout.beads[b]!.y,
+        ),
+      ).toBeCloseTo(diameter, 4);
+    }
   });
 
   it("uses resolved footprints while preserving the balanced sequence", () => {
@@ -386,11 +426,23 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     });
 
     expect(mixed.beads.map((bead) => bead.index)).toEqual([0, 1, 2, 3, 4]);
-    expect(mixed.occupiedArcPx).toBeCloseTo(10 + 28 + 6 + 18 + 10, 6);
     expect(mixed.isOverCapacity).toBe(false);
+    // Angular order for 5: fractions [0, 0.5, 0.25, 0.75, 0.125] → indices 0,4,2,1,3
+    const order = [0, 4, 2, 1, 3];
+    const radii = [5, 14, 3, 9, 5];
+    for (let i = 0; i < order.length - 1; i++) {
+      const a = order[i]!;
+      const b = order[i + 1]!;
+      expect(
+        Math.hypot(
+          mixed.beads[a]!.x - mixed.beads[b]!.x,
+          mixed.beads[a]!.y - mixed.beads[b]!.y,
+        ),
+      ).toBeCloseTo(radii[a]! + radii[b]!, 3);
+    }
   });
 
-  it("sizes arc spans from the resolved footprint", () => {
+  it("sizes arc spans from the resolved footprint chord", () => {
     const layout = computeBalancedRadialStrandPathLayout({
       ...base,
       beads: [
@@ -398,10 +450,33 @@ describe("computeBalancedRadialStrandPathLayout", () => {
         { index: 1, occupancyPx: 10, visualRadiusPx: 12 },
       ],
     });
-    const circumference = 2 * Math.PI * base.radius;
-    // arcSpan = footprintDiameter / circumference * 2π; visual radius wins when larger.
-    expect(layout.beads[0]!.arcSpan).toBeCloseTo((10 / circumference) * 2 * Math.PI, 6);
-    expect(layout.beads[1]!.arcSpan).toBeCloseTo((24 / circumference) * 2 * Math.PI, 6);
+    expect(layout.beads[0]!.arcSpan).toBeCloseTo(2 * Math.asin(5 / base.radius), 6);
+    expect(layout.beads[1]!.arcSpan).toBeCloseTo(2 * Math.asin(12 / base.radius), 6);
+  });
+
+  it("leaves unused capacity as one empty arc — not distributed gaps", () => {
+    const diameter = 10;
+    const layout = computeBalancedRadialStrandPathLayout({
+      ...base,
+      beads: Array.from({ length: 6 }, (_, index) => ({
+        index,
+        occupancyPx: diameter,
+        visualRadiusPx: diameter / 2,
+      })),
+    });
+
+    const order = angularOrderFor(6);
+    const pairGaps: number[] = [];
+    for (let i = 0; i < order.length; i++) {
+      const a = layout.beads[order[i]!.index]!;
+      const b = layout.beads[order[(i + 1) % order.length]!.index]!;
+      pairGaps.push(Math.max(0, Math.hypot(a.x - b.x, a.y - b.y) - diameter));
+    }
+    // Open-chain neighbours touch; only the closure pair holds the unfinished empty arc.
+    for (let i = 0; i < pairGaps.length - 1; i++) {
+      expect(pairGaps[i]!).toBeLessThan(0.5);
+    }
+    expect(pairGaps[pairGaps.length - 1]!).toBeGreaterThan(diameter);
   });
 
   it("closes with no residual gap when occupied length equals circumference", () => {
@@ -409,6 +484,7 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     const beadWidth = circumference / 30;
     const layout = computeBalancedRadialStrandPathLayout({
       ...base,
+      compressionRatio: 1,
       beads: Array.from({ length: 30 }, (_, index) => ({
         index,
         occupancyPx: beadWidth,
@@ -416,20 +492,197 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       })),
     });
 
-    const sortedAngles = layout.beads
-      .map((bead) => {
-        const offset = bead.angle - base.startAngle;
-        return ((offset % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-      })
-      .sort((a, b) => a - b);
-    for (let i = 0; i < sortedAngles.length; i++) {
-      const current = sortedAngles[i]!;
-      const next =
-        i + 1 < sortedAngles.length ? sortedAngles[i + 1]! : sortedAngles[0]! + 2 * Math.PI;
-      expect((next - current) * base.radius).toBeCloseTo(beadWidth, 5);
+    const angular = [...layout.beads].sort((a, b) => a.angle - b.angle);
+    for (let i = 0; i < angular.length; i++) {
+      const a = angular[i]!;
+      const b = angular[(i + 1) % angular.length]!;
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(beadWidth, 4);
     }
-    expect(layout.occupiedArcPx).toBeCloseTo(circumference, 5);
     expect(layout.isOverCapacity).toBe(false);
+  });
+
+  it("calibrates 30 × 6 mm contacts on an 18 cm wrist into a tangent closed loop", () => {
+    // 18 cm wrist ⇒ 180 mm circumference. Thirty 6 mm rendered contacts fill capacity.
+    const wristCircumferenceMm = 180;
+    const diameterPx = 6;
+    const nominalRadiusPx = wristCircumferenceMm / (2 * Math.PI);
+    const layout = computeBalancedRadialStrandPathLayout({
+      centerX: 0,
+      centerY: 0,
+      radius: nominalRadiusPx,
+      startAngle: -Math.PI / 2,
+      closeLoop: true,
+      beads: Array.from({ length: 30 }, (_, index) => ({
+        index,
+        occupancyPx: diameterPx,
+        visualRadiusPx: diameterPx / 2,
+      })),
+    });
+
+    expect(layout.resolvedRadiusPx).toBeCloseTo(
+      diameterPx / (2 * Math.sin(Math.PI / 30)),
+      6,
+    );
+    expect(layout.occupiedArcPx).toBeCloseTo(2 * Math.PI * layout.resolvedRadiusPx!, 5);
+    const angular = layout.beads
+      .map((bead, index) => ({ bead, index }))
+      .sort((a, b) => a.bead.angle - b.bead.angle);
+    for (let i = 0; i < angular.length; i++) {
+      const a = angular[i]!.bead;
+      const b = angular[(i + 1) % angular.length]!.bead;
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(diameterPx, 5);
+    }
+  });
+
+  it("keeps mixed round/spacer/charm contacts tangent without collisions", () => {
+    const diameters = [6, 8, 4, 12, 6, 5, 8, 7];
+    const radii = diameters.map((d) => d / 2);
+    const solved = solveClosedTangentRingRadiusPx(radii, 12);
+    const layout = computeBalancedRadialStrandPathLayout({
+      centerX: 100,
+      centerY: 100,
+      radius: solved,
+      closeLoop: true,
+      beads: diameters.map((diameter, index) => ({
+        index,
+        occupancyPx: diameter,
+        visualRadiusPx: diameter / 2,
+      })),
+    });
+
+    const fractions = [0, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875];
+    const angularOrder = fractions
+      .map((fraction, index) => ({ fraction, index }))
+      .sort((a, b) => a.fraction - b.fraction);
+    for (let i = 0; i < angularOrder.length; i++) {
+      const currentIndex = angularOrder[i]!.index;
+      const nextIndex = angularOrder[(i + 1) % angularOrder.length]!.index;
+      const a = layout.beads[currentIndex]!;
+      const b = layout.beads[nextIndex]!;
+      const expectedContact = (diameters[currentIndex]! + diameters[nextIndex]!) / 2;
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(expectedContact, 5);
+    }
+    expect(layout.beads.map((bead) => bead.index)).toEqual(diameters.map((_, i) => i));
+  });
+
+  it("keeps neighbour contact at every fill level with one shrinking empty arc", () => {
+    const wristCircumferencePx = 180;
+    const radius = wristCircumferencePx / (2 * Math.PI);
+    const visualDiameterPx = 6;
+    const capacityBeadMm = 6;
+    const wristMm = 180;
+    const counts = [5, 10, 15, 20, 25, 28, 29, 30] as const;
+
+    const chainStats = (count: number) => {
+      const compressionRatio = (count * capacityBeadMm) / wristMm;
+      const layout = computeBalancedRadialStrandPathLayout({
+        centerX: 0,
+        centerY: 0,
+        radius,
+        startAngle: -Math.PI / 2,
+        compressionRatio,
+        beads: Array.from({ length: count }, (_, index) => ({
+          index,
+          occupancyPx: visualDiameterPx,
+          visualRadiusPx: visualDiameterPx / 2,
+        })),
+      });
+      const order = angularOrderFor(count);
+      let openGapMax = 0;
+      for (let i = 0; i < order.length - 1; i++) {
+        const a = layout.beads[order[i]!.index]!;
+        const b = layout.beads[order[i + 1]!.index]!;
+        openGapMax = Math.max(
+          openGapMax,
+          Math.max(0, Math.hypot(a.x - b.x, a.y - b.y) - visualDiameterPx),
+        );
+      }
+      // Unused capacity is the leftover arc after the open contact chain — not the
+      // Euclidean chord between endpoints (that chord spans the occupied cluster).
+      const emptyArcPx = Math.max(0, wristCircumferencePx - layout.occupiedArcPx);
+      return { openGapMax, emptyArcPx, layout };
+    };
+
+    const stats = counts.map((count) => chainStats(count));
+    for (const s of stats.slice(0, -1)) {
+      expect(s.openGapMax).toBeLessThan(0.05);
+      expect(s.emptyArcPx).toBeGreaterThan(0.5);
+    }
+    for (let i = 1; i < stats.length - 1; i++) {
+      expect(stats[i]!.emptyArcPx).toBeLessThanOrEqual(stats[i - 1]!.emptyArcPx + 1e-6);
+    }
+    // Full bracelet: closed tangent loop — every neighbour including closure touches.
+    const full = stats[stats.length - 1]!;
+    expect(full.layout.resolvedRadiusPx).toBeDefined();
+    const fullOrder = angularOrderFor(30);
+    for (let i = 0; i < fullOrder.length; i++) {
+      const a = full.layout.beads[fullOrder[i]!.index]!;
+      const b = full.layout.beads[fullOrder[(i + 1) % fullOrder.length]!.index]!;
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(visualDiameterPx, 4);
+    }
+  });
+
+  it("matches closed-loop tangency whether driven by compressionRatio or closeLoop", () => {
+    const diameterPx = 6;
+    const beads = Array.from({ length: 30 }, (_, index) => ({
+      index,
+      occupancyPx: diameterPx,
+      visualRadiusPx: diameterPx / 2,
+    }));
+    const closedBase = {
+      centerX: 0,
+      centerY: 0,
+      radius: 180 / (2 * Math.PI),
+      startAngle: -Math.PI / 2,
+      beads,
+    };
+    const viaRatio = computeBalancedRadialStrandPathLayout({
+      ...closedBase,
+      compressionRatio: 1,
+    });
+    const viaFlag = computeBalancedRadialStrandPathLayout({
+      ...closedBase,
+      closeLoop: true,
+    });
+    expect(viaRatio.resolvedRadiusPx).toBeCloseTo(viaFlag.resolvedRadiusPx!, 6);
+    for (let i = 0; i < 30; i++) {
+      expect(viaRatio.beads[i]!.x).toBeCloseTo(viaFlag.beads[i]!.x, 5);
+      expect(viaRatio.beads[i]!.y).toBeCloseTo(viaFlag.beads[i]!.y, 5);
+    }
+  });
+
+  it("supports mixed 4/6/8 mm plus larger charm footprints without inter-bead gaps", () => {
+    const diameters = [6, 6, 12, 4, 8, 6, 5, 8, 6, 4];
+    const layout = computeBalancedRadialStrandPathLayout({
+      ...base,
+      beads: diameters.map((diameter, index) => ({
+        index,
+        occupancyPx: diameter,
+        visualRadiusPx: diameter / 2,
+      })),
+    });
+    const order = angularOrderFor(diameters.length);
+    for (let i = 0; i < order.length - 1; i++) {
+      const a = order[i]!.index;
+      const b = order[i + 1]!.index;
+      expect(
+        Math.hypot(
+          layout.beads[a]!.x - layout.beads[b]!.x,
+          layout.beads[a]!.y - layout.beads[b]!.y,
+        ),
+      ).toBeCloseTo((diameters[a]! + diameters[b]!) / 2, 3);
+    }
+    const circumference = 2 * Math.PI * base.radius;
+    expect(layout.occupiedArcPx).toBeLessThan(circumference);
+  });
+});
+
+describe("easeOutCubic", () => {
+  it("starts at 0, ends at 1, and rises quickly then levels off", () => {
+    expect(easeOutCubic(0)).toBe(0);
+    expect(easeOutCubic(1)).toBe(1);
+    expect(easeOutCubic(0.5)).toBeCloseTo(0.875, 5);
+    expect(easeOutCubic(0.5)).toBeGreaterThan(0.5);
   });
 });
 

@@ -27,11 +27,121 @@ describe("resolveLensClipRenderSettings", () => {
     expect(resolved.transparency).toBeLessThan(1);
     expect(resolved.lensOpacity).toBeCloseTo(1 - resolved.transparency);
     expect(resolved.frameExclusionOpacity).toBe(1);
+    expect(resolved.automaticMaterialBehavior).toBe(true);
+    expect(resolved.originalLensColorInfluence).toBe(15);
+    expect(resolved.materialInfluence).toBeGreaterThan(30);
+    expect(resolved.baseBrightness).toBe(0);
+    expect(resolved.baseGamma).toBe(1);
+    expect(resolved.glassAbsorption).toBeGreaterThan(14);
+    expect(resolved.glassDiffusion).toBeGreaterThan(12);
+    expect(resolved.glassDepth).toBeGreaterThan(32);
+  });
+
+  it("resolves and clamps manual calibration controls", () => {
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [],
+      render: {
+        automaticMaterialBehavior: false,
+        originalLensColorInfluence: 150,
+        materialInfluence: 150,
+        baseBrightness: -150,
+        baseGamma: 3,
+        glassAbsorption: -10,
+        glassDiffusion: 140,
+        glassDepth: 75,
+      },
+    });
+    expect(resolved.materialInfluence).toBe(100);
+    expect(resolved.originalLensColorInfluence).toBe(100);
+    expect(resolved.baseBrightness).toBe(-100);
+    expect(resolved.baseGamma).toBe(2.5);
+    expect(resolved.glassAbsorption).toBe(0);
+    expect(resolved.glassDiffusion).toBe(100);
+    expect(resolved.glassDepth).toBe(75);
+  });
+
+  it("maps legacy glassMaterialStrength onto materialInfluence when missing", () => {
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [],
+      render: {
+        automaticMaterialBehavior: false,
+        glassMaterialStrength: 65,
+      },
+    });
+    expect(resolved.materialInfluence).toBe(65);
+  });
+
+  it("uses every optical layer value exactly in manual mode", () => {
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [],
+      render: {
+        automaticMaterialBehavior: false,
+        reflectionEnabled: false,
+        reflectionOpacity: 0.31,
+        reflectionStrength: 0.47,
+        reflectionBlur: 0.73,
+        reflectionPosition: 24,
+        reflectionOffsetX: 18,
+        reflectionOffsetY: -22,
+        reflectionScale: 1.36,
+        reflectionAngle: 315,
+        internalReflectionEnabled: true,
+        internalReflectionOpacity: 0.06,
+        internalReflectionSoftness: 0.81,
+        internalReflectionScale: 1.14,
+        internalReflectionAngle: 326,
+        fresnelEnabled: true,
+        fresnelStrength: 0.17,
+        fresnelWidth: 0.23,
+        fresnelSoftness: 0.64,
+        edgeDensity: 0.29,
+        edgeSoftness: 0.61,
+        edgeOpacity: 0.33,
+        lensTransmission: 0.48,
+      },
+    });
+    expect(resolved.reflectionEnabled).toBe(false);
+    expect(resolved.reflectionOpacity).toBe(0.31);
+    expect(resolved.reflectionStrength).toBe(0.47);
+    expect(resolved.reflectionBlur).toBe(0.73);
+    expect(resolved.reflectionPosition).toBe(24);
+    expect(resolved.reflectionOffsetX).toBe(18);
+    expect(resolved.reflectionOffsetY).toBe(-22);
+    expect(resolved.reflectionScale).toBe(1.36);
+    expect(resolved.reflectionAngle).toBe(315);
+    expect(resolved.internalReflectionEnabled).toBe(true);
+    expect(resolved.internalReflectionOpacity).toBe(0.06);
+    expect(resolved.internalReflectionSoftness).toBe(0.81);
+    expect(resolved.internalReflectionScale).toBe(1.14);
+    expect(resolved.internalReflectionAngle).toBe(326);
+    expect(resolved.fresnelEnabled).toBe(true);
+    expect(resolved.fresnelStrength).toBe(0.17);
+    expect(resolved.fresnelWidth).toBe(0.23);
+    expect(resolved.fresnelSoftness).toBe(0.64);
+    expect(resolved.edgeDensity).toBe(0.29);
+    expect(resolved.edgeSoftness).toBe(0.61);
+    expect(resolved.edgeOpacity).toBe(0.33);
+    expect(resolved.lensTransmission).toBe(0.48);
   });
 
   it("clamps and honours a base tint opacity override", () => {
     const resolved = resolveLensClipRenderSettings(
-      { version: 1, imageWidth: 10, imageHeight: 10, lenses: [], render: { baseTintOpacity: 0.7 } },
+      {
+        version: 1,
+        imageWidth: 10,
+        imageHeight: 10,
+        lenses: [],
+        render: { automaticMaterialBehavior: false, baseTintOpacity: 0.7 },
+      },
     );
     expect(resolved.baseTintOpacity).toBe(0.7);
     expect(resolved.transparency).toBeCloseTo(0.3);
@@ -44,6 +154,7 @@ describe("resolveLensClipRenderSettings", () => {
       imageHeight: 10,
       lenses: [],
       render: {
+        automaticMaterialBehavior: false,
         transparency: 0.6,
         lensTransmission: 0.48,
         brightness: 1.2,
@@ -99,7 +210,7 @@ describe("resolveLensClipRenderSettings", () => {
       imageWidth: 10,
       imageHeight: 10,
       lenses: [{ id: "l", label: "L", pathD: "M0 0 L10 0 L10 10 Z" }],
-      render: { lensOpacity: 0.55 },
+      render: { automaticMaterialBehavior: false, lensOpacity: 0.55 },
     });
     expect(resolved.lensOpacity).toBe(0.55);
     expect(resolved.tintOpacity).toBe(DEFAULT_LENS_CLIP_RENDER.tintOpacity);
@@ -136,7 +247,11 @@ describe("resolveLensClipRenderSettings", () => {
       imageWidth: 10,
       imageHeight: 10,
       lenses: [{ id: "l", label: "L", pathD: "M0 0 L10 0 L10 10 Z" }],
-      render: { lensOpacity: 0.92, lensTransmission: 0.58 },
+      render: {
+        automaticMaterialBehavior: false,
+        lensOpacity: 0.92,
+        lensTransmission: 0.58,
+      },
     });
     expect(resolved.lensOpacity).toBe(0.92);
     expect(resolved.lensTransmission).toBe(0.58);
@@ -148,7 +263,11 @@ describe("resolveLensClipRenderSettings", () => {
       imageWidth: 10,
       imageHeight: 10,
       lenses: [{ id: "l", label: "L", pathD: "M0 0 L10 0 L10 10 Z" }],
-      render: { lensOpacity: 0.35, frameExclusionOpacity: 0.9 },
+      render: {
+        automaticMaterialBehavior: false,
+        lensOpacity: 0.35,
+        frameExclusionOpacity: 0.9,
+      },
     });
     expect(resolved.lensOpacity).toBe(0.35);
     expect(resolved.frameExclusionOpacity).toBe(0.9);
