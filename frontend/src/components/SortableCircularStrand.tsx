@@ -634,12 +634,11 @@ const SortableCircularStrand = ({
           effectiveLayoutDiameterPx(diameterPx, layoutScale),
         );
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
-        // Fill ratio only shrinks sub-pixel contact tolerance toward closed-loop tangency.
+        // Fill ratio is informational only — positions come from balanced fractions.
         const compressionRatio = capacityUsedMm / Math.max(wristMm, 1e-6);
 
-        // Physical neighbour contact from measured rendered diameters. Balanced insertion
-        // order (top → bottom → right → left → …) is preserved; unused capacity stays as
-        // one empty unfinished arc — never redistributed as inter-bead gaps.
+        // Exact previous insertion algorithm: each bead sits on its balanced angle fraction
+        // (top → bottom → right → left → largest-gap bisection). No clockwise repack.
         const sequential = computeBalancedRadialStrandPathLayout({
           beads: normalized.map((_, i) => ({
             index: i,

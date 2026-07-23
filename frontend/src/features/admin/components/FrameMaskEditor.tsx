@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import {
   type LensPolygon,
   type MaskConfig,
 } from "@/render/mask";
+import type { FrameExclusionLayerOrder } from "@bino-foundry/shared/types";
 
 export type LensEditorMode = "polygon" | "exclusions";
 
@@ -30,16 +31,33 @@ interface FrameMaskEditorProps {
   lensRevision?: number;
   /** When set, editor focuses on one lens path only (left or right). Polygon mode only. */
   focusedLensId?: FrameLensSide;
-  /** Lens polygon editing vs frame-level exclusion polygons. */
+  /** Lens polygon editing vs frame structure objects. */
   editMode?: LensEditorMode;
   onChange?: (config: MaskConfig | null) => void;
   className?: string;
 }
 
-/** Frame-level exclusion polygons (independent of left/right). */
 function getFrameExclusions(mask: MaskConfig | null | undefined): LensPolygon[] {
   return resolveMaskFrameExclusions(mask);
 }
+
+const LAYER_OPTIONS: { value: FrameExclusionLayerOrder; label: string; hint: string }[] = [
+  {
+    value: "behind",
+    label: "Behind Glass",
+    hint: "Visible through the glass — tint and optics apply above it.",
+  },
+  {
+    value: "inside",
+    label: "Inside Glass",
+    hint: "Embedded in the glass material.",
+  },
+  {
+    value: "front",
+    label: "Front of Glass",
+    hint: "Renders above the glass — optics do not affect it.",
+  },
+];
 
 /** Lens clip path editor (polygon/curve tools → persisted as SVG clip paths). */
 export function FrameMaskEditor({
@@ -63,10 +81,6 @@ export function FrameMaskEditor({
   const [activeExclusionIndex, setActiveExclusionIndex] = useState(0);
   const [exclusionRevision, setExclusionRevision] = useState(0);
 
-  // Frame exclusions are LOCAL editor state, seeded once from the incoming mask. They are the
-  // source of truth while editing so the canvas is never torn down by the parent echoing back a
-  // filtered mask (empty in-progress polygons would otherwise disappear mid-draw). We emit
-  // upward on every change but never re-derive the list from props.
   const [exclusionList, setExclusionListState] = useState<LensPolygon[]>(() =>
     getFrameExclusions(initialMaskRef.current),
   );
@@ -84,17 +98,26 @@ export function FrameMaskEditor({
       mask?.imageHeight ?? 0,
       baseLenses,
       undefined,
-      // Empty in-progress polygons are dropped from the emitted mask (they carry no path),
-      // but stay in local state so the user can keep drawing them.
       list.filter((ex) => ex.points?.length),
     );
     onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
   }, []);
 
+  const patchActive = useCallback(
+    (partial: Partial<LensPolygon>) => {
+      if (!exclusionListRef.current.length) return;
+      const next = exclusionListRef.current.map((ex, i) =>
+        i === activeExclusionIndex ? { ...ex, ...partial } : ex,
+      );
+      setExclusionList(next);
+      emitExclusions(next);
+    },
+    [activeExclusionIndex, emitExclusions, setExclusionList],
+  );
+
   const mergeFocusedEdit = useCallback((edited: LensPolygon[], imgW: number, imgH: number): MaskConfig => {
     const focus = focusedLensIdRef.current;
     const editedLens = edited[0];
-    // Carry frame-level exclusions through lens polygon edits so they are never lost.
     const frameExclusions = getFrameExclusions(initialMaskRef.current);
     if (!focus || !editedLens) {
       return createMaskConfig(imgW, imgH, edited, undefined, frameExclusions);
@@ -152,8 +175,9 @@ export function FrameMaskEditor({
     exclusionList[activeExclusionIndex] ??
     createLensPolygon(
       `frame-exclusion-${Date.now()}`,
-      `Exclusion ${activeExclusionIndex + 1}`,
+      `Frame object ${activeExclusionIndex + 1}`,
       [],
+      { layerOrder: "behind" },
     );
 
   const addExclusion = () => {
@@ -161,12 +185,11 @@ export function FrameMaskEditor({
       ...exclusionListRef.current,
       createLensPolygon(
         `frame-exclusion-${Date.now()}`,
-        `Exclusion ${exclusionListRef.current.length + 1}`,
+        `Frame object ${exclusionListRef.current.length + 1}`,
         [],
+        { layerOrder: "behind", opacity: 100, depth: 50, visible: true },
       ),
     ];
-    // Bump the revision only on add — this remounts the canvas onto the new polygon. It never
-    // fires while drawing, so the canvas stays put between clicks.
     setExclusionList(next);
     setActiveExclusionIndex(next.length - 1);
     setExclusionRevision((r) => r + 1);
@@ -182,28 +205,19 @@ export function FrameMaskEditor({
     emitExclusions(next);
   };
 
-  const renameActiveExclusion = (label: string) => {
-    if (!exclusionListRef.current.length) return;
-    const next = exclusionListRef.current.map((ex, i) =>
-      i === activeExclusionIndex ? { ...ex, label } : ex,
-    );
-    setExclusionList(next);
-    emitExclusions(next);
-  };
-
   if (editMode === "exclusions") {
     return (
       <div className={cn("space-y-3", className)}>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Draw polygons for frame parts inside the lens openings (bridge, screws, inner rim,
-          support bars). These restore the original frame above the rendered lens, so they stay
-          fully visible regardless of tint.
+          Configure physical frame objects inside the lens openings (bridge support, screws, inner
+          rim, nylon wire). Choose whether each sits behind, inside, or in front of the glass.
+          Changes update the live preview immediately.
         </p>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" size="sm" variant="outline" onClick={addExclusion}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add exclusion
+            Add object
           </Button>
           <Button
             type="button"
@@ -218,41 +232,130 @@ export function FrameMaskEditor({
         </div>
 
         {exclusionList.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {exclusionList.map((ex, i) => (
-              <button
-                key={ex.id}
-                type="button"
-                className={cn(
-                  "rounded-md border px-2 py-1 text-[11px]",
-                  i === activeExclusionIndex
-                    ? "border-foreground bg-background"
-                    : "border-border text-muted-foreground",
-                )}
-                onClick={() => {
-                  setActiveExclusionIndex(i);
-                  setExclusionRevision((r) => r + 1);
-                }}
-              >
-                {ex.label || `Exclusion ${i + 1}`}
-              </button>
-            ))}
+          <div className="space-y-2">
+            {exclusionList.map((ex, i) => {
+              const active = i === activeExclusionIndex;
+              return (
+                <button
+                  key={ex.id}
+                  type="button"
+                  className={cn(
+                    "w-full rounded-md border px-3 py-2 text-left text-[11px] transition-colors",
+                    active
+                      ? "border-foreground bg-background"
+                      : "border-border text-muted-foreground hover:border-foreground/40",
+                    ex.visible === false && "opacity-60",
+                  )}
+                  onClick={() => {
+                    setActiveExclusionIndex(i);
+                    setExclusionRevision((r) => r + 1);
+                  }}
+                >
+                  <span className="font-medium text-foreground">{ex.label || `Object ${i + 1}`}</span>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                    {(ex.layerOrder ?? "behind") === "behind"
+                      ? "Behind Glass"
+                      : (ex.layerOrder ?? "behind") === "inside"
+                        ? "Inside Glass"
+                        : "Front of Glass"}
+                    {" · "}
+                    {Math.round(ex.opacity ?? 100)}% opacity
+                    {ex.visible === false ? " · hidden" : ""}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <p className="text-[11px] text-muted-foreground">
-            No frame exclusions yet — add one to begin.
+            No frame objects yet — add one to begin.
           </p>
         )}
 
         {exclusionList.length > 0 ? (
           <>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Label</Label>
-              <Input
-                value={activeExclusion.label}
-                onChange={(e) => renameActiveExclusion(e.target.value)}
-                className="h-8 text-sm"
-              />
+            <div className="space-y-3 rounded border border-border/70 bg-background/50 p-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Name</Label>
+                <Input
+                  value={activeExclusion.label}
+                  onChange={(e) => patchActive({ label: e.target.value })}
+                  className="h-8 text-sm"
+                />
+              </div>
+
+              <fieldset className="space-y-2">
+                <LegendLabel>Layer</LegendLabel>
+                {LAYER_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className="flex cursor-pointer items-start gap-2 text-xs"
+                  >
+                    <input
+                      type="radio"
+                      className="mt-0.5 accent-foreground"
+                      name={`layer-${activeExclusion.id}`}
+                      checked={(activeExclusion.layerOrder ?? "behind") === option.value}
+                      onChange={() => patchActive({ layerOrder: option.value })}
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">{option.label}</span>
+                      <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                        {option.hint}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs text-muted-foreground">Opacity</Label>
+                  <span className="tabular-nums text-[10px] text-muted-foreground">
+                    {Math.round(activeExclusion.opacity ?? 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={activeExclusion.opacity ?? 100}
+                  onChange={(e) => patchActive({ opacity: Number(e.target.value) })}
+                  className="w-full accent-foreground"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs text-muted-foreground">Depth</Label>
+                  <span className="tabular-nums text-[10px] text-muted-foreground">
+                    {Math.round(activeExclusion.depth ?? 50)}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Order within this layer — higher draws closer to the viewer.
+                </p>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={activeExclusion.depth ?? 50}
+                  onChange={(e) => patchActive({ depth: Number(e.target.value) })}
+                  className="w-full accent-foreground"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  className="accent-foreground"
+                  checked={activeExclusion.visible !== false}
+                  onChange={(e) => patchActive({ visible: e.target.checked })}
+                />
+                <span className="font-medium text-foreground">Visible</span>
+              </label>
             </div>
 
             <PolygonEditorShell
@@ -262,12 +365,12 @@ export function FrameMaskEditor({
               getInitialLenses={() => [activeExclusion]}
               onLensesChange={handleLensesChange}
               showLensTabs={false}
-              singlePathLabel={activeExclusion.label || "Exclusion"}
-              previewLabel="Frame exclusion"
+              singlePathLabel={activeExclusion.label || "Frame object"}
+              previewLabel="Frame object"
               showThumbnailPreview={false}
               lensRevision={exclusionRevision + lensRevision}
               handlesLabel="Control points"
-              helpText="Draw closed exclusion polygons over frame parts · Shift+click edge to insert · Del removes selected point"
+              helpText="Draw the object silhouette over the frame structure · Shift+click edge to insert · Del removes selected point"
             />
           </>
         ) : null}
@@ -307,5 +410,13 @@ export function FrameMaskEditor({
           : "Left/Right lens tabs · Draw: click to add points · Shift+click edge to insert · Select (V) + Del removes · Undo ⌘Z · Redo ⇧⌘Z · Pan (H) or Space · C toggles curve on selected point"
       }
     />
+  );
+}
+
+function LegendLabel({ children }: { children: ReactNode }) {
+  return (
+    <legend className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      {children}
+    </legend>
   );
 }

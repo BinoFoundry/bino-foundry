@@ -330,17 +330,11 @@ export function computeSymmetricStrandPathLayout(params: {
   };
 }
 
-/** easeOutCubic — used only to shrink sub-pixel contact tolerance toward a closed loop. */
+/** easeOutCubic — retained for callers/tests; balanced placement no longer packs with it. */
 export function easeOutCubic(t: number): number {
   const x = Math.max(0, Math.min(1, t));
   return 1 - (1 - x) ** 3;
 }
-
-/**
- * Optional sub-pixel contact seam (px). Defaults to zero so neighbours touch exactly;
- * when fill approaches 1 the closed-loop solve finishes the ring without redistributing gaps.
- */
-export const STRAND_CONTACT_TOLERANCE_PX = 0;
 
 /** Chord angle for two circular footprints whose centres are exactly `pairRadius` apart. */
 export function contactChordAngleRad(pairRadius: number, pathRadius: number): number {
@@ -349,19 +343,14 @@ export function contactChordAngleRad(pairRadius: number, pathRadius: number): nu
 }
 
 /**
- * Occupancy-aware balanced radial placement with physical neighbour contact.
+ * Balanced radial placement — recursive largest-gap bisection.
  *
- * Logical array order is preserved exactly. Direction priority still comes from recursive
- * largest-gap bisection (top → bottom → right → left → …) — that only decides angular order.
+ * Insertion order (unchanged):
+ *   top → bottom → right → left → bisect largest remaining gaps …
  *
- * Neighbouring beads in that order are packed so:
- *   distance between centres = radiusA + radiusB (+ tiny sub-pixel tolerance)
- *
- * Unused capacity is NEVER redistributed between beads. It remains one continuous empty arc
- * between the last and first bead in angular order — like an unfinished elastic bracelet.
- *
- * Near / at full capacity the same packing is used; only the sub-pixel tolerance shrinks to
- * zero, then the closed tangent ring solve finishes the loop without a layout snap.
+ * Each chronological bead is placed at its balanced angle fraction. Positions are NEVER
+ * rebuilt by clockwise packing. Spacing tightens only because more beads share the ring
+ * (smaller gaps between balanced targets) — no snap, no late redistribution.
  */
 export function computeBalancedRadialStrandPathLayout(params: {
   beads: SequentialStrandBeadInput[];
@@ -370,13 +359,12 @@ export function computeBalancedRadialStrandPathLayout(params: {
   radius: number;
   startAngle?: number;
   /**
-   * Fill ratio `placedLength / strandLength` in `[0, 1]`.
-   * Only shrinks sub-pixel contact tolerance toward closed-loop tangency.
+   * Reserved for API compatibility. Balanced fraction angles already densify with count;
+   * this value must not reorder or repack beads.
    */
   compressionRatio?: number;
   /**
-   * @deprecated Prefer `compressionRatio`. `true` is treated as `compressionRatio = 1`
-   * (exact closed-loop tangency) for backward-compatible tests and callers.
+   * @deprecated No longer switches algorithm. Kept so existing callers compile.
    */
   closeLoop?: boolean;
 }): SequentialStrandPathLayout {
@@ -386,11 +374,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
     centerY,
     radius,
     startAngle = STRAND_PATH_START_ANGLE,
-    closeLoop = false,
   } = params;
-  const compressionRatio = closeLoop
-    ? 1
-    : Math.max(0, Math.min(1, params.compressionRatio ?? 0));
   const circumferencePx = 2 * Math.PI * Math.max(radius, 1e-6);
   if (!beads.length || radius <= 0) {
     return {
@@ -407,134 +391,41 @@ export function computeBalancedRadialStrandPathLayout(params: {
       Math.max(0, bead.visualRadiusPx),
     ),
   );
-  // Direction order comes from recursive largest-gap bisection; no angle list is hardcoded.
+
+  // Same balancing logic as before — map each sequence index to its fraction.
   const fractions = balancedFractionsForSequence(beads.length);
-  const angularOrder = fractions
-    .map((fraction, index) => ({ fraction, index }))
-    .sort((a, b) => a.fraction - b.fraction);
-
-  const pairContactPx = (previousIndex: number, currentIndex: number, tolerancePx: number) => {
-    const previous = beads[previousIndex]!;
-    const current = beads[currentIndex]!;
-    const pairAdjustmentPx =
-      ((previous.contactAdjustmentPx ?? 0) + (current.contactAdjustmentPx ?? 0)) / 2;
-    return Math.max(
-      0,
-      footprintRadii[previousIndex]! +
-        footprintRadii[currentIndex]! +
-        pairAdjustmentPx +
-        tolerancePx,
-    );
-  };
-
-  // Sub-pixel seam only — shrinks continuously toward zero; never intentional spacing.
-  const contactTolerancePx =
-    STRAND_CONTACT_TOLERANCE_PX * (1 - easeOutCubic(compressionRatio));
-
-  const packOpenChainAngles = (pathRadiusPx: number, tolerancePx: number) => {
-    const centerAngles = new Array<number>(beads.length).fill(startAngle);
-    centerAngles[angularOrder[0]!.index] = startAngle;
-    let occupiedAngle = 0;
-    for (let orderIndex = 1; orderIndex < angularOrder.length; orderIndex++) {
-      const previous = angularOrder[orderIndex - 1]!;
-      const current = angularOrder[orderIndex]!;
-      const step = contactChordAngleRad(
-        pairContactPx(previous.index, current.index, tolerancePx),
-        pathRadiusPx,
-      );
-      occupiedAngle += step;
-      centerAngles[current.index] = normalizePathAngle(startAngle + occupiedAngle);
-    }
-    return { centerAngles, occupiedAngle };
-  };
-
-  const firstIndex = angularOrder[0]!.index;
-  const lastIndex = angularOrder[angularOrder.length - 1]!.index;
-  const openPack = packOpenChainAngles(radius, contactTolerancePx);
-  const closurePairPx = pairContactPx(lastIndex, firstIndex, contactTolerancePx);
-  const closureAngleNeeded = contactChordAngleRad(closurePairPx, radius);
-  const availableClosureAngle = 2 * Math.PI - openPack.occupiedAngle;
-  // Same packing algorithm through fill: only close the loop when the unfinished arc
-  // can no longer hold the final neighbour contact (or the caller forces full fill).
-  const mustCloseLoop =
-    beads.length >= 3 &&
-    (compressionRatio >= 1 - 1e-9 || availableClosureAngle <= closureAngleNeeded + 1e-9);
-
-  if (mustCloseLoop) {
-    const orderedRadii = angularOrder.map(({ index }) => footprintRadii[index]!);
-    const resolvedRadiusPx = solveClosedTangentRingRadiusPx(orderedRadii, radius);
-    const closedPack = packOpenChainAngles(resolvedRadiusPx, 0);
-    // Advance one more contact step is unnecessary — solveClosedTangentRingRadiusPx
-    // guarantees the final pair also meets when measured on resolvedRadiusPx.
-
-    const layouts = beads.map((bead, i) => {
-      const angle = closedPack.centerAngles[i]!;
-      const { x, y } = polarToCartesian(centerX, centerY, resolvedRadiusPx, angle);
-      return {
-        index: bead.index,
-        angle,
-        arcSpan:
-          2 *
-          Math.asin(
-            Math.min(1, footprintRadii[i]! / Math.max(resolvedRadiusPx, 1e-6)),
-          ),
-        x,
-        y,
-        rotationDeg: tangentRotationDeg(angle),
-      };
-    });
-
-    const nextFractions = balancedFractionsForSequence(beads.length + 1);
-    const closureFraction = nextFractions[beads.length] ?? 0;
-    const closureAngle = normalizePathAngle(startAngle + closureFraction * 2 * Math.PI);
-    const insertionAngles = [closureAngle];
-    for (let i = 1; i < layouts.length; i++) {
-      insertionAngles.push(midpointPathAngle(layouts[i - 1]!.angle, layouts[i]!.angle));
-    }
-    insertionAngles.push(closureAngle);
-
-    return {
-      beads: layouts,
-      insertionAngles,
-      occupiedArcPx: 2 * Math.PI * resolvedRadiusPx,
-      isOverCapacity: false,
-      resolvedRadiusPx,
-    };
-  }
-
-  const { centerAngles, occupiedAngle } = openPack;
-  // First + last footprint halves bookend the open chain; free remainder is the empty arc.
-  const openChainArcPx =
-    footprintRadii[firstIndex]! +
-    occupiedAngle * radius +
-    footprintRadii[lastIndex]!;
-  const totalFootprintPx = footprintRadii.reduce((sum, radiusPx) => sum + radiusPx * 2, 0);
 
   const layouts = beads.map((bead, i) => {
-    const angle = centerAngles[i]!;
+    const angle = normalizePathAngle(startAngle + fractions[i]! * 2 * Math.PI);
+    const arcSpan = ((footprintRadii[i]! * 2) / circumferencePx) * 2 * Math.PI;
     const { x, y } = polarToCartesian(centerX, centerY, radius, angle);
     return {
       index: bead.index,
       angle,
-      arcSpan:
-        2 *
-        Math.asin(Math.min(1, footprintRadii[i]! / Math.max(radius, 1e-6))),
+      arcSpan,
       x,
       y,
       rotationDeg: tangentRotationDeg(angle),
     };
   });
 
-  // Empty unfinished arc lives only between the last and first angular neighbours.
-  const lastAngle = centerAngles[lastIndex]!;
-  const firstAngle = centerAngles[firstIndex]!;
-  const lastTrailing = normalizePathAngle(
-    lastAngle + contactChordAngleRad(footprintRadii[lastIndex]!, radius) / 2,
+  // Widest empty gap — where the next bead would land under the same algorithm.
+  const sortedFractions = [...fractions].sort((a, b) => a - b);
+  let widestGap = -Infinity;
+  let widestGapMidFraction = (fractions[0] ?? 0) + 0.5;
+  for (let i = 0; i < sortedFractions.length; i++) {
+    const current = sortedFractions[i]!;
+    const next =
+      i + 1 < sortedFractions.length ? sortedFractions[i + 1]! : sortedFractions[0]! + 1;
+    const gap = next - current;
+    if (gap > widestGap) {
+      widestGap = gap;
+      widestGapMidFraction = current + gap / 2;
+    }
+  }
+  const closureAngle = normalizePathAngle(
+    startAngle + widestGapMidFraction * 2 * Math.PI,
   );
-  const firstLeading = normalizePathAngle(
-    firstAngle - contactChordAngleRad(footprintRadii[firstIndex]!, radius) / 2,
-  );
-  const closureAngle = midpointPathAngle(lastTrailing, firstLeading);
 
   const insertionAngles = [closureAngle];
   for (let i = 1; i < layouts.length; i++) {
@@ -544,10 +435,12 @@ export function computeBalancedRadialStrandPathLayout(params: {
   }
   insertionAngles.push(closureAngle);
 
+  const totalFootprintPx = footprintRadii.reduce((sum, r) => sum + r * 2, 0);
+
   return {
     beads: layouts,
     insertionAngles,
-    occupiedArcPx: openChainArcPx,
+    occupiedArcPx: totalFootprintPx,
     isOverCapacity: totalFootprintPx > circumferencePx + 1e-6,
   };
 }

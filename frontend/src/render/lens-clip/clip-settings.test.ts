@@ -56,11 +56,31 @@ describe("resolveLensClipRenderSettings", () => {
     });
     expect(resolved.materialInfluence).toBe(100);
     expect(resolved.originalLensColorInfluence).toBe(100);
+    expect(resolved.baseGlassNeutralization).toBe(0);
     expect(resolved.baseBrightness).toBe(-100);
     expect(resolved.baseGamma).toBe(2.5);
     expect(resolved.glassAbsorption).toBe(0);
     expect(resolved.glassDiffusion).toBe(100);
     expect(resolved.glassDepth).toBe(75);
+  });
+
+  it("prefers Base Glass Neutralization and promotes legacy density aliases", () => {
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [],
+      render: {
+        automaticMaterialBehavior: false,
+        baseGlassNeutralization: 40,
+        glassBaseDensity: 66,
+        baseDensityBias: 77,
+      },
+    });
+    expect(resolved.baseGlassNeutralization).toBe(40);
+    expect(resolved.originalLensColorInfluence).toBe(60);
+    expect(resolved.baseGlassDarkness).toBe(66);
+    expect(resolved.baseGlassRichness).toBe(77);
   });
 
   it("maps legacy glassMaterialStrength onto materialInfluence when missing", () => {
@@ -303,7 +323,32 @@ describe("frame exclusion shapes", () => {
     expect(normalized.lenses[0]!.exclusions).toBeUndefined();
     expect(normalized.frameExclusions).toHaveLength(1);
     expect(normalized.frameExclusions![0]!.id).toBe("bridge");
+    expect(normalized.frameExclusions![0]!.layerOrder).toBe("behind");
+    expect(normalized.frameExclusions![0]!.opacity).toBe(100);
+    expect(normalized.frameExclusions![0]!.visible).toBe(true);
     expect(resolveFrameExclusionShapes(normalized)).toHaveLength(1);
+  });
+
+  it("preserves layer order and opacity on frame objects", () => {
+    const normalized = normalizeLensClipConfig({
+      version: 1,
+      imageWidth: 100,
+      imageHeight: 100,
+      lenses: [{ id: "left", label: "Left", pathD: "M0 0 L50 0 L50 50 Z" }],
+      frameExclusions: [
+        {
+          id: "screw",
+          label: "Screw",
+          pathD: "M10 10 L20 10 L20 20 Z",
+          layerOrder: "front",
+          opacity: 70,
+          depth: 80,
+        },
+      ],
+    });
+    expect(normalized.frameExclusions?.[0]?.layerOrder).toBe("front");
+    expect(normalized.frameExclusions?.[0]?.opacity).toBe(70);
+    expect(normalized.frameExclusions?.[0]?.depth).toBe(80);
   });
 
   it("migrates legacy per-lens exclusions up to frame-level frameExclusions", () => {

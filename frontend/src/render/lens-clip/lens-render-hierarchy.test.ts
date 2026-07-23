@@ -71,4 +71,25 @@ describe("lens render hierarchy", () => {
     expect(sparse.reflectionPosition).toBe(18);
     expect(sparse.reflectionScale).toBe(1.25);
   });
+
+  it("allows frame override of glass base density calibration", () => {
+    const resolved = resolveFrameLensRenderSettings(
+      { lensRenderPresetId: preset.id, useLensRenderPreset: false },
+      {
+        baseGlassDarkness: 72,
+        baseGlassRichness: 88,
+        baseGlassNeutralization: 40,
+        mirrorReflection: false,
+        reflectionRightOffsetX: 14,
+      },
+      [preset],
+      {},
+    );
+    expect(resolved.baseGlassDarkness).toBe(72);
+    expect(resolved.baseGlassRichness).toBe(88);
+    expect(resolved.baseGlassNeutralization).toBe(40);
+    expect(resolved.mirrorReflection).toBe(false);
+    expect(resolved.reflectionRightOffsetX).toBe(14);
+    expect(resolved.source).toBe("frameOverride");
+  });
 });

@@ -1,9 +1,9 @@
+import type { ReactNode } from "react";
 import type { LensClipRenderSettings } from "@bino-foundry/shared/types";
 
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { DEFAULT_LENS_CLIP_RENDER } from "@/render/lens-clip/clip-settings";
-import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 
 interface LensRenderingSettingsPanelProps {
   value: LensClipRenderSettings | null | undefined;
@@ -14,17 +14,15 @@ interface LensRenderingSettingsPanelProps {
 
 function SliderRow({
   label,
-  description,
   value,
   onChange,
   disabled,
   min = 0,
-  max = 1,
-  step = 0.01,
-  formatValue = (n) => n.toFixed(2),
+  max = 100,
+  step = 1,
+  formatValue = (n) => `${Math.round(n)}%`,
 }: {
   label: string;
-  description: string;
   value: number;
   onChange: (n: number) => void;
   disabled?: boolean;
@@ -34,14 +32,13 @@ function SliderRow({
   formatValue?: (n: number) => string;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <Label className="text-xs text-muted-foreground">{label}</Label>
         <span className="tabular-nums text-[10px] text-muted-foreground">
           {formatValue(value)}
         </span>
       </div>
-      <p className="text-[10px] leading-snug text-muted-foreground">{description}</p>
       <input
         type="range"
         min={min}
@@ -56,9 +53,110 @@ function SliderRow({
   );
 }
 
+function ToolGroup({
+  label,
+  valueLabel,
+  children,
+}: {
+  label: string;
+  valueLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
+        <span className="text-[10px] text-muted-foreground">{valueLabel}</span>
+      </div>
+      <div className="flex flex-wrap gap-1">{children}</div>
+    </div>
+  );
+}
+
+function ToolButton({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "rounded border px-2 py-1 text-[10px] font-medium transition-colors",
+        active
+          ? "border-foreground/40 bg-foreground text-background"
+          : "border-border/70 bg-background text-muted-foreground hover:bg-muted/40",
+        disabled && "opacity-50",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LayerCard({
+  title,
+  description,
+  enabled,
+  onToggle,
+  disabled,
+  children,
+}: {
+  title: string;
+  description: string;
+  enabled: boolean;
+  onToggle: (next: boolean) => void;
+  disabled?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "space-y-3 rounded border border-border/70 bg-background/50 p-3",
+        !enabled && "opacity-70",
+      )}
+    >
+      <label className="flex items-start gap-2 text-xs">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-foreground"
+          checked={enabled}
+          disabled={disabled}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        <span>
+          <span className="font-medium text-foreground">{title}</span>
+          <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">
+            {description}
+          </span>
+        </span>
+      </label>
+      {enabled ? <div className="space-y-3 pl-5">{children}</div> : null}
+    </div>
+  );
+}
+
+const TINT_BLEND_LABELS: Record<
+  NonNullable<LensClipRenderSettings["glassTintBlend"]>,
+  string
+> = {
+  kaca: "Glass",
+  color: "Color",
+  "source-over": "Normal",
+  multiply: "Multiply",
+};
+
 /**
- * Glass Material controls for the reusable SVG `#glassMaterial` filter.
- * Hierarchy (frame override → preset → system default) is applied by the caller.
+ * Glass material layer controls for Lens Rendering Presets and Frame Overrides.
+ * Customer tint HEX stays outside this panel (live preview / catalogue).
  */
 export function LensRenderingSettingsPanel({
   value,
@@ -66,359 +164,489 @@ export function LensRenderingSettingsPanel({
   className,
   disabled,
 }: LensRenderingSettingsPanelProps) {
-  const { lensMaterialProfiles } = useSunglassesCatalog();
-  const merged: Required<
-    Pick<
-      LensClipRenderSettings,
-      | "automaticMaterialBehavior"
-      | "originalLensColorInfluence"
-      | "baseBrightness"
-      | "baseGamma"
-      | "glassAbsorption"
-      | "glassDiffusion"
-      | "glassDepth"
-      | "tintLayerOpacity"
-      | "lensTransmission"
-      | "reflectionEnabled"
-      | "reflectionOpacity"
-      | "reflectionStrength"
-      | "reflectionBlur"
-      | "reflectionOffsetX"
-      | "reflectionOffsetY"
-      | "reflectionScale"
-      | "reflectionAngle"
-      | "backgroundVisibility"
-      | "environmentTransparency"
-      | "centerDensity"
-      | "edgeDensity"
-      | "edgeSoftness"
-      | "edgeOpacity"
-    >
-  > = {
-    automaticMaterialBehavior:
-      value?.automaticMaterialBehavior ??
-      DEFAULT_LENS_CLIP_RENDER.automaticMaterialBehavior,
-    originalLensColorInfluence:
-      value?.originalLensColorInfluence ??
-      DEFAULT_LENS_CLIP_RENDER.originalLensColorInfluence,
-    baseBrightness: value?.baseBrightness ?? DEFAULT_LENS_CLIP_RENDER.baseBrightness,
-    baseGamma: value?.baseGamma ?? DEFAULT_LENS_CLIP_RENDER.baseGamma,
-    glassAbsorption: value?.glassAbsorption ?? DEFAULT_LENS_CLIP_RENDER.glassAbsorption,
-    glassDiffusion: value?.glassDiffusion ?? DEFAULT_LENS_CLIP_RENDER.glassDiffusion,
-    glassDepth: value?.glassDepth ?? DEFAULT_LENS_CLIP_RENDER.glassDepth,
-    tintLayerOpacity: value?.tintLayerOpacity ?? DEFAULT_LENS_CLIP_RENDER.tintLayerOpacity,
-    lensTransmission:
-      value?.lensTransmission ?? DEFAULT_LENS_CLIP_RENDER.lensTransmission,
-    reflectionEnabled:
-      value?.reflectionEnabled ?? DEFAULT_LENS_CLIP_RENDER.reflectionEnabled,
-    reflectionOpacity:
-      value?.reflectionOpacity ?? DEFAULT_LENS_CLIP_RENDER.reflectionOpacity,
-    reflectionStrength:
-      value?.reflectionStrength ?? DEFAULT_LENS_CLIP_RENDER.reflectionStrength,
-    reflectionBlur: value?.reflectionBlur ?? DEFAULT_LENS_CLIP_RENDER.reflectionBlur,
-    reflectionOffsetX:
-      value?.reflectionOffsetX ?? DEFAULT_LENS_CLIP_RENDER.reflectionOffsetX,
-    reflectionOffsetY:
-      value?.reflectionOffsetY ?? DEFAULT_LENS_CLIP_RENDER.reflectionOffsetY,
-    reflectionScale: value?.reflectionScale ?? DEFAULT_LENS_CLIP_RENDER.reflectionScale,
-    reflectionAngle: value?.reflectionAngle ?? DEFAULT_LENS_CLIP_RENDER.reflectionAngle,
-    backgroundVisibility:
+  const tintEnabled = value?.glassTintEnabled ?? DEFAULT_LENS_CLIP_RENDER.glassTintEnabled;
+  const tintOpacity = Math.round(
+    (value?.tintLayerOpacity ?? DEFAULT_LENS_CLIP_RENDER.tintLayerOpacity) * 100,
+  );
+  const tintBlend = value?.glassTintBlend ?? DEFAULT_LENS_CLIP_RENDER.glassTintBlend;
+  const tintDepth = value?.glassDepth ?? DEFAULT_LENS_CLIP_RENDER.glassDepth;
+  const tintShine = value?.glassTintShine ?? DEFAULT_LENS_CLIP_RENDER.glassTintShine;
+
+  const darkEnabled = value?.darkLayerEnabled ?? DEFAULT_LENS_CLIP_RENDER.darkLayerEnabled;
+  const darkOpacity = value?.darkLayerOpacity ?? DEFAULT_LENS_CLIP_RENDER.darkLayerOpacity;
+  const darkMode = value?.darkLayerMode ?? DEFAULT_LENS_CLIP_RENDER.darkLayerMode;
+  const darkColor = value?.darkLayerColor ?? DEFAULT_LENS_CLIP_RENDER.darkLayerColor;
+  const darkBlend = value?.darkLayerBlend ?? DEFAULT_LENS_CLIP_RENDER.darkLayerBlend;
+  const darkGlow = value?.darkLayerGlow ?? DEFAULT_LENS_CLIP_RENDER.darkLayerGlow;
+  const darkGlowSize = value?.darkLayerGlowSize ?? DEFAULT_LENS_CLIP_RENDER.darkLayerGlowSize;
+  const darkGlowX = value?.darkLayerGlowX ?? DEFAULT_LENS_CLIP_RENDER.darkLayerGlowX;
+  const darkGlowY = value?.darkLayerGlowY ?? DEFAULT_LENS_CLIP_RENDER.darkLayerGlowY;
+  const darkSoft = value?.darkLayerSoft ?? DEFAULT_LENS_CLIP_RENDER.darkLayerSoft;
+  const darkEdge = value?.darkLayerEdge ?? DEFAULT_LENS_CLIP_RENDER.darkLayerEdge;
+
+  const reflectionEnabled =
+    value?.reflectionEnabled ?? DEFAULT_LENS_CLIP_RENDER.reflectionEnabled;
+  const reflectionOpacity = Math.round(
+    (value?.reflectionOpacity ?? DEFAULT_LENS_CLIP_RENDER.reflectionOpacity) * 100,
+  );
+
+  const edgeEnabled = value?.edgeEnabled ?? DEFAULT_LENS_CLIP_RENDER.edgeEnabled;
+  const edgeDensity = Math.round(
+    (value?.edgeDensity ?? DEFAULT_LENS_CLIP_RENDER.edgeDensity) * 100,
+  );
+  const edgeOpacity = Math.round(
+    (value?.edgeOpacity ?? DEFAULT_LENS_CLIP_RENDER.edgeOpacity) * 100,
+  );
+
+  const densityEnabled =
+    value?.densityGradientEnabled ?? DEFAULT_LENS_CLIP_RENDER.densityGradientEnabled;
+  const densityMode = value?.densityGradientMode ?? DEFAULT_LENS_CLIP_RENDER.densityGradientMode;
+  const densityAngle =
+    value?.densityGradientAngle ?? DEFAULT_LENS_CLIP_RENDER.densityGradientAngle;
+  const densityStart =
+    value?.densityGradientStartColor ?? DEFAULT_LENS_CLIP_RENDER.densityGradientStartColor ?? "#1E1E1E";
+  const densityEnd =
+    value?.densityGradientEndColor ?? DEFAULT_LENS_CLIP_RENDER.densityGradientEndColor ?? "#4B4B4B";
+  const densityPosition =
+    value?.densityGradientPosition ?? DEFAULT_LENS_CLIP_RENDER.densityGradientPosition;
+  const densityStartFalloff =
+    value?.densityGradientStartFalloff ??
+    value?.densityGradientStrength ??
+    DEFAULT_LENS_CLIP_RENDER.densityGradientStartFalloff;
+  const densityEndFalloff =
+    value?.densityGradientEndFalloff ??
+    value?.densityGradientStrength ??
+    DEFAULT_LENS_CLIP_RENDER.densityGradientEndFalloff;
+  const densityCurve =
+    value?.densityGradientCurve ?? DEFAULT_LENS_CLIP_RENDER.densityGradientCurve;
+
+  const backgroundVisibility = Math.round(
+    Math.max(
       value?.backgroundVisibility ?? DEFAULT_LENS_CLIP_RENDER.backgroundVisibility,
-    environmentTransparency:
       value?.environmentTransparency ?? DEFAULT_LENS_CLIP_RENDER.environmentTransparency,
-    centerDensity: value?.centerDensity ?? DEFAULT_LENS_CLIP_RENDER.centerDensity,
-    edgeDensity: value?.edgeDensity ?? DEFAULT_LENS_CLIP_RENDER.edgeDensity,
-    edgeSoftness: value?.edgeSoftness ?? DEFAULT_LENS_CLIP_RENDER.edgeSoftness,
-    edgeOpacity: value?.edgeOpacity ?? DEFAULT_LENS_CLIP_RENDER.edgeOpacity,
-  };
+    ) * 100,
+  );
 
   const patch = (partial: Partial<LensClipRenderSettings>) => {
-    onChange({ ...value, ...merged, ...partial });
+    onChange({
+      ...value,
+      automaticMaterialBehavior: false,
+      ...partial,
+    });
   };
 
   return (
-    <div className={cn("space-y-4 rounded-md border border-border/80 bg-muted/20 p-3", className)}>
+    <div className={cn("space-y-3 rounded-md border border-border/80 bg-muted/20 p-3", className)}>
       <div>
-        <p className="type-label text-muted-foreground">Lens rendering</p>
+        <p className="type-label text-muted-foreground">Glass material layers</p>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          Optical glass is rendered by one reusable SVG material filter. Automatic mode derives
-          filter response from Tint Layer Opacity; manual mode uses the values below exactly.
+          Layers enhance the original lens. Use the live preview tint colour to try HEX values —
+          the customer’s selected tint remains the final colour.
         </p>
       </div>
 
-      <label className="space-y-1 text-xs">
-        <span className="font-medium text-foreground">Apply material profile</span>
-        <select
-          className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
-          value=""
-          disabled={disabled || lensMaterialProfiles.length === 0}
-          onChange={(event) => {
-            const profile = lensMaterialProfiles.find((item) => item.id === event.target.value);
-            if (profile) onChange({ ...value, ...profile.settings });
-          }}
-        >
-          <option value="">Choose a starting point…</option>
-          {lensMaterialProfiles
-            .filter((profile) => profile.isActive)
-            .map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name}
-              </option>
-            ))}
-        </select>
-        <span className="block text-[10px] text-muted-foreground">
-          Copies database values into this draft. It does not create a locked relationship.
-        </span>
-      </label>
-
-      <label className="flex items-start gap-2 rounded border border-border/70 bg-background/50 p-3 text-xs">
-        <input
-          type="checkbox"
-          className="mt-0.5 accent-foreground"
-          checked={merged.automaticMaterialBehavior}
+      <LayerCard
+        title="Tint layer"
+        description="Colour, depth, and surface shine applied over the original lens."
+        enabled={tintEnabled}
+        disabled={disabled}
+        onToggle={(glassTintEnabled) => patch({ glassTintEnabled })}
+      >
+        <SliderRow
+          label="Opacity"
+          value={tintOpacity}
           disabled={disabled}
-          onChange={(e) => patch({ automaticMaterialBehavior: e.target.checked })}
+          onChange={(pct) => patch({ tintLayerOpacity: pct / 100, tintOpacity: pct / 100 })}
         />
-        <span>
-          <span className="font-medium text-foreground">Automatic Material Behaviour</span>
-          <span className="mt-0.5 block text-muted-foreground">
-            Recommended. Tint density automatically adjusts reflection, edge absorption,
-            transmission, and density inside the glass filter.
-          </span>
-        </span>
-      </label>
+        <ToolGroup label="Blend mode" valueLabel={TINT_BLEND_LABELS[tintBlend]}>
+          {(
+            [
+              ["kaca", "Glass"],
+              ["color", "Color"],
+              ["source-over", "Normal"],
+              ["multiply", "Multiply"],
+            ] as const
+          ).map(([mode, label]) => (
+            <ToolButton
+              key={mode}
+              active={tintBlend === mode}
+              disabled={disabled}
+              onClick={() => patch({ glassTintBlend: mode })}
+            >
+              {label}
+            </ToolButton>
+          ))}
+        </ToolGroup>
+        <SliderRow
+          label="Glass depth"
+          value={tintDepth}
+          disabled={disabled}
+          onChange={(glassDepth) => patch({ glassDepth })}
+        />
+        <SliderRow
+          label="Surface shine"
+          value={tintShine}
+          disabled={disabled}
+          onChange={(glassTintShine) => patch({ glassTintShine })}
+        />
+      </LayerCard>
 
-      <SliderRow
-        label="Tint layer opacity"
-        description="Controls the coloured tint. Lower values create a lighter lens; higher values create a stronger tint."
-        value={merged.tintLayerOpacity}
+      <LayerCard
+        title="Dark layer"
+        description="Dark glass body with an optional graduated sheen."
+        enabled={darkEnabled}
         disabled={disabled}
-        onChange={(tintLayerOpacity) => patch({ tintLayerOpacity })}
-      />
-
-      <SliderRow
-        label="Original Lens Colour Influence"
-        description="How much source-lens hue remains before tinting. 0% = neutral luminance only; 100% keeps the original cast."
-        value={merged.originalLensColorInfluence}
-        min={0}
-        max={100}
-        step={1}
-        formatValue={(n) => `${Math.round(n)}%`}
-        disabled={disabled}
-        onChange={(originalLensColorInfluence) => patch({ originalLensColorInfluence })}
-      />
-
-      {!merged.automaticMaterialBehavior ? (
-        <div className="space-y-4 rounded border border-border/70 bg-background/50 p-3">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Manual source calibration
-          </p>
-          <SliderRow
-            label="Base brightness"
-            description="Brightens or darkens the original lens before tinting."
-            value={merged.baseBrightness}
-            min={-100}
-            max={100}
-            step={1}
-            formatValue={(n) => `${n > 0 ? "+" : ""}${Math.round(n)}`}
+        onToggle={(darkLayerEnabled) => patch({ darkLayerEnabled })}
+      >
+        <ToolGroup
+          label="Mode"
+          valueLabel={darkMode === "gradasi" ? "gradient" : "flat"}
+        >
+          <ToolButton
+            active={darkMode === "flat"}
             disabled={disabled}
-            onChange={(baseBrightness) => patch({ baseBrightness })}
-          />
-          <SliderRow
-            label="Base gamma"
-            description="Tonal response for unusually dark or light source plates."
-            value={merged.baseGamma}
-            min={0.5}
-            max={2.5}
-            step={0.01}
-            formatValue={(n) => n.toFixed(2)}
+            onClick={() => patch({ darkLayerMode: "flat" })}
+          >
+            Flat
+          </ToolButton>
+          <ToolButton
+            active={darkMode === "gradasi"}
             disabled={disabled}
-            onChange={(baseGamma) => patch({ baseGamma })}
-          />
-        </div>
-      ) : null}
-
-      {merged.automaticMaterialBehavior ? (
-        <p className="rounded border border-border/60 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-          Glass Material and reflection response are derived live from tint opacity. Disable
-          Automatic Material Behaviour for full artistic control.
-        </p>
-      ) : (
-        <div className="space-y-4 rounded border border-border/70 bg-background/50 p-3">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Glass Material
-          </p>
-
-          <SliderRow
-            label="Glass Transmission"
-            description="How much environment light remains visible through the glass."
-            value={merged.lensTransmission}
-            formatValue={(n) => `${Math.round(n * 100)}%`}
+            onClick={() => patch({ darkLayerMode: "gradasi" })}
+          >
+            Gradient
+          </ToolButton>
+        </ToolGroup>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground">Colour</Label>
+          <input
+            type="color"
+            value={darkColor}
             disabled={disabled}
-            onChange={(lensTransmission) => patch({ lensTransmission })}
-          />
-          <SliderRow
-            label="Glass Absorption"
-            description="Light absorbed by the glass body — richer depth without simply raising opacity."
-            value={merged.glassAbsorption}
-            min={0}
-            max={100}
-            step={1}
-            formatValue={(n) => `${Math.round(n)}%`}
-            disabled={disabled}
-            onChange={(glassAbsorption) => patch({ glassAbsorption })}
-          />
-          <SliderRow
-            label="Glass Density"
-            description="Perceived optical thickness inside the material filter."
-            value={merged.glassDepth}
-            min={0}
-            max={100}
-            step={1}
-            formatValue={(n) => `${Math.round(n)}%`}
-            disabled={disabled}
-            onChange={(glassDepth) => patch({ glassDepth })}
-          />
-          <SliderRow
-            label="Glass Diffusion"
-            description="Internal softness / light scatter in the filter."
-            value={merged.glassDiffusion}
-            min={0}
-            max={100}
-            step={1}
-            formatValue={(n) => `${Math.round(n)}%`}
-            disabled={disabled}
-            onChange={(glassDiffusion) => patch({ glassDiffusion })}
-          />
-          <SliderRow
-            label="Center Density"
-            description="Density at the optical centre."
-            value={merged.centerDensity}
-            formatValue={(n) => `${Math.round(n * 100)}%`}
-            disabled={disabled}
-            onChange={(centerDensity) => patch({ centerDensity })}
-          />
-          <SliderRow
-            label="Edge Density"
-            description="Extra density at the perimeter from the longer light path."
-            value={merged.edgeDensity}
-            formatValue={(n) => `${Math.round(n * 100)}%`}
-            disabled={disabled}
-            onChange={(edgeDensity) => patch({ edgeDensity })}
-          />
-          <SliderRow
-            label="Edge Softness"
-            description="Feathering of the edge-absorption response in the filter."
-            value={merged.edgeSoftness}
-            formatValue={(n) => `${Math.round(n * 100)}%`}
-            disabled={disabled}
-            onChange={(edgeSoftness) => patch({ edgeSoftness })}
-          />
-          <SliderRow
-            label="Environment Visibility"
-            description="How much of the scene shows through the synthetic glass."
-            value={Math.max(merged.environmentTransparency, merged.backgroundVisibility)}
-            formatValue={(n) => `${Math.round(n * 100)}%`}
-            disabled={disabled}
-            onChange={(environmentVisibility) =>
+            onChange={(e) =>
               patch({
-                environmentTransparency: environmentVisibility,
-                backgroundVisibility: environmentVisibility,
+                darkLayerColor: e.target.value.toUpperCase(),
+                baseGlassDarkness: darkOpacity,
               })
             }
+            className="h-7 w-10 cursor-pointer rounded border border-border/70 bg-transparent"
           />
-
-          <label className="flex items-start gap-2 rounded border border-border/60 bg-muted/10 p-3 text-xs">
-            <input
-              type="checkbox"
-              className="mt-0.5 accent-foreground"
-              checked={merged.reflectionEnabled}
-              disabled={disabled}
-              onChange={(e) => patch({ reflectionEnabled: e.target.checked })}
-            />
-            <span>
-              <span className="font-medium text-foreground">Enable Reflection</span>
-              <span className="mt-0.5 block text-muted-foreground">
-                Adds a configurable specular catch-light inside the glass material filter.
-                When off, the filter skips reflection entirely.
-              </span>
-            </span>
-          </label>
-
-          {merged.reflectionEnabled ? (
-            <div className="space-y-4 border-t border-border/50 pt-3">
-              <SliderRow
-                label="Reflection Opacity"
-                description="Overall visibility of the filter reflection module."
-                value={merged.reflectionOpacity}
-                formatValue={(n) => `${Math.round(n * 100)}%`}
-                disabled={disabled}
-                onChange={(reflectionOpacity) => patch({ reflectionOpacity })}
-              />
-              <SliderRow
-                label="Reflection Softness"
-                description="Blur of the specular catch-light."
-                value={merged.reflectionBlur}
-                formatValue={(n) => `${Math.round(n * 100)}%`}
-                disabled={disabled}
-                onChange={(reflectionBlur) => patch({ reflectionBlur })}
-              />
-              <SliderRow
-                label="Reflection Intensity"
-                description="Highlight energy inside the reflection module."
-                value={merged.reflectionStrength}
-                formatValue={(n) => `${Math.round(n * 100)}%`}
-                disabled={disabled}
-                onChange={(reflectionStrength) => patch({ reflectionStrength })}
-              />
-              <SliderRow
-                label="Reflection Scale"
-                description="Size / distance of the catch-light."
-                value={merged.reflectionScale}
-                min={0.5}
-                max={1.75}
-                step={0.01}
-                formatValue={(n) => `${Math.round(n * 100)}%`}
-                disabled={disabled}
-                onChange={(reflectionScale) => patch({ reflectionScale })}
-              />
-              <SliderRow
-                label="Reflection Rotation"
-                description="Rotates the catch-light around the optical surface."
-                value={merged.reflectionAngle}
-                min={0}
-                max={360}
-                step={1}
-                formatValue={(n) => `${Math.round(n)}°`}
-                disabled={disabled}
-                onChange={(reflectionAngle) => patch({ reflectionAngle })}
-              />
-              <SliderRow
-                label="Reflection Offset X"
-                description="Moves the catch-light horizontally."
-                value={merged.reflectionOffsetX}
-                min={-100}
-                max={100}
-                step={1}
-                formatValue={(n) => `${n > 0 ? "+" : ""}${Math.round(n)}`}
-                disabled={disabled}
-                onChange={(reflectionOffsetX) => patch({ reflectionOffsetX })}
-              />
-              <SliderRow
-                label="Reflection Offset Y"
-                description="Moves the catch-light vertically."
-                value={merged.reflectionOffsetY}
-                min={-100}
-                max={100}
-                step={1}
-                formatValue={(n) => `${n > 0 ? "+" : ""}${Math.round(n)}`}
-                disabled={disabled}
-                onChange={(reflectionOffsetY) => patch({ reflectionOffsetY })}
-              />
-            </div>
-          ) : null}
+          <input
+            type="text"
+            value={darkColor}
+            disabled={disabled}
+            maxLength={7}
+            onChange={(e) => {
+              const next = e.target.value.trim();
+              if (/^#[0-9A-Fa-f]{6}$/.test(next)) {
+                patch({ darkLayerColor: next.toUpperCase() });
+              }
+            }}
+            className="h-7 flex-1 rounded border border-border/70 bg-background px-2 font-mono text-[10px]"
+          />
         </div>
-      )}
+        <SliderRow
+          label="Opacity"
+          value={darkOpacity}
+          disabled={disabled}
+          onChange={(darkLayerOpacity) =>
+            patch({ darkLayerOpacity, baseGlassDarkness: darkLayerOpacity })
+          }
+        />
+        <ToolGroup
+          label="Blend mode"
+          valueLabel={darkBlend === "source-over" ? "normal" : "multiply"}
+        >
+          <ToolButton
+            active={darkBlend === "source-over"}
+            disabled={disabled}
+            onClick={() => patch({ darkLayerBlend: "source-over" })}
+          >
+            Normal
+          </ToolButton>
+          <ToolButton
+            active={darkBlend === "multiply"}
+            disabled={disabled}
+            onClick={() => patch({ darkLayerBlend: "multiply" })}
+          >
+            Multiply
+          </ToolButton>
+        </ToolGroup>
+        {darkMode === "gradasi" ? (
+          <>
+            <SliderRow
+              label="Glass sheen"
+              value={darkGlow}
+              disabled={disabled}
+              onChange={(darkLayerGlow) => patch({ darkLayerGlow })}
+            />
+            <SliderRow
+              label="Sheen band width"
+              value={darkGlowSize}
+              min={15}
+              disabled={disabled}
+              onChange={(darkLayerGlowSize) => patch({ darkLayerGlowSize })}
+            />
+            <SliderRow
+              label="Sheen position X"
+              value={darkGlowX}
+              min={10}
+              max={90}
+              disabled={disabled}
+              onChange={(darkLayerGlowX) => patch({ darkLayerGlowX })}
+            />
+            <SliderRow
+              label="Sheen position Y"
+              value={darkGlowY}
+              min={10}
+              max={90}
+              disabled={disabled}
+              onChange={(darkLayerGlowY) => patch({ darkLayerGlowY })}
+            />
+            <SliderRow
+              label="Soft gradient"
+              value={darkSoft}
+              min={10}
+              disabled={disabled}
+              onChange={(darkLayerSoft) => patch({ darkLayerSoft })}
+            />
+            <SliderRow
+              label="Bottom edge dark"
+              value={darkEdge}
+              disabled={disabled}
+              onChange={(darkLayerEdge) => patch({ darkLayerEdge })}
+            />
+          </>
+        ) : null}
+      </LayerCard>
+
+      <LayerCard
+        title="Density gradient"
+        description="Optical density transition across the lens. Start and end falloff control each side independently."
+        enabled={densityEnabled}
+        disabled={disabled}
+        onToggle={(densityGradientEnabled) =>
+          patch({
+            densityGradientEnabled,
+            // Colours are always part of the gradient when enabled.
+            densityGradientTwoColor: true,
+          })
+        }
+      >
+        <ToolGroup
+          label="Direction"
+          valueLabel={
+            densityMode === "angle"
+              ? "custom angle"
+              : densityMode === "none"
+                ? "none"
+                : densityMode
+          }
+        >
+          {(
+            [
+              ["none", "None"],
+              ["vertical", "Vertical"],
+              ["horizontal", "Horizontal"],
+              ["radial", "Radial"],
+              ["angle", "Custom angle"],
+            ] as const
+          ).map(([mode, label]) => (
+            <ToolButton
+              key={mode}
+              active={densityMode === mode}
+              disabled={disabled}
+              onClick={() => patch({ densityGradientMode: mode })}
+            >
+              {label}
+            </ToolButton>
+          ))}
+        </ToolGroup>
+        {densityMode === "angle" ? (
+          <SliderRow
+            label="Angle"
+            value={densityAngle}
+            max={360}
+            disabled={disabled}
+            formatValue={(n) => `${Math.round(n)}°`}
+            onChange={(densityGradientAngle) => patch({ densityGradientAngle })}
+          />
+        ) : null}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Label className="w-16 shrink-0 text-xs text-muted-foreground">Start</Label>
+            <input
+              type="color"
+              value={densityStart}
+              disabled={disabled}
+              onChange={(e) =>
+                patch({
+                  densityGradientStartColor: e.target.value.toUpperCase(),
+                  densityGradientTwoColor: true,
+                })
+              }
+              className="h-7 w-10 cursor-pointer rounded border border-border/70 bg-transparent"
+            />
+            <input
+              type="text"
+              value={densityStart}
+              disabled={disabled}
+              maxLength={7}
+              onChange={(e) => {
+                const next = e.target.value.trim();
+                if (/^#[0-9A-Fa-f]{6}$/.test(next)) {
+                  patch({
+                    densityGradientStartColor: next.toUpperCase(),
+                    densityGradientTwoColor: true,
+                  });
+                }
+              }}
+              className="h-7 flex-1 rounded border border-border/70 bg-background px-2 font-mono text-[10px]"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="w-16 shrink-0 text-xs text-muted-foreground">End</Label>
+            <input
+              type="color"
+              value={densityEnd}
+              disabled={disabled}
+              onChange={(e) =>
+                patch({
+                  densityGradientEndColor: e.target.value.toUpperCase(),
+                  densityGradientTwoColor: true,
+                })
+              }
+              className="h-7 w-10 cursor-pointer rounded border border-border/70 bg-transparent"
+            />
+            <input
+              type="text"
+              value={densityEnd}
+              disabled={disabled}
+              maxLength={7}
+              onChange={(e) => {
+                const next = e.target.value.trim();
+                if (/^#[0-9A-Fa-f]{6}$/.test(next)) {
+                  patch({
+                    densityGradientEndColor: next.toUpperCase(),
+                    densityGradientTwoColor: true,
+                  });
+                }
+              }}
+              className="h-7 flex-1 rounded border border-border/70 bg-background px-2 font-mono text-[10px]"
+            />
+          </div>
+        </div>
+        <SliderRow
+          label="Position"
+          value={densityPosition}
+          disabled={disabled}
+          onChange={(densityGradientPosition) => patch({ densityGradientPosition })}
+        />
+        <SliderRow
+          label="Start falloff"
+          value={densityStartFalloff}
+          disabled={disabled}
+          onChange={(densityGradientStartFalloff) =>
+            patch({ densityGradientStartFalloff, densityGradientStrength: densityGradientStartFalloff })
+          }
+        />
+        <SliderRow
+          label="End falloff"
+          value={densityEndFalloff}
+          disabled={disabled}
+          onChange={(densityGradientEndFalloff) => patch({ densityGradientEndFalloff })}
+        />
+        <ToolGroup
+          label="Curve"
+          valueLabel={
+            densityCurve === "ease-in"
+              ? "ease in"
+              : densityCurve === "ease-out"
+                ? "ease out"
+                : densityCurve === "ease-in-out"
+                  ? "ease in-out"
+                  : "linear"
+          }
+        >
+          {(
+            [
+              ["linear", "Linear"],
+              ["ease-in", "Ease in"],
+              ["ease-out", "Ease out"],
+              ["ease-in-out", "Ease in-out"],
+            ] as const
+          ).map(([curve, label]) => (
+            <ToolButton
+              key={curve}
+              active={densityCurve === curve}
+              disabled={disabled}
+              onClick={() => patch({ densityGradientCurve: curve })}
+            >
+              {label}
+            </ToolButton>
+          ))}
+        </ToolGroup>
+      </LayerCard>
+
+      <LayerCard
+        title="Reflection"
+        description="Specular catch-light on the glass surface."
+        enabled={reflectionEnabled}
+        disabled={disabled}
+        onToggle={(enabled) =>
+          patch({
+            reflectionEnabled: enabled,
+            ...(enabled && (value?.reflectionStrength == null || value.reflectionStrength < 0.05)
+              ? { reflectionStrength: DEFAULT_LENS_CLIP_RENDER.reflectionStrength }
+              : {}),
+          })
+        }
+      >
+        <SliderRow
+          label="Reflection opacity"
+          value={reflectionOpacity}
+          disabled={disabled}
+          onChange={(pct) => patch({ reflectionOpacity: pct / 100 })}
+        />
+      </LayerCard>
+
+      <LayerCard
+        title="Edge"
+        description="Rim thickness and darkness toward the lens edge."
+        enabled={edgeEnabled}
+        disabled={disabled}
+        onToggle={(next) => patch({ edgeEnabled: next })}
+      >
+        <SliderRow
+          label="Edge density"
+          value={edgeDensity}
+          disabled={disabled}
+          onChange={(pct) => patch({ edgeDensity: pct / 100 })}
+        />
+        <SliderRow
+          label="Edge opacity"
+          value={edgeOpacity}
+          disabled={disabled}
+          onChange={(pct) => patch({ edgeOpacity: pct / 100, edgeDarkness: pct / 100 })}
+        />
+      </LayerCard>
+
+      <div className="space-y-3 rounded border border-border/70 bg-background/50 p-3">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Transmission
+        </p>
+        <SliderRow
+          label="Background visibility"
+          value={backgroundVisibility}
+          disabled={disabled}
+          onChange={(pct) =>
+            patch({
+              backgroundVisibility: pct / 100,
+              environmentTransparency: pct / 100,
+            })
+          }
+        />
+      </div>
     </div>
   );
 }

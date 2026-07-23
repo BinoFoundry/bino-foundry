@@ -10,6 +10,33 @@ export const LENS_RENDER_PRESET_KEYS = [
   "glassAbsorption",
   "glassDiffusion",
   "glassDepth",
+  "glassTintBlend",
+  "glassTintShine",
+  "glassTintEnabled",
+  "darkLayerEnabled",
+  "darkLayerOpacity",
+  "darkLayerMode",
+  "darkLayerColor",
+  "darkLayerBlend",
+  "darkLayerGlow",
+  "darkLayerGlowSize",
+  "darkLayerGlowX",
+  "darkLayerGlowY",
+  "darkLayerSoft",
+  "darkLayerEdge",
+  "edgeEnabled",
+  "densityGradientEnabled",
+  "densityGradientMode",
+  "densityGradientAngle",
+  "densityGradientTwoColor",
+  "densityGradientStartColor",
+  "densityGradientEndColor",
+  "densityGradientStrength",
+  "densityGradientSoftness",
+  "densityGradientPosition",
+  "densityGradientStartFalloff",
+  "densityGradientEndFalloff",
+  "densityGradientCurve",
   "tintLayerOpacity",
   "lensOpacity",
   "reflectionOpacity",
@@ -37,6 +64,16 @@ export const LENS_RENDER_PRESET_KEYS = [
   "reflectionOffsetX",
   "reflectionOffsetY",
   "reflectionScale",
+  "mirrorReflection",
+  "reflectionRightAngle",
+  "reflectionRightOffsetX",
+  "reflectionRightOffsetY",
+  "reflectionRightScale",
+  "reflectionRightOpacity",
+  "reflectionRightBlur",
+  "baseGlassDarkness",
+  "baseGlassRichness",
+  "baseGlassNeutralization",
   "internalReflectionEnabled",
   "internalReflectionOpacity",
   "internalReflectionSoftness",
@@ -147,6 +184,33 @@ export const LENS_RENDER_SYSTEM_DEFAULTS: Required<
   glassAbsorption: 30,
   glassDiffusion: 18,
   glassDepth: 50,
+  glassTintBlend: "kaca",
+  glassTintShine: 55,
+  glassTintEnabled: true,
+  darkLayerEnabled: true,
+  darkLayerOpacity: 28,
+  darkLayerMode: "gradasi",
+  darkLayerColor: "#0A0A0A",
+  darkLayerBlend: "source-over",
+  darkLayerGlow: 42,
+  darkLayerGlowSize: 55,
+  darkLayerGlowX: 45,
+  darkLayerGlowY: 34,
+  darkLayerSoft: 70,
+  darkLayerEdge: 28,
+  edgeEnabled: true,
+  densityGradientEnabled: false,
+  densityGradientMode: "vertical",
+  densityGradientAngle: 90,
+  densityGradientTwoColor: true,
+  densityGradientStartColor: "#1E1E1E",
+  densityGradientEndColor: "#4B4B4B",
+  densityGradientStrength: 45,
+  densityGradientSoftness: 55,
+  densityGradientPosition: 45,
+  densityGradientStartFalloff: 50,
+  densityGradientEndFalloff: 50,
+  densityGradientCurve: "linear",
   tintLayerOpacity: 0.42978,
   lensOpacity: 0.9,
   reflectionOpacity: 0.2,
@@ -174,6 +238,16 @@ export const LENS_RENDER_SYSTEM_DEFAULTS: Required<
   reflectionOffsetX: -10,
   reflectionOffsetY: -8,
   reflectionScale: 1.1,
+  mirrorReflection: true,
+  reflectionRightAngle: 338,
+  reflectionRightOffsetX: 10,
+  reflectionRightOffsetY: -8,
+  reflectionRightScale: 1.1,
+  reflectionRightOpacity: 0.2,
+  reflectionRightBlur: 0.58,
+  baseGlassDarkness: 28,
+  baseGlassRichness: 55,
+  baseGlassNeutralization: 85,
   internalReflectionEnabled: true,
   internalReflectionOpacity: 0.04,
   internalReflectionSoftness: 0.86,
@@ -195,9 +269,8 @@ export const LENS_RENDER_SYSTEM_DEFAULTS: Required<
 };
 
 /**
- * Identity optical settings. Most effects are zero; controls whose neutral point is not
- * zero use their mathematical identity (`baseGamma = 1`).
- * Used by the admin "Show original lens" preview in the same rendering pipeline.
+ * Identity optical settings used when all material layers are off (no comparison UI —
+ * only the mathematical zero point for empty layer stacks).
  */
 export const LENS_RENDER_ZERO_SETTINGS: Required<
   Pick<
@@ -210,6 +283,36 @@ export const LENS_RENDER_ZERO_SETTINGS: Required<
     | "glassAbsorption"
     | "glassDiffusion"
     | "glassDepth"
+    | "glassTintBlend"
+    | "glassTintShine"
+    | "glassTintEnabled"
+    | "darkLayerEnabled"
+    | "darkLayerOpacity"
+    | "darkLayerMode"
+    | "darkLayerColor"
+    | "darkLayerBlend"
+    | "darkLayerGlow"
+    | "darkLayerGlowSize"
+    | "darkLayerGlowX"
+    | "darkLayerGlowY"
+    | "darkLayerSoft"
+    | "darkLayerEdge"
+    | "edgeEnabled"
+    | "densityGradientEnabled"
+    | "densityGradientMode"
+    | "densityGradientAngle"
+    | "densityGradientTwoColor"
+    | "densityGradientStartColor"
+    | "densityGradientEndColor"
+    | "densityGradientStrength"
+    | "densityGradientSoftness"
+    | "densityGradientPosition"
+    | "densityGradientStartFalloff"
+    | "densityGradientEndFalloff"
+    | "densityGradientCurve"
+    | "baseGlassDarkness"
+    | "baseGlassRichness"
+    | "baseGlassNeutralization"
     | "tintLayerOpacity"
     | "lensOpacity"
     | "lensTransmission"
@@ -244,6 +347,36 @@ export const LENS_RENDER_ZERO_SETTINGS: Required<
   glassAbsorption: 0,
   glassDiffusion: 0,
   glassDepth: 0,
+  glassTintBlend: "kaca",
+  glassTintShine: 0,
+  glassTintEnabled: false,
+  darkLayerEnabled: false,
+  darkLayerOpacity: 0,
+  darkLayerMode: "gradasi",
+  darkLayerColor: "#0A0A0A",
+  darkLayerBlend: "source-over",
+  darkLayerGlow: 0,
+  darkLayerGlowSize: 55,
+  darkLayerGlowX: 45,
+  darkLayerGlowY: 34,
+  darkLayerSoft: 70,
+  darkLayerEdge: 0,
+  edgeEnabled: false,
+  densityGradientEnabled: false,
+  densityGradientMode: "vertical",
+  densityGradientAngle: 90,
+  densityGradientTwoColor: false,
+  densityGradientStartColor: "#1E1E1E",
+  densityGradientEndColor: "#4B4B4B",
+  densityGradientStrength: 0,
+  densityGradientSoftness: 55,
+  densityGradientPosition: 45,
+  densityGradientStartFalloff: 0,
+  densityGradientEndFalloff: 0,
+  densityGradientCurve: "linear",
+  baseGlassDarkness: 0,
+  baseGlassRichness: 0,
+  baseGlassNeutralization: 0,
   tintLayerOpacity: 0,
   lensOpacity: 0,
   lensTransmission: 1,
@@ -286,6 +419,19 @@ export function pickLensRenderPresetSettings(
   // Pre-000077 payloads used glassMaterialStrength; promote it into the current key.
   if (out.materialInfluence === undefined && isFiniteNumber(input.glassMaterialStrength)) {
     out.materialInfluence = input.glassMaterialStrength;
+  }
+  // Pre-000083 calibration aliases.
+  if (out.baseGlassDarkness === undefined && isFiniteNumber(input.glassBaseDensity)) {
+    out.baseGlassDarkness = input.glassBaseDensity;
+  }
+  if (out.baseGlassRichness === undefined && isFiniteNumber(input.baseDensityBias)) {
+    out.baseGlassRichness = input.baseDensityBias;
+  }
+  if (
+    out.baseGlassNeutralization === undefined &&
+    isFiniteNumber(input.originalLensColorInfluence)
+  ) {
+    out.baseGlassNeutralization = Math.max(0, Math.min(100, 100 - input.originalLensColorInfluence));
   }
   return out;
 }

@@ -22,8 +22,22 @@ export {
 } from "./clip-settings";
 export {
   resolveGlassMaterialFilterParams,
+  resolveAppliedGlassBaseDensity,
+  resolveBaseGlassDarknessAmount,
+  resolveBaseGlassRichnessAmount,
+  resolveSourceChromaRetain,
+  resolveReflectionTransformForSide,
+  resolveReflectionAppearanceForSide,
+  resolveLensReflectionSide,
+  approximatePathBounds,
   type GlassMaterialFilterParams,
+  type LensReflectionSide,
 } from "./glass-material-filter";
+export {
+  resolvePrototypeGlassAppearance,
+  type PrototypeGlassAppearance,
+} from "./prototype-glass-appearance";
+export { PrototypeGlassElement } from "./PrototypeGlassElement";
 export { GlassMaterialFilterDef } from "./GlassMaterialFilterDef";
 export {
   applyLensRenderHierarchyToFrameViews,

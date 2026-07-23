@@ -13,6 +13,15 @@ function renderLens(
   reflectionEnabled = false,
   originalLensColorInfluence = 0,
   extraRender: LensClipRenderSettings = {},
+  frameExclusions: Array<Record<string, unknown>> = [
+    {
+      id: "bridge",
+      label: "Bridge",
+      pathD: "M 45 10 L 55 10 L 55 20 L 45 20 Z",
+      layerOrder: "behind",
+      opacity: 100,
+    },
+  ],
 ): string {
   return renderToStaticMarkup(
     <SvgClipCompositorView
@@ -32,13 +41,7 @@ function renderLens(
               pathD: "M 10 10 L 90 10 L 90 50 L 10 50 Z",
             },
           ],
-          frameExclusions: [
-            {
-              id: "bridge",
-              label: "Bridge",
-              pathD: "M 45 10 L 55 10 L 55 20 L 45 20 Z",
-            },
-          ],
+          frameExclusions: frameExclusions as never,
           render: {
             automaticMaterialBehavior: false,
             originalLensColorInfluence,
@@ -61,6 +64,8 @@ function renderLens(
             glassAbsorption: 30,
             glassDiffusion: 18,
             glassDepth: 50,
+            baseGlassDarkness: 40,
+            baseGlassRichness: 55,
             ...extraRender,
           },
         },
@@ -75,47 +80,68 @@ function renderLens(
   );
 }
 
-describe("SvgClipCompositorView glass material filter", () => {
-  it("applies one reusable glassMaterial filter to the tinted lens path", () => {
+describe("SvgClipCompositorView prototype glass model", () => {
+  it("renders kaca tint stack with customer tint HEX", () => {
     const markup = renderLens(35, true);
-    expect(markup).toContain("glassMaterial");
-    expect(markup).toContain('filter="url(#');
     expect(markup).toContain("#8F1830");
-    expect(markup).toContain("feSpecularLighting");
-    // No stacked named overlay groups.
-    expect(markup).not.toContain("glass-internal-reflection");
-    expect(markup).not.toContain("glass-fresnel");
+    expect(markup).toContain('style="mix-blend-mode:color"');
+    expect(markup).toContain('style="mix-blend-mode:soft-light"');
+    expect(markup).toContain('style="mix-blend-mode:screen"');
+    // No legacy SVG filter glass material path.
+    expect(markup).not.toContain("feSpecularLighting");
+    expect(markup).not.toContain("glassMaterial");
   });
 
-  it("omits specular reflection primitives when reflection is disabled", () => {
+  it("omits specular when reflection is disabled", () => {
     const disabled = renderLens(35, false);
     const enabled = renderLens(35, true);
-    expect(disabled).not.toContain("feSpecularLighting");
-    expect(enabled).toContain("feSpecularLighting");
+    const specularId = /-specular"/;
+    expect(disabled.match(specularId) ?? []).toHaveLength(0);
+    expect((enabled.match(/-specular"/g) ?? []).length).toBeGreaterThan(0);
   });
 
-  it("removes source chroma before tinting through the foundation calibration filter", () => {
+  it("keeps the original lens under material layers", () => {
     const markup = renderLens(35);
-    expect(markup).toContain('type="saturate" values="0"');
-    expect(markup).toContain("#8F1830");
-  });
-
-  it("controls only source chroma in the existing luminance extraction filter", () => {
-    const neutral = renderLens(35, false, 0);
-    const recommended = renderLens(35, false, 15);
-    const preserved = renderLens(35, false, 100);
-    expect(neutral).toContain('type="saturate" values="0"');
-    expect(recommended).toContain('type="saturate" values="0.15"');
-    expect(preserved).toContain('type="saturate" values="1"');
-  });
-
-  it("keeps frame body, lens foundation, and exclusions on the one original plate", () => {
-    const markup = renderLens(35);
+    expect(markup).toContain('data-layer="original-lens"');
+    expect(markup).not.toContain("base-calibration");
+    expect(markup).not.toContain('type="saturate"');
+    // Plate appears as Frame Back + original lens + Frame Front (+ behind structure).
     const plateReferences = markup.match(/https:\/\/cdn\.example\/frame\.png/g) ?? [];
     expect(plateReferences.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("reuses a single glassMaterial filter definition for every lens opening", () => {
+  it("keeps Frame Back / Front and behind-glass structure objects", () => {
+    const markup = renderLens(35);
+    expect(markup).toContain("frame-back");
+    expect(markup).toContain("frame-front");
+    expect(markup).toContain("M 45 10 L 55 10 L 55 20 L 45 20 Z");
+    expect(markup).not.toContain('clip-rule="evenodd"');
+  });
+
+  it("shows the full plate when no material layers are active", () => {
+    const markup = renderLens(35, false, 0, {
+      glassTintEnabled: false,
+      tintLayerOpacity: 0,
+      darkLayerEnabled: false,
+      darkLayerOpacity: 0,
+      edgeEnabled: false,
+      edgeDensity: 0,
+      edgeOpacity: 0,
+      glassTintShine: 0,
+      backgroundVisibility: 0,
+      environmentTransparency: 0,
+      lensOpacity: 0,
+      lensTransmission: 1,
+      glassDepth: 0,
+    });
+    expect(markup).not.toContain("frame-back");
+    expect(markup).not.toContain("mix-blend-mode:color");
+    expect(markup).not.toContain('data-layer="original-lens"');
+    const plateReferences = markup.match(/https:\/\/cdn\.example\/frame\.png/g) ?? [];
+    expect(plateReferences.length).toBe(1);
+  });
+
+  it("creates independent glass defs per lens opening", () => {
     const markup = renderToStaticMarkup(
       <SvgClipCompositorView
         view="front"
@@ -146,9 +172,9 @@ describe("SvgClipCompositorView glass material filter", () => {
         tint={{ name: "Tint", top: "#224466", bottom: "#224466", opacity: 1 }}
       />,
     );
-    const filterDefs = markup.match(/id="[^"]*-glassMaterial"/g) ?? [];
-    expect(filterDefs).toHaveLength(1);
-    const filteredPaths = markup.match(/filter="url\(#[^"]*-glassMaterial\)"/g) ?? [];
-    expect(filteredPaths.length).toBe(2);
+    expect(markup).toContain("pg-left");
+    expect(markup).toContain("pg-right");
+    expect(markup).toContain("glass-left");
+    expect(markup).toContain("glass-right");
   });
 });

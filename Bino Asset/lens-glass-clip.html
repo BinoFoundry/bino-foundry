@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lens Layers — Clip + Gelap + Warna</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#101014; --panel:#18181e; --panel2:#1f1f26; --line:#2c2c34;
+    --text:#f0eeea; --muted:#8a8793; --soft:#c4b8b0;
+    --accent:#8f1830; --ok:#6bcf8e; --warn:#e0b35a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;min-height:100vh}
+  .wrap{max-width:1280px;margin:0 auto;padding:24px 16px 48px}
+  header{margin-bottom:18px}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--soft);margin:0 0 6px}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:24px;margin:0 0 6px;font-weight:600}
+  .sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0;max-width:640px}
+
+  .layout{display:grid;grid-template-columns:1fr 340px;gap:16px}
+  @media (max-width:980px){.layout{grid-template-columns:1fr}}
+
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:720px){.compare{grid-template-columns:1fr}}
+  .pane-label{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:8px;
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+  }
+  .pane-label b{color:var(--soft);font-weight:500}
+  .stack-hint{font-size:10px;opacity:.85}
+
+  .product{
+    position:relative;width:100%;aspect-ratio:1920/1080;
+    background:#141418;border-radius:8px;overflow:hidden;touch-action:none;
+  }
+  body.mode-draw .product{cursor:crosshair}
+  body.mode-edit .product{cursor:grab}
+  body.mode-edit .product.dragging{cursor:grabbing}
+  .product canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .product .hit{position:absolute;inset:0;z-index:4}
+  .product .overlay-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+  .product.hide-clip .overlay-svg{display:none}
+
+  .side{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 120px);overflow:auto;padding-right:2px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .card h2{
+    font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;
+  }
+
+  .presets{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .presets button{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:10px 4px;font-size:11px;cursor:pointer;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .presets button.active{border-color:var(--soft);color:var(--soft);background:#25252e}
+  .presets button small{display:block;color:var(--muted);font-size:9px;margin-top:3px;font-weight:400}
+
+  .layer{
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:8px;overflow:hidden;
+  }
+  .layer:last-child{margin-bottom:0}
+  .layer.off .layer-body{display:none}
+  .layer.off .layer-head{opacity:.55}
+  .layer-head{
+    display:flex;align-items:center;gap:8px;padding:10px 10px;
+    cursor:pointer;user-select:none;
+  }
+  .layer-head:hover{background:#24242c}
+  .eye{
+    width:28px;height:28px;border-radius:7px;border:1px solid var(--line);
+    background:#121216;color:var(--muted);font-size:14px;cursor:pointer;
+    display:grid;place-items:center;flex-shrink:0;font-family:inherit;
+  }
+  .eye.on{color:#fff;border-color:var(--ok);background:#1a2a20}
+  .layer-title{flex:1;min-width:0}
+  .layer-title strong{display:block;font-size:13px;font-weight:600}
+  .layer-title span{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+  .badge{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;padding:3px 7px;
+    border-radius:999px;border:1px solid var(--line);color:var(--muted);flex-shrink:0;
+  }
+  .badge.pk007{border-color:#5a6a8a;color:#9eb0d4}
+  .layer-body{padding:0 12px 12px;border-top:1px solid transparent}
+  .layer:not(.off) .layer-body{border-top-color:var(--line);padding-top:10px}
+
+  .color-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+  input[type=color]{
+    width:42px;height:34px;border:1px solid var(--line);border-radius:8px;
+    background:transparent;padding:0;cursor:pointer;
+  }
+  .hex{
+    flex:1;background:#121216;border:1px solid var(--line);border-radius:8px;
+    color:var(--text);padding:8px 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;
+  }
+  .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+  .swatch{aspect-ratio:1;border-radius:7px;border:2px solid transparent;cursor:pointer}
+  .swatch.active{border-color:#fff}
+
+  .rowline{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .rowline label{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+  .rowline .val{font-size:11px;color:var(--soft);font-family:'IBM Plex Mono',monospace}
+  input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:8px}
+  .seg2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+  .seg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+  button.tool{
+    background:#121216;border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:8px 6px;font-size:11px;cursor:pointer;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  button.tool.active{border-color:var(--soft);color:var(--soft)}
+  .btn-row{display:flex;flex-wrap:wrap;gap:6px}
+  .btn-row .tool{flex:1;min-width:72px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 0 0}
+  .hint b{color:var(--soft);font-weight:500}
+  .base-row{
+    display:flex;align-items:center;gap:8px;padding:10px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+  }
+  .base-row strong{font-size:13px}
+  .base-row span{font-size:11px;color:var(--muted)}
+  footer{margin-top:16px;text-align:center;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+</style>
+</head>
+<body class="mode-edit">
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Layer stack · bandingkan gelap vs terang</p>
+    <h1>Lensa: asli → gelap → warna</h1>
+    <p class="sub">
+      Matikan/nyalakan tiap layer untuk sejajarkan dulu densitas (PK007 vs PK002),
+      baru warna. Clip bisa disembunyikan saat bandingkan.
+    </p>
+  </header>
+
+  <div class="layout">
+    <div class="stage">
+      <div class="compare">
+        <div>
+          <div class="pane-label">
+            <span>Lensa gelap <b>PK002</b></span>
+            <span class="stack-hint" id="hint002">asli → warna</span>
+          </div>
+          <div class="product" data-sku="pk002">
+            <canvas class="view" width="1920" height="1080"></canvas>
+            <svg class="overlay-svg" viewBox="0 0 1920 1080" preserveAspectRatio="none"></svg>
+            <div class="hit"></div>
+          </div>
+        </div>
+        <div>
+          <div class="pane-label">
+            <span>Lensa terang <b>PK007</b></span>
+            <span class="stack-hint" id="hint007">asli → gelap → warna</span>
+          </div>
+          <div class="product" data-sku="pk007">
+            <canvas class="view" width="1920" height="1080"></canvas>
+            <svg class="overlay-svg" viewBox="0 0 1920 1080" preserveAspectRatio="none"></svg>
+            <div class="hit"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>Lihat tahap</h2>
+        <div class="presets" id="presets">
+          <button type="button" data-view="asli">Asli<small>foto saja</small></button>
+          <button type="button" data-view="dark">Gelap<small>tanpa warna</small></button>
+          <button type="button" data-view="tint">Warna<small>tanpa gelap</small></button>
+          <button type="button" data-view="full" class="active">Semua<small>gelap+warna</small></button>
+        </div>
+        <p class="hint">Alur sejajar: <b>Asli</b> → <b>Gelap</b> (samakan densitas PK007 ke PK002) → <b>Semua</b> (baru warna). Atau klik ◉ tiap layer.</p>
+      </div>
+
+      <div class="card">
+        <h2>Stack layer</h2>
+
+        <div class="layer" id="layerTint" data-layer="tint">
+          <div class="layer-head" data-toggle="tint">
+            <button type="button" class="eye on" id="eyeTint" title="On/off layer warna">◉</button>
+            <div class="layer-title">
+              <strong>Layer warna</strong>
+              <span>Di atas gelap · PK002 &amp; PK007</span>
+            </div>
+            <span class="badge">atas</span>
+          </div>
+          <div class="layer-body">
+            <div class="color-row">
+              <input type="color" id="tintColor" value="#8F1830">
+              <input class="hex" id="tintHex" value="#8F1830" maxlength="7">
+            </div>
+            <div class="swatches" id="swatches"></div>
+            <div class="rowline"><label>Opacity warna</label><span class="val" id="tintOpVal">78%</span></div>
+            <input type="range" id="tintOp" min="0" max="100" value="78">
+            <div class="rowline"><label>Mode warna</label><span class="val" id="tintBlendVal">kaca</span></div>
+            <div class="seg2">
+              <button type="button" class="tool active" id="blendKaca">Kaca</button>
+              <button type="button" class="tool" id="blendColor">Color</button>
+            </div>
+            <div class="seg2">
+              <button type="button" class="tool" id="blendNormal">Normal</button>
+              <button type="button" class="tool" id="blendMultiply">Multiply</button>
+            </div>
+            <div class="rowline"><label>Kedalaman kaca</label><span class="val" id="tintDepthVal">45%</span></div>
+            <input type="range" id="tintDepth" min="0" max="100" value="45">
+            <div class="rowline"><label>Kilau permukaan</label><span class="val" id="shineVal">55%</span></div>
+            <input type="range" id="shine" min="0" max="100" value="55">
+            <p class="hint"><b>Kaca</b> = hex tetap akurat + kilau. Hindari Multiply jika warna jadi gelap/kusam.</p>
+          </div>
+        </div>
+
+        <div class="layer" id="layerDark" data-layer="dark">
+          <div class="layer-head" data-toggle="dark">
+            <button type="button" class="eye on" id="eyeDark" title="On/off layer gelap">◉</button>
+            <div class="layer-title">
+              <strong>Layer gelap</strong>
+              <span>Menggelapkan lensa asli dulu</span>
+            </div>
+            <span class="badge pk007">PK007</span>
+          </div>
+          <div class="layer-body">
+            <div class="rowline"><label>Mode gelap</label><span class="val" id="darkModeVal">gradasi</span></div>
+            <div class="seg2">
+              <button type="button" class="tool" id="darkModeFlat">Rata</button>
+              <button type="button" class="tool active" id="darkModeGrad">Gradasi</button>
+            </div>
+            <div class="color-row">
+              <input type="color" id="darkColor" value="#0a0a0a">
+              <input class="hex" id="darkHex" value="#0A0A0A" maxlength="7">
+            </div>
+            <div class="rowline"><label>Opacity gelap</label><span class="val" id="darkOpVal">90%</span></div>
+            <input type="range" id="darkOp" min="0" max="100" value="90">
+            <div class="rowline"><label>Blend gelap</label><span class="val" id="darkBlendVal">normal</span></div>
+            <div class="seg2">
+              <button type="button" class="tool active" id="darkBlendNormal">Normal</button>
+              <button type="button" class="tool" id="darkBlendMultiply">Multiply</button>
+            </div>
+            <div id="darkGradControls">
+              <div class="rowline"><label>Kilau kaca</label><span class="val" id="darkGlowVal">42%</span></div>
+              <input type="range" id="darkGlow" min="0" max="100" value="42">
+              <div class="rowline"><label>Lebar pita kilau</label><span class="val" id="darkGlowSizeVal">55%</span></div>
+              <input type="range" id="darkGlowSize" min="15" max="100" value="55">
+              <div class="rowline"><label>Posisi kilau X</label><span class="val" id="darkGlowXVal">45%</span></div>
+              <input type="range" id="darkGlowX" min="10" max="90" value="45">
+              <div class="rowline"><label>Posisi kilau Y</label><span class="val" id="darkGlowYVal">34%</span></div>
+              <input type="range" id="darkGlowY" min="10" max="90" value="34">
+              <div class="rowline"><label>Soft gradasi</label><span class="val" id="darkSoftVal">70%</span></div>
+              <input type="range" id="darkSoft" min="10" max="100" value="70">
+              <div class="rowline"><label>Gelap bawah</label><span class="val" id="darkEdgeVal">28%</span></div>
+              <input type="range" id="darkEdge" min="0" max="100" value="28">
+            </div>
+            <p class="hint">Gradasi = gelap penuh + pita kilau horizontal (seperti PK002). Klik <b>Reset</b> jika clip lama masih oval.</p>
+          </div>
+        </div>
+
+        <div class="base-row">
+          <button type="button" class="eye on" disabled title="Selalu on">◉</button>
+          <div>
+            <strong>Lensa asli</strong>
+            <span>Foto dasar — selalu tampil</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Clip mask</h2>
+        <div class="seg2" style="margin-bottom:10px">
+          <button type="button" class="tool active" id="showClip">Clip: ON</button>
+          <button type="button" class="tool" id="focusSku">Fokus: klik panel</button>
+        </div>
+        <div class="seg3">
+          <button type="button" class="tool active" id="modeEdit">Edit</button>
+          <button type="button" class="tool" id="modeDraw">Gambar</button>
+          <button type="button" class="tool" id="modeInsert">Sisip</button>
+        </div>
+        <div class="seg2">
+          <button type="button" class="tool active" id="eyeLeft">Mata kiri</button>
+          <button type="button" class="tool" id="eyeRight">Mata kanan</button>
+        </div>
+        <div class="rowline"><label>Perbesar ke rim</label><span class="val" id="expVal">16px</span></div>
+        <input type="range" id="expand" min="0" max="40" value="16">
+        <div class="rowline"><label>Halus tepi</label><span class="val" id="smVal">35%</span></div>
+        <input type="range" id="smooth" min="0" max="100" value="35">
+        <div class="btn-row">
+          <button type="button" class="tool" id="growPts">+ Besar</button>
+          <button type="button" class="tool" id="shrinkPts">− Kecil</button>
+          <button type="button" class="tool" id="delPt">Hapus titik</button>
+        </div>
+        <div class="btn-row" style="margin-top:6px">
+          <button type="button" class="tool" id="resetSeed">Reset</button>
+          <button type="button" class="tool" id="copyLR">Kiri→kanan</button>
+          <button type="button" class="tool" id="copyPanels">002→007</button>
+        </div>
+        <p class="hint"><b>Edit</b> drag · <b>Sisip</b> klik garis · Alt+klik hapus · matikan Clip saat bandingkan warna.</p>
+      </div>
+    </div>
+  </div>
+  <footer id="statusFooter">view: semua · dark on · tint on</footer>
+</div>
+
+<script>
+const W = 1920, H = 1080;
+const SWATCHES = ['#8F1830','#1B2A4A','#0E3B2E','#4A2E1B','#2C2C2C','#5C4A9E','#B08D57','#1E1E1E'];
+const SRC = { pk002: 'PK002 - Front.png', pk007: 'PK007 - Front.png' };
+const HIT_R = 16;
+
+const state = {
+  mode: 'edit',
+  eye: 'left',
+  showClip: true,
+  view: 'full', // asli | dark | tint | full
+  dark: {
+    on: true,
+    color: '#0A0A0A',
+    opacity: 0.90,
+    blend: 'source-over', // source-over | multiply
+    mode: 'gradasi', // flat | gradasi
+    glow: 0.42,      // kilau horizontal (seperti PK002)
+    glowSize: 0.55,  // lebar pita kilau
+    glowX: 0.45,
+    glowY: 0.34,     // posisi pita dari atas
+    soft: 0.70,
+    edge: 0.28,
+  },
+  tint: {
+    on: true,
+    color: '#8F1830',
+    opacity: 0.78,
+    blend: 'kaca', // kaca | color | source-over | multiply
+    depth: 0.45,   // gelap tepi / volume
+    shine: 0.55,
+  },
+  smooth: 0.35,
+  expand: 16,
+};
+
+const products = {};
+let focusedSku = 'pk002';
+let drag = null;
+let selectedPt = null;
+
+function focused(){ return products[focusedSku]; }
+
+function parseHex(hex){
+  const h = String(hex).replace('#','');
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+function loadImage(src){
+  return new Promise((res, rej)=>{
+    const img = new Image();
+    img.onload = ()=> res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+function localPoint(el, e){
+  const r = el.getBoundingClientRect();
+  return { x:(e.clientX-r.left)/r.width*W, y:(e.clientY-r.top)/r.height*H };
+}
+
+function ellipsePoly(cx, cy, rx, ry, n){
+  const pts = [];
+  for(let i=0;i<n;i++){
+    const a = (i/n)*Math.PI*2 - Math.PI/2;
+    pts.push({ x: cx + Math.cos(a)*rx, y: cy + Math.sin(a)*ry });
+  }
+  return pts;
+}
+/** Superellipse — lebih kotak, nutup sudut lensa rectangular */
+function lensPoly(cx, cy, rw, rh, n=32, k=3.5){
+  const pts = [];
+  for(let i=0;i<n;i++){
+    const t = (i/n)*Math.PI*2 - Math.PI/2;
+    const c = Math.cos(t), s = Math.sin(t);
+    const r = Math.pow(Math.pow(Math.abs(c), k) + Math.pow(Math.abs(s), k), -1/k);
+    pts.push({ x: cx + r * c * rw, y: cy + r * s * rh });
+  }
+  return pts;
+}
+function seedPolys(sku){
+  if(sku === 'pk002'){
+    return {
+      left: lensPoly(560, 470, 278, 208, 32, 3.2),
+      right: lensPoly(1360, 470, 278, 208, 32, 3.2),
+    };
+  }
+  // PK007 rectangular — seed besar supaya layer gelap penuh ke rim
+  return {
+    left: lensPoly(575, 520, 310, 275, 36, 3.7),
+    right: lensPoly(1345, 520, 310, 275, 36, 3.7),
+  };
+}
+
+function smoothClosed(pts, iterations){
+  if(!pts || pts.length < 3 || iterations <= 0) return pts ? pts.slice() : [];
+  let p = pts.slice();
+  for(let n=0;n<iterations;n++){
+    const out = [];
+    const len = p.length;
+    for(let i=0;i<len;i++){
+      const a = p[i], b = p[(i+1)%len];
+      out.push({ x: a.x*0.75 + b.x*0.25, y: a.y*0.75 + b.y*0.25 });
+      out.push({ x: a.x*0.25 + b.x*0.75, y: a.y*0.25 + b.y*0.75 });
+    }
+    p = out;
+  }
+  return p;
+}
+function expandPoly(pts, px){
+  if(!pts || pts.length < 3 || !px) return pts ? pts.slice() : [];
+  let cx=0, cy=0;
+  for(const q of pts){ cx+=q.x; cy+=q.y; }
+  cx/=pts.length; cy/=pts.length;
+  return pts.map(q=>{
+    const dx=q.x-cx, dy=q.y-cy;
+    const len = Math.hypot(dx,dy) || 1;
+    return { x: q.x + dx/len*px, y: q.y + dy/len*px };
+  });
+}
+function scalePoly(pts, factor){
+  if(!pts || pts.length < 3) return;
+  let cx=0, cy=0;
+  for(const q of pts){ cx+=q.x; cy+=q.y; }
+  cx/=pts.length; cy/=pts.length;
+  for(const q of pts){
+    q.x = cx + (q.x-cx)*factor;
+    q.y = cy + (q.y-cy)*factor;
+  }
+}
+function mirrorX(pts){
+  return pts.map(p => ({ x: W - p.x, y: p.y })).reverse();
+}
+
+function buildMask(polys, smoothAmt, expandPx){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  const iters = Math.round(smoothAmt * 4);
+  ctx.fillStyle = '#fff';
+  for(const poly of polys){
+    if(!poly || poly.length < 3) continue;
+    let pts = expandPoly(poly, expandPx);
+    pts = smoothClosed(pts, iters);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  return c;
+}
+
+function maskedLayer(maskCanvas, fillStyle){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = fillStyle;
+  x.fillRect(0, 0, W, H);
+  x.globalCompositeOperation = 'destination-in';
+  x.drawImage(maskCanvas, 0, 0);
+  return c;
+}
+
+function eyeBounds(poly){
+  let pts = expandPoly(poly, state.expand);
+  pts = smoothClosed(pts, Math.round(state.smooth*4));
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9,cx=0,cy=0;
+  for(const q of pts){ minX=Math.min(minX,q.x); maxX=Math.max(maxX,q.x); minY=Math.min(minY,q.y); maxY=Math.max(maxY,q.y); cx+=q.x; cy+=q.y; }
+  cx/=pts.length; cy/=pts.length;
+  return { pts, minX, minY, maxX, maxY, cx, cy, rw: maxX-minX, rh: maxY-minY };
+}
+
+/** Layer gelap: SELALU penuh ke mask, lalu (opsional) kilau kaca horizontal seperti PK002 */
+function buildDarkLayer(maskCanvas, p){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const d = state.dark;
+  const [cr, cg, cb] = parseHex(d.color);
+
+  // 1) Isi penuh seluruh area mask — tidak ada oval “bolong” di tepi
+  ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(maskCanvas, 0, 0);
+
+  if(d.mode !== 'gradasi') return c;
+
+  // 2) Kilau kaca: pita horizontal lembut + sedikit spekular (di atas base gelap)
+  const sheen = document.createElement('canvas');
+  sheen.width = W; sheen.height = H;
+  const sctx = sheen.getContext('2d');
+
+  for(const key of ['left','right']){
+    const poly = p.polys[key];
+    if(!poly || poly.length < 3) continue;
+    const b = eyeBounds(poly);
+
+    sctx.save();
+    sctx.beginPath();
+    sctx.moveTo(b.pts[0].x, b.pts[0].y);
+    for(let i=1;i<b.pts.length;i++) sctx.lineTo(b.pts[i].x, b.pts[i].y);
+    sctx.closePath();
+    sctx.clip();
+
+    // Pita kilau horizontal (ciri lensa gelap foto studio)
+    const bandY = b.minY + b.rh * d.glowY;
+    const bandH = b.rh * (0.18 + d.glowSize * 0.55);
+    const gLift = 0.18 + d.glow * 0.55;
+    const lr = Math.round(cr + (175 - cr) * gLift);
+    const lg = Math.round(cg + (180 - cg) * gLift);
+    const lb = Math.round(cb + (190 - cb) * gLift);
+
+    const soft = 0.15 + d.soft * 0.55;
+    const lin = sctx.createLinearGradient(b.cx, bandY - bandH*0.7, b.cx, bandY + bandH*0.9);
+    lin.addColorStop(0, 'rgba(0,0,0,0)');
+    lin.addColorStop(Math.max(0.05, 0.35*soft), `rgba(${lr},${lg},${lb},${0.55*d.glow})`);
+    lin.addColorStop(0.5, `rgba(${lr},${lg},${lb},${0.75*d.glow})`);
+    lin.addColorStop(Math.min(0.95, 1-0.25*soft), `rgba(${lr},${lg},${lb},${0.25*d.glow})`);
+    lin.addColorStop(1, 'rgba(0,0,0,0)');
+    sctx.fillStyle = lin;
+    sctx.fillRect(b.minX-10, b.minY-10, b.rw+20, b.rh+20);
+
+    // Spekular kecil di atas pita (bukan blob besar)
+    const hx = b.minX + b.rw * d.glowX;
+    const hy = bandY - bandH * 0.15;
+    const specR = Math.min(b.rw, b.rh) * (0.18 + d.glowSize * 0.22);
+    const spec = sctx.createRadialGradient(hx, hy, 0, hx, hy, specR);
+    const a0 = 0.28 * d.glow;
+    spec.addColorStop(0, `rgba(255,255,255,${a0})`);
+    spec.addColorStop(0.45, `rgba(230,235,245,${a0*0.35})`);
+    spec.addColorStop(1, 'rgba(255,255,255,0)');
+    sctx.fillStyle = spec;
+    sctx.fillRect(b.minX-10, b.minY-10, b.rw+20, b.rh+20);
+
+    // Sedikit lebih gelap di tepi bawah (volume kaca)
+    if(d.edge > 0.01){
+      const bot = sctx.createLinearGradient(b.cx, b.minY + b.rh*0.35, b.cx, b.maxY);
+      bot.addColorStop(0, 'rgba(0,0,0,0)');
+      bot.addColorStop(1, `rgba(0,0,0,${d.edge * 0.65})`);
+      sctx.fillStyle = bot;
+      sctx.fillRect(b.minX-10, b.minY-10, b.rw+20, b.rh+20);
+    }
+
+    sctx.restore();
+  }
+
+  sctx.globalCompositeOperation = 'destination-in';
+  sctx.drawImage(maskCanvas, 0, 0);
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(sheen, 0, 0);
+  return c;
+}
+
+function drawSpecular(ctx, p, hi){
+  if(hi < 0.02) return;
+  for(const key of ['left','right']){
+    const poly = p.polys[key];
+    if(!poly || poly.length < 3) continue;
+    let pts = expandPoly(poly, state.expand);
+    pts = smoothClosed(pts, Math.round(state.smooth*4));
+    let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9,cx=0,cy=0;
+    for(const q of pts){ minX=Math.min(minX,q.x); maxX=Math.max(maxX,q.x); minY=Math.min(minY,q.y); maxY=Math.max(maxY,q.y); cx+=q.x; cy+=q.y; }
+    cx/=pts.length; cy/=pts.length;
+    const rw=(maxX-minX)*0.38, rh=(maxY-minY)*0.28;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.clip();
+    const hx = cx - rw*0.35, hy = cy - rh*0.55;
+    const grd = ctx.createRadialGradient(hx, hy, 0, hx, hy, Math.max(rw,rh)*1.2);
+    grd.addColorStop(0, `rgba(255,255,255,${0.42*hi})`);
+    grd.addColorStop(0.4, `rgba(255,255,255,${0.12*hi})`);
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = grd;
+    ctx.fillRect(minX-12, minY-12, maxX-minX+24, maxY-minY+24);
+    ctx.restore();
+  }
+}
+
+function effectiveLayers(sku){
+  // Toggle mata = sumber kebenaran; layer gelap hanya PK007
+  const isLight = sku === 'pk007';
+  return {
+    darkOn: state.dark.on && isLight,
+    tintOn: state.tint.on,
+  };
+}
+
+/** Layer warna kaca: hex akurat + volume (bukan sticker multiply) */
+function buildGlassTint(maskCanvas, p){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const [tr, tg, tb] = parseHex(state.tint.color);
+  const depth = state.tint.depth;
+
+  // Base = warna hex penuh (sumber kebenaran warna)
+  ctx.fillStyle = `rgb(${tr},${tg},${tb})`;
+  ctx.fillRect(0, 0, W, H);
+
+  // Volume kaca: tepi/bawah lebih gelap, pita atas lebih terang — tetap hue yang sama
+  for(const key of ['left','right']){
+    const poly = p.polys[key];
+    if(!poly || poly.length < 3) continue;
+    const b = eyeBounds(poly);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(b.pts[0].x, b.pts[0].y);
+    for(let i=1;i<b.pts.length;i++) ctx.lineTo(b.pts[i].x, b.pts[i].y);
+    ctx.closePath();
+    ctx.clip();
+
+    if(depth > 0.01){
+      const dr = Math.round(tr * (0.35 + (1-depth)*0.4));
+      const dg = Math.round(tg * (0.35 + (1-depth)*0.4));
+      const db = Math.round(tb * (0.35 + (1-depth)*0.4));
+      const bot = ctx.createLinearGradient(b.cx, b.minY, b.cx, b.maxY);
+      bot.addColorStop(0, 'rgba(0,0,0,0)');
+      bot.addColorStop(0.4, `rgba(${dr},${dg},${db},${0.15*depth})`);
+      bot.addColorStop(1, `rgba(${dr},${dg},${db},${0.55*depth})`);
+      ctx.fillStyle = bot;
+      ctx.fillRect(b.minX-8, b.minY-8, b.rw+16, b.rh+16);
+
+      const rim = ctx.createRadialGradient(b.cx, b.cy, Math.min(b.rw,b.rh)*0.2, b.cx, b.cy, Math.max(b.rw,b.rh)*0.58);
+      rim.addColorStop(0, 'rgba(0,0,0,0)');
+      rim.addColorStop(1, `rgba(0,0,0,${0.28*depth})`);
+      ctx.fillStyle = rim;
+      ctx.fillRect(b.minX-8, b.minY-8, b.rw+16, b.rh+16);
+    }
+
+    // Highlight band — campur ke putih tipis (kilau kaca, bukan blob abu)
+    const lr = Math.round(tr + (255-tr)*0.42);
+    const lg = Math.round(tg + (255-tg)*0.38);
+    const lb = Math.round(tb + (255-tb)*0.35);
+    const bandY = b.minY + b.rh * 0.32;
+    const lin = ctx.createLinearGradient(b.cx, bandY - b.rh*0.22, b.cx, bandY + b.rh*0.28);
+    lin.addColorStop(0, 'rgba(255,255,255,0)');
+    lin.addColorStop(0.45, `rgba(${lr},${lg},${lb},0.28)`);
+    lin.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = lin;
+    ctx.fillRect(b.minX-8, b.minY-8, b.rw+16, b.rh+16);
+
+    ctx.restore();
+  }
+
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(maskCanvas, 0, 0);
+  return c;
+}
+
+function applyTintLayer(ctx, maskCanvas, p){
+  const tint = buildGlassTint(maskCanvas, p);
+  const op = state.tint.opacity;
+  const mode = state.tint.blend;
+
+  if(mode === 'kaca'){
+    // 1) Color blend: hue hex menempel, luminance kaca di bawah tetap
+    ctx.save();
+    ctx.globalCompositeOperation = 'color';
+    ctx.globalAlpha = Math.min(1, op * 1.05);
+    ctx.drawImage(tint, 0, 0);
+    ctx.restore();
+
+    // 2) Source-over tipis: tarik ke hex asli biar tidak kusam
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = op * 0.62;
+    ctx.drawImage(tint, 0, 0);
+    ctx.restore();
+
+    // 3) Soft-light: kedalaman tanpa menghitamkan hue
+    ctx.save();
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.globalAlpha = op * 0.35;
+    ctx.drawImage(tint, 0, 0);
+    ctx.restore();
+  } else {
+    const comp = mode === 'color' ? 'color'
+      : mode === 'multiply' ? 'multiply'
+      : 'source-over';
+    ctx.save();
+    ctx.globalCompositeOperation = comp;
+    ctx.globalAlpha = op;
+    ctx.drawImage(tint, 0, 0);
+    ctx.restore();
+  }
+
+  if(state.tint.shine > 0.01) drawSpecular(ctx, p, state.tint.shine);
+}
+
+function drawGlass(p){
+  const ctx = p.vctx;
+  const { photo } = p;
+  const left = p.polys.left;
+  const right = p.polys.right;
+  const hasPoly = (left && left.length>=3) || (right && right.length>=3);
+
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(photo, 0, 0, W, H);
+
+  if(!hasPoly){
+    drawOverlay(p);
+    return;
+  }
+
+  const maskCanvas = buildMask([left, right], state.smooth, state.expand);
+  const { darkOn, tintOn } = effectiveLayers(p.sku);
+
+  if(darkOn && state.dark.opacity > 0.005){
+    const dark = buildDarkLayer(maskCanvas, p);
+    ctx.save();
+    ctx.globalCompositeOperation = state.dark.blend;
+    ctx.globalAlpha = state.dark.opacity;
+    ctx.drawImage(dark, 0, 0);
+    ctx.restore();
+  }
+
+  if(tintOn && state.tint.opacity > 0.005){
+    applyTintLayer(ctx, maskCanvas, p);
+  }
+
+  drawOverlay(p);
+}
+
+function drawOverlay(p){
+  const svg = p.svg;
+  svg.innerHTML = '';
+  if(!state.showClip) return;
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const addPoly = (pts, closed, color, eyeKey) => {
+    if(!pts || !pts.length) return;
+    if(closed && state.expand > 0){
+      const exp = expandPoly(pts, state.expand);
+      const pl2 = document.createElementNS(NS, 'polyline');
+      pl2.setAttribute('points', exp.map(q=>`${q.x},${q.y}`).join(' ') + ` ${exp[0].x},${exp[0].y}`);
+      pl2.setAttribute('fill', 'none');
+      pl2.setAttribute('stroke', color);
+      pl2.setAttribute('stroke-width', '1.5');
+      pl2.setAttribute('stroke-dasharray', '6 5');
+      pl2.setAttribute('opacity', '0.65');
+      svg.appendChild(pl2);
+    }
+    const pl = document.createElementNS(NS, 'polyline');
+    let attr = pts.map(q => `${q.x},${q.y}`).join(' ');
+    if(closed) attr += ` ${pts[0].x},${pts[0].y}`;
+    pl.setAttribute('points', attr);
+    pl.setAttribute('fill', closed ? 'rgba(143,24,48,0.10)' : 'none');
+    pl.setAttribute('stroke', color);
+    pl.setAttribute('stroke-width', '2.4');
+    pl.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(pl);
+    pts.forEach((q, idx) => {
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', q.x); c.setAttribute('cy', q.y);
+      const sel = selectedPt && selectedPt.sku===p.sku && selectedPt.eye===eyeKey && selectedPt.index===idx;
+      c.setAttribute('r', sel ? 9 : (idx===0 ? 7 : 5.5));
+      c.setAttribute('fill', sel ? '#fff' : color);
+      c.setAttribute('stroke', sel ? '#ff4d6d' : '#111');
+      c.setAttribute('stroke-width', sel ? '3' : '1.5');
+      svg.appendChild(c);
+    });
+  };
+
+  addPoly(p.polys.left, true, '#5ec8ff', 'left');
+  addPoly(p.polys.right, true, '#7dffb0', 'right');
+  if(p.draft && p.draft.length) addPoly(p.draft, false, '#ffb84d', 'draft');
+}
+
+function schedule(p){
+  cancelAnimationFrame(p._raf);
+  p._raf = requestAnimationFrame(()=> drawGlass(p));
+}
+function scheduleAll(){ Object.values(products).forEach(schedule); }
+
+function findNearestPoint(p, pt, maxDist){
+  let best = null, bestD = maxDist;
+  for(const eye of ['left','right']){
+    const poly = p.polys[eye];
+    if(!poly) continue;
+    for(let i=0;i<poly.length;i++){
+      const d = Math.hypot(poly[i].x - pt.x, poly[i].y - pt.y);
+      if(d < bestD){ bestD = d; best = { eye, index: i, dist: d }; }
+    }
+  }
+  return best;
+}
+function findNearestEdge(p, pt, maxDist){
+  let best = null, bestD = maxDist;
+  for(const eye of ['left','right']){
+    const poly = p.polys[eye];
+    if(!poly || poly.length < 2) continue;
+    for(let i=0;i<poly.length;i++){
+      const a = poly[i], b = poly[(i+1)%poly.length];
+      const proj = projectPoint(a,b,pt);
+      const d = Math.hypot(proj.x - pt.x, proj.y - pt.y);
+      if(d < bestD){ bestD = d; best = { eye, index: i, point: proj, dist: d }; }
+    }
+  }
+  return best;
+}
+function projectPoint(a,b,p){
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const len2 = dx*dx+dy*dy || 1;
+  let t = ((p.x-a.x)*dx + (p.y-a.y)*dy)/len2;
+  t = Math.max(0, Math.min(1, t));
+  return { x: a.x + t*dx, y: a.y + t*dy, t };
+}
+
+async function initProduct(el){
+  const sku = el.dataset.sku;
+  const photo = await loadImage(SRC[sku]);
+  const view = el.querySelector('canvas.view');
+  const vctx = view.getContext('2d', { willReadFrequently: true });
+  const svg = el.querySelector('.overlay-svg');
+  const hit = el.querySelector('.hit');
+  const p = {
+    el, sku, photo, view, vctx, svg, hit,
+    polys: seedPolys(sku),
+    draft: [],
+    _raf: 0,
+  };
+  products[sku] = p;
+  hit.addEventListener('pointerdown', e => onDown(p, e));
+  hit.addEventListener('pointermove', e => onMove(p, e));
+  hit.addEventListener('pointerup', e => onUp(p, e));
+  hit.addEventListener('pointerleave', e => onUp(p, e));
+  hit.addEventListener('dblclick', e => {
+    e.preventDefault();
+    focusedSku = sku;
+    updateFocusLabel();
+    if(state.mode === 'draw') closeDraft(p);
+  });
+  schedule(p);
+}
+
+function onDown(p, e){
+  e.preventDefault();
+  focusedSku = p.sku;
+  updateFocusLabel();
+  const pt = localPoint(p.el, e);
+
+  if(e.altKey){
+    const hitPt = findNearestPoint(p, pt, HIT_R*1.4);
+    if(hitPt && p.polys[hitPt.eye].length > 3){
+      p.polys[hitPt.eye].splice(hitPt.index, 1);
+      selectedPt = null;
+      schedule(p);
+    }
+    return;
+  }
+
+  if(state.mode === 'edit'){
+    const hitPt = findNearestPoint(p, pt, HIT_R*1.5);
+    if(hitPt){
+      drag = { sku: p.sku, eye: hitPt.eye, index: hitPt.index };
+      selectedPt = { sku: p.sku, eye: hitPt.eye, index: hitPt.index };
+      state.eye = hitPt.eye;
+      syncEyeButtons();
+      p.el.classList.add('dragging');
+      drawOverlay(p);
+      return;
+    }
+  }
+
+  if(state.mode === 'insert'){
+    const edge = findNearestEdge(p, pt, 22);
+    if(edge){
+      p.polys[edge.eye].splice(edge.index+1, 0, { x: edge.point.x, y: edge.point.y });
+      selectedPt = { sku: p.sku, eye: edge.eye, index: edge.index+1 };
+      state.eye = edge.eye;
+      syncEyeButtons();
+      schedule(p);
+    }
+    return;
+  }
+
+  if(state.mode === 'draw'){
+    if(p.draft.length === 0){
+      p.polys[state.eye] = null;
+      schedule(p);
+    }
+    if(p.draft.length >= 3){
+      const f = p.draft[0];
+      if(Math.hypot(pt.x-f.x, pt.y-f.y) < 24){
+        closeDraft(p);
+        return;
+      }
+    }
+    p.draft.push(pt);
+    drawOverlay(p);
+  }
+}
+function onMove(p, e){
+  if(!drag || drag.sku !== p.sku) return;
+  e.preventDefault();
+  const pt = localPoint(p.el, e);
+  const poly = p.polys[drag.eye];
+  if(!poly) return;
+  poly[drag.index].x = pt.x;
+  poly[drag.index].y = pt.y;
+  schedule(p);
+}
+function onUp(p){
+  if(drag && drag.sku === p.sku){
+    drag = null;
+    p.el.classList.remove('dragging');
+  }
+}
+function closeDraft(p){
+  if(p.draft.length < 3) return;
+  p.polys[state.eye] = p.draft.slice();
+  p.draft = [];
+  schedule(p);
+}
+
+function syncEyeButtons(){
+  document.getElementById('eyeLeft').classList.toggle('active', state.eye==='left');
+  document.getElementById('eyeRight').classList.toggle('active', state.eye==='right');
+}
+function updateFocusLabel(){
+  const btn = document.getElementById('focusSku');
+  btn.textContent = 'Fokus: ' + focusedSku.toUpperCase();
+}
+function setMode(mode){
+  state.mode = mode;
+  document.body.classList.remove('mode-edit','mode-draw','mode-insert');
+  document.body.classList.add('mode-'+mode);
+  document.getElementById('modeEdit').classList.toggle('active', mode==='edit');
+  document.getElementById('modeDraw').classList.toggle('active', mode==='draw');
+  document.getElementById('modeInsert').classList.toggle('active', mode==='insert');
+  Object.values(products).forEach(p => { p.draft = []; drawOverlay(p); });
+}
+
+function syncLayerUI(){
+  const darkOn = state.dark.on;
+  const tintOn = state.tint.on;
+  document.getElementById('layerDark').classList.toggle('off', !darkOn);
+  document.getElementById('layerTint').classList.toggle('off', !tintOn);
+  document.getElementById('eyeDark').classList.toggle('on', darkOn);
+  document.getElementById('eyeTint').classList.toggle('on', tintOn);
+  document.getElementById('eyeDark').textContent = darkOn ? '◉' : '○';
+  document.getElementById('eyeTint').textContent = tintOn ? '◉' : '○';
+
+  document.querySelectorAll('#presets button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.view === state.view);
+  });
+
+  document.getElementById('blendKaca').classList.toggle('active', state.tint.blend==='kaca');
+  document.getElementById('blendColor').classList.toggle('active', state.tint.blend==='color');
+  document.getElementById('blendMultiply').classList.toggle('active', state.tint.blend==='multiply');
+  document.getElementById('blendNormal').classList.toggle('active', state.tint.blend==='source-over');
+  const blendLabel = { kaca:'kaca', color:'color', multiply:'multiply', 'source-over':'normal' };
+  document.getElementById('tintBlendVal').textContent = blendLabel[state.tint.blend] || state.tint.blend;
+
+  document.getElementById('darkBlendNormal').classList.toggle('active', state.dark.blend==='source-over');
+  document.getElementById('darkBlendMultiply').classList.toggle('active', state.dark.blend==='multiply');
+  document.getElementById('darkBlendVal').textContent = state.dark.blend==='multiply' ? 'multiply' : 'normal';
+
+  document.getElementById('darkModeFlat').classList.toggle('active', state.dark.mode==='flat');
+  document.getElementById('darkModeGrad').classList.toggle('active', state.dark.mode==='gradasi');
+  document.getElementById('darkModeVal').textContent = state.dark.mode;
+  document.getElementById('darkGradControls').style.display = state.dark.mode==='gradasi' ? '' : 'none';
+
+  document.getElementById('showClip').classList.toggle('active', state.showClip);
+  document.getElementById('showClip').textContent = state.showClip ? 'Clip: ON' : 'Clip: OFF';
+  document.querySelectorAll('.product').forEach(el => el.classList.toggle('hide-clip', !state.showClip));
+
+  const parts = [];
+  parts.push('view: ' + state.view);
+  parts.push('dark ' + (state.dark.on ? 'on' : 'off'));
+  parts.push('tint ' + (state.tint.on ? 'on' : 'off'));
+  document.getElementById('statusFooter').textContent = parts.join(' · ');
+
+  document.getElementById('hint002').textContent = tintOn
+    ? (state.view==='asli' ? 'foto asli' : 'asli → warna')
+    : 'foto asli';
+  document.getElementById('hint007').textContent = (()=>{
+    if(state.view==='asli' || (!darkOn && !tintOn)) return 'foto asli';
+    if(darkOn && !tintOn) return 'asli → gelap';
+    if(!darkOn && tintOn) return 'asli → warna';
+    return 'asli → gelap → warna';
+  })();
+}
+
+function inferView(){
+  if(!state.dark.on && !state.tint.on) return 'asli';
+  if(state.dark.on && !state.tint.on) return 'dark';
+  if(state.dark.on && state.tint.on) return 'full';
+  return 'tint'; // tint on, dark off
+}
+
+function setView(view){
+  state.view = view;
+  if(view === 'asli'){ state.dark.on = false; state.tint.on = false; }
+  else if(view === 'dark'){ state.dark.on = true; state.tint.on = false; }
+  else if(view === 'tint'){ state.dark.on = false; state.tint.on = true; }
+  else if(view === 'full'){ state.dark.on = true; state.tint.on = true; }
+  syncLayerUI();
+  scheduleAll();
+}
+
+function toggleLayer(which){
+  if(which === 'dark') state.dark.on = !state.dark.on;
+  if(which === 'tint') state.tint.on = !state.tint.on;
+  state.view = inferView();
+  syncLayerUI();
+  scheduleAll();
+}
+
+function setTintColor(v){
+  if(!v.startsWith('#')) v = '#'+v;
+  if(!/^#[0-9A-Fa-f]{6}$/.test(v)) return;
+  state.tint.color = v.toUpperCase();
+  document.getElementById('tintColor').value = state.tint.color;
+  document.getElementById('tintHex').value = state.tint.color;
+  [...document.getElementById('swatches').children].forEach(el => {
+    el.classList.toggle('active', el.dataset.c.toLowerCase()===state.tint.color.toLowerCase());
+  });
+  scheduleAll();
+}
+
+// --- wire UI ---
+const sw = document.getElementById('swatches');
+SWATCHES.forEach(c=>{
+  const b = document.createElement('button');
+  b.className='swatch'; b.dataset.c=c; b.style.background=c;
+  b.onclick=()=>setTintColor(c); sw.appendChild(b);
+});
+document.getElementById('tintColor').oninput = e => setTintColor(e.target.value);
+document.getElementById('tintHex').onchange = e => setTintColor(e.target.value.trim());
+document.getElementById('darkColor').oninput = e=>{
+  state.dark.color = e.target.value.toUpperCase();
+  document.getElementById('darkHex').value = state.dark.color;
+  scheduleAll();
+};
+document.getElementById('darkHex').onchange = e=>{
+  let v = e.target.value.trim();
+  if(!v.startsWith('#')) v = '#'+v;
+  if(!/^#[0-9A-Fa-f]{6}$/.test(v)) return;
+  state.dark.color = v.toUpperCase();
+  document.getElementById('darkColor').value = state.dark.color;
+  document.getElementById('darkHex').value = state.dark.color;
+  scheduleAll();
+};
+
+document.getElementById('darkModeFlat').onclick = ()=>{ state.dark.mode='flat'; syncLayerUI(); scheduleAll(); };
+document.getElementById('darkModeGrad').onclick = ()=>{ state.dark.mode='gradasi'; syncLayerUI(); scheduleAll(); };
+document.getElementById('blendKaca').onclick = ()=>{ state.tint.blend='kaca'; syncLayerUI(); scheduleAll(); };
+document.getElementById('blendColor').onclick = ()=>{ state.tint.blend='color'; syncLayerUI(); scheduleAll(); };
+document.getElementById('blendNormal').onclick = ()=>{ state.tint.blend='source-over'; syncLayerUI(); scheduleAll(); };
+document.getElementById('blendMultiply').onclick = ()=>{ state.tint.blend='multiply'; syncLayerUI(); scheduleAll(); };
+document.getElementById('darkBlendNormal').onclick = ()=>{ state.dark.blend='source-over'; syncLayerUI(); scheduleAll(); };
+document.getElementById('darkBlendMultiply').onclick = ()=>{ state.dark.blend='multiply'; syncLayerUI(); scheduleAll(); };
+
+document.getElementById('presets').onclick = e=>{
+  const btn = e.target.closest('button[data-view]');
+  if(!btn) return;
+  setView(btn.dataset.view);
+};
+document.getElementById('eyeDark').onclick = e=>{ e.stopPropagation(); toggleLayer('dark'); };
+document.getElementById('eyeTint').onclick = e=>{ e.stopPropagation(); toggleLayer('tint'); };
+document.querySelectorAll('[data-toggle]').forEach(el=>{
+  el.addEventListener('click', e=>{
+    if(e.target.closest('.eye')) return;
+    toggleLayer(el.dataset.toggle);
+  });
+});
+
+document.getElementById('showClip').onclick = ()=>{
+  state.showClip = !state.showClip;
+  syncLayerUI();
+  Object.values(products).forEach(drawOverlay);
+};
+
+document.getElementById('modeEdit').onclick = ()=> setMode('edit');
+document.getElementById('modeDraw').onclick = ()=> setMode('draw');
+document.getElementById('modeInsert').onclick = ()=> setMode('insert');
+document.getElementById('eyeLeft').onclick = ()=>{ state.eye='left'; syncEyeButtons(); };
+document.getElementById('eyeRight').onclick = ()=>{ state.eye='right'; syncEyeButtons(); };
+
+document.getElementById('growPts').onclick = ()=>{
+  const p = focused(); if(!p) return;
+  const poly = p.polys[state.eye];
+  if(poly){ scalePoly(poly, 1.04); schedule(p); }
+};
+document.getElementById('shrinkPts').onclick = ()=>{
+  const p = focused(); if(!p) return;
+  const poly = p.polys[state.eye];
+  if(poly){ scalePoly(poly, 0.96); schedule(p); }
+};
+document.getElementById('delPt').onclick = ()=>{
+  if(!selectedPt) return;
+  const p = products[selectedPt.sku];
+  const poly = p.polys[selectedPt.eye];
+  if(poly && poly.length > 3){
+    poly.splice(selectedPt.index, 1);
+    selectedPt = null;
+    schedule(p);
+  }
+};
+document.getElementById('resetSeed').onclick = ()=>{
+  const p = focused(); if(!p) return;
+  p.polys = seedPolys(p.sku);
+  p.draft = [];
+  selectedPt = null;
+  schedule(p);
+};
+document.getElementById('copyLR').onclick = ()=>{
+  const p = focused();
+  if(!p || !p.polys.left || p.polys.left.length < 3) return;
+  p.polys.right = mirrorX(p.polys.left);
+  schedule(p);
+};
+document.getElementById('copyPanels').onclick = ()=>{
+  const a = products.pk002, b = products.pk007;
+  if(!a||!b) return;
+  b.polys.left = a.polys.left ? a.polys.left.map(q=>({...q})) : null;
+  b.polys.right = a.polys.right ? a.polys.right.map(q=>({...q})) : null;
+  schedule(b);
+};
+
+document.getElementById('expand').oninput = e=>{
+  state.expand = +e.target.value;
+  document.getElementById('expVal').textContent = state.expand + 'px';
+  scheduleAll();
+};
+
+function bindPct(id, path, labelId){
+  const el = document.getElementById(id);
+  el.oninput = ()=>{
+    const v = el.value / 100;
+    const [a,b] = path.split('.');
+    if(b) state[a][b] = v; else state[a] = v;
+    document.getElementById(labelId).textContent = el.value + '%';
+    scheduleAll();
+  };
+}
+bindPct('tintOp','tint.opacity','tintOpVal');
+bindPct('tintDepth','tint.depth','tintDepthVal');
+bindPct('darkOp','dark.opacity','darkOpVal');
+bindPct('darkGlow','dark.glow','darkGlowVal');
+bindPct('darkGlowSize','dark.glowSize','darkGlowSizeVal');
+bindPct('darkGlowX','dark.glowX','darkGlowXVal');
+bindPct('darkGlowY','dark.glowY','darkGlowYVal');
+bindPct('darkSoft','dark.soft','darkSoftVal');
+bindPct('darkEdge','dark.edge','darkEdgeVal');
+bindPct('shine','tint.shine','shineVal');
+bindPct('smooth','smooth','smVal');
+
+setTintColor('#8F1830');
+syncLayerUI();
+updateFocusLabel();
+Promise.all([...document.querySelectorAll('.product')].map(initProduct));
+</script>
+</body>
+</html>

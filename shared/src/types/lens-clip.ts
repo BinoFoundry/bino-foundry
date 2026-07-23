@@ -11,21 +11,71 @@ export interface LensClipShape {
   exclusions?: LensExclusionShape[];
 }
 
-/** A single exclusion polygon path (frame hardware silhouette). */
+/** Where a frame object sits relative to the generated Glass Element. */
+export type FrameExclusionLayerOrder = "behind" | "inside" | "front";
+
+/** A single frame-structure polygon path (bridge, screw, rim, etc.). */
 export interface LensExclusionShape {
   id: string;
+  /** Display name (e.g. "Bridge Support"). */
   label: string;
   pathD: string;
+  /**
+   * Layer relative to glass. Default `"behind"` (viewed through the glass).
+   * - behind — under glass; tint / transmission / absorption apply above it
+   * - inside — embedded in the glass material
+   * - front — above glass; unaffected by glass optics
+   */
+  layerOrder?: FrameExclusionLayerOrder;
+  /** Object opacity 0–100. Default 100. */
+  opacity?: number;
+  /** Relative depth within its layer band 0–100 (higher draws later / closer). Default 50. */
+  depth?: number;
+  /** When false, skipped by the compositor but kept in the editor. Default true. */
+  visible?: boolean;
 }
 
 /**
- * Frame-level exclusion polygon. These are FRAME components (bridge, screws, inner rim,
- * support bars) that sit inside the lens opening and must stay visible above the rendered
- * lens. They belong to the frame, not to either lens, so `lensId` is optional/legacy only.
+ * Frame-level structure object inside a lens opening.
+ * These are physical frame components — not glass holes.
  */
 export interface FrameExclusionShape extends LensExclusionShape {
   /** @deprecated Legacy association to a lens opening id — no longer used for rendering. */
   lensId?: string;
+}
+
+/** Resolved compositor props for one frame object (always fully populated). */
+export interface ResolvedFrameExclusionObject extends FrameExclusionShape {
+  layerOrder: FrameExclusionLayerOrder;
+  opacity: number;
+  depth: number;
+  visible: boolean;
+}
+
+const LAYER_ORDERS = new Set<FrameExclusionLayerOrder>(["behind", "inside", "front"]);
+
+function clampPctField(n: number | undefined, fallback: number): number {
+  if (n == null || !Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, n));
+}
+
+/** Apply defaults so legacy polygons (id/label/pathD only) become Behind Glass objects. */
+export function resolveFrameExclusionObject(
+  shape: LensExclusionShape | FrameExclusionShape,
+): ResolvedFrameExclusionObject {
+  const layerOrder = LAYER_ORDERS.has(shape.layerOrder as FrameExclusionLayerOrder)
+    ? (shape.layerOrder as FrameExclusionLayerOrder)
+    : "behind";
+  return {
+    id: shape.id,
+    label: shape.label || "Frame object",
+    pathD: shape.pathD,
+    lensId: "lensId" in shape ? shape.lensId : undefined,
+    layerOrder,
+    opacity: clampPctField(shape.opacity, 100),
+    depth: clampPctField(shape.depth, 50),
+    visible: shape.visible !== false,
+  };
 }
 
 /**
@@ -80,7 +130,8 @@ export interface LensClipRenderSettings {
   glassMaterialStrength?: number;
   /**
    * Original source-lens chroma retained before tinting (0–100).
-   * 0 keeps luminance only; 100 preserves the source hue/saturation for intentional colour mixing.
+   * 0 keeps luminance only; 100 preserves the source hue/saturation.
+   * @deprecated Prefer baseGlassNeutralization (neutralization = 100 − influence).
    */
   originalLensColorInfluence?: number;
   /**
@@ -98,8 +149,85 @@ export interface LensClipRenderSettings {
   glassAbsorption?: number;
   /** Manual softness of light spreading through the glass (0–100%). */
   glassDiffusion?: number;
-  /** Manual perceived optical thickness/depth of the lens (0–100%). */
+  /** Manual perceived optical thickness/depth of the lens (0–100%). Maps to tint depth. */
   glassDepth?: number;
+
+  /**
+   * Prototype tint blend mode (`lens-glass-clip.html`).
+   * `kaca` = colour + source-over + soft-light stack (recommended).
+   */
+  glassTintBlend?: "kaca" | "color" | "source-over" | "multiply";
+  /** Surface shine / kilau (0–100). Prototype tint.shine. */
+  glassTintShine?: number;
+  /** When false, tint material layer is skipped. Default true. */
+  glassTintEnabled?: boolean;
+
+  /** Dark material layer above the original lens (prototype Layer gelap). */
+  darkLayerEnabled?: boolean;
+  /** Dark layer opacity (0–100). */
+  darkLayerOpacity?: number;
+  /** Flat fill vs graduated glass sheen. */
+  darkLayerMode?: "flat" | "gradasi";
+  /** Dark layer fill colour (hex). */
+  darkLayerColor?: string;
+  /** Dark layer composite: source-over (normal) or multiply. */
+  darkLayerBlend?: "source-over" | "multiply";
+  /** Gradasi sheen intensity (0–100). */
+  darkLayerGlow?: number;
+  /** Gradasi sheen band width (0–100). */
+  darkLayerGlowSize?: number;
+  /** Sheen position X within lens (0–100). */
+  darkLayerGlowX?: number;
+  /** Sheen position Y within lens (0–100). */
+  darkLayerGlowY?: number;
+  /** Sheen softness (0–100). */
+  darkLayerSoft?: number;
+  /** Extra bottom edge darkening in gradasi mode (0–100). */
+  darkLayerEdge?: number;
+
+  /** When false, edge density/opacity layers are skipped. Default true. */
+  edgeEnabled?: boolean;
+
+  /**
+   * Optical density gradient across the lens (independent of customer tint HEX).
+   * Default false so existing presets keep uniform density.
+   */
+  densityGradientEnabled?: boolean;
+  /** Gradient direction. `none` disables the effect even when enabled. */
+  densityGradientMode?: "none" | "vertical" | "horizontal" | "radial" | "angle";
+  /** Custom angle in degrees (0 = left→right, 90 = top→bottom). Used when mode is `angle`. */
+  densityGradientAngle?: number;
+  /** When true, blend between start/end colours; otherwise density-only (tint hue unchanged). */
+  densityGradientTwoColor?: boolean;
+  /** Gradient start colour (hex). */
+  densityGradientStartColor?: string | null;
+  /** Gradient end colour (hex). */
+  densityGradientEndColor?: string | null;
+  /**
+   * @deprecated Prefer densityGradientStartFalloff / densityGradientEndFalloff.
+   * Kept for reading older presets.
+   */
+  densityGradientStrength?: number;
+  /**
+   * @deprecated Softness is superseded by independent start/end falloff.
+   * Kept for reading older presets.
+   */
+  densityGradientSoftness?: number;
+  /** Mid-transition position along the gradient axis (0–100). */
+  densityGradientPosition?: number;
+  /**
+   * How long the start density holds before transitioning (0–100).
+   * Low = changes almost immediately; high = stays dense longer near the start.
+   */
+  densityGradientStartFalloff?: number;
+  /**
+   * How gradually the end density is approached (0–100).
+   * Low = snaps to the end; high = soft, drawn-out landing.
+   */
+  densityGradientEndFalloff?: number;
+  /** Transition character between start and end. */
+  densityGradientCurve?: "linear" | "ease-in" | "ease-out" | "ease-in-out";
+
   /** Optical colour adjustments; 1 is neutral. */
   brightness?: number;
   contrast?: number;
@@ -129,8 +257,48 @@ export interface LensClipRenderSettings {
   reflectionOffsetX?: number;
   /** Vertical reflection offset (-100 to 100). */
   reflectionOffsetY?: number;
-  /** Reflection highlight size multiplier (0.5–1.75). */
+  /** Reflection highlight size multiplier (0.5–1.75). Primary / left lens. */
   reflectionScale?: number;
+  /**
+   * When true (default), the right-lens reflection mirrors the left-lens controls.
+   * When false, right-lens reflection knobs are edited independently.
+   */
+  mirrorReflection?: boolean;
+  /** Independent right-lens reflection rotation (degrees). Used when mirrorReflection is false. */
+  reflectionRightAngle?: number;
+  /** Independent right-lens horizontal reflection offset (-100 to 100). */
+  reflectionRightOffsetX?: number;
+  /** Independent right-lens vertical reflection offset (-100 to 100). */
+  reflectionRightOffsetY?: number;
+  /** Independent right-lens reflection scale (0.5–1.75). */
+  reflectionRightScale?: number;
+  /** Independent right-lens reflection opacity (0–1). Used when mirrorReflection is false. */
+  reflectionRightOpacity?: number;
+  /** Independent right-lens reflection softness / blur (0–1). Used when mirrorReflection is false. */
+  reflectionRightBlur?: number;
+
+  /**
+   * Perceived darkness of the original glass material before tint (0–100).
+   * 0 = very clear optical glass; 100 = naturally dark sunglass glass.
+   * Does not change the selected tint colour.
+   */
+  baseGlassDarkness?: number;
+  /**
+   * How deep and premium the base glass material appears (0–100).
+   * Adds thickness / richness without changing tint colour.
+   */
+  baseGlassRichness?: number;
+  /**
+   * How much of the original lens colour is removed before tinting (0–100).
+   * 0 = original colour remains; 100 = almost completely neutralised.
+   * Manual calibration only — no automatic colour analysis.
+   */
+  baseGlassNeutralization?: number;
+
+  /** @deprecated Use baseGlassDarkness. */
+  glassBaseDensity?: number;
+  /** @deprecated Use baseGlassRichness. */
+  baseDensityBias?: number;
 
   /** Extremely subtle light bounce within the glass body. */
   internalReflectionEnabled?: boolean;
@@ -201,9 +369,9 @@ export interface LensClipConfig {
   imageHeight: number;
   lenses: LensClipShape[];
   /**
-   * Frame-level exclusion polygons. Rendered as an overlay of the original frame ABOVE the
-   * synthetic lens, so frame hardware inside the opening stays visible. Independent of the
-   * lens clip; empty/absent means the lens fills the whole opening (legacy behaviour).
+   * Frame structure objects inside lens openings (bridge, screws, rim, nylon, etc.).
+   * Each is a render object with layer order (behind / inside / front of glass).
+   * They are not glass holes — they remain visible as physical frame components.
    */
   frameExclusions?: FrameExclusionShape[];
   render?: LensClipRenderSettings;
@@ -249,33 +417,52 @@ export function resolveLensExclusionShapes(
 }
 
 /**
- * The merged frame-level exclusion list.
+ * The merged frame-level structure-object list.
  *
  * Collects canonical root `frameExclusions` plus any legacy per-lens `exclusions[]`
- * (from older saved configs) into a single flat list so callers never need to know
- * where the data was stored. IDs are de-duplicated.
+ * into a single flat list. Missing layer/opacity/depth/visibility default to
+ * Behind Glass / 100% / visible.
  */
 export function resolveFrameExclusionShapes(
   clip: Pick<LensClipConfig, "frameExclusions" | "lenses"> | null | undefined,
-): FrameExclusionShape[] {
+): ResolvedFrameExclusionObject[] {
   if (!clip) return [];
-  const out: FrameExclusionShape[] = [];
+  const out: ResolvedFrameExclusionObject[] = [];
   const seen = new Set<string>();
 
-  const push = (shape: LensExclusionShape | FrameExclusionShape | undefined, lensId?: string) => {
+  const push = (shape: LensExclusionShape | FrameExclusionShape | undefined) => {
     if (!isUsablePathD(shape?.pathD)) return;
-    let id = shape!.id || `frame-exclusion-${out.length}`;
+    const resolved = resolveFrameExclusionObject(shape!);
+    let id = resolved.id || `frame-exclusion-${out.length}`;
     while (seen.has(id)) id = `${id}-${out.length}`;
     seen.add(id);
-    out.push({ id, label: shape!.label || "Frame exclusion", pathD: shape!.pathD });
+    out.push({ ...resolved, id });
   };
 
-  for (const shape of clip.frameExclusions ?? []) push(shape, shape.lensId);
+  for (const shape of clip.frameExclusions ?? []) push(shape);
   for (const lens of clip.lenses ?? []) {
-    for (const shape of resolveLensExclusionShapes(lens)) push(shape, lens.id);
+    for (const shape of resolveLensExclusionShapes(lens)) push(shape);
   }
 
   return out;
+}
+
+/** Partition visible frame objects by glass layer, sorted by depth within each band. */
+export function partitionFrameExclusionObjects(
+  objects: ResolvedFrameExclusionObject[],
+): {
+  behind: ResolvedFrameExclusionObject[];
+  inside: ResolvedFrameExclusionObject[];
+  front: ResolvedFrameExclusionObject[];
+} {
+  const byDepth = (a: ResolvedFrameExclusionObject, b: ResolvedFrameExclusionObject) =>
+    a.depth - b.depth || a.label.localeCompare(b.label);
+  const visible = objects.filter((o) => o.visible);
+  return {
+    behind: visible.filter((o) => o.layerOrder === "behind").sort(byDepth),
+    inside: visible.filter((o) => o.layerOrder === "inside").sort(byDepth),
+    front: visible.filter((o) => o.layerOrder === "front").sort(byDepth),
+  };
 }
 
 /**

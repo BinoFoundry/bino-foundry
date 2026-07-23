@@ -2,7 +2,7 @@ import type { GlassMaterialFilterParams } from "./glass-material-filter";
 
 /**
  * One reusable SVG filter that turns a tinted lens fill into optical glass.
- * Every lens references the same filter id; only the primitive parameters change.
+ * Each lens opening gets its own filter instance so reflection lights stay local.
  */
 export function GlassMaterialFilterDef({
   id,
@@ -17,12 +17,15 @@ export function GlassMaterialFilterDef({
     centerDensity,
     edgeDensity,
     edgeSoftnessPx,
+    baseDensityDarken,
+    richnessDepth,
     reflection,
   } = params;
 
   // Darken RGB toward glass body density while preserving alpha for compositing.
-  const absorb = 1 - absorptionGain * 0.55;
-  const centre = 1 - centerDensity * 0.22;
+  // Darkness + richness deepen the glass body without multiplying tint opacity / HEX.
+  const absorb = 1 - absorptionGain * 0.55 - baseDensityDarken * 0.35 - richnessDepth * 0.12;
+  const centre = 1 - centerDensity * 0.22 - baseDensityDarken * 0.08 - richnessDepth * 0.1;
   const rGain = absorb * centre;
   const gGain = absorb * centre;
   const bGain = absorb * (centre * 0.98);

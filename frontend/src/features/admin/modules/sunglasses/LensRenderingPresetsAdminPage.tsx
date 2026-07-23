@@ -142,8 +142,8 @@ export function LensRenderingPresetsAdminPage() {
         <div>
           <h2 className="text-base font-semibold text-foreground">Lens Rendering Presets</h2>
           <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
-            System Default is the platform fallback. Four editable database presets inherit from
-            it; Classic Tint remains the default for frames.
+            Configure glass material layers applied over the original lens. Hierarchy: Frame
+            Override → Preset → System Default. Live preview matches customer rendering exactly.
           </p>
         </div>
       </div>
@@ -215,8 +215,8 @@ export function LensRenderingPresetsAdminPage() {
         <div className="admin-scroll-pane min-h-0 p-4 sm:p-6">
           {!editing ? (
             <p className="text-sm text-muted-foreground">
-              Select System Default or one of the four presets. Changes update the real-frame
-              preview immediately; Save only persists them.
+              Select System Default or a preset. Settings update the live preview immediately;
+              Save persists them for frames that use this material.
             </p>
           ) : (
             <div className="grid gap-6 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">

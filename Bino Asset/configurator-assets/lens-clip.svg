@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">
+  <defs>
+    <clipPath id="lenses" clipPathUnits="userSpaceOnUse">
+      <rect x="495" y="415" width="350" height="255" rx="52" ry="70"/>
+      <rect x="1075" y="415" width="350" height="255" rx="52" ry="70"/>
+    </clipPath>
+  </defs>
+</svg>

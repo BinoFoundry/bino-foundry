@@ -14,6 +14,31 @@ export type ResolvedLensClipRender = Required<
     | "glassAbsorption"
     | "glassDiffusion"
     | "glassDepth"
+    | "glassTintBlend"
+    | "glassTintShine"
+    | "glassTintEnabled"
+    | "darkLayerEnabled"
+    | "darkLayerOpacity"
+    | "darkLayerMode"
+    | "darkLayerColor"
+    | "darkLayerBlend"
+    | "darkLayerGlow"
+    | "darkLayerGlowSize"
+    | "darkLayerGlowX"
+    | "darkLayerGlowY"
+    | "darkLayerSoft"
+    | "darkLayerEdge"
+    | "edgeEnabled"
+    | "densityGradientEnabled"
+    | "densityGradientMode"
+    | "densityGradientAngle"
+    | "densityGradientTwoColor"
+    | "densityGradientStrength"
+    | "densityGradientSoftness"
+    | "densityGradientPosition"
+    | "densityGradientStartFalloff"
+    | "densityGradientEndFalloff"
+    | "densityGradientCurve"
     | "tintOpacity"
     | "tintLayerOpacity"
     | "lensOpacity"
@@ -36,6 +61,16 @@ export type ResolvedLensClipRender = Required<
     | "reflectionOffsetX"
     | "reflectionOffsetY"
     | "reflectionScale"
+    | "mirrorReflection"
+    | "reflectionRightAngle"
+    | "reflectionRightOffsetX"
+    | "reflectionRightOffsetY"
+    | "reflectionRightScale"
+    | "reflectionRightOpacity"
+    | "reflectionRightBlur"
+    | "baseGlassDarkness"
+    | "baseGlassRichness"
+    | "baseGlassNeutralization"
     | "internalReflectionEnabled"
     | "internalReflectionOpacity"
     | "internalReflectionSoftness"
@@ -65,6 +100,8 @@ export type ResolvedLensClipRender = Required<
 > & {
   gradientTopColor: string | null;
   gradientBottomColor: string | null;
+  densityGradientStartColor: string | null;
+  densityGradientEndColor: string | null;
   /** Legacy overlay fields (used only when mode === "overlay"). */
   tintBlendMode: NonNullable<LensClipRenderSettings["tintBlendMode"]>;
   highlightStrength: number;
@@ -82,6 +119,33 @@ export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   glassAbsorption: 30,
   glassDiffusion: 18,
   glassDepth: 50,
+  glassTintBlend: "kaca",
+  glassTintShine: 55,
+  glassTintEnabled: true,
+  darkLayerEnabled: true,
+  darkLayerOpacity: 28,
+  darkLayerMode: "gradasi",
+  darkLayerColor: "#0A0A0A",
+  darkLayerBlend: "source-over",
+  darkLayerGlow: 42,
+  darkLayerGlowSize: 55,
+  darkLayerGlowX: 45,
+  darkLayerGlowY: 34,
+  darkLayerSoft: 70,
+  darkLayerEdge: 28,
+  edgeEnabled: true,
+  densityGradientEnabled: false,
+  densityGradientMode: "vertical",
+  densityGradientAngle: 90,
+  densityGradientTwoColor: true,
+  densityGradientStartColor: "#1E1E1E",
+  densityGradientEndColor: "#4B4B4B",
+  densityGradientStrength: 45,
+  densityGradientSoftness: 55,
+  densityGradientPosition: 45,
+  densityGradientStartFalloff: 50,
+  densityGradientEndFalloff: 50,
+  densityGradientCurve: "linear",
   tintOpacity: 0.78,
   // Preserve the pre-configuration renderer output exactly (displayed as 0.43 in Admin).
   tintLayerOpacity: 0.42978,
@@ -107,6 +171,16 @@ export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   reflectionOffsetX: -10,
   reflectionOffsetY: -8,
   reflectionScale: 1.1,
+  mirrorReflection: true,
+  reflectionRightAngle: 338,
+  reflectionRightOffsetX: 10,
+  reflectionRightOffsetY: -8,
+  reflectionRightScale: 1.1,
+  reflectionRightOpacity: 0.2,
+  reflectionRightBlur: 0.58,
+  baseGlassDarkness: 28,
+  baseGlassRichness: 55,
+  baseGlassNeutralization: 85,
   internalReflectionEnabled: true,
   internalReflectionOpacity: 0.04,
   internalReflectionSoftness: 0.86,
@@ -236,16 +310,44 @@ export function resolveLensClipRenderSettings(
     overrides?.edgeDarkness ??
     fromConfig?.edgeDarkness;
 
+  // Prefer Base Glass Neutralization; fall back to legacy influence (inverted).
+  const configuredNeutralization =
+    overrides?.baseGlassNeutralization ??
+    fromConfig?.baseGlassNeutralization ??
+    (overrides?.originalLensColorInfluence != null
+      ? 100 - overrides.originalLensColorInfluence
+      : undefined) ??
+    (fromConfig?.originalLensColorInfluence != null
+      ? 100 - fromConfig.originalLensColorInfluence
+      : undefined);
+  const baseGlassNeutralization = clampPct(
+    configuredNeutralization,
+    DEFAULT_LENS_CLIP_RENDER.baseGlassNeutralization,
+  );
+  const baseGlassDarkness = clampPct(
+    overrides?.baseGlassDarkness ??
+      fromConfig?.baseGlassDarkness ??
+      overrides?.glassBaseDensity ??
+      fromConfig?.glassBaseDensity,
+    DEFAULT_LENS_CLIP_RENDER.baseGlassDarkness,
+  );
+  const baseGlassRichness = clampPct(
+    overrides?.baseGlassRichness ??
+      fromConfig?.baseGlassRichness ??
+      overrides?.baseDensityBias ??
+      fromConfig?.baseDensityBias,
+    DEFAULT_LENS_CLIP_RENDER.baseGlassRichness,
+  );
+
   return {
     // Legacy overlay configs are intentionally upgraded to physical replacement at runtime.
     mode: "replace",
     automaticMaterialBehavior,
-    originalLensColorInfluence: clampRange(
-      merged.originalLensColorInfluence,
-      DEFAULT_LENS_CLIP_RENDER.originalLensColorInfluence,
-      0,
-      100,
-    ),
+    // Kept in sync for any legacy readers; compositor uses baseGlassNeutralization.
+    originalLensColorInfluence: 100 - baseGlassNeutralization,
+    baseGlassDarkness,
+    baseGlassRichness,
+    baseGlassNeutralization,
     materialInfluence: clampRange(
       automaticMaterial?.materialInfluence ?? configuredMaterialInfluence,
       DEFAULT_LENS_CLIP_RENDER.materialInfluence,
@@ -272,6 +374,130 @@ export function resolveLensClipRenderSettings(
       0,
       100,
     ),
+    darkLayerOpacity: clampPct(
+      overrides?.darkLayerOpacity ??
+        fromConfig?.darkLayerOpacity ??
+        overrides?.baseGlassDarkness ??
+        fromConfig?.baseGlassDarkness ??
+        overrides?.glassBaseDensity ??
+        fromConfig?.glassBaseDensity,
+      DEFAULT_LENS_CLIP_RENDER.darkLayerOpacity,
+    ),
+    darkLayerMode:
+      (overrides?.darkLayerMode ?? fromConfig?.darkLayerMode) === "flat" ? "flat" : "gradasi",
+    darkLayerColor: (() => {
+      const raw = overrides?.darkLayerColor ?? fromConfig?.darkLayerColor;
+      return typeof raw === "string" && /^#[0-9A-Fa-f]{6}$/.test(raw.trim())
+        ? raw.trim().toUpperCase()
+        : DEFAULT_LENS_CLIP_RENDER.darkLayerColor;
+    })(),
+    darkLayerBlend:
+      (overrides?.darkLayerBlend ?? fromConfig?.darkLayerBlend) === "multiply"
+        ? "multiply"
+        : "source-over",
+    darkLayerGlow: clampPct(
+      overrides?.darkLayerGlow ?? fromConfig?.darkLayerGlow,
+      DEFAULT_LENS_CLIP_RENDER.darkLayerGlow,
+    ),
+    darkLayerGlowSize: clampPct(
+      overrides?.darkLayerGlowSize ?? fromConfig?.darkLayerGlowSize,
+      DEFAULT_LENS_CLIP_RENDER.darkLayerGlowSize,
+    ),
+    darkLayerGlowX: clampPct(
+      overrides?.darkLayerGlowX ?? fromConfig?.darkLayerGlowX,
+      DEFAULT_LENS_CLIP_RENDER.darkLayerGlowX,
+    ),
+    darkLayerGlowY: clampPct(
+      overrides?.darkLayerGlowY ?? fromConfig?.darkLayerGlowY,
+      DEFAULT_LENS_CLIP_RENDER.darkLayerGlowY,
+    ),
+    darkLayerSoft: clampPct(
+      overrides?.darkLayerSoft ?? fromConfig?.darkLayerSoft,
+      DEFAULT_LENS_CLIP_RENDER.darkLayerSoft,
+    ),
+    darkLayerEdge: clampPct(
+      overrides?.darkLayerEdge ?? fromConfig?.darkLayerEdge,
+      DEFAULT_LENS_CLIP_RENDER.darkLayerEdge,
+    ),
+    edgeEnabled: (overrides?.edgeEnabled ?? fromConfig?.edgeEnabled) !== false,
+    densityGradientEnabled: Boolean(
+      overrides?.densityGradientEnabled ?? fromConfig?.densityGradientEnabled,
+    ),
+    densityGradientMode: (() => {
+      const mode = overrides?.densityGradientMode ?? fromConfig?.densityGradientMode;
+      return mode === "horizontal" ||
+        mode === "radial" ||
+        mode === "angle" ||
+        mode === "none" ||
+        mode === "vertical"
+        ? mode
+        : DEFAULT_LENS_CLIP_RENDER.densityGradientMode;
+    })(),
+    densityGradientAngle: normalizeAngle(
+      overrides?.densityGradientAngle ?? fromConfig?.densityGradientAngle,
+      DEFAULT_LENS_CLIP_RENDER.densityGradientAngle,
+    ),
+    densityGradientTwoColor:
+      (overrides?.densityGradientTwoColor ?? fromConfig?.densityGradientTwoColor) !== false,
+    densityGradientStartColor: (() => {
+      const raw =
+        overrides?.densityGradientStartColor ?? fromConfig?.densityGradientStartColor;
+      return typeof raw === "string" && /^#[0-9A-Fa-f]{6}$/.test(raw.trim())
+        ? raw.trim().toUpperCase()
+        : DEFAULT_LENS_CLIP_RENDER.densityGradientStartColor;
+    })(),
+    densityGradientEndColor: (() => {
+      const raw =
+        overrides?.densityGradientEndColor ?? fromConfig?.densityGradientEndColor;
+      return typeof raw === "string" && /^#[0-9A-Fa-f]{6}$/.test(raw.trim())
+        ? raw.trim().toUpperCase()
+        : DEFAULT_LENS_CLIP_RENDER.densityGradientEndColor;
+    })(),
+    densityGradientStrength: clampPct(
+      overrides?.densityGradientStrength ?? fromConfig?.densityGradientStrength,
+      DEFAULT_LENS_CLIP_RENDER.densityGradientStrength,
+    ),
+    densityGradientSoftness: clampPct(
+      overrides?.densityGradientSoftness ?? fromConfig?.densityGradientSoftness,
+      DEFAULT_LENS_CLIP_RENDER.densityGradientSoftness,
+    ),
+    densityGradientPosition: clampPct(
+      overrides?.densityGradientPosition ?? fromConfig?.densityGradientPosition,
+      DEFAULT_LENS_CLIP_RENDER.densityGradientPosition,
+    ),
+    densityGradientStartFalloff: clampPct(
+      overrides?.densityGradientStartFalloff ??
+        fromConfig?.densityGradientStartFalloff ??
+        overrides?.densityGradientStrength ??
+        fromConfig?.densityGradientStrength,
+      DEFAULT_LENS_CLIP_RENDER.densityGradientStartFalloff,
+    ),
+    densityGradientEndFalloff: clampPct(
+      overrides?.densityGradientEndFalloff ??
+        fromConfig?.densityGradientEndFalloff ??
+        overrides?.densityGradientStrength ??
+        fromConfig?.densityGradientStrength,
+      DEFAULT_LENS_CLIP_RENDER.densityGradientEndFalloff,
+    ),
+    densityGradientCurve: (() => {
+      const curve = overrides?.densityGradientCurve ?? fromConfig?.densityGradientCurve;
+      return curve === "ease-in" ||
+        curve === "ease-out" ||
+        curve === "ease-in-out" ||
+        curve === "linear"
+        ? curve
+        : DEFAULT_LENS_CLIP_RENDER.densityGradientCurve;
+    })(),
+    glassTintBlend: (() => {
+      const blend = overrides?.glassTintBlend ?? fromConfig?.glassTintBlend;
+      return blend === "color" || blend === "source-over" || blend === "multiply" ? blend : "kaca";
+    })(),
+    glassTintShine: clampPct(
+      overrides?.glassTintShine ?? fromConfig?.glassTintShine,
+      DEFAULT_LENS_CLIP_RENDER.glassTintShine,
+    ),
+    glassTintEnabled: (overrides?.glassTintEnabled ?? fromConfig?.glassTintEnabled) !== false,
+    darkLayerEnabled: (overrides?.darkLayerEnabled ?? fromConfig?.darkLayerEnabled) !== false,
     tintOpacity,
     tintLayerOpacity,
     lensOpacity: automaticMaterial?.lensOpacity ?? lensOpacity,
@@ -303,8 +529,9 @@ export function resolveLensClipRenderSettings(
       automaticMaterial?.reflectionOpacity ?? merged.reflectionOpacity,
       DEFAULT_LENS_CLIP_RENDER.reflectionOpacity,
     ),
+    // Geometry stays administrator-controlled so per-lens catch-lights can be calibrated.
     reflectionAngle: normalizeAngle(
-      automaticMaterial?.reflectionAngle ?? merged.reflectionAngle,
+      merged.reflectionAngle,
       DEFAULT_LENS_CLIP_RENDER.reflectionAngle,
     ),
     reflectionBlur: clamp01(
@@ -312,28 +539,59 @@ export function resolveLensClipRenderSettings(
       DEFAULT_LENS_CLIP_RENDER.reflectionBlur,
     ),
     reflectionPosition: clampRange(
-      automaticMaterial?.reflectionPosition ?? merged.reflectionPosition,
+      merged.reflectionPosition,
       DEFAULT_LENS_CLIP_RENDER.reflectionPosition,
       -100,
       100,
     ),
     reflectionOffsetX: clampRange(
-      automaticMaterial?.reflectionOffsetX ?? configuredReflectionOffsetX,
+      configuredReflectionOffsetX,
       DEFAULT_LENS_CLIP_RENDER.reflectionOffsetX,
       -100,
       100,
     ),
     reflectionOffsetY: clampRange(
-      automaticMaterial?.reflectionOffsetY ?? configuredReflectionOffsetY,
+      configuredReflectionOffsetY,
       DEFAULT_LENS_CLIP_RENDER.reflectionOffsetY,
       -100,
       100,
     ),
     reflectionScale: clampRange(
-      automaticMaterial?.reflectionScale ?? merged.reflectionScale,
+      merged.reflectionScale,
       DEFAULT_LENS_CLIP_RENDER.reflectionScale,
       0.5,
       1.75,
+    ),
+    mirrorReflection: merged.mirrorReflection !== false,
+    reflectionRightAngle: normalizeAngle(
+      merged.reflectionRightAngle,
+      DEFAULT_LENS_CLIP_RENDER.reflectionRightAngle,
+    ),
+    reflectionRightOffsetX: clampRange(
+      merged.reflectionRightOffsetX,
+      DEFAULT_LENS_CLIP_RENDER.reflectionRightOffsetX,
+      -100,
+      100,
+    ),
+    reflectionRightOffsetY: clampRange(
+      merged.reflectionRightOffsetY,
+      DEFAULT_LENS_CLIP_RENDER.reflectionRightOffsetY,
+      -100,
+      100,
+    ),
+    reflectionRightScale: clampRange(
+      merged.reflectionRightScale,
+      DEFAULT_LENS_CLIP_RENDER.reflectionRightScale,
+      0.5,
+      1.75,
+    ),
+    reflectionRightOpacity: clamp01(
+      merged.reflectionRightOpacity,
+      DEFAULT_LENS_CLIP_RENDER.reflectionRightOpacity,
+    ),
+    reflectionRightBlur: clamp01(
+      merged.reflectionRightBlur,
+      DEFAULT_LENS_CLIP_RENDER.reflectionRightBlur,
     ),
     internalReflectionEnabled: merged.internalReflectionEnabled !== false,
     internalReflectionOpacity: clamp01(

@@ -59,8 +59,12 @@ export function exclusionPolygonsToShapes(
       if (!pathD.trim()) return null;
       return {
         id: polygon.id,
-        label: polygon.label || "Exclusion",
+        label: polygon.label || "Frame object",
         pathD,
+        layerOrder: polygon.layerOrder ?? "behind",
+        opacity: polygon.opacity ?? 100,
+        depth: polygon.depth ?? 50,
+        visible: polygon.visible !== false,
       };
     })
     .filter((shape): shape is LensExclusionShape => Boolean(shape));

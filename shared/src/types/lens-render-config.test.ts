@@ -18,6 +18,9 @@ describe("LENS_RENDER_ZERO_SETTINGS", () => {
     expect(LENS_RENDER_ZERO_SETTINGS.glassAbsorption).toBe(0);
     expect(LENS_RENDER_ZERO_SETTINGS.glassDiffusion).toBe(0);
     expect(LENS_RENDER_ZERO_SETTINGS.glassDepth).toBe(0);
+    expect(LENS_RENDER_ZERO_SETTINGS.baseGlassDarkness).toBe(0);
+    expect(LENS_RENDER_ZERO_SETTINGS.baseGlassRichness).toBe(0);
+    expect(LENS_RENDER_ZERO_SETTINGS.baseGlassNeutralization).toBe(0);
     expect(LENS_RENDER_ZERO_SETTINGS.tintLayerOpacity).toBe(0);
     expect(LENS_RENDER_ZERO_SETTINGS.lensOpacity).toBe(0);
     expect(LENS_RENDER_ZERO_SETTINGS.reflectionOpacity).toBe(0);

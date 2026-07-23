@@ -12,11 +12,17 @@
  * }} PathAnchor
  */
 
-/** @typedef {{
+/**
+ * @typedef {{
  *   id: string,
  *   label: string,
- *   points: PathAnchor[]
- * }} LensPolygon */
+ *   points: PathAnchor[],
+ *   layerOrder?: 'behind' | 'inside' | 'front',
+ *   opacity?: number,
+ *   depth?: number,
+ *   visible?: boolean,
+ * }} LensPolygon
+ */
 
 /**
  * @typedef {{
@@ -36,7 +42,7 @@
  *   updatedAt: number
  * }} MaskConfig
  *
- * `frameExclusions` is the canonical frame-level exclusion list (independent of left/right).
+ * `frameExclusions` is the canonical frame-level structure-object list.
  * `exclusions` (by-side) is legacy and only read for backward compatibility.
  */
 
@@ -146,15 +152,56 @@ export function normalizeExclusionsBySide(exclusions) {
 /** @param {LensPolygon} polygon */
 function normalizeExclusionPolygon(polygon) {
   if (!polygon?.id) return null;
+  const layerOrder =
+    polygon.layerOrder === "inside" || polygon.layerOrder === "front" || polygon.layerOrder === "behind"
+      ? polygon.layerOrder
+      : "behind";
+  const opacity =
+    typeof polygon.opacity === "number" && Number.isFinite(polygon.opacity)
+      ? Math.max(0, Math.min(100, polygon.opacity))
+      : 100;
+  const depth =
+    typeof polygon.depth === "number" && Number.isFinite(polygon.depth)
+      ? Math.max(0, Math.min(100, polygon.depth))
+      : 50;
   return {
     id: polygon.id,
-    label: polygon.label || "Exclusion",
+    label: polygon.label || "Frame object",
     points: migrateAnchors(polygon.points ?? []),
+    layerOrder,
+    opacity,
+    depth,
+    visible: polygon.visible !== false,
   };
 }
 
-export function createLensPolygon(id, label, points = []) {
-  return { id, label, points: migrateAnchors(points) };
+/**
+ * @param {string} id
+ * @param {string} label
+ * @param {PathAnchor[]} [points]
+ * @param {Partial<Pick<LensPolygon, 'layerOrder' | 'opacity' | 'depth' | 'visible'>>} [extras]
+ * @returns {LensPolygon}
+ */
+export function createLensPolygon(id, label, points = [], extras = {}) {
+  return (
+    normalizeExclusionPolygon({
+      id,
+      label,
+      points,
+      layerOrder: extras.layerOrder ?? "behind",
+      opacity: extras.opacity ?? 100,
+      depth: extras.depth ?? 50,
+      visible: extras.visible !== false,
+    }) ?? {
+      id,
+      label,
+      points: migrateAnchors(points),
+      layerOrder: "behind",
+      opacity: 100,
+      depth: 50,
+      visible: true,
+    }
+  );
 }
 
 export function defaultLensSet() {

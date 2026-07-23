@@ -751,7 +751,7 @@ export const FrameRenderViewsSection = forwardRef<
       return;
     }
     if (commitMaskToView(axis, mask)) {
-      setAxisNotice(axis, "Frame exclusions saved to draft.", "success");
+      setAxisNotice(axis, "Frame objects saved to draft.", "success");
       const existingTimer = exclusionSavedTimersRef.current[axis];
       if (existingTimer) clearTimeout(existingTimer);
       setExclusionSaved((prev) => ({ ...prev, [axis]: true }));
@@ -968,7 +968,7 @@ export const FrameRenderViewsSection = forwardRef<
                   {isLeftPanelOpen ? (
                     <InlineEditorPanel
                       title="Left lens path editor"
-                      description="Edit the left lens opening polygon. Frame parts inside the lens are handled by the Frame exclusions editor."
+                      description="Edit the left lens opening polygon. Frame parts inside the lens are handled by the Frame objects editor."
                       toolbar={
                         <>
                           <Button
@@ -1058,7 +1058,7 @@ export const FrameRenderViewsSection = forwardRef<
                   {isRightPanelOpen ? (
                     <InlineEditorPanel
                       title="Right lens path editor"
-                      description="Edit the right lens opening polygon. Frame parts inside the lens are handled by the Frame exclusions editor."
+                      description="Edit the right lens opening polygon. Frame parts inside the lens are handled by the Frame objects editor."
                       toolbar={
                         <>
                           <Button
@@ -1109,7 +1109,7 @@ export const FrameRenderViewsSection = forwardRef<
                   ) : null}
                 </div>
 
-                <p className="type-label text-muted-foreground">Frame exclusions</p>
+                <p className="type-label text-muted-foreground">Frame objects</p>
 
                 <div
                   className={cn(
@@ -1118,8 +1118,8 @@ export const FrameRenderViewsSection = forwardRef<
                   )}
                 >
                   <p className="mb-2 text-xs text-muted-foreground">
-                    Frame parts inside the lens openings (bridge, screws, inner rim, support bars)
-                    that must stay visible above the tinted lens.
+                    Physical frame objects inside the lens openings (bridge support, screws, inner
+                    rim, nylon wire). Each object can sit behind, inside, or in front of the glass.
                   </p>
                   {!isExclusionsPanelOpen ? (
                     <Button
@@ -1130,14 +1130,14 @@ export const FrameRenderViewsSection = forwardRef<
                       onClick={() => openEditor(axis, "exclusions")}
                     >
                       <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Frame Exclusions
+                      Edit Frame Objects
                     </Button>
                   ) : null}
 
                   {isExclusionsPanelOpen ? (
                     <InlineEditorPanel
-                      title="Frame exclusions editor"
-                      description="Draw frame parts that sit inside the lens openings. They are restored above the rendered lens so they always stay visible."
+                      title="Frame objects editor"
+                      description="Draw frame structures inside the lens openings and choose whether each sits behind, inside, or in front of the glass."
                       onSave={() => saveExclusionsEditor(axis)}
                       onCancel={() => cancelEditor(axis)}
                       saveFeedback={
@@ -1264,6 +1264,16 @@ function LensRenderingSection({
     reflectionOffsetY: resolved.reflectionOffsetY,
     reflectionScale: resolved.reflectionScale,
     reflectionAngle: resolved.reflectionAngle,
+    mirrorReflection: resolved.mirrorReflection,
+    reflectionRightAngle: resolved.reflectionRightAngle,
+    reflectionRightOffsetX: resolved.reflectionRightOffsetX,
+    reflectionRightOffsetY: resolved.reflectionRightOffsetY,
+    reflectionRightScale: resolved.reflectionRightScale,
+    reflectionRightOpacity: resolved.reflectionRightOpacity,
+    reflectionRightBlur: resolved.reflectionRightBlur,
+    baseGlassDarkness: resolved.baseGlassDarkness,
+    baseGlassRichness: resolved.baseGlassRichness,
+    baseGlassNeutralization: resolved.baseGlassNeutralization,
     internalReflectionEnabled: resolved.internalReflectionEnabled,
     internalReflectionOpacity: resolved.internalReflectionOpacity,
     internalReflectionSoftness: resolved.internalReflectionSoftness,

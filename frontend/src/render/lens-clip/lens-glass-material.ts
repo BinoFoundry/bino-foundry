@@ -117,17 +117,19 @@ export function computeReflectionBlurPx(
 }
 
 /**
- * Optical glass compositor (bottom → top).
- * Material optics live in one reusable SVG filter applied to a single tinted path.
+ * Inserted optical glass compositor (bottom → top).
+ * Glass Element uses the lens-glass-clip optical model (dark → kaca tint → specular).
+ * Frame structure objects sit behind, inside, or in front of the glass.
  */
 export const REPLACE_LENS_PIPELINE_STEPS = [
-  "knockout-frame-plate",
-  "glass-foundation",
-  "manual-base-brightness",
-  "manual-base-gamma",
-  "glass-tint-path",
-  "glass-material-filter",
-  "frame-exclusions",
+  "frame-back",
+  "behind-glass-objects",
+  "glass-element-dark-body",
+  "glass-element-kaca-tint",
+  "glass-element-specular",
+  "inside-glass-objects",
+  "front-of-glass-objects",
+  "frame-front",
 ] as const;
 
 export type ReplaceLensPipelineStep = (typeof REPLACE_LENS_PIPELINE_STEPS)[number];

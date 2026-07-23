@@ -114,15 +114,19 @@ describe("lens-glass-material", () => {
     expect(resolveReflectionLayerOpacity(1, 1)).toBe(1);
   });
 
-  it("documents glass-material-filter order with exclusions last", () => {
-    expect(REPLACE_LENS_PIPELINE_STEPS[0]).toBe("knockout-frame-plate");
-    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("glass-foundation");
-    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("glass-tint-path");
-    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("glass-material-filter");
-    expect(REPLACE_LENS_PIPELINE_STEPS.indexOf("glass-tint-path")).toBeLessThan(
-      REPLACE_LENS_PIPELINE_STEPS.indexOf("glass-material-filter"),
+  it("documents inserted-glass pipeline order", () => {
+    expect(REPLACE_LENS_PIPELINE_STEPS[0]).toBe("frame-back");
+    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("behind-glass-objects");
+    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("glass-element-kaca-tint");
+    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("glass-element-specular");
+    expect(REPLACE_LENS_PIPELINE_STEPS).toContain("front-of-glass-objects");
+    expect(REPLACE_LENS_PIPELINE_STEPS.at(-1)).toBe("frame-front");
+    expect(REPLACE_LENS_PIPELINE_STEPS.indexOf("behind-glass-objects")).toBeLessThan(
+      REPLACE_LENS_PIPELINE_STEPS.indexOf("glass-element-kaca-tint"),
     );
-    expect(REPLACE_LENS_PIPELINE_STEPS.at(-1)).toBe("frame-exclusions");
+    expect(REPLACE_LENS_PIPELINE_STEPS.indexOf("glass-element-kaca-tint")).toBeLessThan(
+      REPLACE_LENS_PIPELINE_STEPS.indexOf("front-of-glass-objects"),
+    );
     expect(DEFAULT_LENS_CLIP_RENDER.lensTransmission).toBeGreaterThan(0);
   });
 });

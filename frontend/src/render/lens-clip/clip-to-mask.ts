@@ -50,7 +50,10 @@ function pxToNorm(x: number, y: number, w: number, h: number): { x: number; y: n
 
 /** Reconstruct editor anchors from exported SVG path `d` (M/L/C/Z). */
 export function pathDToLensPolygon(
-  shape: Pick<LensClipShape | LensExclusionShape, "id" | "label" | "pathD">,
+  shape: Pick<
+    LensClipShape | LensExclusionShape,
+    "id" | "label" | "pathD" | "layerOrder" | "opacity" | "depth" | "visible"
+  >,
   imageWidth: number,
   imageHeight: number,
 ): LensPolygon | null {
@@ -101,7 +104,12 @@ export function pathDToLensPolygon(
 
   if (migrateAnchors(finalPoints).length < 3) return null;
 
-  return createLensPolygon(shape.id, shape.label, finalPoints);
+  return createLensPolygon(shape.id, shape.label, finalPoints, {
+    layerOrder: shape.layerOrder,
+    opacity: shape.opacity,
+    depth: shape.depth,
+    visible: shape.visible,
+  });
 }
 
 /** Frame-level exclusions (merges canonical + legacy per-lens) → editor polygons. */

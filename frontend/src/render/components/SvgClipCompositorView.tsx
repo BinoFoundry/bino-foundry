@@ -3,18 +3,15 @@ import { memo, useId, useMemo } from "react";
 import { usePlateContentBounds } from "@/render/image-bounds";
 import {
   normalizeLensClipConfig,
+  partitionFrameExclusionObjects,
   resolveFrameExclusionShapes,
-  type FrameExclusionShape,
   type LensClipConfig,
   type LensClipShape,
+  type ResolvedFrameExclusionObject,
 } from "@bino-foundry/shared/types";
 import { resolveLensClipRenderSettings, type ResolvedLensClipRender } from "@/render/lens-clip/clip-settings";
-import { resolveGlassMaterialFilterParams } from "@/render/lens-clip/glass-material-filter";
-import { GlassMaterialFilterDef } from "@/render/lens-clip/GlassMaterialFilterDef";
-import {
-  resolveLensManualCalibration,
-  resolveMaterialInfluence,
-} from "@/render/lens-clip/lens-glass-material";
+import { resolvePrototypeGlassAppearance } from "@/render/lens-clip/prototype-glass-appearance";
+import { PrototypeGlassElement } from "@/render/lens-clip/PrototypeGlassElement";
 import { SvgTintGradientDef } from "@/render/tint/SvgTintGradientDef";
 import {
   normalizeTintRenderSpec,
@@ -45,52 +42,46 @@ function lensFillSpec(
   tintSpec: NormalizedTintRenderSpec,
   _render: ResolvedLensClipRender,
 ): NormalizedTintRenderSpec {
-  // Catalogue tint colours are the sole chromatic source. Frame-level render settings may
-  // tune optics but must never override the customer-selected hue per frame.
   return tintSpec;
 }
 
-function LensClipPathDef({ uid, lens }: { uid: string; lens: LensClipShape }) {
+/** Glass Element clip — full lens mold (structure objects are separate layers). */
+function GlassElementClipDef({ uid, lens }: { uid: string; lens: LensClipShape }) {
   return (
-    <clipPath
-      key={`${uid}-clip-${lens.id}`}
-      id={`${uid}-clip-${lens.id}`}
-      clipPathUnits="userSpaceOnUse"
-    >
+    <clipPath id={`${uid}-glass-${lens.id}`} clipPathUnits="userSpaceOnUse">
       <path d={lens.pathD} />
     </clipPath>
   );
 }
 
 /**
- * Frame Exclusions — paints the ORIGINAL frame plate above the rendered lens, masked to
- * frame-exclusion polygons, so bridge / screws / inner rim stay visible.
+ * One physical frame structure object, masked from the shared plate.
+ * Reuses the plate URL — no duplicated SVG assets.
  */
-function FrameExclusionOverlay({
+function FrameStructureObject({
   uid,
-  exclusions,
+  object,
   w,
   h,
   plateUrl,
-  opacity,
+  blendMode,
 }: {
   uid: string;
-  exclusions: FrameExclusionShape[];
+  object: ResolvedFrameExclusionObject;
   w: number;
   h: number;
   plateUrl: string;
-  opacity: number;
+  blendMode?: "normal" | "multiply" | "soft-light";
 }) {
-  if (!exclusions.length) return null;
-  const maskId = `${uid}-frame-exclusions`;
+  const maskId = `${uid}-obj-${object.id}`;
+  const opacity = Math.max(0, Math.min(1, object.opacity / 100));
+  if (opacity <= 1e-4) return null;
   return (
     <>
       <defs>
         <mask id={maskId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
           <rect x={0} y={0} width={w} height={h} fill="#000" />
-          {exclusions.map((ex) => (
-            <path key={`${maskId}-${ex.id}`} d={ex.pathD} fill="#fff" />
-          ))}
+          <path d={object.pathD} fill="#fff" />
         </mask>
       </defs>
       <image
@@ -103,20 +94,20 @@ function FrameExclusionOverlay({
         crossOrigin="anonymous"
         mask={`url(#${maskId})`}
         opacity={opacity}
+        style={blendMode && blendMode !== "normal" ? { mixBlendMode: blendMode } : undefined}
       />
     </>
   );
 }
 
 /**
- * Replace-lens compositor: one reusable glass material filter + one tinted path per opening.
- * Optical depth, edge absorption, diffusion, and reflection live inside the filter — not
- * as stacked overlay groups.
+ * Optical-glass compositor:
+ * Frame Back → Behind → Original Lens → Material Layers → Inside → Front → Frame Front
  */
-const ReplaceLensLayers = memo(function ReplaceLensLayers({
+const InsertedGlassLayers = memo(function InsertedGlassLayers({
   uid,
   lenses,
-  frameExclusions,
+  frameObjects,
   w,
   h,
   plateUrl,
@@ -125,7 +116,7 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
 }: {
   uid: string;
   lenses: LensClipShape[];
-  frameExclusions: FrameExclusionShape[];
+  frameObjects: ResolvedFrameExclusionObject[];
   w: number;
   h: number;
   plateUrl: string;
@@ -134,33 +125,16 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
 }) {
   const fillSpec = lensFillSpec(tintSpec, render);
   const tintId = `${uid}-tint`;
-  const knockoutId = `${uid}-knockout`;
-  const baseCalibrationFilterId = `${uid}-base-calibration`;
-  const glassMaterialId = `${uid}-glassMaterial`;
+  const frameBackId = `${uid}-frame-back`;
+  const frameFrontId = `${uid}-frame-front`;
   const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+  const { behind, inside, front } = partitionFrameExclusionObjects(frameObjects);
 
-  const calibration = resolveLensManualCalibration(
-    render.baseBrightness,
-    render.baseGamma,
-  );
-  const material = resolveMaterialInfluence(render.materialInfluence);
-  const filterParams = resolveGlassMaterialFilterParams(render, w, h);
-
-  const backgroundReveal = clamp01(render.backgroundVisibility);
-  const transmission = clamp01(render.lensTransmission);
-  // Subtle plate luminance under the filtered tint — not a material overlay path.
-  const foundationOpacity =
-    (1 - backgroundReveal) * (0.28 + transmission * 0.55) * (1 - filterParams.environmentVisibility);
-  const tintAlpha = clamp01(render.tintLayerOpacity);
-  const applyCalibration = tintAlpha > 0 || !calibration.isIdentity;
-
-  // One tinted path: choose the dominant blend so Material Influence stays a blend weight.
-  const useLuminancePreserve = material.luminancePreserveFactor >= material.valueDominanceFactor;
-  const tintOpacity = useLuminancePreserve
-    ? filterParams.bodyOpacity * Math.max(material.luminancePreserveFactor, 0.35)
-    : filterParams.bodyOpacity *
-      Math.max(material.valueDominanceFactor * material.valueBlendGain, 0.35);
-  const tintBlendMode = useLuminancePreserve ? "color" : "multiply";
+  const perLensGlass = lenses.map((lens) => ({
+    lens,
+    appearance: resolvePrototypeGlassAppearance(render, fillSpec.top, lens, lenses),
+  }));
+  const anyGlass = perLensGlass.some((item) => item.appearance.glassPresent);
 
   const plateImageProps = {
     href: plateUrl,
@@ -172,105 +146,97 @@ const ReplaceLensLayers = memo(function ReplaceLensLayers({
     crossOrigin: "anonymous" as const,
   };
 
+  // When no material layers are active, show the plate as-is (production path with empty layers).
+  if (!anyGlass) {
+    return <image {...plateImageProps} />;
+  }
+
   return (
     <>
       <defs>
-        <mask id={knockoutId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
+        <mask id={frameBackId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
           <rect x={0} y={0} width={w} height={h} fill="#fff" />
           {lenses.map((lens) => (
-            <path key={`${knockoutId}-${lens.id}`} d={lens.pathD} fill="#000" />
+            <path key={`${frameBackId}-lens-${lens.id}`} d={lens.pathD} fill="#000" />
+          ))}
+        </mask>
+        <mask id={frameFrontId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
+          <rect x={0} y={0} width={w} height={h} fill="#fff" />
+          {lenses.map((lens) => (
+            <path key={`${frameFrontId}-lens-${lens.id}`} d={lens.pathD} fill="#000" />
           ))}
         </mask>
 
         <SvgTintGradientDef id={tintId} spec={fillSpec} />
 
-        {applyCalibration ? (
-          <filter
-            id={baseCalibrationFilterId}
-            x="0%"
-            y="0%"
-            width="100%"
-            height="100%"
-            colorInterpolationFilters="sRGB"
-          >
-            <feComponentTransfer in="SourceGraphic" result="brightened">
-              <feFuncR
-                type="linear"
-                slope={1}
-                intercept={calibration.brightnessOffset}
-              />
-              <feFuncG
-                type="linear"
-                slope={1}
-                intercept={calibration.brightnessOffset}
-              />
-              <feFuncB
-                type="linear"
-                slope={1}
-                intercept={calibration.brightnessOffset}
-              />
-              <feFuncA type="identity" />
-            </feComponentTransfer>
-            <feColorMatrix
-              in="brightened"
-              type="saturate"
-              values={render.originalLensColorInfluence / 100}
-              result="neutralFoundation"
-            />
-            <feComponentTransfer in="neutralFoundation">
-              <feFuncR type="gamma" amplitude={1} exponent={calibration.gamma} offset={0} />
-              <feFuncG type="gamma" amplitude={1} exponent={calibration.gamma} offset={0} />
-              <feFuncB type="gamma" amplitude={1} exponent={calibration.gamma} offset={0} />
-              <feFuncA type="identity" />
-            </feComponentTransfer>
-          </filter>
-        ) : null}
-
-        {/* One shared optical engine for every lens opening. */}
-        <GlassMaterialFilterDef id={glassMaterialId} params={filterParams} />
-
         {lenses.map((lens) => (
-          <LensClipPathDef key={`${uid}-clipdef-${lens.id}`} uid={uid} lens={lens} />
+          <GlassElementClipDef key={`${uid}-glass-clip-${lens.id}`} uid={uid} lens={lens} />
         ))}
       </defs>
 
-      {/* 1. Frame body (lens openings punched out). */}
-      <image {...plateImageProps} mask={`url(#${knockoutId})`} />
+      {/* 1. Frame Back */}
+      <image {...plateImageProps} mask={`url(#${frameBackId})`} />
 
-      {/* 2. Each opening: foundation luminance + one filtered tint path. */}
+      {/* 2. Behind Glass — viewed through original lens + material layers */}
+      {behind.map((object) => (
+        <FrameStructureObject
+          key={`${uid}-behind-${object.id}`}
+          uid={`${uid}-behind`}
+          object={object}
+          w={w}
+          h={h}
+          plateUrl={plateUrl}
+        />
+      ))}
+
+      {/* 3. Original lens foundation — natural texture / gradients / base glass */}
       {lenses.map((lens) => (
-        <g
-          key={`${uid}-lens-${lens.id}`}
-          clipPath={`url(#${uid}-clip-${lens.id})`}
-        >
-          {foundationOpacity > 0 ? (
-            <image
-              {...plateImageProps}
-              opacity={foundationOpacity}
-              filter={applyCalibration ? `url(#${baseCalibrationFilterId})` : undefined}
-            />
-          ) : null}
-
-          {tintOpacity > 0 ? (
-            <path
-              d={lens.pathD}
-              fill={`url(#${tintId})`}
-              opacity={tintOpacity}
-              filter={`url(#${glassMaterialId})`}
-              style={{ mixBlendMode: tintBlendMode }}
-            />
-          ) : null}
+        <g key={`${uid}-orig-lens-${lens.id}`} clipPath={`url(#${uid}-glass-${lens.id})`}>
+          <image {...plateImageProps} data-layer="original-lens" />
         </g>
       ))}
 
-      {/* 3. Frame exclusions restore hardware above the lens. */}
-      <FrameExclusionOverlay
-        uid={uid}
-        exclusions={frameExclusions}
-        w={w}
-        h={h}
-        plateUrl={plateUrl}
-        opacity={render.frameExclusionOpacity}
+      {/* 4. Glass material layers (prototype model over the original lens) */}
+      {perLensGlass.map(({ lens, appearance }) => (
+        <PrototypeGlassElement
+          key={`${uid}-glass-el-${lens.id}`}
+          uid={uid}
+          lens={lens}
+          tintId={tintId}
+          appearance={appearance}
+        />
+      ))}
+
+      {/* 5. Inside Glass */}
+      {inside.map((object) => (
+        <FrameStructureObject
+          key={`${uid}-inside-${object.id}`}
+          uid={`${uid}-inside`}
+          object={object}
+          w={w}
+          h={h}
+          plateUrl={plateUrl}
+          blendMode="soft-light"
+        />
+      ))}
+
+      {/* 6. Front of Glass */}
+      {front.map((object) => (
+        <FrameStructureObject
+          key={`${uid}-front-${object.id}`}
+          uid={`${uid}-front`}
+          object={object}
+          w={w}
+          h={h}
+          plateUrl={plateUrl}
+        />
+      ))}
+
+      {/* 7. Frame Front rim */}
+      <image
+        {...plateImageProps}
+        mask={`url(#${frameFrontId})`}
+        opacity={clamp01(render.frameExclusionOpacity)}
       />
     </>
   );
@@ -298,11 +264,11 @@ function SvgClipCompositorViewInner({
   const plateH = plate?.height ?? 0;
   const { viewBox } = usePlateContentBounds(plate?.plateUrl, plateW, plateH);
 
-  const { lenses, frameExclusions } = useMemo(() => {
+  const { lenses, frameObjects } = useMemo(() => {
     const clip = plate?.clipConfig ? normalizeLensClipConfig(plate.clipConfig) : null;
     return {
       lenses: (clip?.lenses ?? []).filter((l) => l.pathD?.trim()),
-      frameExclusions: resolveFrameExclusionShapes(clip),
+      frameObjects: resolveFrameExclusionShapes(clip),
     };
   }, [plate?.clipConfig]);
 
@@ -350,10 +316,10 @@ function SvgClipCompositorViewInner({
               crossOrigin="anonymous"
             />
           ) : (
-            <ReplaceLensLayers
+            <InsertedGlassLayers
               uid={uid}
               lenses={lenses}
-              frameExclusions={frameExclusions}
+              frameObjects={frameObjects}
               w={w}
               h={h}
               plateUrl={plate.plateUrl}
