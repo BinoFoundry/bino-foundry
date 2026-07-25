@@ -131,22 +131,39 @@ export function StrandRenderConfigPanel({
 
       <div className="grid gap-3 sm:grid-cols-2">
         {mode === "system" ? (
-          <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
-            <input
-              type="number"
-              step="0.1"
-              min={90}
-              max={110}
-              disabled={readOnly}
-              className={adminFieldClass()}
-              value={Number((value.layoutScale * 100).toFixed(2))}
-              onChange={(e) => onChange({ layoutScale: Number(e.target.value) / 100 })}
-            />
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Global positioning calibration (100% = measured rendered contact diameter). Does not
-              resize bead images.
-            </p>
-          </Field>
+          <>
+            <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
+              <input
+                type="number"
+                step="0.1"
+                min={90}
+                max={110}
+                disabled={readOnly}
+                className={adminFieldClass()}
+                value={Number((value.layoutScale * 100).toFixed(2))}
+                onChange={(e) => onChange({ layoutScale: Number(e.target.value) / 100 })}
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Global positioning calibration (100% = measured rendered contact diameter). Does not
+                resize bead images.
+              </p>
+            </Field>
+            <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  disabled={readOnly}
+                  checked={value.balanceSpacing}
+                  onChange={(e) => onChange({ balanceSpacing: e.target.checked })}
+                />
+                Equalise empty neighbour gaps after physical placement
+              </label>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Final optical pass only — keeps occupancy, insertion order, and no-overlap rules.
+                Turn off for pure physical strand layout.
+              </p>
+            </Field>
+          </>
         ) : null}
         <Field
           label="Contact width"

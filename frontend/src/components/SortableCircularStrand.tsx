@@ -628,29 +628,28 @@ const SortableCircularStrand = ({
           return getBeadStrandTangentContactPx(sizing) * renderScale;
         });
         const layoutScale = strandRenderDefaults?.layoutScale ?? 1;
+        const balanceSpacing = strandRenderDefaults?.balanceSpacing ?? true;
         // One positioning source of truth: metadata-measured rendered contact diameter,
         // calibrated globally. This does not change bitmap/shell size or nominal capacity.
         const effectiveLayoutDiametersPx = visualDiametersPx.map((diameterPx) =>
           effectiveLayoutDiameterPx(diameterPx, layoutScale),
         );
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
-        // Fill ratio is informational only — positions come from balanced fractions.
-        const compressionRatio = capacityUsedMm / Math.max(wristMm, 1e-6);
 
-        // Exact previous insertion algorithm: each bead sits on its balanced angle fraction
-        // (top → bottom → right → left → largest-gap bisection). No clockwise repack.
+        // Top → bottom → right → left anchors, then occupancy-aware largest-gap insertion.
+        // Optional Balance Spacing equalises leftover empty gaps without changing occupancy.
         const sequential = computeBalancedRadialStrandPathLayout({
           beads: normalized.map((_, i) => ({
             index: i,
-            occupancyPx: effectiveLayoutDiametersPx[i]!,
-            visualRadiusPx: effectiveLayoutDiametersPx[i]! / 2,
+            occupancyPx: occupancy.contactArcPx[i]!,
+            visualRadiusPx: occupancy.contactArcPx[i]! / 2,
             contactAdjustmentPx: 0,
           })),
           centerX: center,
           centerY: center,
           radius: wristRadius,
           startAngle: pathStartAngle,
-          compressionRatio,
+          balanceSpacing,
         });
         radius = sequential.resolvedRadiusPx ?? wristRadius;
         const pathLayout = sequential.beads;
@@ -798,7 +797,7 @@ const SortableCircularStrand = ({
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
     };
-  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead]);
+  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing]);
 
   const renderCanvasSize = canvasSize;
   const ringStrokeWidth = computeStrandRingStrokePx(scaleFactor);

@@ -27,6 +27,11 @@ export interface StrandRenderProfile {
    * Positioning only: never changes bitmap/CSS size. 1 = 100%.
    */
   layoutScale: number;
+  /**
+   * When true, run a final optical pass that equalises empty neighbour gaps after
+   * physical largest-gap placement. Occupancy and insertion order are preserved.
+   */
+  balanceSpacing: boolean;
   /** Inline on occupied arc, or between two neighbours (connectors). */
   attachmentStyle: StrandAttachmentStyle;
   /** Fraction of tangent width occupied on the strand (1 = one bead width). @deprecated Use contactWidth */
@@ -108,6 +113,7 @@ export const STRAND_EFFECTIVE_CONTACT_WIDTH_MIN = 0;
 
 export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
   layoutScale: 1,
+  balanceSpacing: true,
   attachmentStyle: "inline",
   strandOccupancy: 1,
   contactWidth: 1,
@@ -294,6 +300,7 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   const o = raw as Record<string, unknown>;
   const partial: Partial<StrandRenderProfile> = {};
   if (typeof o.layoutScale === "number") partial.layoutScale = o.layoutScale;
+  if (typeof o.balanceSpacing === "boolean") partial.balanceSpacing = o.balanceSpacing;
   if (typeof o.strandOccupancy === "number") partial.strandOccupancy = o.strandOccupancy;
   if (typeof o.contactWidth === "number") partial.contactWidth = o.contactWidth;
   if (o.layoutMode === "inline" || o.layoutMode === "dangling") {

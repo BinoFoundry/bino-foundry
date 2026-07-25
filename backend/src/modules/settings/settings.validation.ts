@@ -21,6 +21,7 @@ export const siteGeneralSettingsDto = z.object({
 
 export const strandRenderDefaultsDto = z.object({
   layoutScale: z.number().min(0.9).max(1.1).default(1),
+  balanceSpacing: z.boolean().default(true),
   attachmentStyle: z.enum(["inline", "betweenItems"]),
   strandOccupancy: z.number().min(0.05).max(2),
   contactWidth: z.number().min(STRAND_CONTACT_SPACING_MIN).max(STRAND_CONTACT_SPACING_MAX),

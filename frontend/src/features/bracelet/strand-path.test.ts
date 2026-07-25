@@ -19,7 +19,6 @@ import {
   strandRotationDeg,
   tangentRotationDeg,
 } from "./strand-path";
-import { balancedFractionsForSequence } from "./balanced-strand-layout";
 import { resolveStrandRenderConfigForType } from "@/render/bead-crop/strand-render-profile";
 import { TEST_STRAND_RENDER_CATALOGUE } from "@/render/bead-crop/strand-render-test-catalogue";
 
@@ -319,174 +318,259 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     radius: 100,
     startAngle: -Math.PI / 2,
   };
+  const circumference = 2 * Math.PI * base.radius;
 
-  const angleAtFraction = (fraction: number) =>
-    Math.atan2(
-      Math.sin(base.startAngle + fraction * 2 * Math.PI),
-      Math.cos(base.startAngle + fraction * 2 * Math.PI),
-    );
-
-  const angularDelta = (from: number, to: number) => {
-    let d = to - from;
-    while (d > Math.PI) d -= 2 * Math.PI;
-    while (d < -Math.PI) d += 2 * Math.PI;
-    return d;
+  const clockwiseAngle = (from: number, to: number) => {
+    const delta = (to - from) % (2 * Math.PI);
+    return delta < 0 ? delta + 2 * Math.PI : delta;
   };
 
-  it("fills top → bottom → right by direction priority without reordering", () => {
+  const shortestAngle = (from: number, to: number) =>
+    Math.min(clockwiseAngle(from, to), clockwiseAngle(to, from));
+
+  const equalBeads = (count: number, occupancyPx = 8) =>
+    Array.from({ length: count }, (_, index) => ({
+      index,
+      occupancyPx,
+      visualRadiusPx: occupancyPx / 2,
+    }));
+
+  it("keeps the first four visual anchors at top, bottom, right, and left", () => {
     const layout = computeBalancedRadialStrandPathLayout({
       ...base,
-      beads: Array.from({ length: 3 }, (_, index) => ({
-        index,
-        occupancyPx: 10,
-        visualRadiusPx: 5,
-      })),
+      balanceSpacing: false,
+      beads: equalBeads(4),
     });
 
-    expect(layout.beads.map((bead) => bead.index)).toEqual([0, 1, 2]);
-    expect(layout.beads[0]!.angle).toBeCloseTo(angleAtFraction(0), 6);
-    expect(layout.beads[1]!.angle).toBeCloseTo(angleAtFraction(0.5), 6);
-    expect(layout.beads[2]!.angle).toBeCloseTo(angleAtFraction(0.25), 6);
+    expect(layout.beads.map((bead) => bead.index)).toEqual([0, 1, 2, 3]);
+    expect(layout.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
+    expect(clockwiseAngle(base.startAngle, layout.beads[1]!.angle)).toBeCloseTo(Math.PI, 6);
+    expect(clockwiseAngle(base.startAngle, layout.beads[2]!.angle)).toBeCloseTo(Math.PI / 2, 6);
+    expect(clockwiseAngle(base.startAngle, layout.beads[3]!.angle)).toBeCloseTo(3 * Math.PI / 2, 6);
   });
 
-  it("keeps top/bottom/right/left order for four beads", () => {
-    const layout = computeBalancedRadialStrandPathLayout({
-      ...base,
-      beads: Array.from({ length: 4 }, (_, index) => ({
-        index,
-        occupancyPx: 10,
-        visualRadiusPx: 5,
-      })),
-    });
-
-    expect(layout.beads[0]!.angle).toBeCloseTo(angleAtFraction(0), 6);
-    expect(layout.beads[1]!.angle).toBeCloseTo(angleAtFraction(0.5), 6);
-    expect(layout.beads[2]!.angle).toBeCloseTo(angleAtFraction(0.25), 6);
-    expect(layout.beads[3]!.angle).toBeCloseTo(angleAtFraction(0.75), 6);
-  });
-
-  it("recursively fills the largest gaps without clockwise packing", () => {
-    const layout = computeBalancedRadialStrandPathLayout({
-      ...base,
-      beads: Array.from({ length: 8 }, (_, index) => ({
-        index,
-        occupancyPx: 10,
-        visualRadiusPx: 5,
-      })),
-    });
-
-    const expectedFractions = [0, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875];
-    expectedFractions.forEach((fraction, index) => {
-      expect(layout.beads[index]!.angle).toBeCloseTo(angleAtFraction(fraction), 6);
-    });
-  });
-
-  it("preserves balanced compass angles regardless of footprint size", () => {
-    const mixed = computeBalancedRadialStrandPathLayout({
-      ...base,
-      beads: [
-        { index: 0, occupancyPx: 10, visualRadiusPx: 5 },
-        { index: 1, occupancyPx: 24, visualRadiusPx: 14 },
-        { index: 2, occupancyPx: 6, visualRadiusPx: 3 },
-        { index: 3, occupancyPx: 18, visualRadiusPx: 9 },
-        { index: 4, occupancyPx: 10, visualRadiusPx: 5 },
-      ],
-    });
-
-    expect(mixed.beads.map((bead) => bead.index)).toEqual([0, 1, 2, 3, 4]);
-    expect(mixed.beads[0]!.angle).toBeCloseTo(angleAtFraction(0), 6);
-    expect(mixed.beads[1]!.angle).toBeCloseTo(angleAtFraction(0.5), 6);
-    expect(mixed.beads[2]!.angle).toBeCloseTo(angleAtFraction(0.25), 6);
-    expect(mixed.beads[3]!.angle).toBeCloseTo(angleAtFraction(0.75), 6);
-    expect(mixed.beads[4]!.angle).toBeCloseTo(angleAtFraction(0.125), 6);
-  });
-
-  it("densifies spacing gradually as count grows — no clockwise cluster", () => {
-    const radius = 180 / (2 * Math.PI);
-    const counts = [1, 2, 3, 4, 5, 8, 12, 20, 30] as const;
-    const meanGap = (count: number) => {
+  it("uses the requested non-clockwise largest-gap sequence for the first eight beads", () => {
+    const expectedFractions = [0, 0.5, 0.25, 0.75, 0.125, 0.625, 0.875, 0.375];
+    for (let count = 1; count <= expectedFractions.length; count++) {
       const layout = computeBalancedRadialStrandPathLayout({
-        centerX: 0,
-        centerY: 0,
-        radius,
-        startAngle: -Math.PI / 2,
-        beads: Array.from({ length: count }, (_, index) => ({
-          index,
-          occupancyPx: 6,
-          visualRadiusPx: 3,
-        })),
+        ...base,
+        balanceSpacing: false,
+        beads: equalBeads(count),
       });
-      if (count < 2) return Infinity;
-      const angular = [...layout.beads].sort((a, b) => a.angle - b.angle);
-      let sum = 0;
-      for (let i = 0; i < angular.length; i++) {
-        const a = angular[i]!;
-        const b = angular[(i + 1) % angular.length]!;
-        sum += Math.hypot(a.x - b.x, a.y - b.y);
-      }
-      return sum / angular.length;
-    };
-
-    const gaps = counts.map((count) => meanGap(count));
-    for (let i = 2; i < gaps.length; i++) {
-      expect(gaps[i]!).toBeLessThan(gaps[i - 1]!);
+      expect(
+        clockwiseAngle(base.startAngle, layout.beads[count - 1]!.angle) / (2 * Math.PI),
+      ).toBeCloseTo(expectedFractions[count - 1]!, 6);
     }
-    // 2 beads are opposite; 30 beads are nearly touching on an 18 cm ring.
-    expect(gaps[1]!).toBeGreaterThan(radius);
-    expect(gaps[gaps.length - 1]!).toBeLessThan(7);
   });
 
-  it("keeps existing bead angles stable when one bead is added", () => {
-    const radius = 180 / (2 * Math.PI);
-    for (const count of [2, 3, 4, 5, 8, 12, 20, 29] as const) {
+  it.each([5, 8, 12, 20, 30])(
+    "puts bead %i into a largest empty gap without moving earlier beads when it fits",
+    (count) => {
       const before = computeBalancedRadialStrandPathLayout({
-        centerX: 0,
-        centerY: 0,
-        radius,
-        beads: Array.from({ length: count }, (_, index) => ({
-          index,
-          occupancyPx: 6,
-          visualRadiusPx: 3,
-        })),
+        ...base,
+        balanceSpacing: false,
+        beads: equalBeads(count - 1, 4),
       });
       const after = computeBalancedRadialStrandPathLayout({
-        centerX: 0,
-        centerY: 0,
-        radius,
-        beads: Array.from({ length: count + 1 }, (_, index) => ({
-          index,
-          occupancyPx: 6,
-          visualRadiusPx: 3,
-        })),
+        ...base,
+        balanceSpacing: false,
+        beads: equalBeads(count, 4),
       });
-      for (let i = 0; i < count; i++) {
-        // Existing beads keep the same balanced fraction — only the new bead occupies a gap.
-        expect(Math.abs(angularDelta(before.beads[i]!.angle, after.beads[i]!.angle))).toBeLessThan(
-          1e-9,
+      const ordered = [...before.beads].sort((a, b) =>
+        clockwiseAngle(base.startAngle, a.angle) -
+        clockwiseAngle(base.startAngle, b.angle),
+      );
+      const emptyGaps = ordered.map((left, index) => {
+        const right = ordered[(index + 1) % ordered.length]!;
+        return clockwiseAngle(left.angle, right.angle) * base.radius - 4;
+      });
+      const inserted = after.beads[count - 1]!;
+      const containingGapIndex = ordered.findIndex((left, index) => {
+        const right = ordered[(index + 1) % ordered.length]!;
+        return (
+          clockwiseAngle(left.angle, inserted.angle) <=
+          clockwiseAngle(left.angle, right.angle) + 1e-8
+        );
+      });
+
+      expect(emptyGaps[containingGapIndex]!).toBeCloseTo(Math.max(...emptyGaps), 5);
+      for (let index = 0; index < count - 1; index++) {
+        expect(shortestAngle(before.beads[index]!.angle, after.beads[index]!.angle)).toBeLessThan(
+          1e-8,
         );
       }
-    }
+    },
+  );
+
+  it("measures largest gaps edge-to-edge using mixed occupancies", () => {
+    const occupancies = [8, 20, 12, 30, 10];
+    const before = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: false,
+      beads: occupancies.slice(0, 4).map((occupancyPx, index) => ({
+        index,
+        occupancyPx,
+        visualRadiusPx: occupancyPx / 2,
+      })),
+    });
+    const after = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: false,
+      beads: occupancies.map((occupancyPx, index) => ({
+        index,
+        occupancyPx,
+        visualRadiusPx: occupancyPx / 2,
+      })),
+    });
+    const order = [0, 2, 1, 3];
+    const gaps = order.map((leftIndex, slot) => {
+      const rightIndex = order[(slot + 1) % order.length]!;
+      return (
+        clockwiseAngle(before.beads[leftIndex]!.angle, before.beads[rightIndex]!.angle) *
+          base.radius -
+        occupancies[leftIndex]! / 2 -
+        occupancies[rightIndex]! / 2
+      );
+    });
+    const selectedSlot = order.findIndex((leftIndex, slot) => {
+      const rightIndex = order[(slot + 1) % order.length]!;
+      return (
+        clockwiseAngle(before.beads[leftIndex]!.angle, after.beads[4]!.angle) <=
+        clockwiseAngle(
+          before.beads[leftIndex]!.angle,
+          before.beads[rightIndex]!.angle,
+        ) +
+          1e-8
+      );
+    });
+
+    expect(gaps[selectedSlot]!).toBeCloseTo(Math.max(...gaps), 5);
   });
 
-  it("matches balancedFractionsForSequence for every build step", () => {
-    const radius = 100;
-    for (const count of [1, 2, 3, 4, 5, 8, 12, 20, 30] as const) {
-      const layout = computeBalancedRadialStrandPathLayout({
-        centerX: 0,
-        centerY: 0,
-        radius,
-        startAngle: -Math.PI / 2,
-        beads: Array.from({ length: count }, (_, index) => ({
-          index,
-          occupancyPx: 6,
-          visualRadiusPx: 3,
-        })),
-      });
-      const fractions = balancedFractionsForSequence(count);
-      fractions.forEach((fraction, index) => {
-        expect(layout.beads[index]!.angle).toBeCloseTo(angleAtFraction(fraction), 6);
-      });
+  it("maintains occupancy spacing after local relaxation near capacity", () => {
+    const radius = 180 / (2 * Math.PI);
+    const occupancyPx = 18;
+    const before = computeBalancedRadialStrandPathLayout({
+      centerX: 0,
+      centerY: 0,
+      radius,
+      balanceSpacing: false,
+      beads: equalBeads(8, occupancyPx),
+    });
+    const layout = computeBalancedRadialStrandPathLayout({
+      centerX: 0,
+      centerY: 0,
+      radius,
+      balanceSpacing: false,
+      beads: equalBeads(9, occupancyPx),
+    });
+    const ordered = [...layout.beads].sort((a, b) => a.angle - b.angle);
+
+    expect(layout.isOverCapacity).toBe(false);
+    for (let index = 0; index < ordered.length; index++) {
+      const left = ordered[index]!;
+      const right = ordered[(index + 1) % ordered.length]!;
+      expect(clockwiseAngle(left.angle, right.angle) * radius).toBeGreaterThanOrEqual(
+        occupancyPx - 1e-6,
+      );
     }
+    const movedExisting = before.beads.filter(
+      (bead, index) => shortestAngle(bead.angle, layout.beads[index]!.angle) > 1e-8,
+    );
+    expect(movedExisting.length).toBeGreaterThan(0);
+    expect(movedExisting.length).toBeLessThan(before.beads.length);
+    expect(layout.occupiedArcPx).toBeCloseTo(9 * occupancyPx, 5);
+  });
+
+  const emptyGapVariance = (
+    layout: ReturnType<typeof computeBalancedRadialStrandPathLayout>,
+    widthsPx: number[],
+  ) => {
+    const ordered = [...layout.beads].sort(
+      (a, b) =>
+        clockwiseAngle(base.startAngle, a.angle) - clockwiseAngle(base.startAngle, b.angle),
+    );
+    const empties = ordered.map((left, index) => {
+      const right = ordered[(index + 1) % ordered.length]!;
+      return (
+        clockwiseAngle(left.angle, right.angle) * base.radius -
+        widthsPx[left.index]! / 2 -
+        widthsPx[right.index]! / 2
+      );
+    });
+    const mean = empties.reduce((sum, value) => sum + value, 0) / empties.length;
+    return empties.reduce((sum, value) => sum + (value - mean) ** 2, 0) / empties.length;
+  };
+
+  it("keeps pure physical positions when Balance Spacing is OFF", () => {
+    const off = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: false,
+      beads: equalBeads(8),
+    });
+    const expectedFractions = [0, 0.5, 0.25, 0.75, 0.125, 0.625, 0.875, 0.375];
+    expectedFractions.forEach((fraction, index) => {
+      expect(clockwiseAngle(base.startAngle, off.beads[index]!.angle) / (2 * Math.PI)).toBeCloseTo(
+        fraction,
+        6,
+      );
+    });
+  });
+
+  it("equalises empty gaps when Balance Spacing is ON without rotating bead 0", () => {
+    const widths = [10, 22, 14, 28, 12, 18, 8, 16];
+    const beads = widths.map((occupancyPx, index) => ({
+      index,
+      occupancyPx,
+      visualRadiusPx: occupancyPx / 2,
+    }));
+    const off = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: false,
+      beads,
+    });
+    const on = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: true,
+      beads,
+    });
+
+    expect(on.beads[0]!.angle).toBeCloseTo(off.beads[0]!.angle, 6);
+    expect(on.occupiedArcPx).toBeCloseTo(off.occupiedArcPx, 6);
+    expect(emptyGapVariance(on, widths)).toBeLessThan(emptyGapVariance(off, widths) - 1e-6);
+
+    const ordered = [...on.beads].sort(
+      (a, b) =>
+        clockwiseAngle(base.startAngle, a.angle) - clockwiseAngle(base.startAngle, b.angle),
+    );
+    for (let index = 0; index < ordered.length; index++) {
+      const left = ordered[index]!;
+      const right = ordered[(index + 1) % ordered.length]!;
+      expect(clockwiseAngle(left.angle, right.angle) * base.radius).toBeGreaterThanOrEqual(
+        widths[left.index]! / 2 + widths[right.index]! / 2 - 1e-6,
+      );
+    }
+
+    // Mixed sizes must not collapse to equal angles.
+    const centreSteps = ordered.map((left, index) => {
+      const right = ordered[(index + 1) % ordered.length]!;
+      return clockwiseAngle(left.angle, right.angle);
+    });
+    expect(Math.max(...centreSteps) - Math.min(...centreSteps)).toBeGreaterThan(1e-3);
+  });
+
+  it("defaults Balance Spacing to ON", () => {
+    const widths = [10, 22, 14, 28, 12];
+    const beads = widths.map((occupancyPx, index) => ({
+      index,
+      occupancyPx,
+      visualRadiusPx: occupancyPx / 2,
+    }));
+    const defaults = computeBalancedRadialStrandPathLayout({ ...base, beads });
+    const on = computeBalancedRadialStrandPathLayout({ ...base, balanceSpacing: true, beads });
+    defaults.beads.forEach((bead, index) => {
+      expect(bead.angle).toBeCloseTo(on.beads[index]!.angle, 8);
+    });
   });
 });
 
