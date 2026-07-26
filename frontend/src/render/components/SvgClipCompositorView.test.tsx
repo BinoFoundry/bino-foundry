@@ -115,6 +115,7 @@ describe("SvgClipCompositorView prototype glass model", () => {
     expect(markup).toContain("frame-back");
     expect(markup).toContain("frame-front");
     expect(markup).toContain("M 45 10 L 55 10 L 55 20 L 45 20 Z");
+    expect(markup).toContain('fill-rule="evenodd"');
     expect(markup).not.toContain('clip-rule="evenodd"');
   });
 

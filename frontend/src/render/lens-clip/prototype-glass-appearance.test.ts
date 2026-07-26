@@ -106,13 +106,13 @@ describe("resolvePrototypeGlassAppearance", () => {
     expect(multiply.tint.colorOpacity).toBeCloseTo(0.8);
   });
 
-  it("builds density gradient when enabled", () => {
+  it("keeps density gradient disabled (retired with Glass Sheet)", () => {
     const off = resolvePrototypeGlassAppearance(DEFAULT_LENS_CLIP_RENDER, "#8F1830", lens, [
       lens,
     ]);
     expect(off.densityGradient.enabled).toBe(false);
 
-    const on = resolvePrototypeGlassAppearance(
+    const forced = resolvePrototypeGlassAppearance(
       {
         ...DEFAULT_LENS_CLIP_RENDER,
         densityGradientEnabled: true,
@@ -127,13 +127,10 @@ describe("resolvePrototypeGlassAppearance", () => {
       lens,
       [lens],
     );
-    expect(on.densityGradient.enabled).toBe(true);
-    expect(on.densityGradient.kind).toBe("linear");
-    expect(on.densityGradient.twoColor).toBe(true);
-    expect(on.densityGradient.stops.length).toBeGreaterThanOrEqual(3);
+    expect(forced.densityGradient.enabled).toBe(false);
   });
 
-  it("uses two-colour density stops when requested", () => {
+  it("ignores density gradient colour settings when retired", () => {
     const appearance = resolvePrototypeGlassAppearance(
       {
         ...DEFAULT_LENS_CLIP_RENDER,
@@ -149,9 +146,8 @@ describe("resolvePrototypeGlassAppearance", () => {
       lens,
       [lens],
     );
-    expect(appearance.densityGradient.enabled).toBe(true);
-    expect(appearance.densityGradient.twoColor).toBe(true);
-    expect(appearance.densityGradient.stops[0]?.color).toContain("30");
+    expect(appearance.densityGradient.enabled).toBe(false);
+    expect(appearance.densityGradient.stops).toHaveLength(0);
   });
 
   it("keeps start dense longer when start falloff is high", () => {

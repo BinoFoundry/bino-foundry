@@ -25,6 +25,11 @@ export interface CustomiserSelection {
   lensRenderSystemDefaults?: LensClipRenderSettings | null;
   /** Live draft settings (preset editor). When set, stamped onto every view without Save. */
   renderSettingsOverride?: LensClipRenderSettings | null;
+  /**
+   * Preview-only: when false, frame glass occluders are stripped for comparison.
+   * Never persisted — defaults to showing occluders (true / undefined).
+   */
+  previewGlassOccludersEnabled?: boolean;
 }
 
 /** Views with plate + ready SVG clip paths. */
@@ -49,6 +54,22 @@ function stampRenderOverride(
       clipConfig: {
         ...view.clipConfig,
         render: { ...view.clipConfig.render, ...override },
+      },
+    };
+  });
+}
+
+function stripGlassOccluders(views: FrameRenderView[]): FrameRenderView[] {
+  return views.map((view) => {
+    if (!view.clipConfig) return view;
+    return {
+      ...view,
+      clipConfig: {
+        ...view.clipConfig,
+        frameExclusions: [],
+        lenses: view.clipConfig.lenses.map((lens) =>
+          lens.exclusions?.length ? { ...lens, exclusions: [] } : lens,
+        ),
       },
     };
   });
@@ -80,6 +101,10 @@ export function buildCustomiserCompositorConfig(selection: CustomiserSelection):
       selection.lensRenderPresets,
       selection.lensRenderSystemDefaults,
     );
+  }
+
+  if (selection.previewGlassOccludersEnabled === false) {
+    views = stripGlassOccluders(views);
   }
 
   const clipViews = buildClipViewsMap(views);

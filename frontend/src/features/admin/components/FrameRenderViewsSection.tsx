@@ -751,7 +751,7 @@ export const FrameRenderViewsSection = forwardRef<
       return;
     }
     if (commitMaskToView(axis, mask)) {
-      setAxisNotice(axis, "Frame objects saved to draft.", "success");
+      setAxisNotice(axis, "Glass occluders saved to draft.", "success");
       const existingTimer = exclusionSavedTimersRef.current[axis];
       if (existingTimer) clearTimeout(existingTimer);
       setExclusionSaved((prev) => ({ ...prev, [axis]: true }));
@@ -968,7 +968,7 @@ export const FrameRenderViewsSection = forwardRef<
                   {isLeftPanelOpen ? (
                     <InlineEditorPanel
                       title="Left lens path editor"
-                      description="Edit the left lens opening polygon. Frame parts inside the lens are handled by the Frame objects editor."
+                      description="Edit the left lens opening polygon. Frame parts inside the lens are handled by Glass Occluders."
                       toolbar={
                         <>
                           <Button
@@ -1058,7 +1058,7 @@ export const FrameRenderViewsSection = forwardRef<
                   {isRightPanelOpen ? (
                     <InlineEditorPanel
                       title="Right lens path editor"
-                      description="Edit the right lens opening polygon. Frame parts inside the lens are handled by the Frame objects editor."
+                      description="Edit the right lens opening polygon. Frame parts inside the lens are handled by Glass Occluders."
                       toolbar={
                         <>
                           <Button
@@ -1109,7 +1109,7 @@ export const FrameRenderViewsSection = forwardRef<
                   ) : null}
                 </div>
 
-                <p className="type-label text-muted-foreground">Frame objects</p>
+                <p className="type-label text-muted-foreground">Glass Occluders</p>
 
                 <div
                   className={cn(
@@ -1136,7 +1136,7 @@ export const FrameRenderViewsSection = forwardRef<
 
                   {isExclusionsPanelOpen ? (
                     <InlineEditorPanel
-                      title="Frame objects editor"
+                      title="Glass Occluders editor"
                       description="Draw frame structures inside the lens openings and choose whether each sits behind, inside, or in front of the glass."
                       onSave={() => saveExclusionsEditor(axis)}
                       onCancel={() => cancelEditor(axis)}
@@ -1290,6 +1290,31 @@ function LensRenderingSection({
     edgeDensity: resolved.edgeDensity,
     edgeSoftness: resolved.edgeSoftness,
     edgeOpacity: resolved.edgeOpacity,
+    glassSheetEnabled: resolved.glassSheetEnabled,
+    glassSheetUrl: resolved.glassSheetUrl,
+    glassSheetNaturalWidth: resolved.glassSheetNaturalWidth,
+    glassSheetNaturalHeight: resolved.glassSheetNaturalHeight,
+    glassSheetCrop: resolved.glassSheetCrop,
+    glassSheetFit: resolved.glassSheetFit,
+    glassSheetScale: resolved.glassSheetScale,
+    glassSheetOffsetX: resolved.glassSheetOffsetX,
+    glassSheetOffsetY: resolved.glassSheetOffsetY,
+    glassSheetColorStrength: resolved.glassSheetColorStrength,
+    glassSheetTextureStrength: resolved.glassSheetTextureStrength,
+    glassSheetShine: resolved.glassSheetShine,
+    glassSheetOccluderEnabled: resolved.glassSheetOccluderEnabled,
+    glassSheetOccluderStrength: resolved.glassSheetOccluderStrength,
+    glassSheetOccluderThreshold: resolved.glassSheetOccluderThreshold,
+    glassTintEnabled: resolved.glassTintEnabled,
+    glassTintBlend: resolved.glassTintBlend,
+    glassTintShine: resolved.glassTintShine,
+    darkLayerEnabled: resolved.darkLayerEnabled,
+    darkLayerOpacity: resolved.darkLayerOpacity,
+    darkLayerMode: resolved.darkLayerMode,
+    darkLayerColor: resolved.darkLayerColor,
+    darkLayerBlend: resolved.darkLayerBlend,
+    edgeEnabled: resolved.edgeEnabled,
+    densityGradientEnabled: resolved.densityGradientEnabled,
   };
 
   const applyCustomSettings = (render: LensClipRenderSettings) => {

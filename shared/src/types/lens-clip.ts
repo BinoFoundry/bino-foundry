@@ -11,20 +11,36 @@ export interface LensClipShape {
   exclusions?: LensExclusionShape[];
 }
 
-/** Where a frame object sits relative to the generated Glass Element. */
+/** Where a frame/glass-occluder object sits relative to the glass. */
 export type FrameExclusionLayerOrder = "behind" | "inside" | "front";
 
-/** A single frame-structure polygon path (bridge, screw, rim, etc.). */
+/**
+ * Alias for admin/docs: Behind Glass (`behind`) or Above Glass (`front`).
+ * `inside` remains supported for legacy configs (soft-light mid-band).
+ */
+export type GlassOccluderLayer = FrameExclusionLayerOrder;
+
+/** A single frame-structure / glass-occluder polygon path (bridge, screw, rim, etc.). */
 export interface LensExclusionShape {
   id: string;
-  /** Display name (e.g. "Bridge Support"). */
+  /** Display name (e.g. "Nose Bridge", "Inner Lip"). */
   label: string;
+  /**
+   * Outer closed SVG path `d` (M/L/C/Z).
+   * Combined with {@link holePathDs} via `fill-rule="evenodd"` at render time.
+   */
   pathD: string;
   /**
-   * Layer relative to glass. Default `"behind"` (viewed through the glass).
-   * - behind — under glass; tint / transmission / absorption apply above it
-   * - inside — embedded in the glass material
-   * - front — above glass; unaffected by glass optics
+   * Optional inner hole paths (closed subpaths). Each is subtracted from the outer
+   * via even-odd fill — same model as Illustrator/Figma compound paths.
+   * Legacy occluders omit this (outer only, zero holes).
+   */
+  holePathDs?: string[];
+  /**
+   * Layer relative to glass. Default `"behind"` (Behind Glass).
+   * - behind — under glass; tint / optics apply above it
+   * - inside — legacy mid-band (soft-light); prefer behind/front for new work
+   * - front — Above Glass; unaffected by glass optics
    */
   layerOrder?: FrameExclusionLayerOrder;
   /** Object opacity 0–100. Default 100. */
@@ -33,10 +49,12 @@ export interface LensExclusionShape {
   depth?: number;
   /** When false, skipped by the compositor but kept in the editor. Default true. */
   visible?: boolean;
+  /** Optional admin notes. */
+  notes?: string;
 }
 
 /**
- * Frame-level structure object inside a lens opening.
+ * Frame-level structure object inside a lens opening (Glass Occluder).
  * These are physical frame components — not glass holes.
  */
 export interface FrameExclusionShape extends LensExclusionShape {
@@ -44,12 +62,17 @@ export interface FrameExclusionShape extends LensExclusionShape {
   lensId?: string;
 }
 
+/** Prefer this name in new code — same persisted `frameExclusions` JSON. */
+export type GlassOccluderShape = FrameExclusionShape;
+
 /** Resolved compositor props for one frame object (always fully populated). */
 export interface ResolvedFrameExclusionObject extends FrameExclusionShape {
   layerOrder: FrameExclusionLayerOrder;
   opacity: number;
   depth: number;
   visible: boolean;
+  notes: string;
+  holePathDs: string[];
 }
 
 const LAYER_ORDERS = new Set<FrameExclusionLayerOrder>(["behind", "inside", "front"]);
@@ -57,6 +80,31 @@ const LAYER_ORDERS = new Set<FrameExclusionLayerOrder>(["behind", "inside", "fro
 function clampPctField(n: number | undefined, fallback: number): number {
   if (n == null || !Number.isFinite(n)) return fallback;
   return Math.max(0, Math.min(100, n));
+}
+
+function normalizeHolePathDs(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    if (trimmed.length > 8) out.push(trimmed);
+  }
+  return out;
+}
+
+/**
+ * Outer + hole subpaths as one SVG `d` string for even-odd fills.
+ * Legacy single-polygon occluders (no holes) return `pathD` unchanged.
+ */
+export function compoundOccluderPathD(
+  shape: Pick<LensExclusionShape, "pathD" | "holePathDs">,
+): string {
+  const outer = typeof shape.pathD === "string" ? shape.pathD.trim() : "";
+  const holes = normalizeHolePathDs(shape.holePathDs);
+  if (!outer) return holes.join(" ");
+  if (!holes.length) return outer;
+  return [outer, ...holes].join(" ");
 }
 
 /** Apply defaults so legacy polygons (id/label/pathD only) become Behind Glass objects. */
@@ -68,14 +116,27 @@ export function resolveFrameExclusionObject(
     : "behind";
   return {
     id: shape.id,
-    label: shape.label || "Frame object",
+    label: shape.label || "Glass occluder",
     pathD: shape.pathD,
+    holePathDs: normalizeHolePathDs(shape.holePathDs),
     lensId: "lensId" in shape ? shape.lensId : undefined,
     layerOrder,
     opacity: clampPctField(shape.opacity, 100),
     depth: clampPctField(shape.depth, 50),
     visible: shape.visible !== false,
+    notes: typeof shape.notes === "string" ? shape.notes : "",
   };
+}
+
+/**
+ * Normalized crop rectangle on the glass sheet image (0–1 of natural width/height).
+ * Full sheet when omitted or when width/height cover the image.
+ */
+export interface GlassSheetCropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 /**
@@ -84,6 +145,42 @@ export function resolveFrameExclusionObject(
  * synthetic lens is painted inside the clipping polygons.
  */
 export interface LensClipRenderSettings {
+  /**
+   * @deprecated Ignored when `glassSheetUrl` is set — a sheet is always used when present.
+   * Kept for reading older presets.
+   */
+  glassSheetEnabled?: boolean;
+  /** Public URL of the uploaded glass sheet (PNG/JPG). When set, the sheet replaces the original lens. */
+  glassSheetUrl?: string | null;
+  /** Natural pixel size of the sheet (captured on upload for crop/fit). */
+  glassSheetNaturalWidth?: number | null;
+  glassSheetNaturalHeight?: number | null;
+  /** Crop of the sheet in normalized 0–1 coordinates. */
+  glassSheetCrop?: GlassSheetCropRect | null;
+  /** How the sheet is fitted inside each lens opening. */
+  glassSheetFit?: "cover" | "contain";
+  /** Extra scale after fit (1 = 100%). */
+  glassSheetScale?: number;
+  /** Horizontal offset inside the lens (-100 … 100). */
+  glassSheetOffsetX?: number;
+  /** Vertical offset inside the lens (-100 … 100). */
+  glassSheetOffsetY?: number;
+  /** Strength of the solid tint colour fill (0–100). */
+  glassSheetColorStrength?: number;
+  /** Strength of the sheet texture multiply / soft-light pass (0–100). */
+  glassSheetTextureStrength?: number;
+  /** Surface shine / kilau over the sheet (0–100). */
+  glassSheetShine?: number;
+  /**
+   * When true, restore dark frame parts inside the lens hole from the product photo.
+   * Default false.
+   */
+  glassSheetOccluderEnabled?: boolean;
+  /** Occluder opacity (0–100). */
+  glassSheetOccluderStrength?: number;
+  /** Luminance threshold for auto occluder (0–100). Darker pixels below this are kept. */
+  glassSheetOccluderThreshold?: number;
+
   /** Admin scope for opacity controls. Defaults to `global` for legacy configs. */
   renderScope?: "global" | "front" | "side";
   /**
@@ -189,19 +286,19 @@ export interface LensClipRenderSettings {
   edgeEnabled?: boolean;
 
   /**
-   * Optical density gradient across the lens (independent of customer tint HEX).
-   * Default false so existing presets keep uniform density.
+   * @deprecated Retired with Glass Sheet architecture — always forced off at resolve time.
+   * Kept only for reading older presets.
    */
   densityGradientEnabled?: boolean;
-  /** Gradient direction. `none` disables the effect even when enabled. */
+  /** @deprecated See densityGradientEnabled. */
   densityGradientMode?: "none" | "vertical" | "horizontal" | "radial" | "angle";
-  /** Custom angle in degrees (0 = left→right, 90 = top→bottom). Used when mode is `angle`. */
+  /** @deprecated See densityGradientEnabled. */
   densityGradientAngle?: number;
-  /** When true, blend between start/end colours; otherwise density-only (tint hue unchanged). */
+  /** @deprecated See densityGradientEnabled. */
   densityGradientTwoColor?: boolean;
-  /** Gradient start colour (hex). */
+  /** @deprecated See densityGradientEnabled. */
   densityGradientStartColor?: string | null;
-  /** Gradient end colour (hex). */
+  /** @deprecated See densityGradientEnabled. */
   densityGradientEndColor?: string | null;
   /**
    * @deprecated Prefer densityGradientStartFalloff / densityGradientEndFalloff.
@@ -328,14 +425,13 @@ export interface LensClipRenderSettings {
   edgeWidth?: number;
 
   /**
-   * Global transparency of the synthetic lens (0–1). Higher reveals more of the scene
-   * rendered behind the lens (the transparent, knocked-out opening) — never the original
-   * lens texture, which is discarded entirely.
+   * @deprecated Retired with Glass Sheet architecture — always forced to 0 at resolve time.
+   * Kept only for reading older presets.
    */
   backgroundVisibility?: number;
   /**
-   * Thins the coloured lens body so the background shows through the tint (0–1). Affects
-   * the rendered scene behind the lens only; never reveals original lens pixels.
+   * @deprecated Retired with Glass Sheet architecture — always forced to 0 at resolve time.
+   * Kept only for reading older presets.
    */
   environmentTransparency?: number;
   /** Density reinforcement toward the lens centre (0–1). Independent of tint opacity. */
@@ -447,7 +543,9 @@ export function resolveFrameExclusionShapes(
   return out;
 }
 
-/** Partition visible frame objects by glass layer, sorted by depth within each band. */
+/** Partition visible frame objects by glass layer.
+ * Within each band, order follows admin list order (`depth` mirrors list index).
+ */
 export function partitionFrameExclusionObjects(
   objects: ResolvedFrameExclusionObject[],
 ): {
@@ -455,13 +553,13 @@ export function partitionFrameExclusionObjects(
   inside: ResolvedFrameExclusionObject[];
   front: ResolvedFrameExclusionObject[];
 } {
-  const byDepth = (a: ResolvedFrameExclusionObject, b: ResolvedFrameExclusionObject) =>
+  const byListOrder = (a: ResolvedFrameExclusionObject, b: ResolvedFrameExclusionObject) =>
     a.depth - b.depth || a.label.localeCompare(b.label);
   const visible = objects.filter((o) => o.visible);
   return {
-    behind: visible.filter((o) => o.layerOrder === "behind").sort(byDepth),
-    inside: visible.filter((o) => o.layerOrder === "inside").sort(byDepth),
-    front: visible.filter((o) => o.layerOrder === "front").sort(byDepth),
+    behind: visible.filter((o) => o.layerOrder === "behind").sort(byListOrder),
+    inside: visible.filter((o) => o.layerOrder === "inside").sort(byListOrder),
+    front: visible.filter((o) => o.layerOrder === "front").sort(byListOrder),
   };
 }
 

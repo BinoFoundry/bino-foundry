@@ -8,6 +8,7 @@ import {
   hasPlateCropApplied,
   resolveOriginalPlate,
 } from "@/render/frame-plate/crop";
+import { finalizeGlassSheetSettings } from "@/features/admin/lib/glass-sheet-lifecycle";
 
 function processedFileName(axis: string): string {
   return `frame-${axis}-${Date.now()}.png`;
@@ -17,6 +18,7 @@ function processedFileName(axis: string): string {
  * Export cropped plates and upload processed assets. Called only on Save frame.
  * Original URLs are preserved; plateUrl becomes the processed crop for compositing.
  * plateCropConfig is retained for lossless re-edit on reopen.
+ * Also promotes any draft glass-sheet blob URLs in clipConfig.render.
  */
 export async function prepareRenderViewsForSave(views: FrameRenderView[]): Promise<FrameRenderView[]> {
   const prepared: FrameRenderView[] = [];
@@ -30,6 +32,7 @@ export async function prepareRenderViewsForSave(views: FrameRenderView[]): Promi
     const config = view.plateCropConfig;
     const needsCropExport = hasPlateCropApplied(view) && config && isBeadCropConfigValid(config);
 
+    let nextView: FrameRenderView;
     if (needsCropExport) {
       const cropped = await exportFramePlateFromCropConfig({
         ...config,
@@ -40,7 +43,7 @@ export async function prepareRenderViewsForSave(views: FrameRenderView[]): Promi
       const { imageUrl } = await uploadApi.uploadImage(
         new File([cropped.blob], processedFileName(axis), { type: "image/png" }),
       );
-      prepared.push({
+      nextView = {
         ...view,
         plateUrl: imageUrl,
         width: cropped.width,
@@ -56,15 +59,37 @@ export async function prepareRenderViewsForSave(views: FrameRenderView[]): Promi
           processedUrl: imageUrl,
           updatedAt: Date.now(),
         },
-      });
+      };
     } else {
-      prepared.push({
+      nextView = {
         ...view,
         originalPlateUrl: view.originalPlateUrl?.trim() || sourceUrl,
         originalWidth: original.width,
         originalHeight: original.height,
-      });
+      };
     }
+
+    if (nextView.clipConfig?.render) {
+      const persistedBefore =
+        view.clipConfig?.render?.glassSheetUrl &&
+        !view.clipConfig.render.glassSheetUrl.startsWith("blob:")
+          ? view.clipConfig.render.glassSheetUrl
+          : null;
+      const render = await finalizeGlassSheetSettings(
+        nextView.clipConfig.render,
+        persistedBefore,
+      );
+      nextView = {
+        ...nextView,
+        clipConfig: {
+          ...nextView.clipConfig,
+          render,
+          updatedAt: Date.now(),
+        },
+      };
+    }
+
+    prepared.push(nextView);
   }
 
   return prepared;

@@ -19,7 +19,16 @@ export interface PolygonEditorShellProps {
   renderPreview?: (lenses: LensPolygon[], imgW: number, imgH: number, thumb: HTMLCanvasElement) => void;
   /** Show left/right lens tabs (frame mask). Off for single-path bead crop. */
   showLensTabs?: boolean;
-  /** Label for the single path when showLensTabs is false. */
+  /**
+   * Custom path tabs (e.g. Outer + Hole 1…). When set, replaces left/right lens tabs
+   * and maps 1:1 to `getInitialLenses()` order.
+   */
+  pathTabs?: { id: string; label: string }[];
+  /** Initial active path index when pathTabs / showLensTabs is used (applied on remount). */
+  defaultActivePathIndex?: number;
+  /** Notified when the active path tab changes (Outer / Hole / Left / Right). */
+  onActivePathChange?: (index: number) => void;
+  /** Label for the single path when showLensTabs is false and pathTabs is unset. */
   singlePathLabel?: string;
   previewLabel?: string;
   handlesLabel?: string;
@@ -43,6 +52,9 @@ export function PolygonEditorShell({
   onLensesChange,
   renderPreview,
   showLensTabs = true,
+  pathTabs,
+  defaultActivePathIndex = 0,
+  onActivePathChange,
   singlePathLabel = "Crop path",
   previewLabel = "Mask preview",
   handlesLabel = "Curve handles",
@@ -60,9 +72,21 @@ export function PolygonEditorShell({
   onLensesChangeRef.current = onLensesChange;
   const getInitialLensesRef = useRef(getInitialLenses);
   getInitialLensesRef.current = getInitialLenses;
+  const onActivePathChangeRef = useRef(onActivePathChange);
+  onActivePathChangeRef.current = onActivePathChange;
+  const defaultActivePathIndexRef = useRef(defaultActivePathIndex);
+  defaultActivePathIndexRef.current = defaultActivePathIndex;
+
+  const tabs = pathTabs?.length
+    ? pathTabs
+    : showLensTabs
+      ? FRAME_LENS_TABS.map((t) => ({ id: t.id, label: t.label }))
+      : null;
 
   const [tool, setTool] = useState<string>(EditorTool.DRAW);
-  const [activeLens, setActiveLens] = useState(0);
+  const [activeLens, setActiveLens] = useState(() =>
+    Math.max(0, defaultActivePathIndex),
+  );
   const [lensSummaries, setLensSummaries] = useState<{ id: string; label: string; count: number }[]>([]);
   const [status, setStatus] = useState("");
   const [ready, setReady] = useState(false);
@@ -185,7 +209,15 @@ export function PolygonEditorShell({
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !editorReady) return;
-    editor.replaceLenses(getInitialLensesRef.current());
+    const lenses = getInitialLensesRef.current();
+    editor.replaceLenses(lenses);
+    const nextActive = Math.max(
+      0,
+      Math.min(defaultActivePathIndexRef.current, Math.max(0, lenses.length - 1)),
+    );
+    editor.setActiveLens(nextActive);
+    setActiveLens(nextActive);
+    onActivePathChangeRef.current?.(nextActive);
     emitChangeRef.current();
   }, [lensRevision, editorReady]);
 
@@ -218,12 +250,17 @@ export function PolygonEditorShell({
             {label}
           </Button>
         ))}
-        {showLensTabs ? (
+        {tabs ? (
           <>
             <span className="mx-1 text-border">|</span>
-            <span className="type-label text-muted-foreground">Lens</span>
-            {FRAME_LENS_TABS.map((tab, i) => {
-              const count = lensSummaries.find((s) => s.id === tab.id)?.count ?? 0;
+            <span className="type-label text-muted-foreground">
+              {pathTabs?.length ? "Path" : "Lens"}
+            </span>
+            {tabs.map((tab, i) => {
+              const count =
+                lensSummaries.find((s) => s.id === tab.id)?.count ??
+                lensSummaries[i]?.count ??
+                0;
               return (
                 <Button
                   key={tab.id}
@@ -235,6 +272,7 @@ export function PolygonEditorShell({
                     runEditor((e) => {
                       e.setActiveLens(i);
                       setActiveLens(i);
+                      onActivePathChangeRef.current?.(i);
                     })
                   }
                 >

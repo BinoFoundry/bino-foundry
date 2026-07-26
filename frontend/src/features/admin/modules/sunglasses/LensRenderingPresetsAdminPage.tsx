@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Settings2 } from "lucide-react";
 import {
   LENS_RENDER_SYSTEM_DEFAULTS,
@@ -16,6 +16,10 @@ import { isApiError } from "@/services/api";
 import { sunglassesApi } from "@/services/api/sunglasses";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 import { DEFAULT_LENS_CLIP_RENDER } from "@/render/lens-clip/clip-settings";
+import {
+  discardPendingGlassSheet,
+  finalizeGlassSheetSettings,
+} from "@/features/admin/lib/glass-sheet-lifecycle";
 
 export function LensRenderingPresetsAdminPage() {
   const catalog = useSunglassesCatalog();
@@ -32,6 +36,12 @@ export function LensRenderingPresetsAdminPage() {
   const [saving, setSaving] = useState(false);
   const [previewTintHex, setPreviewTintHex] = useState("#8F1830");
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+  /** Permanent glass sheet URL from the last loaded/saved draft (for replace/delete cleanup). */
+  const savedSheetUrlRef = useRef<string | null>(null);
+
+  const discardDraftSheet = useCallback((settings: LensClipRenderSettings | null | undefined) => {
+    discardPendingGlassSheet(settings?.glassSheetUrl);
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -76,15 +86,34 @@ export function LensRenderingPresetsAdminPage() {
   }, [editing, systemDefaults]);
 
   const openEdit = (preset: LensRenderingPreset) => {
+    discardDraftSheet(editing?.settings);
     setSaveFeedback(null);
     setEditingSystemDefault(false);
+    const settings = {
+      ...systemDefaults,
+      ...pickLensRenderPresetSettings(preset.settings),
+    };
+    savedSheetUrlRef.current = settings.glassSheetUrl?.trim() || null;
     setEditing({
       ...preset,
-      settings: {
-        ...systemDefaults,
-        ...pickLensRenderPresetSettings(preset.settings),
-      },
+      settings,
     });
+  };
+
+  const openSystemDefault = () => {
+    discardDraftSheet(editing?.settings);
+    setEditingSystemDefault(true);
+    const settings = { ...systemDefaults };
+    savedSheetUrlRef.current = settings.glassSheetUrl?.trim() || null;
+    setEditing({ name: "System Default", settings });
+    setSaveFeedback(null);
+  };
+
+  const closeEditor = () => {
+    discardDraftSheet(editing?.settings);
+    setEditing(null);
+    setEditingSystemDefault(false);
+    setSaveFeedback(null);
   };
 
   const handleSave = async () => {
@@ -93,15 +122,21 @@ export function LensRenderingPresetsAdminPage() {
     setSaving(true);
     setSaveFeedback(null);
     try {
+      const finalized = await finalizeGlassSheetSettings(
+        editing.settings,
+        savedSheetUrlRef.current,
+      );
+      const settingsPayload = pickLensRenderPresetSettings(finalized);
+
       if (editingSystemDefault) {
-        const saved = await sunglassesApi.updateLensRenderSystemDefaults(
-          pickLensRenderPresetSettings(editing.settings),
-        );
-        setSystemDefaults({
+        const saved = await sunglassesApi.updateLensRenderSystemDefaults(settingsPayload);
+        const merged = {
           ...LENS_RENDER_SYSTEM_DEFAULTS,
           ...pickLensRenderPresetSettings(saved),
-        });
-        setEditing((prev) => (prev ? { ...prev, settings: saved } : prev));
+        };
+        setSystemDefaults(merged);
+        savedSheetUrlRef.current = merged.glassSheetUrl?.trim() || null;
+        setEditing((prev) => (prev ? { ...prev, settings: merged } : prev));
         setSaveFeedback("Saved");
         await catalog.refreshAdminFromApi();
         window.setTimeout(() => setSaveFeedback(null), 2000);
@@ -111,13 +146,15 @@ export function LensRenderingPresetsAdminPage() {
         code: editing.code!,
         name: editing.name.trim(),
         description: editing.description?.trim() ?? "",
-        settings: pickLensRenderPresetSettings(editing.settings),
+        settings: settingsPayload,
         displayOrder: editing.displayOrder ?? 0,
         isActive: editing.isActive !== false,
         isDefault: Boolean(editing.isDefault),
       };
 
       await sunglassesApi.updateLensRenderPreset(editing.id!, payload);
+      savedSheetUrlRef.current = settingsPayload.glassSheetUrl?.trim() || null;
+      setEditing((prev) => (prev ? { ...prev, settings: finalized } : prev));
       setSaveFeedback("Saved");
       await refresh();
       window.setTimeout(() => setSaveFeedback(null), 2000);
@@ -142,8 +179,8 @@ export function LensRenderingPresetsAdminPage() {
         <div>
           <h2 className="text-base font-semibold text-foreground">Lens Rendering Presets</h2>
           <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
-            Configure glass material layers applied over the original lens. Hierarchy: Frame
-            Override → Preset → System Default. Live preview matches customer rendering exactly.
+            Configure glass sheet material for the lens hole. Hierarchy: Frame Override → Preset →
+            System Default. Live preview matches customer rendering.
           </p>
         </div>
       </div>
@@ -163,11 +200,7 @@ export function LensRenderingPresetsAdminPage() {
                 className={`flex w-full items-center gap-2 px-3 py-3 text-left ${
                   editingSystemDefault ? "bg-muted/50" : ""
                 }`}
-                onClick={() => {
-                  setEditingSystemDefault(true);
-                  setEditing({ name: "System Default", settings: { ...systemDefaults } });
-                  setSaveFeedback(null);
-                }}
+                onClick={openSystemDefault}
               >
                 <Settings2 className="h-4 w-4 shrink-0" />
                 <span>
@@ -262,7 +295,7 @@ export function LensRenderingPresetsAdminPage() {
                   {saveFeedback ? (
                     <span className="mr-auto text-xs text-muted-foreground">{saveFeedback}</span>
                   ) : null}
-                  <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+                  <Button type="button" variant="outline" onClick={closeEditor}>
                     Close
                   </Button>
                   <Button

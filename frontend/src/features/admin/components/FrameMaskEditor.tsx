@@ -1,5 +1,20 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +46,7 @@ interface FrameMaskEditorProps {
   lensRevision?: number;
   /** When set, editor focuses on one lens path only (left or right). Polygon mode only. */
   focusedLensId?: FrameLensSide;
-  /** Lens polygon editing vs frame structure objects. */
+  /** Lens polygon editing vs glass occluders (frame structures inside the hole). */
   editMode?: LensEditorMode;
   onChange?: (config: MaskConfig | null) => void;
   className?: string;
@@ -41,21 +56,56 @@ function getFrameExclusions(mask: MaskConfig | null | undefined): LensPolygon[] 
   return resolveMaskFrameExclusions(mask);
 }
 
+/** List index → depth so compositor order matches the admin list within each layer. */
+function withListOrderDepth(list: LensPolygon[]): LensPolygon[] {
+  return list.map((ex, index) => ({ ...ex, depth: index }));
+}
+
+/** Editor paths for one compound occluder: [outer, ...holes]. */
+function occluderToEditorPaths(occluder: LensPolygon): LensPolygon[] {
+  const outer: LensPolygon = {
+    id: occluder.id,
+    label: "Outer",
+    points: occluder.points ?? [],
+  };
+  const holes = (occluder.holes ?? []).map((hole, i) => ({
+    id: hole.id || `${occluder.id}-hole-${i + 1}`,
+    label: hole.label || `Hole ${i + 1}`,
+    points: hole.points ?? [],
+  }));
+  return [outer, ...holes];
+}
+
+/** Merge editor paths back onto the occluder metadata. */
+function editorPathsToOccluder(paths: LensPolygon[], previous: LensPolygon): LensPolygon {
+  const outer = paths[0];
+  const holePaths = paths.slice(1);
+  return {
+    ...previous,
+    id: previous.id,
+    // Keep the occluder display name — outer tab is always "Outer".
+    label: previous.label,
+    points: outer?.points ?? previous.points ?? [],
+    holes: holePaths.map((hole, i) => ({
+      id: hole.id || `${previous.id}-hole-${i + 1}`,
+      label: hole.label?.startsWith("Hole") || hole.label === "Outer"
+        ? `Hole ${i + 1}`
+        : hole.label || `Hole ${i + 1}`,
+      points: hole.points ?? [],
+    })),
+  };
+}
+
 const LAYER_OPTIONS: { value: FrameExclusionLayerOrder; label: string; hint: string }[] = [
   {
     value: "behind",
     label: "Behind Glass",
-    hint: "Visible through the glass — tint and optics apply above it.",
-  },
-  {
-    value: "inside",
-    label: "Inside Glass",
-    hint: "Embedded in the glass material.",
+    hint: "Under the lens — tint and optics apply above it.",
   },
   {
     value: "front",
-    label: "Front of Glass",
-    hint: "Renders above the glass — optics do not affect it.",
+    label: "Above Glass",
+    hint: "In front of the lens — optics do not affect it.",
   },
 ];
 
@@ -80,6 +130,8 @@ export function FrameMaskEditor({
 
   const [activeExclusionIndex, setActiveExclusionIndex] = useState(0);
   const [exclusionRevision, setExclusionRevision] = useState(0);
+  /** 0 = outer polygon; 1+ = hole index + 1 in editor path list. */
+  const [activePathIndex, setActivePathIndex] = useState(0);
 
   const [exclusionList, setExclusionListState] = useState<LensPolygon[]>(() =>
     getFrameExclusions(initialMaskRef.current),
@@ -90,7 +142,14 @@ export function FrameMaskEditor({
     setExclusionListState(next);
   }, []);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+  );
+
   const emitExclusions = useCallback((list: LensPolygon[]) => {
+    const ordered = withListOrderDepth(list);
     const mask = initialMaskRef.current;
     const baseLenses = ensureFrameLensSet(mask?.lenses ?? defaultLensSet());
     const config = createMaskConfig(
@@ -98,10 +157,25 @@ export function FrameMaskEditor({
       mask?.imageHeight ?? 0,
       baseLenses,
       undefined,
-      list.filter((ex) => ex.points?.length),
+      ordered.filter((ex) => ex.points?.length),
     );
     onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
   }, []);
+
+  const commitList = useCallback(
+    (list: LensPolygon[], options?: { selectIndex?: number; bumpRevision?: boolean }) => {
+      const ordered = withListOrderDepth(list);
+      setExclusionList(ordered);
+      if (options?.selectIndex != null) {
+        setActiveExclusionIndex(options.selectIndex);
+      }
+      if (options?.bumpRevision) {
+        setExclusionRevision((r) => r + 1);
+      }
+      emitExclusions(ordered);
+    },
+    [emitExclusions, setExclusionList],
+  );
 
   const patchActive = useCallback(
     (partial: Partial<LensPolygon>) => {
@@ -109,10 +183,9 @@ export function FrameMaskEditor({
       const next = exclusionListRef.current.map((ex, i) =>
         i === activeExclusionIndex ? { ...ex, ...partial } : ex,
       );
-      setExclusionList(next);
-      emitExclusions(next);
+      commitList(next);
     },
-    [activeExclusionIndex, emitExclusions, setExclusionList],
+    [activeExclusionIndex, commitList],
   );
 
   const mergeFocusedEdit = useCallback((edited: LensPolygon[], imgW: number, imgH: number): MaskConfig => {
@@ -135,23 +208,14 @@ export function FrameMaskEditor({
   const handleLensesChange = useCallback(
     (lenses: LensPolygon[], meta: { imgW: number; imgH: number }) => {
       if (editModeRef.current === "exclusions") {
-        const editedPolygon = lenses[0];
         const next = [...exclusionListRef.current];
-        if (editedPolygon) {
-          if (next.length === 0) {
-            next.push(editedPolygon);
-          } else {
-            const idx = Math.min(activeExclusionIndex, next.length - 1);
-            next[idx] = {
-              ...next[idx]!,
-              id: editedPolygon.id,
-              label: editedPolygon.label || next[idx]!.label,
-              points: editedPolygon.points,
-            };
-          }
+        if (next.length === 0) {
+          if (lenses[0]) next.push({ ...lenses[0], holes: lenses.slice(1) });
+        } else {
+          const idx = Math.min(activeExclusionIndex, next.length - 1);
+          next[idx] = editorPathsToOccluder(lenses, next[idx]!);
         }
-        setExclusionList(next);
-        emitExclusions(next);
+        commitList(next);
         return;
       }
 
@@ -167,15 +231,15 @@ export function FrameMaskEditor({
 
       onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
     },
-    [activeExclusionIndex, emitExclusions, mergeFocusedEdit, setExclusionList],
+    [activeExclusionIndex, commitList, mergeFocusedEdit],
   );
 
   const focusedLabel = focusedLensId ? LENS_SIDE_LABELS[focusedLensId] : undefined;
   const activeExclusion =
     exclusionList[activeExclusionIndex] ??
     createLensPolygon(
-      `frame-exclusion-${Date.now()}`,
-      `Frame object ${activeExclusionIndex + 1}`,
+      `glass-occluder-${Date.now()}`,
+      `Occluder ${activeExclusionIndex + 1}`,
       [],
       { layerOrder: "behind" },
     );
@@ -184,108 +248,184 @@ export function FrameMaskEditor({
     const next = [
       ...exclusionListRef.current,
       createLensPolygon(
-        `frame-exclusion-${Date.now()}`,
-        `Frame object ${exclusionListRef.current.length + 1}`,
+        `glass-occluder-${Date.now()}`,
+        `Occluder ${exclusionListRef.current.length + 1}`,
         [],
-        { layerOrder: "behind", opacity: 100, depth: 50, visible: true },
+        {
+          layerOrder: "behind",
+          opacity: 100,
+          depth: exclusionListRef.current.length,
+          visible: true,
+          holes: [],
+        },
       ),
     ];
-    setExclusionList(next);
-    setActiveExclusionIndex(next.length - 1);
-    setExclusionRevision((r) => r + 1);
-    emitExclusions(next);
+    setActivePathIndex(0);
+    commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
+  };
+
+  const addHoleToActive = () => {
+    const list = exclusionListRef.current;
+    if (!list.length) return;
+    const idx = Math.min(activeExclusionIndex, list.length - 1);
+    const current = list[idx]!;
+    const holeCount = current.holes?.length ?? 0;
+    const hole = {
+      id: `${current.id}-hole-${Date.now()}`,
+      label: `Hole ${holeCount + 1}`,
+      points: [] as LensPolygon["points"],
+    };
+    const next = list.map((ex, i) =>
+      i === idx ? { ...ex, holes: [...(ex.holes ?? []), hole] } : ex,
+    );
+    setActivePathIndex(holeCount + 1);
+    commitList(next, { bumpRevision: true });
+  };
+
+  const removeActiveHole = () => {
+    if (activePathIndex <= 0) return;
+    const list = exclusionListRef.current;
+    if (!list.length) return;
+    const idx = Math.min(activeExclusionIndex, list.length - 1);
+    const current = list[idx]!;
+    const holeIndex = activePathIndex - 1;
+    const holes = [...(current.holes ?? [])];
+    if (holeIndex < 0 || holeIndex >= holes.length) return;
+    holes.splice(holeIndex, 1);
+    const renumbered = holes.map((hole, i) => ({
+      ...hole,
+      label: `Hole ${i + 1}`,
+    }));
+    const next = list.map((ex, i) => (i === idx ? { ...ex, holes: renumbered } : ex));
+    setActivePathIndex(Math.min(activePathIndex, renumbered.length));
+    commitList(next, { bumpRevision: true });
   };
 
   const removeActiveExclusion = () => {
     if (!exclusionListRef.current.length) return;
     const next = exclusionListRef.current.filter((_, i) => i !== activeExclusionIndex);
-    setExclusionList(next);
-    setActiveExclusionIndex(Math.max(0, Math.min(activeExclusionIndex, next.length - 1)));
-    setExclusionRevision((r) => r + 1);
-    emitExclusions(next);
+    const nextIndex = next.length === 0 ? 0 : Math.min(activeExclusionIndex, next.length - 1);
+    commitList(next, { selectIndex: nextIndex, bumpRevision: true });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const list = exclusionListRef.current;
+    const oldIndex = list.findIndex((ex) => ex.id === active.id);
+    const newIndex = list.findIndex((ex) => ex.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(list, oldIndex, newIndex);
+    const selectedId = list[activeExclusionIndex]?.id;
+    const selectIndex = selectedId
+      ? Math.max(
+          0,
+          next.findIndex((ex) => ex.id === selectedId),
+        )
+      : newIndex;
+    commitList(next, { selectIndex });
   };
 
   if (editMode === "exclusions") {
     return (
       <div className={cn("space-y-3", className)}>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Configure physical frame objects inside the lens openings (bridge support, screws, inner
-          rim, nylon wire). Choose whether each sits behind, inside, or in front of the glass.
-          Changes update the live preview immediately.
+          Glass Occluders are independent polygons for frame parts inside the lens opening. Select
+          one from the list to edit its properties. Drag to reorder — list order matches render
+          order within each layer.
         </p>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={addExclusion}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add object
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={exclusionList.length === 0}
-            onClick={removeActiveExclusion}
-          >
-            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            Remove
-          </Button>
-        </div>
+        <Button type="button" size="sm" variant="outline" onClick={addExclusion}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Add Occluder
+        </Button>
 
-        {exclusionList.length > 0 ? (
-          <div className="space-y-2">
-            {exclusionList.map((ex, i) => {
-              const active = i === activeExclusionIndex;
-              return (
-                <button
-                  key={ex.id}
-                  type="button"
-                  className={cn(
-                    "w-full rounded-md border px-3 py-2 text-left text-[11px] transition-colors",
-                    active
-                      ? "border-foreground bg-background"
-                      : "border-border text-muted-foreground hover:border-foreground/40",
-                    ex.visible === false && "opacity-60",
-                  )}
-                  onClick={() => {
-                    setActiveExclusionIndex(i);
-                    setExclusionRevision((r) => r + 1);
-                  }}
-                >
-                  <span className="font-medium text-foreground">{ex.label || `Object ${i + 1}`}</span>
-                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                    {(ex.layerOrder ?? "behind") === "behind"
-                      ? "Behind Glass"
-                      : (ex.layerOrder ?? "behind") === "inside"
-                        ? "Inside Glass"
-                        : "Front of Glass"}
-                    {" · "}
-                    {Math.round(ex.opacity ?? 100)}% opacity
-                    {ex.visible === false ? " · hidden" : ""}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
+        {exclusionList.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">
-            No frame objects yet — add one to begin.
+            No glass occluders yet — add one to begin.
           </p>
-        )}
+        ) : (
+          <div className="grid gap-3 md:grid-cols-[minmax(11rem,15rem)_minmax(0,1fr)] md:items-start">
+            {/* Left: compact selectable list */}
+            <div className="min-w-0 rounded-md border border-border/70 bg-muted/10">
+              <p className="border-b border-border/60 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Occluder list
+              </p>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={exclusionList.map((ex) => ex.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul className="max-h-[min(28rem,55vh)] overflow-y-auto p-1">
+                    {exclusionList.map((ex, i) => (
+                      <SortableOccluderRow
+                        key={ex.id}
+                        id={ex.id}
+                        label={ex.label || `Occluder ${i + 1}`}
+                        active={i === activeExclusionIndex}
+                        visible={ex.visible !== false}
+                        holeCount={ex.holes?.length ?? 0}
+                        onSelect={() => {
+                          setActiveExclusionIndex(i);
+                          setActivePathIndex(0);
+                          setExclusionRevision((r) => r + 1);
+                        }}
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
+            </div>
 
-        {exclusionList.length > 0 ? (
-          <>
-            <div className="space-y-3 rounded border border-border/70 bg-background/50 p-3">
+            {/* Right: properties for the selected occluder */}
+            <div className="min-w-0 space-y-3 rounded-md border border-border/70 bg-background/50 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Occluder properties
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">
+                    {activeExclusion.label || `Occluder ${activeExclusionIndex + 1}`}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0 text-destructive hover:text-destructive"
+                  onClick={removeActiveExclusion}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Name</Label>
                 <Input
                   value={activeExclusion.label}
                   onChange={(e) => patchActive({ label: e.target.value })}
                   className="h-8 text-sm"
+                  placeholder="e.g. Nose Bridge"
                 />
               </div>
 
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  className="accent-foreground"
+                  checked={activeExclusion.visible !== false}
+                  onChange={(e) => patchActive({ visible: e.target.checked })}
+                />
+                <span className="font-medium text-foreground">Visible</span>
+              </label>
+
               <fieldset className="space-y-2">
-                <LegendLabel>Layer</LegendLabel>
+                <LegendLabel>Layer order</LegendLabel>
                 {LAYER_OPTIONS.map((option) => (
                   <label
                     key={option.value}
@@ -295,7 +435,12 @@ export function FrameMaskEditor({
                       type="radio"
                       className="mt-0.5 accent-foreground"
                       name={`layer-${activeExclusion.id}`}
-                      checked={(activeExclusion.layerOrder ?? "behind") === option.value}
+                      checked={
+                        (activeExclusion.layerOrder ?? "behind") === option.value ||
+                        (option.value === "behind" &&
+                          (activeExclusion.layerOrder === "inside" ||
+                            activeExclusion.layerOrder == null))
+                      }
                       onChange={() => patchActive({ layerOrder: option.value })}
                     />
                     <span>
@@ -327,53 +472,67 @@ export function FrameMaskEditor({
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <Label className="text-xs text-muted-foreground">Depth</Label>
-                  <span className="tabular-nums text-[10px] text-muted-foreground">
-                    {Math.round(activeExclusion.depth ?? 50)}
-                  </span>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Order within this layer — higher draws closer to the viewer.
-                </p>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={activeExclusion.depth ?? 50}
-                  onChange={(e) => patchActive({ depth: Number(e.target.value) })}
-                  className="w-full accent-foreground"
+                <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
+                <Input
+                  value={activeExclusion.notes ?? ""}
+                  onChange={(e) => patchActive({ notes: e.target.value })}
+                  className="h-8 text-sm"
+                  placeholder="e.g. metal lip under lens"
                 />
               </div>
 
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  className="accent-foreground"
-                  checked={activeExclusion.visible !== false}
-                  onChange={(e) => patchActive({ visible: e.target.checked })}
+              <div>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-foreground">Compound polygon</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button type="button" size="sm" variant="outline" onClick={addHoleToActive}>
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Add Hole
+                    </Button>
+                    {activePathIndex > 0 ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={removeActiveHole}
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        Delete Hole
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="mb-2 text-[10px] leading-snug text-muted-foreground">
+                  Draw the outer silhouette, then add holes to cut out inner regions (even-odd
+                  compound path — like Illustrator / Figma).
+                </p>
+                <PolygonEditorShell
+                  key={`${activeExclusion.id}-${exclusionRevision}-${lensRevision}`}
+                  className="min-h-[280px]"
+                  imageUrl={plateUrl}
+                  getInitialLenses={() => occluderToEditorPaths(activeExclusion)}
+                  onLensesChange={handleLensesChange}
+                  showLensTabs={false}
+                  pathTabs={[
+                    { id: activeExclusion.id, label: "Outer" },
+                    ...(activeExclusion.holes ?? []).map((hole, i) => ({
+                      id: hole.id || `${activeExclusion.id}-hole-${i + 1}`,
+                      label: hole.label || `Hole ${i + 1}`,
+                    })),
+                  ]}
+                  defaultActivePathIndex={activePathIndex}
+                  onActivePathChange={setActivePathIndex}
+                  previewLabel="Occluder preview"
+                  showThumbnailPreview={false}
+                  lensRevision={exclusionRevision + lensRevision}
+                  handlesLabel="Control points"
+                  helpText="Outer + holes · Switch path tabs to edit · Shift+click edge to insert · Del removes selected point"
                 />
-                <span className="font-medium text-foreground">Visible</span>
-              </label>
+              </div>
             </div>
-
-            <PolygonEditorShell
-              key={`${activeExclusion.id}-${exclusionRevision}-${lensRevision}`}
-              className="min-h-[280px]"
-              imageUrl={plateUrl}
-              getInitialLenses={() => [activeExclusion]}
-              onLensesChange={handleLensesChange}
-              showLensTabs={false}
-              singlePathLabel={activeExclusion.label || "Frame object"}
-              previewLabel="Frame object"
-              showThumbnailPreview={false}
-              lensRevision={exclusionRevision + lensRevision}
-              handlesLabel="Control points"
-              helpText="Draw the object silhouette over the frame structure · Shift+click edge to insert · Del removes selected point"
-            />
-          </>
-        ) : null}
+          </div>
+        )}
       </div>
     );
   }
@@ -410,6 +569,82 @@ export function FrameMaskEditor({
           : "Left/Right lens tabs · Draw: click to add points · Shift+click edge to insert · Select (V) + Del removes · Undo ⌘Z · Redo ⇧⌘Z · Pan (H) or Space · C toggles curve on selected point"
       }
     />
+  );
+}
+
+function SortableOccluderRow({
+  id,
+  label,
+  active,
+  visible,
+  holeCount,
+  onSelect,
+}: {
+  id: string;
+  label: string;
+  active: boolean;
+  visible: boolean;
+  holeCount: number;
+  onSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li ref={setNodeRef} style={style} className={cn(isDragging && "z-10 opacity-90")}>
+      <div
+        className={cn(
+          "flex w-full items-center gap-1 rounded-sm px-1 py-1 text-left text-[11px] transition-colors",
+          active
+            ? "bg-foreground text-background"
+            : "text-foreground hover:bg-muted/60",
+          !visible && !active && "opacity-50",
+        )}
+      >
+        <button
+          type="button"
+          className={cn(
+            "inline-flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded touch-none active:cursor-grabbing",
+            active ? "text-background/80" : "text-muted-foreground",
+          )}
+          aria-label={`Reorder ${label}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate py-0.5 text-left font-medium"
+          onClick={onSelect}
+        >
+          <span
+            className={cn(
+              "mr-1.5 inline-block h-1.5 w-1.5 rounded-sm align-middle",
+              active ? "bg-background" : visible ? "bg-foreground" : "bg-muted-foreground",
+            )}
+            aria-hidden
+          />
+          {label}
+          {holeCount > 0 ? (
+            <span
+              className={cn(
+                "ml-1 font-normal",
+                active ? "text-background/70" : "text-muted-foreground",
+              )}
+            >
+              · {holeCount} hole{holeCount === 1 ? "" : "s"}
+            </span>
+          ) : null}
+        </button>
+      </div>
+    </li>
   );
 }
 

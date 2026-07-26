@@ -2,6 +2,21 @@ import type { LensClipRenderSettings } from "./lens-clip.js";
 
 /** Material keys that participate in the preset hierarchy (admin-editable optics). */
 export const LENS_RENDER_PRESET_KEYS = [
+  "glassSheetEnabled",
+  "glassSheetUrl",
+  "glassSheetNaturalWidth",
+  "glassSheetNaturalHeight",
+  "glassSheetCrop",
+  "glassSheetFit",
+  "glassSheetScale",
+  "glassSheetOffsetX",
+  "glassSheetOffsetY",
+  "glassSheetColorStrength",
+  "glassSheetTextureStrength",
+  "glassSheetShine",
+  "glassSheetOccluderEnabled",
+  "glassSheetOccluderStrength",
+  "glassSheetOccluderThreshold",
   "automaticMaterialBehavior",
   "originalLensColorInfluence",
   "materialInfluence",
@@ -176,6 +191,21 @@ export type ResolvedLensRenderMaterial = Required<
 export const LENS_RENDER_SYSTEM_DEFAULTS: Required<
   Pick<LensClipRenderSettings, LensRenderPresetKey>
 > = {
+  glassSheetEnabled: false,
+  glassSheetUrl: null,
+  glassSheetNaturalWidth: null,
+  glassSheetNaturalHeight: null,
+  glassSheetCrop: null,
+  glassSheetFit: "cover",
+  glassSheetScale: 1,
+  glassSheetOffsetX: 0,
+  glassSheetOffsetY: 0,
+  glassSheetColorStrength: 85,
+  glassSheetTextureStrength: 55,
+  glassSheetShine: 40,
+  glassSheetOccluderEnabled: false,
+  glassSheetOccluderStrength: 70,
+  glassSheetOccluderThreshold: 42,
   automaticMaterialBehavior: true,
   originalLensColorInfluence: 15,
   materialInfluence: 35,
@@ -453,6 +483,14 @@ export function pruneLensRenderOverride(
     if (isFiniteNumber(next) && isFiniteNumber(base)) {
       if (Math.abs(next - base) < 1e-6) continue;
     } else if (next === base) {
+      continue;
+    } else if (
+      next != null &&
+      base != null &&
+      typeof next === "object" &&
+      typeof base === "object" &&
+      JSON.stringify(next) === JSON.stringify(base)
+    ) {
       continue;
     }
     (out as Record<string, unknown>)[key] = next;

@@ -198,15 +198,14 @@ export function resolvePrototypeGlassAppearance(
   const tintOp = tintOn ? clamp01(render.tintLayerOpacity) : 0;
   const depth = tintOn ? clamp01(render.glassDepth / 100) : 0;
   const shine = clamp01(render.glassTintShine / 100);
-  const env = clamp01(
-    Math.max(render.environmentTransparency, render.backgroundVisibility * 0.5),
-  );
+  // Background visibility / environment transmission retired with Glass Sheet.
+  const env = 0;
   const edgeOn = render.edgeEnabled;
   const edgeDensity = edgeOn ? clamp01(render.edgeDensity) : 0;
   const edgeOpacityAmt = edgeOn ? clamp01(render.edgeOpacity) : 0;
 
-  const densityMode = render.densityGradientMode;
-  const densityOn = render.densityGradientEnabled && densityMode !== "none";
+  // Density gradient retired with Glass Sheet architecture.
+  const densityOn = false;
 
   const glassPresent =
     darkOp > 1e-4 ||
@@ -284,44 +283,15 @@ export function resolvePrototypeGlassAppearance(
     (0.28 + transform.scale * 0.22) *
     (0.85 + (1 - appearance.softBlur) * 0.25);
 
-  // Density gradient — optical density transition with independent falloffs.
-  const twoColor = render.densityGradientTwoColor !== false;
-  const startHex = render.densityGradientStartColor ?? "#1E1E1E";
-  const endHex = render.densityGradientEndColor ?? "#4B4B4B";
-  const densityStops = buildDensityGradientStops({
-    startFalloff: render.densityGradientStartFalloff,
-    endFalloff: render.densityGradientEndFalloff,
-    position: render.densityGradientPosition,
-    curve: render.densityGradientCurve,
-    startColor: startHex,
-    endColor: endHex,
-    twoColor,
-  });
-
-  let densityKind: "linear" | "radial" = "linear";
-  let dx1 = cx;
-  let dy1 = minY;
-  let dx2 = cx;
-  let dy2 = minY + height;
-  let dRadius = Math.max(width, height) * 0.62;
-
-  if (densityMode === "horizontal") {
-    dx1 = minX;
-    dy1 = cy;
-    dx2 = minX + width;
-    dy2 = cy;
-  } else if (densityMode === "radial") {
-    densityKind = "radial";
-  } else if (densityMode === "angle") {
-    const rad = ((render.densityGradientAngle - 90) * Math.PI) / 180;
-    const hx = Math.cos(rad) * width * 0.55;
-    const hy = Math.sin(rad) * height * 0.55;
-    dx1 = cx - hx;
-    dy1 = cy - hy;
-    dx2 = cx + hx;
-    dy2 = cy + hy;
-  }
-  // vertical (default): already top → bottom
+  // Density gradient — retired; stub geometry kept for type compatibility.
+  const twoColor = false;
+  const densityStops: Array<{ offset: number; color: string; opacity: number }> = [];
+  const densityKind: "linear" | "radial" = "linear";
+  const dx1 = cx;
+  const dy1 = minY;
+  const dx2 = cx;
+  const dy2 = minY + height;
+  const dRadius = Math.max(width, height) * 0.62;
 
   return {
     bounds,

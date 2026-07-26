@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  LENS_RENDER_ZERO_SETTINGS,
-  type LensClipRenderSettings,
-} from "@bino-foundry/shared/types";
+import type { LensClipRenderSettings } from "@bino-foundry/shared/types";
 
 import { TintColorControl } from "@/features/admin/components/tint-editor/TintColorControl";
 import { isValidHexColor } from "@/features/admin/lib/adminHex";
@@ -12,7 +9,6 @@ import { buildCustomiserCompositorConfig } from "@/render/adapters/customiser-co
 import { isFrameViewClipReady } from "@/render/lens-clip";
 import { useCatalogue } from "@/state/catalogue";
 import type { FrameEntry } from "@/data/glasses";
-import { cn } from "@/lib/utils";
 
 function framesWithClipReady(frames: FrameEntry[]): FrameEntry[] {
   return frames.filter(
@@ -66,25 +62,24 @@ function pickDefaultPreviewPair(frames: FrameEntry[]): { darkId: string; clearId
   };
 }
 
-/** Preview-only layer gates — never written to presets / overrides / system defaults. */
+/**
+ * Preview-only layer gates — mirrors Lens Rendering editor layers exactly.
+ * Never written to presets / overrides / system defaults.
+ */
 export interface PreviewRenderMode {
-  useMaterialLayers: boolean;
+  glassSheet: boolean;
   tintLayer: boolean;
   reflection: boolean;
-  internalGlass: boolean;
   edge: boolean;
-  backgroundVisibility: boolean;
-  densityGradient: boolean;
+  glassOccluders: boolean;
 }
 
 export const DEFAULT_PREVIEW_RENDER_MODE: PreviewRenderMode = {
-  useMaterialLayers: true,
+  glassSheet: true,
   tintLayer: true,
   reflection: true,
-  internalGlass: true,
   edge: true,
-  backgroundVisibility: true,
-  densityGradient: true,
+  glassOccluders: true,
 };
 
 /**
@@ -95,26 +90,17 @@ export function applyPreviewRenderMode(
   draftSettings: LensClipRenderSettings,
   mode: PreviewRenderMode,
 ): LensClipRenderSettings {
-  if (!mode.useMaterialLayers) {
-    return { ...draftSettings, ...LENS_RENDER_ZERO_SETTINGS };
-  }
-
   return {
     ...draftSettings,
     glassTintEnabled: mode.tintLayer,
-    darkLayerEnabled: mode.internalGlass,
-    internalReflectionEnabled: mode.internalGlass,
     reflectionEnabled: mode.reflection,
     edgeEnabled: mode.edge,
-    densityGradientEnabled: mode.densityGradient
-      ? draftSettings.densityGradientEnabled === true
-      : false,
-    backgroundVisibility: mode.backgroundVisibility
-      ? draftSettings.backgroundVisibility
-      : 0,
-    environmentTransparency: mode.backgroundVisibility
-      ? draftSettings.environmentTransparency
-      : 0,
+    // Sheet is always-on when a URL exists in saved config; preview may temporarily clear it.
+    glassSheetUrl: mode.glassSheet ? draftSettings.glassSheetUrl : null,
+    // Retired controls — never reintroduced via preview.
+    densityGradientEnabled: false,
+    backgroundVisibility: 0,
+    environmentTransparency: 0,
   };
 }
 
@@ -184,6 +170,7 @@ export function LensRenderPresetLivePreview({
       options: {},
       lensRenderSystemDefaults: systemDefaults,
       renderSettingsOverride: applyPreviewRenderMode(draftSettings, mode),
+      previewGlassOccludersEnabled: mode.glassOccluders,
     });
   };
 
@@ -221,7 +208,8 @@ export function LensRenderPresetLivePreview({
               Preview
             </p>
             <p className="text-[10px] text-muted-foreground">
-              Front view only. Controls are temporary and do not change the saved material.
+              Front view only. Layer toggles match Lens Rendering and are temporary — they never
+              change the saved preset.
             </p>
           </div>
         </div>
@@ -255,25 +243,17 @@ function PreviewToggle({
   label,
   checked,
   onChange,
-  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: (next: boolean) => void;
-  disabled?: boolean;
 }) {
   return (
-    <label
-      className={cn(
-        "flex items-center gap-1.5 text-[10px] text-foreground",
-        disabled && "opacity-50",
-      )}
-    >
+    <label className="flex items-center gap-1.5 text-[10px] text-foreground">
       <input
         type="checkbox"
         className="accent-foreground"
         checked={checked}
-        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
       {label}
@@ -315,7 +295,7 @@ function PreviewPane({
         </div>
       ) : (
         <SunglassesCompositor
-          key={`${selectedId}-front-${mode.useMaterialLayers}-${mode.tintLayer}-${mode.reflection}-${mode.internalGlass}-${mode.edge}-${mode.densityGradient}-${mode.backgroundVisibility}`}
+          key={`${selectedId}-front-${mode.glassSheet}-${mode.tintLayer}-${mode.reflection}-${mode.edge}-${mode.glassOccluders}`}
           config={config}
           view="front"
           label="Front"
@@ -341,54 +321,34 @@ function PreviewPane({
       </label>
 
       <div className="space-y-1.5 border-t border-border/60 pt-2">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Layers
+        </p>
         <PreviewToggle
-          label="Use glass material layers"
-          checked={mode.useMaterialLayers}
-          onChange={(useMaterialLayers) => patchMode({ useMaterialLayers })}
+          label="Glass sheet"
+          checked={mode.glassSheet}
+          onChange={(glassSheet) => patchMode({ glassSheet })}
         />
-        <div
-          className={cn(
-            "space-y-1.5",
-            !mode.useMaterialLayers && "pointer-events-none opacity-45",
-          )}
-        >
-          <PreviewToggle
-            label="Tint layer"
-            checked={mode.tintLayer}
-            disabled={!mode.useMaterialLayers}
-            onChange={(tintLayer) => patchMode({ tintLayer })}
-          />
-          <PreviewToggle
-            label="Reflection"
-            checked={mode.reflection}
-            disabled={!mode.useMaterialLayers}
-            onChange={(reflection) => patchMode({ reflection })}
-          />
-          <PreviewToggle
-            label="Internal glass"
-            checked={mode.internalGlass}
-            disabled={!mode.useMaterialLayers}
-            onChange={(internalGlass) => patchMode({ internalGlass })}
-          />
-          <PreviewToggle
-            label="Edge"
-            checked={mode.edge}
-            disabled={!mode.useMaterialLayers}
-            onChange={(edge) => patchMode({ edge })}
-          />
-          <PreviewToggle
-            label="Density gradient"
-            checked={mode.densityGradient}
-            disabled={!mode.useMaterialLayers}
-            onChange={(densityGradient) => patchMode({ densityGradient })}
-          />
-          <PreviewToggle
-            label="Background visibility"
-            checked={mode.backgroundVisibility}
-            disabled={!mode.useMaterialLayers}
-            onChange={(backgroundVisibility) => patchMode({ backgroundVisibility })}
-          />
-        </div>
+        <PreviewToggle
+          label="Tint layer"
+          checked={mode.tintLayer}
+          onChange={(tintLayer) => patchMode({ tintLayer })}
+        />
+        <PreviewToggle
+          label="Reflection"
+          checked={mode.reflection}
+          onChange={(reflection) => patchMode({ reflection })}
+        />
+        <PreviewToggle
+          label="Edge"
+          checked={mode.edge}
+          onChange={(edge) => patchMode({ edge })}
+        />
+        <PreviewToggle
+          label="Glass occluders"
+          checked={mode.glassOccluders}
+          onChange={(glassOccluders) => patchMode({ glassOccluders })}
+        />
       </div>
     </div>
   );

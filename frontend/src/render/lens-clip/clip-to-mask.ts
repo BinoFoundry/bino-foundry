@@ -52,7 +52,7 @@ function pxToNorm(x: number, y: number, w: number, h: number): { x: number; y: n
 export function pathDToLensPolygon(
   shape: Pick<
     LensClipShape | LensExclusionShape,
-    "id" | "label" | "pathD" | "layerOrder" | "opacity" | "depth" | "visible"
+    "id" | "label" | "pathD" | "layerOrder" | "opacity" | "depth" | "visible" | "notes"
   >,
   imageWidth: number,
   imageHeight: number,
@@ -109,6 +109,7 @@ export function pathDToLensPolygon(
     opacity: shape.opacity,
     depth: shape.depth,
     visible: shape.visible,
+    notes: shape.notes,
   });
 }
 
@@ -117,7 +118,21 @@ function frameExclusionsFromClip(clip: LensClipConfig): LensPolygon[] {
   const polygons: LensPolygon[] = [];
   for (const shape of resolveFrameExclusionShapes(clip)) {
     const polygon = pathDToLensPolygon(shape, clip.imageWidth, clip.imageHeight);
-    if (polygon) polygons.push(polygon);
+    if (!polygon) continue;
+    const holes: LensPolygon[] = [];
+    for (let i = 0; i < shape.holePathDs.length; i++) {
+      const hole = pathDToLensPolygon(
+        {
+          id: `${shape.id}-hole-${i + 1}`,
+          label: `Hole ${i + 1}`,
+          pathD: shape.holePathDs[i]!,
+        },
+        clip.imageWidth,
+        clip.imageHeight,
+      );
+      if (hole) holes.push({ id: hole.id, label: hole.label, points: hole.points });
+    }
+    polygons.push({ ...polygon, holes });
   }
   return polygons;
 }

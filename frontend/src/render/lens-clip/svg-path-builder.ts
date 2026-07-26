@@ -57,14 +57,19 @@ export function exclusionPolygonsToShapes(
     .map((polygon) => {
       const pathD = lensPolygonToPathD(polygon, imageWidth, imageHeight);
       if (!pathD.trim()) return null;
+      const holePathDs = (polygon.holes ?? [])
+        .map((hole) => lensPolygonToPathD(hole, imageWidth, imageHeight))
+        .filter((d) => d.trim().length > 0);
       return {
         id: polygon.id,
-        label: polygon.label || "Frame object",
+        label: polygon.label || "Glass occluder",
         pathD,
+        ...(holePathDs.length ? { holePathDs } : {}),
         layerOrder: polygon.layerOrder ?? "behind",
         opacity: polygon.opacity ?? 100,
         depth: polygon.depth ?? 50,
         visible: polygon.visible !== false,
+        notes: typeof polygon.notes === "string" ? polygon.notes : "",
       };
     })
     .filter((shape): shape is LensExclusionShape => Boolean(shape));

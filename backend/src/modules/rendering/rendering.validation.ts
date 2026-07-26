@@ -4,10 +4,12 @@ const lensExclusionShapeSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
   pathD: z.string().min(8),
+  holePathDs: z.array(z.string().min(8)).optional(),
   layerOrder: z.enum(["behind", "inside", "front"]).optional(),
   opacity: z.number().min(0).max(100).optional(),
   depth: z.number().min(0).max(100).optional(),
   visible: z.boolean().optional(),
+  notes: z.string().max(500).optional(),
 });
 
 const lensClipShapeSchema = z.object({
@@ -58,6 +60,29 @@ const lensClipRenderFields = {
   darkLayerGlowY: z.number().min(0).max(100).optional(),
   darkLayerSoft: z.number().min(0).max(100).optional(),
   darkLayerEdge: z.number().min(0).max(100).optional(),
+  glassSheetEnabled: z.boolean().optional(),
+  glassSheetUrl: z.string().nullable().optional(),
+  glassSheetNaturalWidth: z.number().min(1).nullable().optional(),
+  glassSheetNaturalHeight: z.number().min(1).nullable().optional(),
+  glassSheetCrop: z
+    .object({
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+      width: z.number().min(0.01).max(1),
+      height: z.number().min(0.01).max(1),
+    })
+    .nullable()
+    .optional(),
+  glassSheetFit: z.enum(["cover", "contain"]).optional(),
+  glassSheetScale: z.number().min(0.25).max(3).optional(),
+  glassSheetOffsetX: z.number().min(-100).max(100).optional(),
+  glassSheetOffsetY: z.number().min(-100).max(100).optional(),
+  glassSheetColorStrength: z.number().min(0).max(100).optional(),
+  glassSheetTextureStrength: z.number().min(0).max(100).optional(),
+  glassSheetShine: z.number().min(0).max(100).optional(),
+  glassSheetOccluderEnabled: z.boolean().optional(),
+  glassSheetOccluderStrength: z.number().min(0).max(100).optional(),
+  glassSheetOccluderThreshold: z.number().min(0).max(100).optional(),
   edgeEnabled: z.boolean().optional(),
   densityGradientEnabled: z.boolean().optional(),
   densityGradientMode: z.enum(["none", "vertical", "horizontal", "radial", "angle"]).optional(),
@@ -155,6 +180,16 @@ const lensPolygonSchema = z.object({
   opacity: z.number().min(0).max(100).optional(),
   depth: z.number().min(0).max(100).optional(),
   visible: z.boolean().optional(),
+  notes: z.string().max(500).optional(),
+  holes: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string(),
+        points: z.array(pathAnchorSchema),
+      }),
+    )
+    .optional(),
 });
 
 export const maskConfigSchema = z.object({

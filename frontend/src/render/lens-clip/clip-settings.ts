@@ -96,12 +96,27 @@ export type ResolvedLensClipRender = Required<
     | "edgeOpacity"
     | "polarizedEnabled"
     | "polarizedStrength"
+    | "glassSheetEnabled"
+    | "glassSheetFit"
+    | "glassSheetScale"
+    | "glassSheetOffsetX"
+    | "glassSheetOffsetY"
+    | "glassSheetColorStrength"
+    | "glassSheetTextureStrength"
+    | "glassSheetShine"
+    | "glassSheetOccluderEnabled"
+    | "glassSheetOccluderStrength"
+    | "glassSheetOccluderThreshold"
   >
 > & {
   gradientTopColor: string | null;
   gradientBottomColor: string | null;
   densityGradientStartColor: string | null;
   densityGradientEndColor: string | null;
+  glassSheetUrl: string | null;
+  glassSheetNaturalWidth: number | null;
+  glassSheetNaturalHeight: number | null;
+  glassSheetCrop: NonNullable<LensClipRenderSettings["glassSheetCrop"]> | null;
   /** Legacy overlay fields (used only when mode === "overlay"). */
   tintBlendMode: NonNullable<LensClipRenderSettings["tintBlendMode"]>;
   highlightStrength: number;
@@ -206,6 +221,21 @@ export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   edgeOpacity: 0.24,
   polarizedEnabled: false,
   polarizedStrength: 0.12,
+  glassSheetEnabled: false,
+  glassSheetUrl: null,
+  glassSheetNaturalWidth: null,
+  glassSheetNaturalHeight: null,
+  glassSheetCrop: null,
+  glassSheetFit: "cover",
+  glassSheetScale: 1,
+  glassSheetOffsetX: 0,
+  glassSheetOffsetY: 0,
+  glassSheetColorStrength: 85,
+  glassSheetTextureStrength: 55,
+  glassSheetShine: 40,
+  glassSheetOccluderEnabled: false,
+  glassSheetOccluderStrength: 70,
+  glassSheetOccluderThreshold: 42,
   tintBlendMode: "multiply",
   highlightStrength: 0.12,
   highlightBlendMode: "screen",
@@ -420,9 +450,8 @@ export function resolveLensClipRenderSettings(
       DEFAULT_LENS_CLIP_RENDER.darkLayerEdge,
     ),
     edgeEnabled: (overrides?.edgeEnabled ?? fromConfig?.edgeEnabled) !== false,
-    densityGradientEnabled: Boolean(
-      overrides?.densityGradientEnabled ?? fromConfig?.densityGradientEnabled,
-    ),
+    // Density gradient retired with Glass Sheet architecture — always off.
+    densityGradientEnabled: false,
     densityGradientMode: (() => {
       const mode = overrides?.densityGradientMode ?? fromConfig?.densityGradientMode;
       return mode === "horizontal" ||
@@ -636,14 +665,9 @@ export function resolveLensClipRenderSettings(
       DEFAULT_LENS_CLIP_RENDER.edgeDarkness,
     ),
     edgeWidth: clampRange(merged.edgeWidth, DEFAULT_LENS_CLIP_RENDER.edgeWidth, 0, 0.05),
-    backgroundVisibility: clamp01(
-      automaticMaterial?.backgroundVisibility ?? merged.backgroundVisibility,
-      DEFAULT_LENS_CLIP_RENDER.backgroundVisibility,
-    ),
-    environmentTransparency: clamp01(
-      automaticMaterial?.environmentTransparency ?? merged.environmentTransparency,
-      DEFAULT_LENS_CLIP_RENDER.environmentTransparency,
-    ),
+    // Background visibility / environment transmission retired — always off.
+    backgroundVisibility: 0,
+    environmentTransparency: 0,
     centerDensity: clamp01(
       automaticMaterial?.centerDensity ?? merged.centerDensity,
       DEFAULT_LENS_CLIP_RENDER.centerDensity,
@@ -662,6 +686,68 @@ export function resolveLensClipRenderSettings(
     ),
     polarizedEnabled: Boolean(merged.polarizedEnabled),
     polarizedStrength: clamp01(merged.polarizedStrength, DEFAULT_LENS_CLIP_RENDER.polarizedStrength),
+    glassSheetUrl: typeof merged.glassSheetUrl === "string" && merged.glassSheetUrl.trim()
+      ? merged.glassSheetUrl.trim()
+      : null,
+    // Deprecated flag — kept in sync with URL so legacy readers still see "enabled".
+    glassSheetEnabled: Boolean(
+      typeof merged.glassSheetUrl === "string" && merged.glassSheetUrl.trim(),
+    ),
+    glassSheetNaturalWidth:
+      merged.glassSheetNaturalWidth != null && Number.isFinite(merged.glassSheetNaturalWidth)
+        ? Math.max(1, merged.glassSheetNaturalWidth)
+        : null,
+    glassSheetNaturalHeight:
+      merged.glassSheetNaturalHeight != null && Number.isFinite(merged.glassSheetNaturalHeight)
+        ? Math.max(1, merged.glassSheetNaturalHeight)
+        : null,
+    glassSheetCrop: (() => {
+      const crop = merged.glassSheetCrop;
+      if (!crop || typeof crop !== "object") return null;
+      const x = clamp01(crop.x, 0);
+      const y = clamp01(crop.y, 0);
+      const width = clamp01(crop.width, 1);
+      const height = clamp01(crop.height, 1);
+      if (width < 0.01 || height < 0.01) return null;
+      return {
+        x: Math.min(x, 1 - width),
+        y: Math.min(y, 1 - height),
+        width,
+        height,
+      };
+    })(),
+    glassSheetFit: merged.glassSheetFit === "contain" ? "contain" : "cover",
+    glassSheetScale: clampRange(merged.glassSheetScale, DEFAULT_LENS_CLIP_RENDER.glassSheetScale, 0.25, 3),
+    glassSheetOffsetX: clampRange(
+      merged.glassSheetOffsetX,
+      DEFAULT_LENS_CLIP_RENDER.glassSheetOffsetX,
+      -100,
+      100,
+    ),
+    glassSheetOffsetY: clampRange(
+      merged.glassSheetOffsetY,
+      DEFAULT_LENS_CLIP_RENDER.glassSheetOffsetY,
+      -100,
+      100,
+    ),
+    glassSheetColorStrength: clampPct(
+      merged.glassSheetColorStrength,
+      DEFAULT_LENS_CLIP_RENDER.glassSheetColorStrength,
+    ),
+    glassSheetTextureStrength: clampPct(
+      merged.glassSheetTextureStrength,
+      DEFAULT_LENS_CLIP_RENDER.glassSheetTextureStrength,
+    ),
+    glassSheetShine: clampPct(merged.glassSheetShine, DEFAULT_LENS_CLIP_RENDER.glassSheetShine),
+    glassSheetOccluderEnabled: Boolean(merged.glassSheetOccluderEnabled),
+    glassSheetOccluderStrength: clampPct(
+      merged.glassSheetOccluderStrength,
+      DEFAULT_LENS_CLIP_RENDER.glassSheetOccluderStrength,
+    ),
+    glassSheetOccluderThreshold: clampPct(
+      merged.glassSheetOccluderThreshold,
+      DEFAULT_LENS_CLIP_RENDER.glassSheetOccluderThreshold,
+    ),
     tintBlendMode: merged.tintBlendMode ?? DEFAULT_LENS_CLIP_RENDER.tintBlendMode,
     highlightStrength: clamp01(merged.highlightStrength, DEFAULT_LENS_CLIP_RENDER.highlightStrength),
     highlightBlendMode: merged.highlightBlendMode ?? DEFAULT_LENS_CLIP_RENDER.highlightBlendMode,

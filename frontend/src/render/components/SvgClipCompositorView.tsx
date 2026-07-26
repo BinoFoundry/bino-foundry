@@ -2,6 +2,7 @@ import { memo, useId, useMemo } from "react";
 
 import { usePlateContentBounds } from "@/render/image-bounds";
 import {
+  compoundOccluderPathD,
   normalizeLensClipConfig,
   partitionFrameExclusionObjects,
   resolveFrameExclusionShapes,
@@ -12,6 +13,10 @@ import {
 import { resolveLensClipRenderSettings, type ResolvedLensClipRender } from "@/render/lens-clip/clip-settings";
 import { resolvePrototypeGlassAppearance } from "@/render/lens-clip/prototype-glass-appearance";
 import { PrototypeGlassElement } from "@/render/lens-clip/PrototypeGlassElement";
+import {
+  GlassSheetElement,
+  isGlassSheetActive,
+} from "@/render/lens-clip/GlassSheetElement";
 import { SvgTintGradientDef } from "@/render/tint/SvgTintGradientDef";
 import {
   normalizeTintRenderSpec,
@@ -81,7 +86,7 @@ function FrameStructureObject({
       <defs>
         <mask id={maskId} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
           <rect x={0} y={0} width={w} height={h} fill="#000" />
-          <path d={object.pathD} fill="#fff" />
+          <path d={compoundOccluderPathD(object)} fill="#fff" fillRule="evenodd" />
         </mask>
       </defs>
       <image
@@ -101,8 +106,9 @@ function FrameStructureObject({
 }
 
 /**
- * Optical-glass compositor:
- * Frame Back → Behind → Original Lens → Material Layers → Inside → Front → Frame Front
+ * Optical-glass compositor (bottom → top):
+ * Frame Back → Behind Occluders → Glass Sheet → Tint / Reflection / Edge →
+ * Inside (legacy) → Above Occluders → Frame Front
  */
 const InsertedGlassLayers = memo(function InsertedGlassLayers({
   uid,
@@ -130,11 +136,17 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
   const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
   const { behind, inside, front } = partitionFrameExclusionObjects(frameObjects);
 
+  const sheetActive = isGlassSheetActive(render);
+  // Over a glass sheet, skip the dark/original-lens compensation path.
+  const sheetRender: ResolvedLensClipRender = sheetActive
+    ? { ...render, darkLayerEnabled: false }
+    : render;
   const perLensGlass = lenses.map((lens) => ({
     lens,
-    appearance: resolvePrototypeGlassAppearance(render, fillSpec.top, lens, lenses),
+    appearance: resolvePrototypeGlassAppearance(sheetRender, fillSpec.top, lens, lenses),
   }));
-  const anyGlass = perLensGlass.some((item) => item.appearance.glassPresent);
+  const anyMaterialGlass = perLensGlass.some((item) => item.appearance.glassPresent);
+  const anyGlass = sheetActive || anyMaterialGlass;
 
   const plateImageProps = {
     href: plateUrl,
@@ -146,7 +158,7 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
     crossOrigin: "anonymous" as const,
   };
 
-  // When no material layers are active, show the plate as-is (production path with empty layers).
+  // When no material layers are active and no sheet, show the plate as-is.
   if (!anyGlass) {
     return <image {...plateImageProps} />;
   }
@@ -174,10 +186,10 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
         ))}
       </defs>
 
-      {/* 1. Frame Back */}
+      {/* 1. Frame Back — product photo with lens holes cut out */}
       <image {...plateImageProps} mask={`url(#${frameBackId})`} />
 
-      {/* 2. Behind Glass — viewed through original lens + material layers */}
+      {/* 2. Behind Glass Occluders */}
       {behind.map((object) => (
         <FrameStructureObject
           key={`${uid}-behind-${object.id}`}
@@ -189,25 +201,49 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
         />
       ))}
 
-      {/* 3. Original lens foundation — natural texture / gradients / base glass */}
-      {lenses.map((lens) => (
-        <g key={`${uid}-orig-lens-${lens.id}`} clipPath={`url(#${uid}-glass-${lens.id})`}>
-          <image {...plateImageProps} data-layer="original-lens" />
-        </g>
-      ))}
+      {sheetActive ? (
+        <>
+          {/* 3. Glass sheet texture foundation */}
+          {lenses.map((lens) => (
+            <GlassSheetElement
+              key={`${uid}-sheet-${lens.id}`}
+              uid={uid}
+              lens={lens}
+              render={render}
+            />
+          ))}
+          {/* 4. Tint → Reflection → Edge over the sheet */}
+          {perLensGlass.map(({ lens, appearance }) => (
+            <PrototypeGlassElement
+              key={`${uid}-glass-el-${lens.id}`}
+              uid={uid}
+              lens={lens}
+              tintId={tintId}
+              appearance={appearance}
+            />
+          ))}
+        </>
+      ) : (
+        <>
+          {/* Legacy path: original lens + material layers */}
+          {lenses.map((lens) => (
+            <g key={`${uid}-orig-lens-${lens.id}`} clipPath={`url(#${uid}-glass-${lens.id})`}>
+              <image {...plateImageProps} data-layer="original-lens" />
+            </g>
+          ))}
+          {perLensGlass.map(({ lens, appearance }) => (
+            <PrototypeGlassElement
+              key={`${uid}-glass-el-${lens.id}`}
+              uid={uid}
+              lens={lens}
+              tintId={tintId}
+              appearance={appearance}
+            />
+          ))}
+        </>
+      )}
 
-      {/* 4. Glass material layers (prototype model over the original lens) */}
-      {perLensGlass.map(({ lens, appearance }) => (
-        <PrototypeGlassElement
-          key={`${uid}-glass-el-${lens.id}`}
-          uid={uid}
-          lens={lens}
-          tintId={tintId}
-          appearance={appearance}
-        />
-      ))}
-
-      {/* 5. Inside Glass */}
+      {/* 5. Inside Glass (legacy mid-band occluders) */}
       {inside.map((object) => (
         <FrameStructureObject
           key={`${uid}-inside-${object.id}`}
@@ -220,7 +256,7 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
         />
       ))}
 
-      {/* 6. Front of Glass */}
+      {/* 6. Above Glass Occluders */}
       {front.map((object) => (
         <FrameStructureObject
           key={`${uid}-front-${object.id}`}

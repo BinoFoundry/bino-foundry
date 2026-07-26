@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  compoundOccluderPathD,
   createLensClipConfig,
   normalizeLensClipConfig,
   resolveFrameExclusionShapes,
@@ -14,6 +15,20 @@ import {
 import { lensClipConfigToMaskConfig } from "./clip-to-mask";
 import { maskConfigToLensClipConfig } from "./mask-to-clip";
 import { createLensPolygon, createMaskConfig } from "@/render/mask/mask-types";
+
+describe("compoundOccluderPathD", () => {
+  it("returns the outer path alone when there are no holes", () => {
+    expect(compoundOccluderPathD({ pathD: "M 0 0 L 1 0 L 1 1 Z" })).toBe("M 0 0 L 1 0 L 1 1 Z");
+  });
+
+  it("concatenates outer and hole subpaths for even-odd fills", () => {
+    const d = compoundOccluderPathD({
+      pathD: "M 0 0 L 10 0 L 10 10 Z",
+      holePathDs: ["M 2 2 L 8 2 L 8 8 Z"],
+    });
+    expect(d).toBe("M 0 0 L 10 0 L 10 10 Z M 2 2 L 8 2 L 8 8 Z");
+  });
+});
 
 describe("resolveLensClipRenderSettings", () => {
   it("defaults to replace mode with optical layers enabled", () => {
@@ -395,6 +410,51 @@ describe("frame exclusion shapes", () => {
     const restored = lensClipConfigToMaskConfig(clip);
     expect(restored?.frameExclusions).toHaveLength(1);
     expect(restored?.frameExclusions?.[0]?.id).toBe("excl-1");
+  });
+
+  it("round-trips compound occluders with hole polygons", () => {
+    const leftLens = createLensPolygon("left", "Left lens", [
+      { x: 0.1, y: 0.2, curved: false, handleIn: null, handleOut: null },
+      { x: 0.4, y: 0.2, curved: false, handleIn: null, handleOut: null },
+      { x: 0.25, y: 0.45, curved: false, handleIn: null, handleOut: null },
+    ]);
+    const rightLens = createLensPolygon("right", "Right lens", [
+      { x: 0.6, y: 0.2, curved: false, handleIn: null, handleOut: null },
+      { x: 0.9, y: 0.2, curved: false, handleIn: null, handleOut: null },
+      { x: 0.75, y: 0.45, curved: false, handleIn: null, handleOut: null },
+    ]);
+    const ring = createLensPolygon(
+      "ring-1",
+      "Inner Lip",
+      [
+        { x: 0.1, y: 0.1, curved: false, handleIn: null, handleOut: null },
+        { x: 0.4, y: 0.1, curved: false, handleIn: null, handleOut: null },
+        { x: 0.4, y: 0.4, curved: false, handleIn: null, handleOut: null },
+        { x: 0.1, y: 0.4, curved: false, handleIn: null, handleOut: null },
+      ],
+      {
+        holes: [
+          {
+            id: "ring-1-hole-1",
+            label: "Hole 1",
+            points: [
+              { x: 0.18, y: 0.18, curved: false, handleIn: null, handleOut: null },
+              { x: 0.32, y: 0.18, curved: false, handleIn: null, handleOut: null },
+              { x: 0.32, y: 0.32, curved: false, handleIn: null, handleOut: null },
+              { x: 0.18, y: 0.32, curved: false, handleIn: null, handleOut: null },
+            ],
+          },
+        ],
+      },
+    );
+    const mask = createMaskConfig(200, 100, [leftLens, rightLens], undefined, [ring]);
+    const clip = maskConfigToLensClipConfig(mask);
+    expect(clip.frameExclusions?.[0]?.holePathDs).toHaveLength(1);
+    expect(clip.frameExclusions?.[0]?.holePathDs?.[0]?.length).toBeGreaterThan(8);
+
+    const restored = lensClipConfigToMaskConfig(clip);
+    expect(restored?.frameExclusions?.[0]?.holes).toHaveLength(1);
+    expect(restored?.frameExclusions?.[0]?.holes?.[0]?.points.length).toBeGreaterThanOrEqual(3);
   });
 
   it("migrates a legacy by-side mask exclusion into frame-level clip exclusions", () => {

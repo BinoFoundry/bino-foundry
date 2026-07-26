@@ -21,7 +21,11 @@
  *   opacity?: number,
  *   depth?: number,
  *   visible?: boolean,
+ *   notes?: string,
+ *   holes?: LensPolygon[],
  * }} LensPolygon
+ *
+ * `holes` — inner polygons for compound glass occluders (even-odd fill). Outer path = `points`.
  */
 
 /**
@@ -150,6 +154,16 @@ export function normalizeExclusionsBySide(exclusions) {
 }
 
 /** @param {LensPolygon} polygon */
+function normalizeHolePolygon(polygon) {
+  if (!polygon?.id) return null;
+  return {
+    id: polygon.id,
+    label: polygon.label || "Hole",
+    points: migrateAnchors(polygon.points ?? []),
+  };
+}
+
+/** @param {LensPolygon} polygon */
 function normalizeExclusionPolygon(polygon) {
   if (!polygon?.id) return null;
   const layerOrder =
@@ -164,14 +178,19 @@ function normalizeExclusionPolygon(polygon) {
     typeof polygon.depth === "number" && Number.isFinite(polygon.depth)
       ? Math.max(0, Math.min(100, polygon.depth))
       : 50;
+  const holes = Array.isArray(polygon.holes)
+    ? polygon.holes.map(normalizeHolePolygon).filter(Boolean)
+    : [];
   return {
     id: polygon.id,
-    label: polygon.label || "Frame object",
+    label: polygon.label || "Glass occluder",
     points: migrateAnchors(polygon.points ?? []),
     layerOrder,
     opacity,
     depth,
     visible: polygon.visible !== false,
+    notes: typeof polygon.notes === "string" ? polygon.notes : "",
+    holes,
   };
 }
 
@@ -179,7 +198,7 @@ function normalizeExclusionPolygon(polygon) {
  * @param {string} id
  * @param {string} label
  * @param {PathAnchor[]} [points]
- * @param {Partial<Pick<LensPolygon, 'layerOrder' | 'opacity' | 'depth' | 'visible'>>} [extras]
+ * @param {Partial<Pick<LensPolygon, 'layerOrder' | 'opacity' | 'depth' | 'visible' | 'notes' | 'holes'>>} [extras]
  * @returns {LensPolygon}
  */
 export function createLensPolygon(id, label, points = [], extras = {}) {
@@ -192,6 +211,8 @@ export function createLensPolygon(id, label, points = [], extras = {}) {
       opacity: extras.opacity ?? 100,
       depth: extras.depth ?? 50,
       visible: extras.visible !== false,
+      notes: extras.notes ?? "",
+      holes: extras.holes ?? [],
     }) ?? {
       id,
       label,
@@ -200,6 +221,8 @@ export function createLensPolygon(id, label, points = [], extras = {}) {
       opacity: 100,
       depth: 50,
       visible: true,
+      notes: "",
+      holes: [],
     }
   );
 }
