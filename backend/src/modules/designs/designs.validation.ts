@@ -37,5 +37,35 @@ export const designIdParam = z.object({
   id: z.string().min(1),
 });
 
+/** Bulk delete payload — public design ids (`dsn_…`). Accepts camelCase or snake_case. */
+export const bulkDeleteDesignsDto = z
+  .object({
+    designIds: z.array(z.string().min(1)).min(1).max(100).optional(),
+    design_ids: z.array(z.string().min(1)).min(1).max(100).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const ids = value.designIds ?? value.design_ids;
+    if (!ids?.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "designIds is required",
+        path: ["designIds"],
+      });
+    }
+  })
+  .transform((value) => {
+    const raw = value.designIds ?? value.design_ids ?? [];
+    const seen = new Set<string>();
+    const designIds: string[] = [];
+    for (const id of raw) {
+      const trimmed = id.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      designIds.push(trimmed);
+    }
+    return { designIds };
+  });
+
 export type SaveDesignDTO = z.infer<typeof saveDesignDto>;
 export type SunglassesConfigDTO = z.infer<typeof sunglassesConfigDto>;
+export type BulkDeleteDesignsDTO = z.infer<typeof bulkDeleteDesignsDto>;

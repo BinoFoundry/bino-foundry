@@ -1,4 +1,8 @@
-import type { SaveDesignRequest, SavedDesignSummary } from "@bino-foundry/shared/types";
+import type {
+  BulkDeleteDesignsResult,
+  SaveDesignRequest,
+  SavedDesignSummary,
+} from "@bino-foundry/shared/types";
 
 import { apiRequestData } from "./client";
 
@@ -61,6 +65,13 @@ export const designsApi = {
 
   remove(id: string): Promise<void> {
     return apiRequestData<void>(`/designs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  bulkRemove(designIds: string[]): Promise<BulkDeleteDesignsResult> {
+    return apiRequestData<BulkDeleteDesignsResult>("/designs/bulk-delete", {
+      method: "POST",
+      body: { designIds },
+    });
   },
 
   duplicate(id: string): Promise<SavedDesignSummary> {

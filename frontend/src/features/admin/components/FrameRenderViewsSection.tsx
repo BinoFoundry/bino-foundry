@@ -747,11 +747,11 @@ export const FrameRenderViewsSection = forwardRef<
   const saveExclusionsEditor = (axis: FrameViewAxis) => {
     const mask = draftRef.current[axis] ?? resolveMaskConfigForEditor(getView(axis));
     if (!mask || !isMaskConfigValid(mask)) {
-      toast.error("Define the lens openings before saving frame exclusions.");
+      toast.error("Define the lens openings before saving frame parts.");
       return;
     }
     if (commitMaskToView(axis, mask)) {
-      setAxisNotice(axis, "Glass occluders saved to draft.", "success");
+      setAxisNotice(axis, "Frame parts saved to draft.", "success");
       const existingTimer = exclusionSavedTimersRef.current[axis];
       if (existingTimer) clearTimeout(existingTimer);
       setExclusionSaved((prev) => ({ ...prev, [axis]: true }));
@@ -968,7 +968,7 @@ export const FrameRenderViewsSection = forwardRef<
                   {isLeftPanelOpen ? (
                     <InlineEditorPanel
                       title="Left lens path editor"
-                      description="Edit the left lens opening polygon. Frame parts inside the lens are handled by Glass Occluders."
+                      description="Edit the left lens opening polygon. Rivets and logos are Manual Details; the Inner Frame lip is automatic."
                       toolbar={
                         <>
                           <Button
@@ -1058,7 +1058,7 @@ export const FrameRenderViewsSection = forwardRef<
                   {isRightPanelOpen ? (
                     <InlineEditorPanel
                       title="Right lens path editor"
-                      description="Edit the right lens opening polygon. Frame parts inside the lens are handled by Glass Occluders."
+                      description="Edit the right lens opening polygon. Rivets and logos are Manual Details; the Inner Frame lip is automatic."
                       toolbar={
                         <>
                           <Button
@@ -1109,7 +1109,7 @@ export const FrameRenderViewsSection = forwardRef<
                   ) : null}
                 </div>
 
-                <p className="type-label text-muted-foreground">Glass Occluders</p>
+                <p className="type-label text-muted-foreground">Manual Details</p>
 
                 <div
                   className={cn(
@@ -1118,8 +1118,8 @@ export const FrameRenderViewsSection = forwardRef<
                   )}
                 >
                   <p className="mb-2 text-xs text-muted-foreground">
-                    Physical frame objects inside the lens openings (bridge support, screws, inner
-                    rim, nylon wire). Each object can sit behind, inside, or in front of the glass.
+                    Place rivets, screws, and logos above the glass. The Inner Frame lip is
+                    automatic from each lens opening — adjust it under Lens rendering.
                   </p>
                   {!isExclusionsPanelOpen ? (
                     <Button
@@ -1130,14 +1130,14 @@ export const FrameRenderViewsSection = forwardRef<
                       onClick={() => openEditor(axis, "exclusions")}
                     >
                       <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Frame Objects
+                      Edit Manual Details
                     </Button>
                   ) : null}
 
                   {isExclusionsPanelOpen ? (
                     <InlineEditorPanel
-                      title="Glass Occluders editor"
-                      description="Draw frame structures inside the lens openings and choose whether each sits behind, inside, or in front of the glass."
+                      title="Manual Details editor"
+                      description="Add and refine plate-masked details that sit above the glass."
                       onSave={() => saveExclusionsEditor(axis)}
                       onCancel={() => cancelEditor(axis)}
                       saveFeedback={
@@ -1305,6 +1305,11 @@ function LensRenderingSection({
     glassSheetOccluderEnabled: resolved.glassSheetOccluderEnabled,
     glassSheetOccluderStrength: resolved.glassSheetOccluderStrength,
     glassSheetOccluderThreshold: resolved.glassSheetOccluderThreshold,
+    innerFrameEnabled: resolved.innerFrameEnabled,
+    innerFrameThickness: resolved.innerFrameThickness,
+    innerFrameOpacity: resolved.innerFrameOpacity,
+    innerFrameFeather: resolved.innerFrameFeather,
+    innerFrameBlendMode: resolved.innerFrameBlendMode,
     glassTintEnabled: resolved.glassTintEnabled,
     glassTintBlend: resolved.glassTintBlend,
     glassTintShine: resolved.glassTintShine,

@@ -62,7 +62,7 @@ export function exclusionPolygonsToShapes(
         .filter((d) => d.trim().length > 0);
       return {
         id: polygon.id,
-        label: polygon.label || "Glass occluder",
+        label: polygon.label || "Frame part",
         pathD,
         ...(holePathDs.length ? { holePathDs } : {}),
         layerOrder: polygon.layerOrder ?? "behind",

@@ -31,6 +31,36 @@ describe("compoundOccluderPathD", () => {
 });
 
 describe("resolveLensClipRenderSettings", () => {
+  it("defaults Automatic Inner Frame on with sensible thickness", () => {
+    const resolved = resolveLensClipRenderSettings(null);
+    expect(resolved.innerFrameEnabled).toBe(true);
+    expect(resolved.innerFrameThickness).toBe(2);
+    expect(resolved.innerFrameOpacity).toBe(70);
+    expect(resolved.innerFrameFeather).toBe(25);
+    expect(resolved.innerFrameBlendMode).toBe("normal");
+  });
+
+  it("clamps Automatic Inner Frame controls", () => {
+    const resolved = resolveLensClipRenderSettings({
+      version: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      lenses: [],
+      render: {
+        innerFrameEnabled: false,
+        innerFrameThickness: 99,
+        innerFrameOpacity: 150,
+        innerFrameFeather: -5,
+        innerFrameBlendMode: "multiply",
+      },
+    });
+    expect(resolved.innerFrameEnabled).toBe(false);
+    expect(resolved.innerFrameThickness).toBe(8);
+    expect(resolved.innerFrameOpacity).toBe(100);
+    expect(resolved.innerFrameFeather).toBe(0);
+    expect(resolved.innerFrameBlendMode).toBe("multiply");
+  });
+
   it("defaults to replace mode with optical layers enabled", () => {
     const resolved = resolveLensClipRenderSettings(null);
     expect(resolved.mode).toBe("replace");

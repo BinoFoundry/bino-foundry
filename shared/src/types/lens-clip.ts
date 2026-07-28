@@ -116,7 +116,7 @@ export function resolveFrameExclusionObject(
     : "behind";
   return {
     id: shape.id,
-    label: shape.label || "Glass occluder",
+    label: shape.label || "Frame part",
     pathD: shape.pathD,
     holePathDs: normalizeHolePathDs(shape.holePathDs),
     lensId: "lensId" in shape ? shape.lensId : undefined,
@@ -178,8 +178,22 @@ export interface LensClipRenderSettings {
   glassSheetOccluderEnabled?: boolean;
   /** Occluder opacity (0–100). */
   glassSheetOccluderStrength?: number;
-  /** Luminance threshold for auto occluder (0–100). Darker pixels below this are kept. */
+  /** Luminance threshold for the sheet occluder (0–255-ish scale stored as 0–100 UI in places). */
   glassSheetOccluderThreshold?: number;
+
+  /**
+   * Automatic Inner Frame — inset ring derived from each lens polygon.
+   * When enabled and thickness > 0, a plate-masked lip is rendered around the glass.
+   */
+  innerFrameEnabled?: boolean;
+  /** Inset distance in plate pixels (0–8). 0 disables the ring visually. */
+  innerFrameThickness?: number;
+  /** Ring opacity 0–100. */
+  innerFrameOpacity?: number;
+  /** Softens the glass↔frame transition (0–100 → mask blur). */
+  innerFrameFeather?: number;
+  /** Composite blend for the automatic inner frame. */
+  innerFrameBlendMode?: "normal" | "multiply" | "overlay" | "screen";
 
   /** Admin scope for opacity controls. Defaults to `global` for legacy configs. */
   renderScope?: "global" | "front" | "side";

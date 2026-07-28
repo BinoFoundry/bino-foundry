@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -32,10 +32,18 @@ import {
   LENS_SIDE_LABELS,
   type LensPolygon,
   type MaskConfig,
+  type PathAnchor,
 } from "@/render/mask";
-import type { FrameExclusionLayerOrder } from "@bino-foundry/shared/types";
+import {
+  createFramePart,
+  type FramePartStartShape,
+} from "@/features/admin/lib/frame-parts";
+import { FramePartTransformCanvas } from "@/features/admin/components/FramePartTransformCanvas";
 
+/** Internal mode id kept for persistence wiring; UI copy says Manual Details. */
 export type LensEditorMode = "polygon" | "exclusions";
+
+type PartEditPhase = "transform" | "vertex";
 
 interface FrameMaskEditorProps {
   plateUrl: string;
@@ -46,67 +54,30 @@ interface FrameMaskEditorProps {
   lensRevision?: number;
   /** When set, editor focuses on one lens path only (left or right). Polygon mode only. */
   focusedLensId?: FrameLensSide;
-  /** Lens polygon editing vs glass occluders (frame structures inside the hole). */
+  /** Lens polygon editing vs manual details (rivets, screws, logos above glass). */
   editMode?: LensEditorMode;
   onChange?: (config: MaskConfig | null) => void;
   className?: string;
 }
 
-function getFrameExclusions(mask: MaskConfig | null | undefined): LensPolygon[] {
+function getFrameParts(mask: MaskConfig | null | undefined): LensPolygon[] {
   return resolveMaskFrameExclusions(mask);
 }
 
-/** List index → depth so compositor order matches the admin list within each layer. */
+/** List index → depth so compositor order matches the admin list; force Above Glass. */
 function withListOrderDepth(list: LensPolygon[]): LensPolygon[] {
-  return list.map((ex, index) => ({ ...ex, depth: index }));
-}
-
-/** Editor paths for one compound occluder: [outer, ...holes]. */
-function occluderToEditorPaths(occluder: LensPolygon): LensPolygon[] {
-  const outer: LensPolygon = {
-    id: occluder.id,
-    label: "Outer",
-    points: occluder.points ?? [],
-  };
-  const holes = (occluder.holes ?? []).map((hole, i) => ({
-    id: hole.id || `${occluder.id}-hole-${i + 1}`,
-    label: hole.label || `Hole ${i + 1}`,
-    points: hole.points ?? [],
+  return list.map((part, index) => ({
+    ...part,
+    depth: index,
+    holes: [],
+    layerOrder: "front",
   }));
-  return [outer, ...holes];
 }
 
-/** Merge editor paths back onto the occluder metadata. */
-function editorPathsToOccluder(paths: LensPolygon[], previous: LensPolygon): LensPolygon {
-  const outer = paths[0];
-  const holePaths = paths.slice(1);
-  return {
-    ...previous,
-    id: previous.id,
-    // Keep the occluder display name — outer tab is always "Outer".
-    label: previous.label,
-    points: outer?.points ?? previous.points ?? [],
-    holes: holePaths.map((hole, i) => ({
-      id: hole.id || `${previous.id}-hole-${i + 1}`,
-      label: hole.label?.startsWith("Hole") || hole.label === "Outer"
-        ? `Hole ${i + 1}`
-        : hole.label || `Hole ${i + 1}`,
-      points: hole.points ?? [],
-    })),
-  };
-}
-
-const LAYER_OPTIONS: { value: FrameExclusionLayerOrder; label: string; hint: string }[] = [
-  {
-    value: "behind",
-    label: "Behind Glass",
-    hint: "Under the lens — tint and optics apply above it.",
-  },
-  {
-    value: "front",
-    label: "Above Glass",
-    hint: "In front of the lens — optics do not affect it.",
-  },
+const START_SHAPES: { value: FramePartStartShape; label: string; hint: string }[] = [
+  { value: "rectangle", label: "Rectangle", hint: "Quick box — transform, then refine." },
+  { value: "ellipse", label: "Ellipse", hint: "Rounded starting shape." },
+  { value: "free", label: "Free Polygon", hint: "Empty path — draw vertices yourself." },
 ];
 
 /** Lens clip path editor (polygon/curve tools → persisted as SVG clip paths). */
@@ -128,18 +99,18 @@ export function FrameMaskEditor({
   const editModeRef = useRef(editMode);
   editModeRef.current = editMode;
 
-  const [activeExclusionIndex, setActiveExclusionIndex] = useState(0);
-  const [exclusionRevision, setExclusionRevision] = useState(0);
-  /** 0 = outer polygon; 1+ = hole index + 1 in editor path list. */
-  const [activePathIndex, setActivePathIndex] = useState(0);
+  const [activePartIndex, setActivePartIndex] = useState(0);
+  const [partRevision, setPartRevision] = useState(0);
+  const [editPhase, setEditPhase] = useState<PartEditPhase>("transform");
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
-  const [exclusionList, setExclusionListState] = useState<LensPolygon[]>(() =>
-    getFrameExclusions(initialMaskRef.current),
+  const [partList, setPartListState] = useState<LensPolygon[]>(() =>
+    getFrameParts(initialMaskRef.current),
   );
-  const exclusionListRef = useRef(exclusionList);
-  const setExclusionList = useCallback((next: LensPolygon[]) => {
-    exclusionListRef.current = next;
-    setExclusionListState(next);
+  const partListRef = useRef(partList);
+  const setPartList = useCallback((next: LensPolygon[]) => {
+    partListRef.current = next;
+    setPartListState(next);
   }, []);
 
   const sensors = useSensors(
@@ -148,7 +119,19 @@ export function FrameMaskEditor({
     }),
   );
 
-  const emitExclusions = useCallback((list: LensPolygon[]) => {
+  useEffect(() => {
+    if (editMode !== "exclusions" || editPhase !== "vertex") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setEditPhase("transform");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editMode, editPhase]);
+
+  const emitParts = useCallback((list: LensPolygon[]) => {
     const ordered = withListOrderDepth(list);
     const mask = initialMaskRef.current;
     const baseLenses = ensureFrameLensSet(mask?.lenses ?? defaultLensSet());
@@ -157,7 +140,7 @@ export function FrameMaskEditor({
       mask?.imageHeight ?? 0,
       baseLenses,
       undefined,
-      ordered.filter((ex) => ex.points?.length),
+      ordered.filter((part) => (part.points?.length ?? 0) >= 1),
     );
     onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
   }, []);
@@ -165,35 +148,35 @@ export function FrameMaskEditor({
   const commitList = useCallback(
     (list: LensPolygon[], options?: { selectIndex?: number; bumpRevision?: boolean }) => {
       const ordered = withListOrderDepth(list);
-      setExclusionList(ordered);
+      setPartList(ordered);
       if (options?.selectIndex != null) {
-        setActiveExclusionIndex(options.selectIndex);
+        setActivePartIndex(options.selectIndex);
       }
       if (options?.bumpRevision) {
-        setExclusionRevision((r) => r + 1);
+        setPartRevision((r) => r + 1);
       }
-      emitExclusions(ordered);
+      emitParts(ordered);
     },
-    [emitExclusions, setExclusionList],
+    [emitParts, setPartList],
   );
 
   const patchActive = useCallback(
     (partial: Partial<LensPolygon>) => {
-      if (!exclusionListRef.current.length) return;
-      const next = exclusionListRef.current.map((ex, i) =>
-        i === activeExclusionIndex ? { ...ex, ...partial } : ex,
+      if (!partListRef.current.length) return;
+      const next = partListRef.current.map((part, i) =>
+        i === activePartIndex ? { ...part, ...partial, holes: [] } : part,
       );
       commitList(next);
     },
-    [activeExclusionIndex, commitList],
+    [activePartIndex, commitList],
   );
 
   const mergeFocusedEdit = useCallback((edited: LensPolygon[], imgW: number, imgH: number): MaskConfig => {
     const focus = focusedLensIdRef.current;
     const editedLens = edited[0];
-    const frameExclusions = getFrameExclusions(initialMaskRef.current);
+    const frameParts = getFrameParts(initialMaskRef.current);
     if (!focus || !editedLens) {
-      return createMaskConfig(imgW, imgH, edited, undefined, frameExclusions);
+      return createMaskConfig(imgW, imgH, edited, undefined, frameParts);
     }
 
     const base = ensureFrameLensSet(initialMaskRef.current?.lenses ?? defaultLensSet());
@@ -202,18 +185,29 @@ export function FrameMaskEditor({
         ? { ...lens, points: editedLens.points, label: LENS_SIDE_LABELS[focus] }
         : lens,
     );
-    return createMaskConfig(imgW, imgH, merged, undefined, frameExclusions);
+    return createMaskConfig(imgW, imgH, merged, undefined, frameParts);
   }, []);
 
   const handleLensesChange = useCallback(
     (lenses: LensPolygon[], meta: { imgW: number; imgH: number }) => {
       if (editModeRef.current === "exclusions") {
-        const next = [...exclusionListRef.current];
+        const edited = lenses[0];
+        const next = [...partListRef.current];
+        if (!edited) {
+          commitList(next);
+          return;
+        }
         if (next.length === 0) {
-          if (lenses[0]) next.push({ ...lenses[0], holes: lenses.slice(1) });
+          next.push({ ...edited, holes: [] });
         } else {
-          const idx = Math.min(activeExclusionIndex, next.length - 1);
-          next[idx] = editorPathsToOccluder(lenses, next[idx]!);
+          const idx = Math.min(activePartIndex, next.length - 1);
+          next[idx] = {
+            ...next[idx]!,
+            id: next[idx]!.id,
+            label: next[idx]!.label,
+            points: edited.points,
+            holes: [],
+          };
         }
         commitList(next);
         return;
@@ -226,130 +220,116 @@ export function FrameMaskEditor({
             meta.imgH,
             lenses,
             undefined,
-            getFrameExclusions(initialMaskRef.current),
+            getFrameParts(initialMaskRef.current),
           );
 
       onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
     },
-    [activeExclusionIndex, commitList, mergeFocusedEdit],
+    [activePartIndex, commitList, mergeFocusedEdit],
   );
 
   const focusedLabel = focusedLensId ? LENS_SIDE_LABELS[focusedLensId] : undefined;
-  const activeExclusion =
-    exclusionList[activeExclusionIndex] ??
-    createLensPolygon(
-      `glass-occluder-${Date.now()}`,
-      `Occluder ${activeExclusionIndex + 1}`,
-      [],
-      { layerOrder: "behind" },
-    );
+  const activePart =
+    partList[activePartIndex] ??
+    createLensPolygon(`frame-part-fallback`, `Part ${activePartIndex + 1}`, [], {
+      layerOrder: "front",
+      holes: [],
+    });
 
-  const addExclusion = () => {
+  const addPart = (shape: FramePartStartShape) => {
     const next = [
-      ...exclusionListRef.current,
-      createLensPolygon(
-        `glass-occluder-${Date.now()}`,
-        `Occluder ${exclusionListRef.current.length + 1}`,
-        [],
-        {
-          layerOrder: "behind",
-          opacity: 100,
-          depth: exclusionListRef.current.length,
-          visible: true,
-          holes: [],
-        },
-      ),
+      ...partListRef.current,
+      createFramePart(`Part ${partListRef.current.length + 1}`, shape, {
+        depth: partListRef.current.length,
+      }),
     ];
-    setActivePathIndex(0);
+    setShowAddMenu(false);
+    setEditPhase(shape === "free" ? "vertex" : "transform");
     commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
   };
 
-  const addHoleToActive = () => {
-    const list = exclusionListRef.current;
-    if (!list.length) return;
-    const idx = Math.min(activeExclusionIndex, list.length - 1);
-    const current = list[idx]!;
-    const holeCount = current.holes?.length ?? 0;
-    const hole = {
-      id: `${current.id}-hole-${Date.now()}`,
-      label: `Hole ${holeCount + 1}`,
-      points: [] as LensPolygon["points"],
-    };
-    const next = list.map((ex, i) =>
-      i === idx ? { ...ex, holes: [...(ex.holes ?? []), hole] } : ex,
-    );
-    setActivePathIndex(holeCount + 1);
-    commitList(next, { bumpRevision: true });
-  };
-
-  const removeActiveHole = () => {
-    if (activePathIndex <= 0) return;
-    const list = exclusionListRef.current;
-    if (!list.length) return;
-    const idx = Math.min(activeExclusionIndex, list.length - 1);
-    const current = list[idx]!;
-    const holeIndex = activePathIndex - 1;
-    const holes = [...(current.holes ?? [])];
-    if (holeIndex < 0 || holeIndex >= holes.length) return;
-    holes.splice(holeIndex, 1);
-    const renumbered = holes.map((hole, i) => ({
-      ...hole,
-      label: `Hole ${i + 1}`,
-    }));
-    const next = list.map((ex, i) => (i === idx ? { ...ex, holes: renumbered } : ex));
-    setActivePathIndex(Math.min(activePathIndex, renumbered.length));
-    commitList(next, { bumpRevision: true });
-  };
-
-  const removeActiveExclusion = () => {
-    if (!exclusionListRef.current.length) return;
-    const next = exclusionListRef.current.filter((_, i) => i !== activeExclusionIndex);
-    const nextIndex = next.length === 0 ? 0 : Math.min(activeExclusionIndex, next.length - 1);
+  const removeActivePart = () => {
+    if (!partListRef.current.length) return;
+    const next = partListRef.current.filter((_, i) => i !== activePartIndex);
+    const nextIndex = next.length === 0 ? 0 : Math.min(activePartIndex, next.length - 1);
+    setEditPhase("transform");
     commitList(next, { selectIndex: nextIndex, bumpRevision: true });
+  };
+
+  const commitTransformedPoints = (index: number, points: PathAnchor[]) => {
+    const next = partListRef.current.map((part, i) =>
+      i === index ? { ...part, points, holes: [] } : part,
+    );
+    commitList(next);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const list = exclusionListRef.current;
-    const oldIndex = list.findIndex((ex) => ex.id === active.id);
-    const newIndex = list.findIndex((ex) => ex.id === over.id);
+    const list = partListRef.current;
+    const oldIndex = list.findIndex((part) => part.id === active.id);
+    const newIndex = list.findIndex((part) => part.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
     const next = arrayMove(list, oldIndex, newIndex);
-    const selectedId = list[activeExclusionIndex]?.id;
+    const selectedId = list[activePartIndex]?.id;
     const selectIndex = selectedId
-      ? Math.max(
-          0,
-          next.findIndex((ex) => ex.id === selectedId),
-        )
+      ? Math.max(0, next.findIndex((part) => part.id === selectedId))
       : newIndex;
     commitList(next, { selectIndex });
   };
 
   if (editMode === "exclusions") {
+    const lensOpenings = ensureFrameLensSet(
+      initialMaskRef.current?.lenses ?? defaultLensSet(),
+    );
+
     return (
       <div className={cn("space-y-3", className)}>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Glass Occluders are independent polygons for frame parts inside the lens opening. Select
-          one from the list to edit its properties. Drag to reorder — list order matches render
-          order within each layer.
+          Manual Details sit above the glass (rivets, screws, logos). Drag to move, use handles to
+          scale and rotate. Double-click only when you need vertex-level edits. The Inner Frame lip
+          is automatic — edit it under Lens rendering.
         </p>
 
-        <Button type="button" size="sm" variant="outline" onClick={addExclusion}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          Add Occluder
-        </Button>
+        <div className="relative inline-flex">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setShowAddMenu((open) => !open)}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add Detail
+          </Button>
+          {showAddMenu ? (
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-border bg-background p-1.5 shadow-md">
+              <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Starting shape
+              </p>
+              {START_SHAPES.map((shape) => (
+                <button
+                  key={shape.value}
+                  type="button"
+                  className="flex w-full flex-col rounded px-2 py-1.5 text-left text-[11px] hover:bg-muted/60"
+                  onClick={() => addPart(shape.value)}
+                >
+                  <span className="font-medium text-foreground">{shape.label}</span>
+                  <span className="text-[10px] text-muted-foreground">{shape.hint}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
 
-        {exclusionList.length === 0 ? (
+        {partList.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">
-            No glass occluders yet — add one to begin.
+            No manual details yet — add a rectangle or ellipse to begin.
           </p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-[minmax(11rem,15rem)_minmax(0,1fr)] md:items-start">
-            {/* Left: compact selectable list */}
+          <div className="grid gap-3 md:grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)] md:items-start">
             <div className="min-w-0 rounded-md border border-border/70 bg-muted/10">
               <p className="border-b border-border/60 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Occluder list
+                Manual Details
               </p>
               <DndContext
                 sensors={sensors}
@@ -357,22 +337,27 @@ export function FrameMaskEditor({
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext
-                  items={exclusionList.map((ex) => ex.id)}
+                  items={partList.map((part) => part.id)}
                   strategy={verticalListSortingStrategy}
                 >
                   <ul className="max-h-[min(28rem,55vh)] overflow-y-auto p-1">
-                    {exclusionList.map((ex, i) => (
-                      <SortableOccluderRow
-                        key={ex.id}
-                        id={ex.id}
-                        label={ex.label || `Occluder ${i + 1}`}
-                        active={i === activeExclusionIndex}
-                        visible={ex.visible !== false}
-                        holeCount={ex.holes?.length ?? 0}
+                    {partList.map((part, i) => (
+                      <SortablePartRow
+                        key={part.id}
+                        id={part.id}
+                        label={part.label || `Part ${i + 1}`}
+                        active={i === activePartIndex}
+                        visible={part.visible !== false}
                         onSelect={() => {
-                          setActiveExclusionIndex(i);
-                          setActivePathIndex(0);
-                          setExclusionRevision((r) => r + 1);
+                          setActivePartIndex(i);
+                          setEditPhase("transform");
+                          setPartRevision((r) => r + 1);
+                        }}
+                        onToggleVisible={(visible) => {
+                          const next = partList.map((item, idx) =>
+                            idx === i ? { ...item, visible } : item,
+                          );
+                          commitList(next);
                         }}
                       />
                     ))}
@@ -381,23 +366,22 @@ export function FrameMaskEditor({
               </DndContext>
             </div>
 
-            {/* Right: properties for the selected occluder */}
             <div className="min-w-0 space-y-3 rounded-md border border-border/70 bg-background/50 p-3">
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Occluder properties
+                    Detail properties
                   </p>
                   <p className="mt-0.5 text-xs font-medium text-foreground">
-                    {activeExclusion.label || `Occluder ${activeExclusionIndex + 1}`}
+                    {activePart.label || `Part ${activePartIndex + 1}`}
                   </p>
                 </div>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="shrink-0 text-destructive hover:text-destructive"
-                  onClick={removeActiveExclusion}
+                  className="text-destructive hover:text-destructive"
+                  onClick={removeActivePart}
                 >
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                   Delete
@@ -407,10 +391,10 @@ export function FrameMaskEditor({
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Name</Label>
                 <Input
-                  value={activeExclusion.label}
+                  value={activePart.label}
                   onChange={(e) => patchActive({ label: e.target.value })}
                   className="h-8 text-sm"
-                  placeholder="e.g. Nose Bridge"
+                  placeholder="e.g. Rivet L"
                 />
               </div>
 
@@ -418,46 +402,17 @@ export function FrameMaskEditor({
                 <input
                   type="checkbox"
                   className="accent-foreground"
-                  checked={activeExclusion.visible !== false}
+                  checked={activePart.visible !== false}
                   onChange={(e) => patchActive({ visible: e.target.checked })}
                 />
                 <span className="font-medium text-foreground">Visible</span>
               </label>
 
-              <fieldset className="space-y-2">
-                <LegendLabel>Layer order</LegendLabel>
-                {LAYER_OPTIONS.map((option) => (
-                  <label
-                    key={option.value}
-                    className="flex cursor-pointer items-start gap-2 text-xs"
-                  >
-                    <input
-                      type="radio"
-                      className="mt-0.5 accent-foreground"
-                      name={`layer-${activeExclusion.id}`}
-                      checked={
-                        (activeExclusion.layerOrder ?? "behind") === option.value ||
-                        (option.value === "behind" &&
-                          (activeExclusion.layerOrder === "inside" ||
-                            activeExclusion.layerOrder == null))
-                      }
-                      onChange={() => patchActive({ layerOrder: option.value })}
-                    />
-                    <span>
-                      <span className="font-medium text-foreground">{option.label}</span>
-                      <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                        {option.hint}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <Label className="text-xs text-muted-foreground">Opacity</Label>
                   <span className="tabular-nums text-[10px] text-muted-foreground">
-                    {Math.round(activeExclusion.opacity ?? 100)}%
+                    {Math.round(activePart.opacity ?? 100)}%
                   </span>
                 </div>
                 <input
@@ -465,71 +420,85 @@ export function FrameMaskEditor({
                   min={0}
                   max={100}
                   step={1}
-                  value={activeExclusion.opacity ?? 100}
+                  value={activePart.opacity ?? 100}
                   onChange={(e) => patchActive({ opacity: Number(e.target.value) })}
                   className="w-full accent-foreground"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
-                <Input
-                  value={activeExclusion.notes ?? ""}
-                  onChange={(e) => patchActive({ notes: e.target.value })}
-                  className="h-8 text-sm"
-                  placeholder="e.g. metal lip under lens"
-                />
+              <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={editPhase === "transform" ? "default" : "outline"}
+                  onClick={() => setEditPhase("transform")}
+                >
+                  Transform
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={editPhase === "vertex" ? "default" : "outline"}
+                  onClick={() => setEditPhase("vertex")}
+                >
+                  Edit vertices
+                </Button>
               </div>
 
-              <div>
-                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-foreground">Compound polygon</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Button type="button" size="sm" variant="outline" onClick={addHoleToActive}>
-                      <Plus className="mr-1.5 h-3.5 w-3.5" />
-                      Add Hole
-                    </Button>
-                    {activePathIndex > 0 ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={removeActiveHole}
-                      >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                        Delete Hole
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-                <p className="mb-2 text-[10px] leading-snug text-muted-foreground">
-                  Draw the outer silhouette, then add holes to cut out inner regions (even-odd
-                  compound path — like Illustrator / Figma).
-                </p>
-                <PolygonEditorShell
-                  key={`${activeExclusion.id}-${exclusionRevision}-${lensRevision}`}
-                  className="min-h-[280px]"
+              {editPhase === "transform" ? (
+                <FramePartTransformCanvas
+                  key={`transform-${partRevision}-${lensRevision}`}
                   imageUrl={plateUrl}
-                  getInitialLenses={() => occluderToEditorPaths(activeExclusion)}
-                  onLensesChange={handleLensesChange}
-                  showLensTabs={false}
-                  pathTabs={[
-                    { id: activeExclusion.id, label: "Outer" },
-                    ...(activeExclusion.holes ?? []).map((hole, i) => ({
-                      id: hole.id || `${activeExclusion.id}-hole-${i + 1}`,
-                      label: hole.label || `Hole ${i + 1}`,
-                    })),
-                  ]}
-                  defaultActivePathIndex={activePathIndex}
-                  onActivePathChange={setActivePathIndex}
-                  previewLabel="Occluder preview"
-                  showThumbnailPreview={false}
-                  lensRevision={exclusionRevision + lensRevision}
-                  handlesLabel="Control points"
-                  helpText="Outer + holes · Switch path tabs to edit · Shift+click edge to insert · Del removes selected point"
+                  parts={partList}
+                  activeIndex={activePartIndex}
+                  onSelect={setActivePartIndex}
+                  onCommitPoints={commitTransformedPoints}
+                  onEnterVertexEdit={(index) => {
+                    setActivePartIndex(index);
+                    setEditPhase("vertex");
+                    setPartRevision((r) => r + 1);
+                  }}
+                  // Reserved architecture hook — not active yet.
+                  snapToLensEdge={false}
+                  lensOpenings={lensOpenings}
                 />
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Vertex mode — Esc or Transform returns to move / scale / rotate.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditPhase("transform")}
+                    >
+                      Done
+                    </Button>
+                  </div>
+                  <PolygonEditorShell
+                    key={`${activePart.id}-vertex-${partRevision}-${lensRevision}`}
+                    className="min-h-[280px]"
+                    imageUrl={plateUrl}
+                    getInitialLenses={() => [
+                      {
+                        id: activePart.id,
+                        label: activePart.label || "Frame part",
+                        points: activePart.points ?? [],
+                      },
+                    ]}
+                    onLensesChange={handleLensesChange}
+                    showLensTabs={false}
+                    singlePathLabel={activePart.label || "Frame part"}
+                    previewLabel="Frame part"
+                    showThumbnailPreview={false}
+                    lensRevision={partRevision + lensRevision}
+                    handlesLabel="Control points"
+                    helpText="Fine-tune vertices · Shift+click edge to insert · Del removes selected point"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -572,20 +541,20 @@ export function FrameMaskEditor({
   );
 }
 
-function SortableOccluderRow({
+function SortablePartRow({
   id,
   label,
   active,
   visible,
-  holeCount,
   onSelect,
+  onToggleVisible,
 }: {
   id: string;
   label: string;
   active: boolean;
   visible: boolean;
-  holeCount: number;
   onSelect: () => void;
+  onToggleVisible: (visible: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -601,9 +570,7 @@ function SortableOccluderRow({
       <div
         className={cn(
           "flex w-full items-center gap-1 rounded-sm px-1 py-1 text-left text-[11px] transition-colors",
-          active
-            ? "bg-foreground text-background"
-            : "text-foreground hover:bg-muted/60",
+          active ? "bg-foreground text-background" : "text-foreground hover:bg-muted/60",
           !visible && !active && "opacity-50",
         )}
       >
@@ -619,39 +586,22 @@ function SortableOccluderRow({
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
+        <input
+          type="checkbox"
+          className="shrink-0 accent-foreground"
+          checked={visible}
+          onChange={(e) => onToggleVisible(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`${visible ? "Hide" : "Show"} ${label}`}
+        />
         <button
           type="button"
           className="min-w-0 flex-1 truncate py-0.5 text-left font-medium"
           onClick={onSelect}
         >
-          <span
-            className={cn(
-              "mr-1.5 inline-block h-1.5 w-1.5 rounded-sm align-middle",
-              active ? "bg-background" : visible ? "bg-foreground" : "bg-muted-foreground",
-            )}
-            aria-hidden
-          />
           {label}
-          {holeCount > 0 ? (
-            <span
-              className={cn(
-                "ml-1 font-normal",
-                active ? "text-background/70" : "text-muted-foreground",
-              )}
-            >
-              · {holeCount} hole{holeCount === 1 ? "" : "s"}
-            </span>
-          ) : null}
         </button>
       </div>
     </li>
-  );
-}
-
-function LegendLabel({ children }: { children: ReactNode }) {
-  return (
-    <legend className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-      {children}
-    </legend>
   );
 }

@@ -71,7 +71,8 @@ export interface PreviewRenderMode {
   tintLayer: boolean;
   reflection: boolean;
   edge: boolean;
-  glassOccluders: boolean;
+  innerFrame: boolean;
+  manualDetails: boolean;
 }
 
 export const DEFAULT_PREVIEW_RENDER_MODE: PreviewRenderMode = {
@@ -79,7 +80,8 @@ export const DEFAULT_PREVIEW_RENDER_MODE: PreviewRenderMode = {
   tintLayer: true,
   reflection: true,
   edge: true,
-  glassOccluders: true,
+  innerFrame: true,
+  manualDetails: true,
 };
 
 /**
@@ -95,6 +97,7 @@ export function applyPreviewRenderMode(
     glassTintEnabled: mode.tintLayer,
     reflectionEnabled: mode.reflection,
     edgeEnabled: mode.edge,
+    innerFrameEnabled: mode.innerFrame,
     // Sheet is always-on when a URL exists in saved config; preview may temporarily clear it.
     glassSheetUrl: mode.glassSheet ? draftSettings.glassSheetUrl : null,
     // Retired controls — never reintroduced via preview.
@@ -170,7 +173,7 @@ export function LensRenderPresetLivePreview({
       options: {},
       lensRenderSystemDefaults: systemDefaults,
       renderSettingsOverride: applyPreviewRenderMode(draftSettings, mode),
-      previewGlassOccludersEnabled: mode.glassOccluders,
+      previewGlassOccludersEnabled: mode.manualDetails,
     });
   };
 
@@ -295,7 +298,7 @@ function PreviewPane({
         </div>
       ) : (
         <SunglassesCompositor
-          key={`${selectedId}-front-${mode.glassSheet}-${mode.tintLayer}-${mode.reflection}-${mode.edge}-${mode.glassOccluders}`}
+          key={`${selectedId}-front-${mode.glassSheet}-${mode.tintLayer}-${mode.reflection}-${mode.edge}-${mode.innerFrame}-${mode.manualDetails}`}
           config={config}
           view="front"
           label="Front"
@@ -345,9 +348,14 @@ function PreviewPane({
           onChange={(edge) => patchMode({ edge })}
         />
         <PreviewToggle
-          label="Glass occluders"
-          checked={mode.glassOccluders}
-          onChange={(glassOccluders) => patchMode({ glassOccluders })}
+          label="Inner Frame"
+          checked={mode.innerFrame}
+          onChange={(innerFrame) => patchMode({ innerFrame })}
+        />
+        <PreviewToggle
+          label="Manual Details"
+          checked={mode.manualDetails}
+          onChange={(manualDetails) => patchMode({ manualDetails })}
         />
       </div>
     </div>

@@ -58,7 +58,7 @@ export function PolygonEditorShell({
   singlePathLabel = "Crop path",
   previewLabel = "Mask preview",
   handlesLabel = "Curve handles",
-  helpText = "Draw: click to add points · Shift+click edge to insert · Select (V) then Del to remove · Undo ⌘Z / Redo ⇧⌘Z · Pan (H) or Space · scroll to zoom · C toggles curve",
+  helpText = "Draw: click to add points · Shift+click edge to insert · Select (V) then Del to remove · Undo ⌘Z / Redo ⇧⌘Z · Pan (H), Space+drag, or middle-mouse · scroll / Ctrl+scroll to zoom · C toggles curve",
   className,
   headerExtra,
   footerExtra,
@@ -95,6 +95,8 @@ export function PolygonEditorShell({
   const [editorReady, setEditorReady] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [zoomLabel, setZoomLabel] = useState("100%");
+
 
   const syncHistory = useCallback(() => {
     const editor = editorRef.current;
@@ -171,6 +173,9 @@ export function PolygonEditorShell({
           onChange: () => emitChangeRef.current(),
           onToolChange: (t) => setTool(t),
           onHistoryChange: () => syncHistoryRef.current(),
+          onViewportChange: ({ zoomLabel: label }) => {
+            if (!destroyed) setZoomLabel(label);
+          },
         });
         editorRef.current = editor;
 
@@ -330,8 +335,24 @@ export function PolygonEditorShell({
           disabled={!editorReady}
           onClick={() => runEditor((e) => e.fitToView())}
         >
-          Fit view
+          Fit to Screen
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={!editorReady}
+          onClick={() => runEditor((e) => e.resetView())}
+        >
+          Reset View
+        </Button>
+        <span
+          className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] tabular-nums text-muted-foreground"
+          aria-live="polite"
+          title="Current zoom"
+        >
+          {zoomLabel}
+        </span>
         <Button
           type="button"
           size="sm"
@@ -346,8 +367,7 @@ export function PolygonEditorShell({
           }}
         >
           Toggle curve (C)
-        </Button>
-        <label className="flex items-center gap-1.5 text-xs">
+        </Button>        <label className="flex items-center gap-1.5 text-xs">
           <input
             type="checkbox"
             checked={showPreview}

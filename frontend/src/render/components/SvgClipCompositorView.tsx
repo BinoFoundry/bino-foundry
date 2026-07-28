@@ -17,6 +17,7 @@ import {
   GlassSheetElement,
   isGlassSheetActive,
 } from "@/render/lens-clip/GlassSheetElement";
+import { AutomaticInnerFrameElement } from "@/render/lens-clip/AutomaticInnerFrameElement";
 import { SvgTintGradientDef } from "@/render/tint/SvgTintGradientDef";
 import {
   normalizeTintRenderSpec,
@@ -107,8 +108,8 @@ function FrameStructureObject({
 
 /**
  * Optical-glass compositor (bottom → top):
- * Frame Back → Behind Occluders → Glass Sheet → Tint / Reflection / Edge →
- * Inside (legacy) → Above Occluders → Frame Front
+ * Frame Back → [legacy Behind Details] → Glass Sheet → Tint / Reflection / Edge →
+ * Automatic Inner Frame → Manual Details → Frame Front
  */
 const InsertedGlassLayers = memo(function InsertedGlassLayers({
   uid,
@@ -189,7 +190,7 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
       {/* 1. Frame Back — product photo with lens holes cut out */}
       <image {...plateImageProps} mask={`url(#${frameBackId})`} />
 
-      {/* 2. Behind Glass Occluders */}
+      {/* Legacy Behind Glass manual details (kept for older configs) */}
       {behind.map((object) => (
         <FrameStructureObject
           key={`${uid}-behind-${object.id}`}
@@ -203,7 +204,7 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
 
       {sheetActive ? (
         <>
-          {/* 3. Glass sheet texture foundation */}
+          {/* 2. Glass sheet texture foundation */}
           {lenses.map((lens) => (
             <GlassSheetElement
               key={`${uid}-sheet-${lens.id}`}
@@ -212,7 +213,7 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
               render={render}
             />
           ))}
-          {/* 4. Tint → Reflection → Edge over the sheet */}
+          {/* 3. Tint → Reflection → Edge over the sheet */}
           {perLensGlass.map(({ lens, appearance }) => (
             <PrototypeGlassElement
               key={`${uid}-glass-el-${lens.id}`}
@@ -243,7 +244,20 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
         </>
       )}
 
-      {/* 5. Inside Glass (legacy mid-band occluders) */}
+      {/* 4. Automatic Inner Frame — inset lip from each lens polygon */}
+      {lenses.map((lens) => (
+        <AutomaticInnerFrameElement
+          key={`${uid}-inner-frame-${lens.id}`}
+          uid={uid}
+          lens={lens}
+          plateUrl={plateUrl}
+          w={w}
+          h={h}
+          render={render}
+        />
+      ))}
+
+      {/* 5. Legacy inside-band details */}
       {inside.map((object) => (
         <FrameStructureObject
           key={`${uid}-inside-${object.id}`}
@@ -256,7 +270,7 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
         />
       ))}
 
-      {/* 6. Above Glass Occluders */}
+      {/* 6. Manual Details (Above Glass) */}
       {front.map((object) => (
         <FrameStructureObject
           key={`${uid}-front-${object.id}`}

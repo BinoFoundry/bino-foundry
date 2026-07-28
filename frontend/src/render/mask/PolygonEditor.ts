@@ -7,6 +7,13 @@ import {
   normFromPx,
   toggleSegmentCurved,
 } from "./bezier-path";
+import {
+  SmoothCursorZoom,
+  applyPanOffset,
+  fitViewportToScreen,
+  formatZoomPercent,
+  resetViewportToDefault,
+} from "./canvas-viewport";
 import { UI_CANVAS_BACKGROUND } from "../constants";
 import {
   CursorState,
@@ -44,6 +51,7 @@ export class PolygonEditor {
     this.onChange = options.onChange ?? (() => {});
     this.onToolChange = options.onToolChange ?? (() => {});
     this.onHistoryChange = options.onHistoryChange ?? (() => {});
+    this.onViewportChange = options.onViewportChange ?? (() => {});
 
     /** @type {import('./lens-history.js').EditorHistorySnapshot[]} */
     this._historyPast = [];
@@ -72,6 +80,23 @@ export class PolygonEditor {
     this._pendingClickTimer = null;
     this._layoutW = 0;
     this._layoutH = 0;
+
+    this._smoothZoom = new SmoothCursorZoom({
+      getState: () => ({
+        scale: this.scale,
+        offsetX: this.offsetX,
+        offsetY: this.offsetY,
+      }),
+      setState: (next) => {
+        this.scale = next.scale;
+        this.offsetX = next.offsetX;
+        this.offsetY = next.offsetY;
+      },
+      onFrame: () => {
+        this.draw();
+        this._emitViewportChange();
+      },
+    });
 
     this.cursorState = new EditorInteractionState(canvas, {
       defaultTool: options.tool ?? EditorTool.DRAW,
@@ -102,6 +127,7 @@ export class PolygonEditor {
 
   destroy() {
     if (this._pendingClickTimer) clearTimeout(this._pendingClickTimer);
+    this._smoothZoom?.destroy();
     this.canvas.removeEventListener('pointerdown', this._onPointerDown);
     this.canvas.removeEventListener('pointermove', this._onPointerMove);
     this.canvas.removeEventListener('pointerup', this._onPointerUp);
@@ -137,14 +163,37 @@ export class PolygonEditor {
   }
 
   fitToView() {
+    this._smoothZoom.cancel();
     const rect = this.canvas.getBoundingClientRect();
-    const pad = 32;
-    const sx = (rect.width - pad * 2) / this.imgW;
-    const sy = (rect.height - pad * 2) / this.imgH;
-    this.scale = Math.min(sx, sy, 1.5);
-    this.offsetX = (rect.width - this.imgW * this.scale) / 2;
-    this.offsetY = (rect.height - this.imgH * this.scale) / 2;
+    const next = fitViewportToScreen(rect.width, rect.height, this.imgW, this.imgH);
+    this.scale = next.scale;
+    this.offsetX = next.offsetX;
+    this.offsetY = next.offsetY;
     this.draw();
+    this._emitViewportChange();
+  }
+
+  /** Instantly return to 100% zoom with the frame centered. */
+  resetView() {
+    this._smoothZoom.cancel();
+    const rect = this.canvas.getBoundingClientRect();
+    const next = resetViewportToDefault(rect.width, rect.height, this.imgW, this.imgH);
+    this.scale = next.scale;
+    this.offsetX = next.offsetX;
+    this.offsetY = next.offsetY;
+    this.draw();
+    this._emitViewportChange();
+  }
+
+  getZoomPercentLabel() {
+    return formatZoomPercent(this.scale);
+  }
+
+  _emitViewportChange() {
+    this.onViewportChange({
+      scale: this.scale,
+      zoomLabel: formatZoomPercent(this.scale),
+    });
   }
 
   screenToImage(clientX, clientY) {
@@ -337,6 +386,7 @@ export class PolygonEditor {
     const tool = this.cursorState.getTool();
 
     if (e.button === 1 || this.spacePan) {
+      e.preventDefault();
       this.interaction = { mode: 'pan', startScreen, startOffset };
       this.cursorState.setTransient(CursorState.PANNING);
       return;
@@ -421,8 +471,9 @@ export class PolygonEditor {
         i.mode = 'pan';
         i.activated = true;
       }
-      this.offsetX = i.startOffset.x + (e.clientX - i.startScreen.x);
-      this.offsetY = i.startOffset.y + (e.clientY - i.startScreen.y);
+      const pan = applyPanOffset(i.startOffset, i.startScreen, e.clientX, e.clientY);
+      this.offsetX = pan.offsetX;
+      this.offsetY = pan.offsetY;
       this.cursorState.setTransient(CursorState.PANNING);
       this.draw();
       return;
@@ -582,20 +633,7 @@ export class PolygonEditor {
   onWheel(e) {
     e.preventDefault();
     const rect = this.canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const before = this.screenToImage(e.clientX, e.clientY);
-
-    let delta = e.deltaY;
-    if (e.deltaMode === 1) delta *= 16;
-    if (e.deltaMode === 2) delta *= rect.height;
-
-    const zoomSpeed = e.ctrlKey || e.metaKey ? 0.008 : 0.0012;
-    const factor = Math.exp(-delta * zoomSpeed);
-    this.scale = Math.min(12, Math.max(0.1, this.scale * factor));
-    this.offsetX = cx - before.x * this.scale;
-    this.offsetY = cy - before.y * this.scale;
-    this.draw();
+    this._smoothZoom.handleWheel(e, rect);
   }
 
   /** Ignore editor shortcuts while the user is typing in a form field. */

@@ -10,6 +10,7 @@ import type { CreateBraceletConfigDTO } from "../bracelet/bracelet.validation.js
 import { sunglassesConfigService } from "./sunglasses-config.service.js";
 import type { SaveDesignDTO } from "./designs.validation.js";
 import { persistDesignThumbnail } from "./design-thumbnail.service.js";
+import { uploadService } from "../upload/upload.service.js";
 
 const DESIGN_SUMMARY_SELECT =
   "public_id, product_type, status, title, subtotal, currency_code, product_config_id, order_reference, preview_thumbnail_url, created_at, updated_at";
@@ -220,16 +221,164 @@ export class DesignsService {
   }
 
   async deleteDesign(userId: string, designPublicId: string) {
-    const existing = await this.getDesignForUser(userId, designPublicId);
+    // Ownership check first so unowned ids stay 404 (no existence leak beyond "not found").
+    await this.getDesignForUser(userId, designPublicId);
+    const result = await this.bulkDeleteDesigns(userId, [designPublicId]);
+    if (result.failed > 0 && result.deleted === 0) {
+      throw new NotFoundError("Saved design not found");
+    }
+    return { id: designPublicId, deleted: result.deleted > 0 };
+  }
+
+  /**
+   * Soft-archive designs that were ordered / referenced by an order.
+   * Permanently delete unused designs and exclusive product configs / thumbnails.
+   * Ownership is enforced for every id — unowned ids are skipped, not deleted.
+   */
+  async bulkDeleteDesigns(userId: string, designPublicIds: string[]) {
+    const uniqueIds = [...new Set(designPublicIds.map((id) => id.trim()).filter(Boolean))];
+    const result = {
+      deleted: 0,
+      failed: 0,
+      skipped: 0,
+      deletedIds: [] as string[],
+      failedIds: [] as string[],
+      skippedIds: [] as string[],
+    };
+
+    if (uniqueIds.length === 0) return result;
+
+    const supabase = getSupabaseServiceRole();
+    const { data, error } = await supabase
+      .from("saved_designs")
+      .select(
+        "id, public_id, user_id, product_type, status, product_config_id, order_reference, preview_thumbnail_url",
+      )
+      .eq("user_id", userId)
+      .in("public_id", uniqueIds);
+
+    assertNoDbError(error);
+
+    const byPublicId = new Map(
+      (data ?? []).map((row) => {
+        const r = row as Record<string, unknown>;
+        return [String(r.public_id), r] as const;
+      }),
+    );
+
+    for (const publicId of uniqueIds) {
+      const row = byPublicId.get(publicId);
+      if (!row) {
+        result.skipped += 1;
+        result.skippedIds.push(publicId);
+        continue;
+      }
+
+      if (String(row.status) === "archived") {
+        result.skipped += 1;
+        result.skippedIds.push(publicId);
+        continue;
+      }
+
+      try {
+        const used = await this.isDesignInUse(String(row.id), row);
+        if (used) {
+          await this.softDeleteDesignRow(userId, publicId);
+        } else {
+          await this.hardDeleteDesignRow(userId, row);
+        }
+        result.deleted += 1;
+        result.deletedIds.push(publicId);
+      } catch {
+        result.failed += 1;
+        result.failedIds.push(publicId);
+      }
+    }
+
+    return result;
+  }
+
+  private async isDesignInUse(internalId: string, row: Record<string, unknown>): Promise<boolean> {
+    if (String(row.status) === "ordered") return true;
+    if (row.order_reference) return true;
+
+    const supabase = getSupabaseServiceRole();
+    const { count, error } = await supabase
+      .from("customer_orders")
+      .select("id", { count: "exact", head: true })
+      .eq("saved_design_id", internalId);
+
+    assertNoDbError(error);
+    return (count ?? 0) > 0;
+  }
+
+  private async softDeleteDesignRow(userId: string, designPublicId: string) {
     const supabase = getSupabaseServiceRole();
     const { error } = await supabase
       .from("saved_designs")
       .update({ status: "archived" })
       .eq("public_id", designPublicId)
       .eq("user_id", userId);
+    assertNoDbError(error);
+  }
+
+  private async hardDeleteDesignRow(userId: string, row: Record<string, unknown>) {
+    const supabase = getSupabaseServiceRole();
+    const publicId = String(row.public_id);
+    const productType = String(row.product_type);
+    const productConfigId = String(row.product_config_id);
+    const thumbnailUrl =
+      typeof row.preview_thumbnail_url === "string" ? row.preview_thumbnail_url : null;
+
+    // Drop the index row first so orders SET NULL and the unique config link is freed.
+    const { error: deleteError } = await supabase
+      .from("saved_designs")
+      .delete()
+      .eq("public_id", publicId)
+      .eq("user_id", userId);
+    assertNoDbError(deleteError);
+
+    // Best-effort cleanup of exclusive builder configs / thumbnails.
+    try {
+      if (productType === "bracelet" && productConfigId) {
+        const { error } = await supabase
+          .from("bracelet_configurations")
+          .delete()
+          .eq("public_id", productConfigId);
+        assertNoDbError(error);
+      } else if (productType === "sunglasses" && productConfigId) {
+        const { error } = await supabase
+          .from("sunglasses_configurations")
+          .delete()
+          .eq("public_id", productConfigId)
+          .eq("owner_user_id", userId);
+        assertNoDbError(error);
+      }
+    } catch {
+      // Design is already removed from the account index.
+    }
+
+    if (thumbnailUrl) {
+      await this.removeExclusiveThumbnail(thumbnailUrl);
+    }
+  }
+
+  /** Deletes a preview thumbnail only when no other saved design still references it. */
+  private async removeExclusiveThumbnail(thumbnailUrl: string) {
+    const supabase = getSupabaseServiceRole();
+    const { count, error } = await supabase
+      .from("saved_designs")
+      .select("id", { count: "exact", head: true })
+      .eq("preview_thumbnail_url", thumbnailUrl);
 
     assertNoDbError(error);
-    return { id: existing.id, archived: true };
+    if ((count ?? 0) > 0) return;
+
+    try {
+      await uploadService.deleteUploadedPublicUrl(thumbnailUrl);
+    } catch {
+      // Best-effort storage cleanup — design row is already gone.
+    }
   }
 
   private mapSummary(row: unknown) {

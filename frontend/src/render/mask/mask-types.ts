@@ -183,7 +183,7 @@ function normalizeExclusionPolygon(polygon) {
     : [];
   return {
     id: polygon.id,
-    label: polygon.label || "Glass occluder",
+    label: polygon.label || "Frame part",
     points: migrateAnchors(polygon.points ?? []),
     layerOrder,
     opacity,

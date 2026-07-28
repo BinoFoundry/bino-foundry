@@ -107,6 +107,11 @@ export type ResolvedLensClipRender = Required<
     | "glassSheetOccluderEnabled"
     | "glassSheetOccluderStrength"
     | "glassSheetOccluderThreshold"
+    | "innerFrameEnabled"
+    | "innerFrameThickness"
+    | "innerFrameOpacity"
+    | "innerFrameFeather"
+    | "innerFrameBlendMode"
   >
 > & {
   gradientTopColor: string | null;
@@ -236,6 +241,11 @@ export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   glassSheetOccluderEnabled: false,
   glassSheetOccluderStrength: 70,
   glassSheetOccluderThreshold: 42,
+  innerFrameEnabled: true,
+  innerFrameThickness: 2,
+  innerFrameOpacity: 70,
+  innerFrameFeather: 25,
+  innerFrameBlendMode: "normal",
   tintBlendMode: "multiply",
   highlightStrength: 0.12,
   highlightBlendMode: "screen",
@@ -748,6 +758,27 @@ export function resolveLensClipRenderSettings(
       merged.glassSheetOccluderThreshold,
       DEFAULT_LENS_CLIP_RENDER.glassSheetOccluderThreshold,
     ),
+    innerFrameEnabled: merged.innerFrameEnabled !== false,
+    innerFrameThickness: clampRange(
+      merged.innerFrameThickness,
+      DEFAULT_LENS_CLIP_RENDER.innerFrameThickness,
+      0,
+      8,
+    ),
+    innerFrameOpacity: clampPct(
+      merged.innerFrameOpacity,
+      DEFAULT_LENS_CLIP_RENDER.innerFrameOpacity,
+    ),
+    innerFrameFeather: clampPct(
+      merged.innerFrameFeather,
+      DEFAULT_LENS_CLIP_RENDER.innerFrameFeather,
+    ),
+    innerFrameBlendMode: (() => {
+      const mode = merged.innerFrameBlendMode;
+      return mode === "multiply" || mode === "overlay" || mode === "screen" || mode === "normal"
+        ? mode
+        : DEFAULT_LENS_CLIP_RENDER.innerFrameBlendMode;
+    })(),
     tintBlendMode: merged.tintBlendMode ?? DEFAULT_LENS_CLIP_RENDER.tintBlendMode,
     highlightStrength: clamp01(merged.highlightStrength, DEFAULT_LENS_CLIP_RENDER.highlightStrength),
     highlightBlendMode: merged.highlightBlendMode ?? DEFAULT_LENS_CLIP_RENDER.highlightBlendMode,

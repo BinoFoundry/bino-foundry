@@ -30,11 +30,13 @@ describe("applyPreviewRenderMode", () => {
       tintLayer: true,
       reflection: false,
       edge: false,
-      glassOccluders: false,
+      innerFrame: false,
+      manualDetails: false,
     });
     expect(tintOnly.glassTintEnabled).toBe(true);
     expect(tintOnly.reflectionEnabled).toBe(false);
     expect(tintOnly.edgeEnabled).toBe(false);
+    expect(tintOnly.innerFrameEnabled).toBe(false);
     expect(tintOnly.glassSheetUrl).toBe("https://cdn.example/sheet.png");
     expect(draft.reflectionEnabled).toBe(true);
   });
@@ -50,6 +52,19 @@ describe("applyPreviewRenderMode", () => {
     });
     expect(next.glassSheetUrl).toBeNull();
     expect(draft.glassSheetUrl).toBe("https://cdn.example/sheet.png");
+  });
+
+  it("gates the automatic Inner Frame via preview toggle", () => {
+    const draft = {
+      ...DEFAULT_LENS_CLIP_RENDER,
+      innerFrameEnabled: true,
+    };
+    const next = applyPreviewRenderMode(draft, {
+      ...DEFAULT_PREVIEW_RENDER_MODE,
+      innerFrame: false,
+    });
+    expect(next.innerFrameEnabled).toBe(false);
+    expect(draft.innerFrameEnabled).toBe(true);
   });
 
   it("never re-enables retired density or background controls", () => {

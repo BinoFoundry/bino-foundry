@@ -155,6 +155,16 @@ const TINT_BLEND_LABELS: Record<
   multiply: "Multiply",
 };
 
+const INNER_FRAME_BLEND_LABELS: Record<
+  NonNullable<LensClipRenderSettings["innerFrameBlendMode"]>,
+  string
+> = {
+  normal: "Normal",
+  multiply: "Multiply",
+  overlay: "Overlay",
+  screen: "Screen",
+};
+
 /**
  * Glass sheet foundation + optical layers (tint / reflection / edge).
  * A sheet is always used when a URL exists — no enable toggle.
@@ -211,6 +221,17 @@ export function LensRenderingSettingsPanel({
   const edgeOpacity = Math.round(
     (value?.edgeOpacity ?? DEFAULT_LENS_CLIP_RENDER.edgeOpacity) * 100,
   );
+
+  const innerFrameEnabled =
+    value?.innerFrameEnabled ?? DEFAULT_LENS_CLIP_RENDER.innerFrameEnabled;
+  const innerFrameThickness =
+    value?.innerFrameThickness ?? DEFAULT_LENS_CLIP_RENDER.innerFrameThickness;
+  const innerFrameOpacity =
+    value?.innerFrameOpacity ?? DEFAULT_LENS_CLIP_RENDER.innerFrameOpacity;
+  const innerFrameFeather =
+    value?.innerFrameFeather ?? DEFAULT_LENS_CLIP_RENDER.innerFrameFeather;
+  const innerFrameBlendMode =
+    value?.innerFrameBlendMode ?? DEFAULT_LENS_CLIP_RENDER.innerFrameBlendMode;
 
   const patch = (partial: Partial<LensClipRenderSettings>) => {
     onChange({
@@ -557,6 +578,56 @@ export function LensRenderingSettingsPanel({
           disabled={disabled}
           onChange={(pct) => patch({ edgeOpacity: pct / 100, edgeDarkness: pct / 100 })}
         />
+      </LayerCard>
+
+      <LayerCard
+        title="Inner Frame"
+        description="Automatic inset lip from each lens opening — no manual polygon."
+        enabled={innerFrameEnabled}
+        disabled={disabled}
+        onToggle={(next) => patch({ innerFrameEnabled: next })}
+      >
+        <SliderRow
+          label="Thickness"
+          value={innerFrameThickness}
+          min={0}
+          max={8}
+          step={0.5}
+          disabled={disabled}
+          formatValue={(n) => `${n} px`}
+          onChange={(innerFrameThickness) => patch({ innerFrameThickness })}
+        />
+        <SliderRow
+          label="Opacity"
+          value={innerFrameOpacity}
+          disabled={disabled}
+          onChange={(innerFrameOpacity) => patch({ innerFrameOpacity })}
+        />
+        <SliderRow
+          label="Feather"
+          value={innerFrameFeather}
+          disabled={disabled}
+          onChange={(innerFrameFeather) => patch({ innerFrameFeather })}
+        />
+        <ToolGroup
+          label="Blend mode"
+          valueLabel={INNER_FRAME_BLEND_LABELS[innerFrameBlendMode]}
+        >
+          {(
+            Object.keys(INNER_FRAME_BLEND_LABELS) as Array<
+              keyof typeof INNER_FRAME_BLEND_LABELS
+            >
+          ).map((mode) => (
+            <ToolButton
+              key={mode}
+              active={innerFrameBlendMode === mode}
+              disabled={disabled}
+              onClick={() => patch({ innerFrameBlendMode: mode })}
+            >
+              {INNER_FRAME_BLEND_LABELS[mode]}
+            </ToolButton>
+          ))}
+        </ToolGroup>
       </LayerCard>
 
       {cropSession ? (

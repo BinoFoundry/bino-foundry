@@ -4,7 +4,7 @@ import { asyncHandler } from "../../lib/async-handler.js";
 import { sendData, sendDataCreated, sendNoContent } from "../../lib/http-response.js";
 import { getAuthUserId } from "../../middleware/auth-mutations.js";
 import { designsService } from "./designs.service.js";
-import { designIdParam, saveDesignDto } from "./designs.validation.js";
+import { bulkDeleteDesignsDto, designIdParam, saveDesignDto } from "./designs.validation.js";
 
 async function listDesigns(req: Request, res: Response): Promise<void> {
   const userId = getAuthUserId(req)!;
@@ -36,6 +36,12 @@ async function deleteDesign(req: Request, res: Response): Promise<void> {
   sendNoContent(res);
 }
 
+async function bulkDeleteDesigns(req: Request, res: Response): Promise<void> {
+  const userId = getAuthUserId(req)!;
+  const body = bulkDeleteDesignsDto.parse(req.body);
+  sendData(req, res, await designsService.bulkDeleteDesigns(userId, body.designIds));
+}
+
 async function duplicateDesign(req: Request, res: Response): Promise<void> {
   const userId = getAuthUserId(req)!;
   const { id } = designIdParam.parse(req.params);
@@ -48,4 +54,5 @@ export const designsHandlers = {
   saveDesign: asyncHandler(saveDesign),
   duplicateDesign: asyncHandler(duplicateDesign),
   deleteDesign: asyncHandler(deleteDesign),
+  bulkDeleteDesigns: asyncHandler(bulkDeleteDesigns),
 };

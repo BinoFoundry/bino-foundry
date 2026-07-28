@@ -64,6 +64,16 @@ export interface SaveDesignRequest {
   sunglasses?: SunglassesConfigurationPayload;
 }
 
+/** Result of POST /designs/bulk-delete (also shapes single-delete internals). */
+export interface BulkDeleteDesignsResult {
+  deleted: number;
+  failed: number;
+  skipped: number;
+  deletedIds: string[];
+  failedIds: string[];
+  skippedIds: string[];
+}
+
 export interface CustomerOrderSummary {
   id: string;
   status: CustomerOrderStatus;

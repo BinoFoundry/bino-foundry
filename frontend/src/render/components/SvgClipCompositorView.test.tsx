@@ -119,6 +119,22 @@ describe("SvgClipCompositorView prototype glass model", () => {
     expect(markup).not.toContain('clip-rule="evenodd"');
   });
 
+  it("renders Automatic Inner Frame as a plate-masked even-odd ring", () => {
+    const markup = renderLens(35, false, 0, {
+      innerFrameEnabled: true,
+      innerFrameThickness: 3,
+      innerFrameOpacity: 70,
+      innerFrameFeather: 0,
+    });
+    expect(markup).toContain('data-layer="automatic-inner-frame"');
+    expect(markup).toContain("M 10 10 L 90 10 L 90 50 L 10 50 Z");
+  });
+
+  it("omits Automatic Inner Frame when disabled", () => {
+    const markup = renderLens(35, false, 0, { innerFrameEnabled: false });
+    expect(markup).not.toContain('data-layer="automatic-inner-frame"');
+  });
+
   it("shows the full plate when no material layers are active", () => {
     const markup = renderLens(35, false, 0, {
       glassTintEnabled: false,
