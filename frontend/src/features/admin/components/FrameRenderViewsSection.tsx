@@ -1,10 +1,18 @@
-import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { FramePlateCropEditorHandle } from "./FramePlateCropEditor";
-import { Check, Frame, Loader2, Pencil, RotateCcw, Scan, UploadCloud, Wand2 } from "lucide-react";
+import { Check, Copy, Loader2, RotateCcw, Scan, UploadCloud, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { copyFrontGeometryToSideMask } from "@/features/admin/lib/frame-duplicate";
+import {
+  applyDetailStampToMask,
+  deleteDetailStamp,
+  listDetailStamps,
+  saveDetailStampFromMask,
+  type DetailStamp,
+} from "@/features/admin/lib/detail-stamps";
 import { flushFrameRenderViews } from "@/features/admin/lib/frame-render-flush";
 import { isApiError, uploadApi } from "@/services/api";
 import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
@@ -121,6 +129,8 @@ function lensStatusLine(mask: MaskConfig | null): string {
 interface FrameRenderViewsSectionProps {
   views: FrameRenderView[];
   onChange: (views: FrameRenderView[]) => void;
+  /** Optional model family — powers Manual Detail stamps. */
+  modelFamily?: string | null;
   lensRenderPresetId?: string | null;
   useLensRenderPreset?: boolean;
   lensRenderPresets?: LensRenderingPreset[];
@@ -137,7 +147,7 @@ export type FrameRenderViewsSectionHandle = {
 };
 
 /**
- * Front + side plates with inline expandable editors (accordion — one open at a time).
+ * Front + side plates with a unified per-view workspace (tool strip → one editor).
  */
 export const FrameRenderViewsSection = forwardRef<
   FrameRenderViewsSectionHandle,
@@ -146,6 +156,7 @@ export const FrameRenderViewsSection = forwardRef<
   {
     views,
     onChange,
+    modelFamily = null,
     lensRenderPresetId = null,
     useLensRenderPreset = true,
     lensRenderPresets = [],
@@ -170,6 +181,14 @@ export const FrameRenderViewsSection = forwardRef<
     useRef<Partial<Record<FrameViewAxis, ReturnType<typeof setTimeout>>>>({});
   const frameCropEditorRef = useRef<FramePlateCropEditorHandle>(null);
   const [framePathReady, setFramePathReady] = useState(false);
+  const [stampName, setStampName] = useState("");
+  const [stampTick, setStampTick] = useState(0);
+  const familyStamps = useMemo(
+    () => listDetailStamps(modelFamily),
+    // stampTick forces refresh after save/delete in this session
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [modelFamily, stampTick],
+  );
   const [renderingScope, setRenderingScope] = useState<LensRenderingScope>(() =>
     resolveRenderingScope(views),
   );
@@ -762,14 +781,127 @@ export const FrameRenderViewsSection = forwardRef<
     }
   };
 
+  const copyFrontGeometryToSide = () => {
+    const front = getView("front");
+    const side = getView("side");
+    if (!side.plateUrl || !(side.width > 0) || !(side.height > 0)) {
+      toast.error("Upload a side photo before copying front geometry.");
+      return;
+    }
+    const frontMask =
+      draftRef.current.front ??
+      previewMasks.front ??
+      resolveMaskConfigForEditor(front);
+    if (!frontMask || !hasAnyLensMask(frontMask)) {
+      toast.error("Configure front lens openings before copying to side.");
+      return;
+    }
+    const nextMask = copyFrontGeometryToSideMask(frontMask, side.width, side.height);
+    if (!nextMask || !commitMaskToView("side", nextMask)) {
+      toast.error("Could not copy front geometry to side.");
+      return;
+    }
+    setExpandedEditor(null);
+    setAxisNotice(
+      "side",
+      "Front lenses and Manual Details copied as a starting point — nudge for the side photo.",
+      "success",
+    );
+    toast.success("Front geometry copied to side. Adjust openings to match the side photo.");
+  };
+
+  const saveCurrentDetailsAsStamp = (axis: FrameViewAxis) => {
+    if (!modelFamily?.trim()) {
+      toast.error("Set Model family on the frame before saving detail stamps.");
+      return;
+    }
+    const mask =
+      draftRef.current[axis] ??
+      previewMasks[axis] ??
+      resolveMaskConfigForEditor(getView(axis));
+    const stamp = saveDetailStampFromMask(modelFamily, stampName || "Detail set", mask);
+    if (!stamp) {
+      toast.error("Add at least one Manual Detail before saving a stamp.");
+      return;
+    }
+    setStampName("");
+    setStampTick((n) => n + 1);
+    toast.success(`Saved stamp “${stamp.name}” for family ${modelFamily.trim()}.`);
+  };
+
+  const applyStampToAxis = (axis: FrameViewAxis, stamp: DetailStamp) => {
+    const base =
+      draftRef.current[axis] ??
+      previewMasks[axis] ??
+      resolveMaskConfigForEditor(getView(axis));
+    if (!base || !isMaskConfigValid(base)) {
+      toast.error("Define lens openings before applying detail stamps.");
+      return;
+    }
+    const next = applyDetailStampToMask(base, stamp);
+    if (!commitMaskToView(axis, next)) {
+      toast.error("Could not apply stamp.");
+      return;
+    }
+    openEditor(axis, "exclusions");
+    toast.success(`Applied “${stamp.name}”. Nudge positions if needed.`);
+  };
+
+  const frontView = getView("front");
+  const sideView = getView("side");
+  const checklist = [
+    {
+      id: "front-plate",
+      label: "Front photo",
+      done: Boolean(resolveOriginalPlate(frontView).url),
+    },
+    {
+      id: "front-crop",
+      label: "Front frame crop",
+      done: hasPlateCropApplied(frontView),
+    },
+    {
+      id: "front-lenses",
+      label: "Front lens openings",
+      done: Boolean(frontView.clipConfig && isLensClipConfigValid(frontView.clipConfig)),
+    },
+    {
+      id: "side-plate",
+      label: "Side photo (optional)",
+      done: Boolean(resolveOriginalPlate(sideView).url),
+    },
+    {
+      id: "side-lenses",
+      label: "Side lens openings",
+      done: Boolean(sideView.clipConfig && isLensClipConfigValid(sideView.clipConfig)),
+    },
+  ];
+
   return (
     <div className="space-y-8 border-t border-border pt-4">
       <div>
         <h3 className="type-h3 text-base">Render views</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Upload front and side photos, then open an editor to draw clip paths and lens masks. Only one
-          editor expands at a time. Click Save frame to persist all changes.
+          Unified workspace per view: Crop → Left lens → Right lens → Details. Assign a Model family
+          to reuse Manual Detail stamps across sizes. Prefer Duplicate when adding another size of the
+          same model.
         </p>
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {checklist.map((item) => (
+            <li
+              key={item.id}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]",
+                item.done
+                  ? "border-status-success/30 bg-status-success/10 text-status-success"
+                  : "border-border/70 bg-muted/20 text-muted-foreground",
+              )}
+            >
+              <Check className={cn("h-3 w-3", !item.done && "opacity-30")} />
+              {item.label}
+            </li>
+          ))}
+        </ul>
       </div>
 
       {FRAME_VIEW_AXES.map((axis) => {
@@ -790,22 +922,44 @@ export const FrameRenderViewsSection = forwardRef<
         const isRightPanelOpen = expandedEditor?.axis === axis && expandedEditor.panel === "right";
         const isExclusionsPanelOpen =
           expandedEditor?.axis === axis && expandedEditor.panel === "exclusions";
+        const canCopyFrontToSide =
+          axis === "side" &&
+          hasPlate &&
+          Boolean(frontView.clipConfig && isLensClipConfigValid(frontView.clipConfig));
 
         return (
           <section key={axis} className="rounded-xl border border-border bg-muted/20 p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-foreground">{FRAME_VIEW_LABELS[axis]}</h4>
-              {hasPlate ? (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {effectivePlateDimensions(view).width}×{effectivePlateDimensions(view).height}
-                  {framePathSet ? " · frame path set" : committedCrop ? " · processed frame" : " · full original"}
-                  {" · "}
-                  {lensStatusLine(overlayMask)}
-                </p>
-              ) : (
-                <p className="mt-0.5 text-xs text-muted-foreground">No plate uploaded</p>
-              )}
-              {notice[axis] ? <p className={`mt-1 text-xs ${noticeTone}`}>{notice[axis]}</p> : null}
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">{FRAME_VIEW_LABELS[axis]}</h4>
+                {hasPlate ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {effectivePlateDimensions(view).width}×{effectivePlateDimensions(view).height}
+                    {framePathSet
+                      ? " · frame path set"
+                      : committedCrop
+                        ? " · processed frame"
+                        : " · full original"}
+                    {" · "}
+                    {lensStatusLine(overlayMask)}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-xs text-muted-foreground">No plate uploaded</p>
+                )}
+                {notice[axis] ? <p className={`mt-1 text-xs ${noticeTone}`}>{notice[axis]}</p> : null}
+              </div>
+              {canCopyFrontToSide ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={working}
+                  onClick={copyFrontGeometryToSide}
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  Copy front geometry
+                </Button>
+              ) : null}
             </div>
 
             <div className="mb-4">
@@ -835,12 +989,36 @@ export const FrameRenderViewsSection = forwardRef<
             </div>
 
             {hasPlate ? (
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2 px-0.5">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2 px-0.5">
+                  <span className="type-label text-muted-foreground">Workspace</span>
+                  {(
+                    [
+                      ["frame", "Crop"],
+                      ["left", "Left lens"],
+                      ["right", "Right lens"],
+                      ["exclusions", "Details"],
+                    ] as const
+                  ).map(([panel, label]) => (
+                    <Button
+                      key={panel}
+                      type="button"
+                      size="sm"
+                      variant={
+                        expandedEditor?.axis === axis && expandedEditor.panel === panel
+                          ? "default"
+                          : "outline"
+                      }
+                      disabled={working}
+                      onClick={() => openEditor(axis, panel)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
                   <Button
                     type="button"
                     size="sm"
-                    variant="outline"
+                    variant="ghost"
                     disabled={isBusy(axis, "detect-both")}
                     onClick={() => void handleDetectBothLenses(axis)}
                   >
@@ -849,33 +1027,15 @@ export const FrameRenderViewsSection = forwardRef<
                     ) : (
                       <Wand2 className="mr-1.5 h-3.5 w-3.5" />
                     )}
-                    Auto Detect Both Lenses
+                    Auto Detect Lenses
                   </Button>
                 </div>
-                <div
-                  className={cn(
-                    isFramePanelOpen && INLINE_SECTION_ACTIVE_CLASS,
-                    !isFramePanelOpen && "px-0.5",
-                  )}
-                >
-                  <p className="type-label mb-2 text-muted-foreground">Frame</p>
-                  {!isFramePanelOpen ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={working}
-                      onClick={() => openEditor(axis, "frame")}
-                    >
-                      <Frame className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Frame
-                    </Button>
-                  ) : null}
 
-                  {isFramePanelOpen ? (
+                {isFramePanelOpen ? (
+                  <div className={INLINE_SECTION_ACTIVE_CLASS}>
                     <InlineEditorPanel
-                      title="Frame clip editor"
-                      description="Draw the visible frame boundary on the photo. The editing canvas is your working view."
+                      title="Crop"
+                      description="Draw the visible frame boundary. Stay in this workspace — switch tools above without leaving the view."
                       toolbar={
                         <>
                           <Button
@@ -890,7 +1050,7 @@ export const FrameRenderViewsSection = forwardRef<
                             ) : (
                               <Wand2 className="mr-1.5 h-3.5 w-3.5" />
                             )}
-                            Auto Crop Frame
+                            Auto Crop
                           </Button>
                           <Button
                             type="button"
@@ -899,7 +1059,7 @@ export const FrameRenderViewsSection = forwardRef<
                             onClick={() => resetFrameInEditor(axis)}
                           >
                             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            Reset Frame
+                            Reset
                           </Button>
                         </>
                       }
@@ -924,51 +1084,14 @@ export const FrameRenderViewsSection = forwardRef<
                         onDraftChange={(_config, valid) => setFramePathReady(valid)}
                       />
                     </InlineEditorPanel>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
-                <p className="type-label text-muted-foreground">Lens area</p>
-
-                <div
-                  className={cn(
-                    isLeftPanelOpen && INLINE_SECTION_ACTIVE_CLASS,
-                    !isLeftPanelOpen && "px-0.5",
-                  )}
-                >
-                  <p className="mb-2 text-xs font-medium text-foreground">Left lens</p>
-                  {!isLeftPanelOpen ? (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={working}
-                        onClick={() => openEditor(axis, "left")}
-                      >
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                        Edit Left Lens
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={isBusy(axis, "detect-left")}
-                        onClick={() => void handleDetectLensSide(axis, "left")}
-                      >
-                        {isBusy(axis, "detect-left") ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Scan className="mr-1.5 h-3.5 w-3.5" />
-                        )}
-                        Auto Detect Left Lens
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {isLeftPanelOpen ? (
+                {isLeftPanelOpen ? (
+                  <div className={INLINE_SECTION_ACTIVE_CLASS}>
                     <InlineEditorPanel
-                      title="Left lens path editor"
-                      description="Edit the left lens opening polygon. Rivets and logos are Manual Details; the Inner Frame lip is automatic."
+                      title="Left lens"
+                      description="Edit the left lens opening. Inner Frame lip is automatic; rivets/logos go under Details."
                       toolbar={
                         <>
                           <Button
@@ -983,7 +1106,7 @@ export const FrameRenderViewsSection = forwardRef<
                             ) : (
                               <Scan className="mr-1.5 h-3.5 w-3.5" />
                             )}
-                            Auto Detect Left Lens
+                            Auto Detect
                           </Button>
                           <Button
                             type="button"
@@ -992,7 +1115,7 @@ export const FrameRenderViewsSection = forwardRef<
                             onClick={() => resetLensSideInEditor(axis, "left")}
                           >
                             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            Reset Left Lens
+                            Reset
                           </Button>
                         </>
                       }
@@ -1016,49 +1139,14 @@ export const FrameRenderViewsSection = forwardRef<
                         />
                       </Suspense>
                     </InlineEditorPanel>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
-                <div
-                  className={cn(
-                    isRightPanelOpen && INLINE_SECTION_ACTIVE_CLASS,
-                    !isRightPanelOpen && "px-0.5",
-                  )}
-                >
-                  <p className="mb-2 text-xs font-medium text-foreground">Right lens</p>
-                  {!isRightPanelOpen ? (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={working}
-                        onClick={() => openEditor(axis, "right")}
-                      >
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                        Edit Right Lens
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={isBusy(axis, "detect-right")}
-                        onClick={() => void handleDetectLensSide(axis, "right")}
-                      >
-                        {isBusy(axis, "detect-right") ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Scan className="mr-1.5 h-3.5 w-3.5" />
-                        )}
-                        Auto Detect Right Lens
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {isRightPanelOpen ? (
+                {isRightPanelOpen ? (
+                  <div className={INLINE_SECTION_ACTIVE_CLASS}>
                     <InlineEditorPanel
-                      title="Right lens path editor"
-                      description="Edit the right lens opening polygon. Rivets and logos are Manual Details; the Inner Frame lip is automatic."
+                      title="Right lens"
+                      description="Edit the right lens opening. Inner Frame lip is automatic; rivets/logos go under Details."
                       toolbar={
                         <>
                           <Button
@@ -1073,7 +1161,7 @@ export const FrameRenderViewsSection = forwardRef<
                             ) : (
                               <Scan className="mr-1.5 h-3.5 w-3.5" />
                             )}
-                            Auto Detect Right Lens
+                            Auto Detect
                           </Button>
                           <Button
                             type="button"
@@ -1082,7 +1170,7 @@ export const FrameRenderViewsSection = forwardRef<
                             onClick={() => resetLensSideInEditor(axis, "right")}
                           >
                             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            Reset Right Lens
+                            Reset
                           </Button>
                         </>
                       }
@@ -1106,38 +1194,14 @@ export const FrameRenderViewsSection = forwardRef<
                         />
                       </Suspense>
                     </InlineEditorPanel>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
-                <p className="type-label text-muted-foreground">Manual Details</p>
-
-                <div
-                  className={cn(
-                    isExclusionsPanelOpen && INLINE_SECTION_ACTIVE_CLASS,
-                    !isExclusionsPanelOpen && "px-0.5",
-                  )}
-                >
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    Place rivets, screws, and logos above the glass. The Inner Frame lip is
-                    automatic from each lens opening — adjust it under Lens rendering.
-                  </p>
-                  {!isExclusionsPanelOpen ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={working}
-                      onClick={() => openEditor(axis, "exclusions")}
-                    >
-                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Manual Details
-                    </Button>
-                  ) : null}
-
-                  {isExclusionsPanelOpen ? (
+                {isExclusionsPanelOpen ? (
+                  <div className={INLINE_SECTION_ACTIVE_CLASS}>
                     <InlineEditorPanel
-                      title="Manual Details editor"
-                      description="Add and refine plate-masked details that sit above the glass."
+                      title="Manual Details"
+                      description="Place rivets, screws, and logos above the glass. Save stamps for this model family to reuse on other sizes."
                       onSave={() => saveExclusionsEditor(axis)}
                       onCancel={() => cancelEditor(axis)}
                       saveFeedback={
@@ -1149,6 +1213,74 @@ export const FrameRenderViewsSection = forwardRef<
                         ) : null
                       }
                     >
+                      <div className="mb-3 space-y-2 rounded-md border border-border/70 bg-muted/10 p-2.5">
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Family stamps
+                          {modelFamily?.trim() ? ` · ${modelFamily.trim()}` : ""}
+                        </p>
+                        {!modelFamily?.trim() ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            Set Model family on the frame form to save and apply detail stamps.
+                          </p>
+                        ) : (
+                          <>
+                            <div className="flex flex-wrap gap-2">
+                              <input
+                                className="min-w-[10rem] flex-1 rounded border border-border bg-background px-2 py-1.5 text-xs"
+                                placeholder="Stamp name"
+                                value={stampName}
+                                onChange={(e) => setStampName(e.target.value)}
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => saveCurrentDetailsAsStamp(axis)}
+                              >
+                                Save as stamp
+                              </Button>
+                            </div>
+                            {familyStamps.length === 0 ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                No stamps yet for this family.
+                              </p>
+                            ) : (
+                              <ul className="space-y-1">
+                                {familyStamps.map((stamp) => (
+                                  <li
+                                    key={stamp.id}
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/60 px-2 py-1.5 text-xs"
+                                  >
+                                    <span className="font-medium text-foreground">{stamp.name}</span>
+                                    <span className="flex gap-1">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => applyStampToAxis(axis, stamp)}
+                                      >
+                                        Apply
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-destructive"
+                                        onClick={() => {
+                                          deleteDetailStamp(modelFamily, stamp.id);
+                                          setStampTick((n) => n + 1);
+                                        }}
+                                      >
+                                        Delete
+                                      </Button>
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
+                        )}
+                      </div>
                       <Suspense fallback={<LoadingState label="Loading editor…" className="h-40" />}>
                         <LensEditorForView
                           axis={axis}
@@ -1166,9 +1298,14 @@ export const FrameRenderViewsSection = forwardRef<
                         />
                       </Suspense>
                     </InlineEditorPanel>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
+                {!expandedEditor || expandedEditor.axis !== axis ? (
+                  <p className="px-0.5 text-[11px] text-muted-foreground">
+                    Choose a workspace tool above to edit crop, lenses, or Manual Details.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </section>

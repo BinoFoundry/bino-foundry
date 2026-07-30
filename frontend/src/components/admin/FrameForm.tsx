@@ -55,6 +55,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     isActive: true,
     availabilityStatusCode: "ACTIVE",
     displayOrder: 0,
+    modelFamily: null,
     lensRenderPresetId: defaultPresetId,
     useLensRenderPreset: true,
     renderViews: normalizeViews(),
@@ -63,6 +64,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   const [form, setForm] = useState<FrameEntry>({
     ...blank,
     ...initial,
+    modelFamily: initial?.modelFamily ?? null,
     lensRenderPresetId: initial?.lensRenderPresetId ?? defaultPresetId,
     useLensRenderPreset: initial?.useLensRenderPreset !== false,
     renderViews: normalizeViews(initial?.renderViews),
@@ -83,7 +85,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   );
   const frontHasPlate = Boolean(frontView?.plateUrl?.trim());
 
-  const set = (k: keyof FrameEntry, v: string | number | boolean) =>
+  const set = (k: keyof FrameEntry, v: string | number | boolean | null) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,6 +169,30 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
           />
         </div>
         <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Model family</label>
+          <input
+            className="w-full rounded border border-border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+            value={form.modelFamily ?? ""}
+            onChange={(e) => set("modelFamily", e.target.value.trim() ? e.target.value : null)}
+            placeholder="e.g. Aviator Classic"
+            list="frame-model-family-suggestions"
+          />
+          <datalist id="frame-model-family-suggestions">
+            {[...new Set(
+              (cat.frames ?? [])
+                .map((f) => f.modelFamily?.trim())
+                .filter((v): v is string => Boolean(v)),
+            )]
+              .sort((a, b) => a.localeCompare(b))
+              .map((family) => (
+                <option key={family} value={family} />
+              ))}
+          </datalist>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Groups size variants. Detail stamps and duplicate workflows use this label.
+          </p>
+        </div>
+        <div>
           <label className="mb-1 block text-xs font-medium text-muted-foreground">Display order</label>
           <input
             type="number"
@@ -207,6 +233,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
           ref={viewsSectionRef}
           views={renderViews}
           onChange={setRenderViews}
+          modelFamily={form.modelFamily ?? null}
           lensRenderPresetId={form.lensRenderPresetId ?? null}
           useLensRenderPreset={form.useLensRenderPreset !== false}
           lensRenderPresets={sunglassesCatalog.lensRenderPresets}

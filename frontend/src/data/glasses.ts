@@ -20,6 +20,11 @@ export interface FrameEntry {
   lensRenderPresetId?: string | null;
   /** When true (default), inherit preset values; when false, sparse clip_config.render overrides apply. */
   useLensRenderPreset?: boolean;
+  /**
+   * Optional product-family label (e.g. "Aviator Classic").
+   * Groups size SKUs for reuse of look/preset and Manual Detail stamps.
+   */
+  modelFamily?: string | null;
   metadata?: CatalogItemMetadata & Record<string, unknown>;
   /** @deprecated Use renderViews (front/side masked plates). */
   frameImages?: string[];

@@ -64,6 +64,10 @@ function mapFrameRow(
     displayOrder: Number(row.display_order ?? 0),
     lensRenderPresetId: row.lens_render_preset_id ? String(row.lens_render_preset_id) : null,
     useLensRenderPreset: row.use_lens_render_preset !== false,
+    modelFamily:
+      typeof row.model_family === "string" && row.model_family.trim()
+        ? row.model_family.trim()
+        : null,
     frameImages: Array.isArray(images) ? images : [],
     lensColors: Array.isArray(lens) ? lens : [],
     renderViews: views,
@@ -264,6 +268,12 @@ export class FrameService {
       ...(payload.useLensRenderPreset !== undefined && {
         use_lens_render_preset: payload.useLensRenderPreset,
       }),
+      ...(payload.modelFamily !== undefined && {
+        model_family:
+          payload.modelFamily == null || !String(payload.modelFamily).trim()
+            ? null
+            : String(payload.modelFamily).trim(),
+      }),
     };
 
     const { data, error } = await supabase.from("frames").insert(insertRow).select("*").single();
@@ -298,6 +308,12 @@ export class FrameService {
       }),
       ...(payload.useLensRenderPreset !== undefined && {
         use_lens_render_preset: payload.useLensRenderPreset,
+      }),
+      ...(payload.modelFamily !== undefined && {
+        model_family:
+          payload.modelFamily == null || !String(payload.modelFamily).trim()
+            ? null
+            : String(payload.modelFamily).trim(),
       }),
       marketing_copy: mc,
     };

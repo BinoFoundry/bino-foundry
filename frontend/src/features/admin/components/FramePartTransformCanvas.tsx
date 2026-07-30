@@ -76,6 +76,7 @@ export function FramePartTransformCanvas({
   className,
 }: FramePartTransformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const partsRef = useRef(parts);
   partsRef.current = parts;
@@ -90,17 +91,20 @@ export function FramePartTransformCanvas({
     startOffset: { x: number; y: number };
   } | null>(null);
   const smoothZoomRef = useRef<SmoothCursorZoom | null>(null);
+  const toolRef = useRef<CanvasTool>("select");
 
   const [ready, setReady] = useState(false);
   const [tool, setTool] = useState<CanvasTool>("select");
   const [status, setStatus] = useState("Select tool active · click a detail to select and edit");
   const [zoomLabel, setZoomLabel] = useState("100%");
+  toolRef.current = tool;
 
   const setToolAndStatus = useCallback((next: CanvasTool) => {
     dragRef.current = null;
     previewPointsRef.current = null;
     panRef.current = null;
     setTool(next);
+    toolRef.current = next;
     setStatus(
       next === "pan"
         ? "Pan tool active · drag the canvas"
@@ -108,6 +112,12 @@ export function FramePartTransformCanvas({
           ? "Zoom tool active · use the mouse wheel to zoom"
           : "Select tool active · click a detail to select and edit",
     );
+    // Zoom/Pan should become the active interaction target immediately.
+    if (next === "zoom" || next === "pan") {
+      requestAnimationFrame(() => {
+        canvasRef.current?.focus({ preventScroll: true });
+      });
+    }
   }, []);
 
   const syncZoomLabel = useCallback(() => {
@@ -294,6 +304,35 @@ export function FramePartTransformCanvas({
       smoothZoomRef.current = null;
     };
   }, [draw, syncZoomLabel]);
+
+  /**
+   * Native non-passive wheel listener — React's onWheel is passive, so preventDefault
+   * cannot stop browser scroll / Ctrl+wheel page zoom.
+   */
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const onWheelNative = (event: WheelEvent) => {
+      const activeTool = toolRef.current;
+      // Select: leave page scrolling alone.
+      if (activeTool === "select") return;
+
+      // Pan / Zoom: canvas owns the wheel while the pointer is over the stage.
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (activeTool !== "zoom") return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      smoothZoomRef.current?.handleWheel(event, canvas.getBoundingClientRect());
+    };
+
+    stage.addEventListener("wheel", onWheelNative, { passive: false, capture: true });
+    return () => {
+      stage.removeEventListener("wheel", onWheelNative, { capture: true });
+    };
+  }, []);
 
   const hitPartIndex = (imgX: number, imgY: number): number => {
     const canvas = canvasRef.current;
@@ -496,14 +535,6 @@ export function FramePartTransformCanvas({
     }
   };
 
-  const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    if (tool !== "zoom") return;
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    smoothZoomRef.current?.handleWheel(e.nativeEvent, canvas.getBoundingClientRect());
-  };
-
   const cursorClass =
     tool === "pan"
       ? panRef.current
@@ -579,18 +610,32 @@ export function FramePartTransformCanvas({
         </div>
       </div>
       <div
+        ref={stageRef}
         className="relative w-full overflow-hidden rounded-lg border border-border bg-[#1a1a1e]"
-        style={{ height: "min(52vh, 520px)", minHeight: 360 }}
+        style={{
+          height: "min(52vh, 520px)",
+          minHeight: 360,
+          overscrollBehavior: "contain",
+          touchAction: tool === "select" ? "auto" : "none",
+        }}
       >
         <canvas
           ref={canvasRef}
-          className={cn("h-full w-full touch-none", cursorClass)}
+          tabIndex={0}
+          className={cn(
+            "h-full w-full touch-none outline-none",
+            cursorClass,
+          )}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           onDoubleClick={onDoubleClick}
-          onWheel={onWheel}
+          onPointerEnter={() => {
+            if (tool === "zoom" || tool === "pan") {
+              canvasRef.current?.focus({ preventScroll: true });
+            }
+          }}
         />
       </div>
       <p className="text-[10px] text-muted-foreground">

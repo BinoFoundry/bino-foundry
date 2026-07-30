@@ -36,6 +36,8 @@ export const frameCreateDto = z.object({
   displayOrder: z.coerce.number().int().optional(),
   lensRenderPresetId: z.string().uuid().nullable().optional(),
   useLensRenderPreset: z.boolean().optional(),
+  /** Groups size variants of the same model (e.g. "Aviator Classic"). */
+  modelFamily: z.string().trim().max(120).nullable().optional(),
   frameImages: z.array(z.string()).optional(),
   lensColors: z.array(lensColorSchema).optional(),
   renderViews: z.array(renderViewSchema).optional(),
