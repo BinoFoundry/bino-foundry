@@ -26,6 +26,9 @@ export interface FrameEntry {
    */
   modelFamily?: string | null;
   metadata?: CatalogItemMetadata & Record<string, unknown>;
+  /** ISO timestamps from API (optional — used by admin pickers). */
+  createdAt?: string | null;
+  updatedAt?: string | null;
   /** @deprecated Use renderViews (front/side masked plates). */
   frameImages?: string[];
   /** @deprecated Lens tint is configured via sunglasses catalog, not per-frame swatches. */

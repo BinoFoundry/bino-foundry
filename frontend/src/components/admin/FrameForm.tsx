@@ -1,5 +1,10 @@
 import { useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
+import {
+  CopyFrameConfigDialog,
+  CopyFrameConfigTrigger,
+} from "@/features/admin/components/CopyFrameConfigDialog";
 import { FrameRenderViewsSection, type FrameRenderViewsSectionHandle } from "@/features/admin/components/FrameRenderViewsSection";
 import {
   describeFrameSaveBlockers,
@@ -75,6 +80,12 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [viewsError, setViewsError] = useState<string | null>(null);
+  const [copyConfigOpen, setCopyConfigOpen] = useState(false);
+  const [copyDestination, setCopyDestination] = useState({
+    renderViews: normalizeViews(),
+    lensRenderPresetId: null as string | null | undefined,
+    useLensRenderPreset: true as boolean | undefined,
+  });
   const viewsSectionRef = useRef<FrameRenderViewsSectionHandle>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const viewsBlockRef = useRef<HTMLDivElement>(null);
@@ -229,6 +240,25 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
 
       <div ref={viewsBlockRef} className="space-y-2">
         {viewsError ? <p className="text-xs text-destructive">{viewsError}</p> : null}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            Reuse crop, lenses, details, or rendering from a completed frame — then nudge for this
+            plate.
+          </p>
+          <CopyFrameConfigTrigger
+            onClick={() => {
+              // Flush in-progress crop/mask drafts before conflict detection.
+              const flushed = viewsSectionRef.current?.flushPendingEdits() ?? renderViews;
+              setRenderViews(flushed);
+              setCopyDestination({
+                renderViews: flushed,
+                lensRenderPresetId: form.lensRenderPresetId,
+                useLensRenderPreset: form.useLensRenderPreset,
+              });
+              setCopyConfigOpen(true);
+            }}
+          />
+        </div>
         <FrameRenderViewsSection
           ref={viewsSectionRef}
           views={renderViews}
@@ -243,6 +273,28 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
           }}
         />
       </div>
+
+      <CopyFrameConfigDialog
+        open={copyConfigOpen}
+        onOpenChange={setCopyConfigOpen}
+        frames={(cat.frames ?? []) as FrameEntry[]}
+        currentFrameId={form.id || null}
+        preferredFamily={form.modelFamily}
+        destination={copyDestination}
+        onApply={(payload) => {
+          setRenderViews(normalizeViews(payload.renderViews));
+          setForm((f) => ({
+            ...f,
+            lensRenderPresetId: payload.lensRenderPresetId ?? f.lensRenderPresetId,
+            useLensRenderPreset:
+              payload.useLensRenderPreset !== undefined
+                ? payload.useLensRenderPreset
+                : f.useLensRenderPreset,
+          }));
+          setViewsError(null);
+          toast.success("Configuration copied — review and adjust before saving.");
+        }}
+      />
 
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
