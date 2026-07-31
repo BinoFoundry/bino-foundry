@@ -187,6 +187,25 @@ export interface GlassSheetCropRect {
  */
 export interface LensClipRenderSettings {
   /**
+   * Internal compositing order for true lens replacement (not shown in normal admin UI).
+   * - hybrid (default): Frame Back → Glass → optics → Manual Details → Frame Front
+   * - under-frame: Glass optics under a full frame pass
+   * - over-surface: Frame Back then glass optics (single frame pass)
+   */
+  glassCompositionOrder?: "hybrid" | "under-frame" | "over-surface";
+  /**
+   * Glass body source. Default: `"sheet"` when `glassSheetUrl` is set, otherwise `"canvas"`.
+   */
+  glassBaseSource?: "sheet" | "canvas";
+  /**
+   * Internal DEV compositing preview stage (not shown in admin / customer UI).
+   * - original: product plate only
+   * - glass-base: frame + replacement glass substrate
+   * - glass-tint: frame + glass + tint (no reflection / edge)
+   * - full: complete glass stack (default)
+   */
+  glassDebugStage?: "original" | "glass-base" | "glass-tint" | "full";
+  /**
    * @deprecated Ignored when `glassSheetUrl` is set — a sheet is always used when present.
    * Kept for reading older presets.
    */

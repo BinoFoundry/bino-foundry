@@ -14,6 +14,16 @@ export {
 export { lensClipConfigToMaskConfig, pathDToLensPolygon } from "./clip-to-mask";
 export { maskConfigToLensClipConfig } from "./mask-to-clip";
 export { editorPlateKey, enrichMaskHolesFromSource, resolveMaskConfigForEditor } from "./mask-for-editor";
+export {
+  resolveGlassBaseSource,
+  resolveGlassCompositionOrder,
+  resolveGlassDebugStage,
+  shouldReplaceOriginalLens,
+  type GlassBaseSource,
+  type GlassCompositionOrder,
+  type GlassDebugStage,
+} from "./glass-composition";
+export { ProceduralGlassBaseElement } from "./ProceduralGlassBaseElement";
 export { resolveLensClipConfig, isFrameViewClipReady } from "./resolve-clip";
 export {
   DEFAULT_LENS_CLIP_RENDER,

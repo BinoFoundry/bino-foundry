@@ -100,14 +100,15 @@ describe("SvgClipCompositorView prototype glass model", () => {
     expect((enabled.match(/-specular"/g) ?? []).length).toBeGreaterThan(0);
   });
 
-  it("keeps the original lens under material layers", () => {
+  it("replaces the original lens with a glass base (never paints original lens pixels)", () => {
     const markup = renderLens(35);
-    expect(markup).toContain('data-layer="original-lens"');
+    expect(markup).not.toContain('data-layer="original-lens"');
+    expect(markup).toContain('data-layer="glass-canvas"');
     expect(markup).not.toContain("base-calibration");
     expect(markup).not.toContain('type="saturate"');
-    // Plate appears as Frame Back + original lens + Frame Front (+ behind structure).
+    // Plate appears as Frame Back + Manual Details + Frame Front (not as lens fill).
     const plateReferences = markup.match(/https:\/\/cdn\.example\/frame\.png/g) ?? [];
-    expect(plateReferences.length).toBeGreaterThanOrEqual(3);
+    expect(plateReferences.length).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps Frame Back / Front and behind-glass structure objects", () => {
@@ -135,7 +136,7 @@ describe("SvgClipCompositorView prototype glass model", () => {
     expect(markup).not.toContain('data-layer="automatic-inner-frame"');
   });
 
-  it("shows the full plate when no material layers are active", () => {
+  it("still cuts lens holes and inserts clear glass when material layers are off", () => {
     const markup = renderLens(35, false, 0, {
       glassTintEnabled: false,
       tintLayerOpacity: 0,
@@ -151,11 +152,38 @@ describe("SvgClipCompositorView prototype glass model", () => {
       lensTransmission: 1,
       glassDepth: 0,
     });
-    expect(markup).not.toContain("frame-back");
-    expect(markup).not.toContain("mix-blend-mode:color");
+    expect(markup).toContain("frame-back");
+    expect(markup).toContain('data-layer="glass-canvas"');
     expect(markup).not.toContain('data-layer="original-lens"');
-    const plateReferences = markup.match(/https:\/\/cdn\.example\/frame\.png/g) ?? [];
-    expect(plateReferences.length).toBe(1);
+    expect(markup).not.toContain("mix-blend-mode:color");
+  });
+
+  it("uses the glass sheet base when a sheet URL is configured", () => {
+    const markup = renderLens(35, true, 0, {
+      glassSheetUrl: "https://cdn.example/sheet.png",
+      glassSheetTextureStrength: 55,
+      glassSheetShine: 40,
+    });
+    expect(markup).toContain('data-layer="glass-sheet"');
+    expect(markup).toContain("https://cdn.example/sheet.png");
+    expect(markup).not.toContain('data-layer="original-lens"');
+    expect(markup).not.toContain('data-layer="glass-canvas"');
+  });
+
+  it("supports internal glass debug stages without painting original lens", () => {
+    const original = renderLens(35, true, 0, { glassDebugStage: "original" });
+    expect(original).toContain('data-layer="debug-original"');
+    expect(original).not.toContain('data-layer="glass-canvas"');
+
+    const base = renderLens(35, true, 0, { glassDebugStage: "glass-base" });
+    expect(base).toContain('data-layer="glass-canvas"');
+    expect(base).not.toContain('data-layer="glass-reflection"');
+    expect(base).not.toContain('data-layer="lens-edge"');
+
+    const tintOnly = renderLens(35, true, 0, { glassDebugStage: "glass-tint" });
+    expect(tintOnly).toContain('data-layer="glass-canvas"');
+    expect(tintOnly).toContain("#8F1830");
+    expect(tintOnly).not.toContain('data-layer="glass-reflection"');
   });
 
   it("creates independent glass defs per lens opening", () => {

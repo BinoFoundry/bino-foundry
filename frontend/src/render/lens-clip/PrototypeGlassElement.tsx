@@ -3,9 +3,9 @@ import { insetClosedPathD } from "./inset-path";
 import type { PrototypeGlassAppearance } from "./prototype-glass-appearance";
 
 /**
- * SVG material layers from `lens-glass-clip.html`:
- * dark body → tint (kaca / color / normal / multiply) → boundary edge → specular.
- * Drawn above the original lens plate (compositor foundation).
+ * SVG material layers for true lens replacement:
+ * dark body → tint → density gradient → boundary edge → directional reflection → specular.
+ * Drawn above the replacement glass base (sheet or procedural canvas) — never on original lens pixels.
  */
 export function PrototypeGlassElement({
   uid,
@@ -153,21 +153,35 @@ export function PrototypeGlassElement({
         ) : null}
 
         {specular.enabled ? (
-          <radialGradient
-            id={`${prefix}-specular`}
-            gradientUnits="userSpaceOnUse"
-            cx={specular.cx}
-            cy={specular.cy}
-            r={specular.radius}
-          >
-            <stop offset="0%" stopColor="#fff" stopOpacity={specular.peakOpacity} />
-            <stop offset="40%" stopColor="#fff" stopOpacity={specular.peakOpacity * 0.28} />
-            <stop offset="100%" stopColor="#fff" stopOpacity={0} />
-          </radialGradient>
+          <>
+            <linearGradient
+              id={`${prefix}-reflectionWash`}
+              gradientUnits="userSpaceOnUse"
+              x1={specular.cx - specular.radius * 0.9}
+              y1={specular.cy - specular.radius * 0.35}
+              x2={specular.cx + specular.radius * 1.1}
+              y2={specular.cy + specular.radius * 0.85}
+            >
+              <stop offset="0%" stopColor="#f5f7fa" stopOpacity={specular.peakOpacity * 0.85} />
+              <stop offset="42%" stopColor="#c8d0da" stopOpacity={specular.peakOpacity * 0.28} />
+              <stop offset="100%" stopColor="#9aa3ad" stopOpacity={0} />
+            </linearGradient>
+            <radialGradient
+              id={`${prefix}-specular`}
+              gradientUnits="userSpaceOnUse"
+              cx={specular.cx}
+              cy={specular.cy}
+              r={specular.radius}
+            >
+              <stop offset="0%" stopColor="#fff" stopOpacity={specular.peakOpacity} />
+              <stop offset="40%" stopColor="#fff" stopOpacity={specular.peakOpacity * 0.28} />
+              <stop offset="100%" stopColor="#fff" stopOpacity={0} />
+            </radialGradient>
+          </>
         ) : null}
       </defs>
 
-      {/* 1. Dark material layer — enhances original lens; no synthetic replacement plate */}
+      {/* 1. Dark material layer — glass body density on replacement substrate */}
       {dark.enabled ? (
         <path
           d={lens.pathD}
@@ -276,7 +290,30 @@ export function PrototypeGlassElement({
         />
       ) : null}
 
-      {/* 3. Boundary edge — outer − inset ring (follows lens path, tint-aware) */}
+      {/* 3. Reflection — directional wash + specular (above tint so dark glass still reads) */}
+      {specular.enabled ? (
+        <>
+          <rect
+            x={minX - 8}
+            y={minY - 8}
+            width={width + 16}
+            height={height + 16}
+            fill={`url(#${prefix}-reflectionWash)`}
+            style={{ mixBlendMode: "screen" }}
+            data-layer="glass-reflection"
+          />
+          <rect
+            x={minX - 8}
+            y={minY - 8}
+            width={width + 16}
+            height={height + 16}
+            fill={`url(#${prefix}-specular)`}
+            style={{ mixBlendMode: "screen" }}
+          />
+        </>
+      ) : null}
+
+      {/* 4. Boundary edge — subtle rim after reflection */}
       {edge.enabled && edgeRingD ? (
         <path
           d={edgeRingD}
@@ -285,18 +322,6 @@ export function PrototypeGlassElement({
           opacity={edge.opacity}
           filter={edge.blurPx > 0.05 ? `url(#${prefix}-edgeBlur)` : undefined}
           data-layer="lens-edge"
-        />
-      ) : null}
-
-      {/* 4. Specular catch-light */}
-      {specular.enabled ? (
-        <rect
-          x={minX - 8}
-          y={minY - 8}
-          width={width + 16}
-          height={height + 16}
-          fill={`url(#${prefix}-specular)`}
-          style={{ mixBlendMode: "screen" }}
         />
       ) : null}
 

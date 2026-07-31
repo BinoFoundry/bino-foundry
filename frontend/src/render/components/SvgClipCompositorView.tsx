@@ -1,4 +1,4 @@
-import { memo, useId, useMemo } from "react";
+import { memo, useId, useMemo, type ReactNode } from "react";
 
 import { usePlateContentBounds } from "@/render/image-bounds";
 import {
@@ -17,6 +17,14 @@ import {
   GlassSheetElement,
   isGlassSheetActive,
 } from "@/render/lens-clip/GlassSheetElement";
+import { ProceduralGlassBaseElement } from "@/render/lens-clip/ProceduralGlassBaseElement";
+import {
+  resolveGlassBaseSource,
+  resolveGlassCompositionOrder,
+  resolveGlassDebugStage,
+  shouldReplaceOriginalLens,
+  type GlassCompositionOrder,
+} from "@/render/lens-clip/glass-composition";
 import { AutomaticInnerFrameElement } from "@/render/lens-clip/AutomaticInnerFrameElement";
 import { SvgTintGradientDef } from "@/render/tint/SvgTintGradientDef";
 import {
@@ -112,9 +120,13 @@ function FrameStructureObject({
 }
 
 /**
- * Optical-glass compositor (bottom → top):
- * Frame Back → [legacy Behind Details] → Glass Sheet → Tint / Reflection / Edge →
+ * True lens replacement compositor (original lens pixels are never the visual base).
+ *
+ * Default hybrid order (bottom → top):
+ * Frame Back → [Behind Details] → Glass Base (sheet|canvas) → Tint / Reflection / Edge →
  * Automatic Inner Frame → Manual Details → Frame Front
+ *
+ * Internal `glassCompositionOrder` can reorder Frame vs Glass for testing.
  */
 const InsertedGlassLayers = memo(function InsertedGlassLayers({
   uid,
@@ -142,17 +154,40 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
   const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
   const { behind, inside, front } = partitionFrameExclusionObjects(frameObjects);
 
-  const sheetActive = isGlassSheetActive(render);
-  // Over a glass sheet, skip the dark/original-lens compensation path.
-  const sheetRender: ResolvedLensClipRender = sheetActive
-    ? { ...render, darkLayerEnabled: false }
-    : render;
+  const order = resolveGlassCompositionOrder(render);
+  const baseSource = resolveGlassBaseSource(render);
+  const debugStage = resolveGlassDebugStage(render);
+  const sheetActive = baseSource === "sheet" && isGlassSheetActive(render);
+
+  if (debugStage === "original") {
+    return (
+      <image
+        href={plateUrl}
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        preserveAspectRatio="none"
+        crossOrigin="anonymous"
+        data-layer="debug-original"
+      />
+    );
+  }
+
+  // Replacement substrate — never darken / tint the photographed original lens.
+  const opticsRender: ResolvedLensClipRender = {
+    ...render,
+    darkLayerEnabled: debugStage === "glass-base" ? false : render.darkLayerEnabled,
+    glassTintEnabled: debugStage === "glass-base" ? false : render.glassTintEnabled,
+    tintLayerOpacity: debugStage === "glass-base" ? 0 : render.tintLayerOpacity,
+    reflectionEnabled: debugStage === "full" ? render.reflectionEnabled : false,
+    edgeEnabled: debugStage === "full" ? render.edgeEnabled : false,
+    originalLensColorInfluence: 0,
+  };
   const perLensGlass = lenses.map((lens) => ({
     lens,
-    appearance: resolvePrototypeGlassAppearance(sheetRender, fillSpec.top, lens, lenses),
+    appearance: resolvePrototypeGlassAppearance(opticsRender, fillSpec.top, lens, lenses),
   }));
-  const anyMaterialGlass = perLensGlass.some((item) => item.appearance.glassPresent);
-  const anyGlass = sheetActive || anyMaterialGlass;
 
   const plateImageProps = {
     href: plateUrl,
@@ -164,10 +199,112 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
     crossOrigin: "anonymous" as const,
   };
 
-  // When no material layers are active and no sheet, show the plate as-is.
-  if (!anyGlass) {
+  if (!shouldReplaceOriginalLens(lenses.length)) {
     return <image {...plateImageProps} />;
   }
+
+  const glassBase = (
+    <>
+      {sheetActive
+        ? lenses.map((lens) => (
+            <GlassSheetElement
+              key={`${uid}-sheet-${lens.id}`}
+              uid={uid}
+              lens={lens}
+              render={render}
+            />
+          ))
+        : lenses.map((lens) => (
+            <ProceduralGlassBaseElement
+              key={`${uid}-canvas-${lens.id}`}
+              uid={uid}
+              lens={lens}
+              render={render}
+            />
+          ))}
+    </>
+  );
+
+  const optics =
+    debugStage === "glass-base" ? null : (
+      <>
+        {perLensGlass.map(({ lens, appearance }) => (
+          <PrototypeGlassElement
+            key={`${uid}-glass-el-${lens.id}`}
+            uid={uid}
+            lens={lens}
+            tintId={tintId}
+            appearance={appearance}
+          />
+        ))}
+      </>
+    );
+
+  const innerFrames = lenses.map((lens) => (
+    <AutomaticInnerFrameElement
+      key={`${uid}-inner-frame-${lens.id}`}
+      uid={uid}
+      lens={lens}
+      plateUrl={plateUrl}
+      w={w}
+      h={h}
+      render={render}
+    />
+  ));
+
+  const behindDetails = behind.map((object) => (
+    <FrameStructureObject
+      key={`${uid}-behind-${object.id}`}
+      uid={`${uid}-behind`}
+      object={object}
+      w={w}
+      h={h}
+      plateUrl={plateUrl}
+    />
+  ));
+
+  const insideDetails = inside.map((object) => (
+    <FrameStructureObject
+      key={`${uid}-inside-${object.id}`}
+      uid={`${uid}-inside`}
+      object={object}
+      w={w}
+      h={h}
+      plateUrl={plateUrl}
+      blendMode="soft-light"
+    />
+  ));
+
+  const frontDetails = front.map((object) => (
+    <FrameStructureObject
+      key={`${uid}-front-${object.id}`}
+      uid={`${uid}-front`}
+      object={object}
+      w={w}
+      h={h}
+      plateUrl={plateUrl}
+    />
+  ));
+
+  const frameBack = <image {...plateImageProps} mask={`url(#${frameBackId})`} />;
+  const frameFront = (
+    <image
+      {...plateImageProps}
+      mask={`url(#${frameFrontId})`}
+      opacity={clamp01(render.frameExclusionOpacity)}
+    />
+  );
+
+  const stack = composeReplacementLayers(order, {
+    frameBack,
+    behindDetails,
+    glassBase,
+    optics,
+    innerFrames,
+    insideDetails,
+    frontDetails,
+    frameFront,
+  });
 
   return (
     <>
@@ -192,110 +329,78 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
         ))}
       </defs>
 
-      {/* 1. Frame Back — product photo with lens holes cut out */}
-      <image {...plateImageProps} mask={`url(#${frameBackId})`} />
-
-      {/* Legacy Behind Glass manual details (kept for older configs) */}
-      {behind.map((object) => (
-        <FrameStructureObject
-          key={`${uid}-behind-${object.id}`}
-          uid={`${uid}-behind`}
-          object={object}
-          w={w}
-          h={h}
-          plateUrl={plateUrl}
-        />
-      ))}
-
-      {sheetActive ? (
-        <>
-          {/* 2. Glass sheet texture foundation */}
-          {lenses.map((lens) => (
-            <GlassSheetElement
-              key={`${uid}-sheet-${lens.id}`}
-              uid={uid}
-              lens={lens}
-              render={render}
-            />
-          ))}
-          {/* 3. Tint → Reflection → Edge over the sheet */}
-          {perLensGlass.map(({ lens, appearance }) => (
-            <PrototypeGlassElement
-              key={`${uid}-glass-el-${lens.id}`}
-              uid={uid}
-              lens={lens}
-              tintId={tintId}
-              appearance={appearance}
-            />
-          ))}
-        </>
-      ) : (
-        <>
-          {/* Legacy path: original lens + material layers */}
-          {lenses.map((lens) => (
-            <g key={`${uid}-orig-lens-${lens.id}`} clipPath={`url(#${uid}-glass-${lens.id})`}>
-              <image {...plateImageProps} data-layer="original-lens" />
-            </g>
-          ))}
-          {perLensGlass.map(({ lens, appearance }) => (
-            <PrototypeGlassElement
-              key={`${uid}-glass-el-${lens.id}`}
-              uid={uid}
-              lens={lens}
-              tintId={tintId}
-              appearance={appearance}
-            />
-          ))}
-        </>
-      )}
-
-      {/* 4. Automatic Inner Frame — inset lip from each lens polygon */}
-      {lenses.map((lens) => (
-        <AutomaticInnerFrameElement
-          key={`${uid}-inner-frame-${lens.id}`}
-          uid={uid}
-          lens={lens}
-          plateUrl={plateUrl}
-          w={w}
-          h={h}
-          render={render}
-        />
-      ))}
-
-      {/* 5. Legacy inside-band details */}
-      {inside.map((object) => (
-        <FrameStructureObject
-          key={`${uid}-inside-${object.id}`}
-          uid={`${uid}-inside`}
-          object={object}
-          w={w}
-          h={h}
-          plateUrl={plateUrl}
-          blendMode="soft-light"
-        />
-      ))}
-
-      {/* 6. Manual Details (Above Glass) */}
-      {front.map((object) => (
-        <FrameStructureObject
-          key={`${uid}-front-${object.id}`}
-          uid={`${uid}-front`}
-          object={object}
-          w={w}
-          h={h}
-          plateUrl={plateUrl}
-        />
-      ))}
-
-      {/* 7. Frame Front rim */}
-      <image
-        {...plateImageProps}
-        mask={`url(#${frameFrontId})`}
-        opacity={clamp01(render.frameExclusionOpacity)}
-      />
+      {stack}
     </>
   );
 });
+
+function composeReplacementLayers(
+  order: GlassCompositionOrder,
+  layers: {
+    frameBack: ReactNode;
+    behindDetails: ReactNode;
+    glassBase: ReactNode;
+    optics: ReactNode;
+    innerFrames: ReactNode;
+    insideDetails: ReactNode;
+    frontDetails: ReactNode;
+    frameFront: ReactNode;
+  },
+): ReactNode {
+  const {
+    frameBack,
+    behindDetails,
+    glassBase,
+    optics,
+    innerFrames,
+    insideDetails,
+    frontDetails,
+    frameFront,
+  } = layers;
+
+  if (order === "under-frame") {
+    return (
+      <>
+        {glassBase}
+        {optics}
+        {innerFrames}
+        {frameBack}
+        {behindDetails}
+        {insideDetails}
+        {frontDetails}
+        {frameFront}
+      </>
+    );
+  }
+
+  if (order === "over-surface") {
+    return (
+      <>
+        {frameBack}
+        {behindDetails}
+        {glassBase}
+        {optics}
+        {innerFrames}
+        {insideDetails}
+        {frontDetails}
+      </>
+    );
+  }
+
+  // hybrid — realistic default matching Frame Back / Glass / Details / Frame Front
+  return (
+    <>
+      {frameBack}
+      {behindDetails}
+      {glassBase}
+      {optics}
+      {innerFrames}
+      {insideDetails}
+      {frontDetails}
+      {frameFront}
+    </>
+  );
+}
 
 function SvgClipCompositorViewInner({
   plate,

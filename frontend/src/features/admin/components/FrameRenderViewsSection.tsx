@@ -747,31 +747,11 @@ export const FrameRenderViewsSection = forwardRef<
     }
   };
 
-  const handleEditorChange = useCallback(
-    (axis: FrameViewAxis, mask: MaskConfig | null) => {
-      draftRef.current[axis] = mask;
-      if (mask && hasAnyLensMask(mask)) {
-        setPreviewMasks((prev) => ({ ...prev, [axis]: mask }));
-        if (isMaskConfigValid(mask)) {
-          const existing = getView(axis).clipConfig;
-          const clipConfig = maskConfigToLensClipConfig(mask, {
-            render: existing?.render,
-            existingClip: existing,
-          });
-          patchView(axis, {
-            maskConfig: mask,
-            maskStatus: isDualLensMaskValid(mask) ? "ready" : "draft",
-            clipConfig,
-            clipStatus:
-              clipConfig && isLensClipConfigValid(clipConfig) && isDualLensMaskValid(mask)
-                ? "ready"
-                : "draft",
-          });
-        }
-      }
-    },
-    [getView, patchView],
-  );
+  const handleEditorChange = useCallback((axis: FrameViewAxis, mask: MaskConfig | null) => {
+    // Live edits stay in draft only — avoid mask→clip conversion and parent form
+    // re-renders on every pointer frame. Commit via Save / flushPendingEdits.
+    draftRef.current[axis] = mask;
+  }, []);
 
   const saveLensEditor = (axis: FrameViewAxis, side: FrameLensSide) => {
     const mask = draftRef.current[axis];

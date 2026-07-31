@@ -112,6 +112,9 @@ export type ResolvedLensClipRender = Required<
     | "innerFrameOpacity"
     | "innerFrameFeather"
     | "innerFrameBlendMode"
+    | "glassCompositionOrder"
+    | "glassBaseSource"
+    | "glassDebugStage"
   >
 > & {
   gradientTopColor: string | null;
@@ -246,6 +249,9 @@ export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   innerFrameOpacity: 70,
   innerFrameFeather: 25,
   innerFrameBlendMode: "normal",
+  glassCompositionOrder: "hybrid",
+  glassBaseSource: "canvas",
+  glassDebugStage: "full",
   tintBlendMode: "multiply",
   highlightStrength: 0.12,
   highlightBlendMode: "screen",
@@ -460,8 +466,10 @@ export function resolveLensClipRenderSettings(
       DEFAULT_LENS_CLIP_RENDER.darkLayerEdge,
     ),
     edgeEnabled: (overrides?.edgeEnabled ?? fromConfig?.edgeEnabled) !== false,
-    // Density gradient retired with Glass Sheet architecture — always off.
-    densityGradientEnabled: false,
+    // Optional gradient on the replacement glass surface (not the original lens).
+    densityGradientEnabled: Boolean(
+      overrides?.densityGradientEnabled ?? fromConfig?.densityGradientEnabled,
+    ),
     densityGradientMode: (() => {
       const mode = overrides?.densityGradientMode ?? fromConfig?.densityGradientMode;
       return mode === "horizontal" ||
@@ -779,6 +787,28 @@ export function resolveLensClipRenderSettings(
         ? mode
         : DEFAULT_LENS_CLIP_RENDER.innerFrameBlendMode;
     })(),
+    glassCompositionOrder:
+      merged.glassCompositionOrder === "under-frame" ||
+      merged.glassCompositionOrder === "over-surface" ||
+      merged.glassCompositionOrder === "hybrid"
+        ? merged.glassCompositionOrder
+        : DEFAULT_LENS_CLIP_RENDER.glassCompositionOrder,
+    glassBaseSource: (() => {
+      // Prefer config/override only — DEFAULT is "canvas" and must not block sheet auto-select.
+      const explicit = overrides?.glassBaseSource ?? fromConfig?.glassBaseSource;
+      const sheetUrl = overrides?.glassSheetUrl ?? fromConfig?.glassSheetUrl ?? merged.glassSheetUrl;
+      const hasSheet = typeof sheetUrl === "string" && Boolean(sheetUrl.trim());
+      if (explicit === "canvas") return "canvas";
+      if (explicit === "sheet") return hasSheet ? "sheet" : "canvas";
+      return hasSheet ? "sheet" : "canvas";
+    })(),
+    glassDebugStage:
+      merged.glassDebugStage === "original" ||
+      merged.glassDebugStage === "glass-base" ||
+      merged.glassDebugStage === "glass-tint" ||
+      merged.glassDebugStage === "full"
+        ? merged.glassDebugStage
+        : DEFAULT_LENS_CLIP_RENDER.glassDebugStage,
     tintBlendMode: merged.tintBlendMode ?? DEFAULT_LENS_CLIP_RENDER.tintBlendMode,
     highlightStrength: clamp01(merged.highlightStrength, DEFAULT_LENS_CLIP_RENDER.highlightStrength),
     highlightBlendMode: merged.highlightBlendMode ?? DEFAULT_LENS_CLIP_RENDER.highlightBlendMode,

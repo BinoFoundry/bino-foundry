@@ -136,11 +136,21 @@ export function PolygonEditorShell({
     const imgH = editor.imgH;
     const lenses = editor.getLenses();
     const valid = lenses.some((l) => l.points.length >= 3);
-    setReady(valid);
-    setStatus(valid ? "Path ready" : "Add at least 3 points to close the crop boundary");
-    setLensSummaries(
-      lenses.map((l) => ({ id: l.id, label: l.label, count: l.points.length })),
-    );
+    setReady((prev) => (prev === valid ? prev : valid));
+    setStatus((prev) => {
+      const next = valid ? "Path ready" : "Add at least 3 points to close the crop boundary";
+      return prev === next ? prev : next;
+    });
+    setLensSummaries((prev) => {
+      const next = lenses.map((l) => ({ id: l.id, label: l.label, count: l.points.length }));
+      if (
+        prev.length === next.length &&
+        prev.every((p, i) => p.id === next[i]?.id && p.count === next[i]?.count)
+      ) {
+        return prev;
+      }
+      return next;
+    });
     onLensesChangeRef.current(lenses, { imgW, imgH, valid });
 
     const thumb = thumbRef.current;

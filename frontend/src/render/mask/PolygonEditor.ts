@@ -62,6 +62,9 @@ export class PolygonEditor {
     this._historyFuture = [];
     this._historyApplying = false;
     this._historyRecordedForGesture = false;
+    this._drawRaf = 0;
+    this._dirtyEmit = false;
+    this._viewportEmitAt = 0;
 
     this.activeLensIndex = 0;
     this.selectedPointIndex = -1;
@@ -96,7 +99,7 @@ export class PolygonEditor {
         this.offsetY = next.offsetY;
       },
       onFrame: () => {
-        this.draw();
+        this.scheduleDraw();
         this._emitViewportChange();
       },
     });
@@ -130,6 +133,10 @@ export class PolygonEditor {
 
   destroy() {
     if (this._pendingClickTimer) clearTimeout(this._pendingClickTimer);
+    if (this._drawRaf) {
+      cancelAnimationFrame(this._drawRaf);
+      this._drawRaf = 0;
+    }
     this._smoothZoom?.destroy();
     this.canvas.removeEventListener('pointerdown', this._onPointerDown);
     this.canvas.removeEventListener('pointermove', this._onPointerMove);
@@ -173,7 +180,7 @@ export class PolygonEditor {
     this.offsetX = next.offsetX;
     this.offsetY = next.offsetY;
     this.draw();
-    this._emitViewportChange();
+    this._emitViewportChange(true);
   }
 
   /** Instantly return to 100% zoom with the frame centered. */
@@ -185,14 +192,18 @@ export class PolygonEditor {
     this.offsetX = next.offsetX;
     this.offsetY = next.offsetY;
     this.draw();
-    this._emitViewportChange();
+    this._emitViewportChange(true);
   }
 
   getZoomPercentLabel() {
     return formatZoomPercent(this.scale);
   }
 
-  _emitViewportChange() {
+  _emitViewportChange(force = false) {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    // Zoom animation can fire 60fps — throttle React label updates.
+    if (!force && now - this._viewportEmitAt < 80) return;
+    this._viewportEmitAt = now;
     this.onViewportChange({
       scale: this.scale,
       zoomLabel: formatZoomPercent(this.scale),
@@ -356,6 +367,15 @@ export class PolygonEditor {
 
     this.drawAnchorHandles();
     this.ctx.restore();
+  }
+
+  /** Coalesce high-frequency pointer/zoom redraws to one paint per animation frame. */
+  scheduleDraw() {
+    if (this._drawRaf) return;
+    this._drawRaf = requestAnimationFrame(() => {
+      this._drawRaf = 0;
+      this.draw();
+    });
   }
 
   drawAnchorHandles() {
@@ -537,7 +557,7 @@ export class PolygonEditor {
       this.offsetX = pan.offsetX;
       this.offsetY = pan.offsetY;
       this.cursorState.setTransient(CursorState.PANNING);
-      this.draw();
+      this.scheduleDraw();
       return;
     }
 
@@ -586,8 +606,9 @@ export class PolygonEditor {
         }
       }
 
-      this.emitChange();
-      this.draw();
+      // Mutate in place + canvas only; commit to React on pointerup.
+      this._dirtyEmit = true;
+      this.scheduleDraw();
       return;
     }
 
@@ -610,8 +631,8 @@ export class PolygonEditor {
         handleIn: p.handleIn ? { x: p.handleIn.x + dx, y: p.handleIn.y + dy } : undefined,
         handleOut: p.handleOut ? { x: p.handleOut.x + dx, y: p.handleOut.y + dy } : undefined,
       }));
-      this.emitChange();
-      this.draw();
+      this._dirtyEmit = true;
+      this.scheduleDraw();
     }
   }
 
@@ -620,6 +641,9 @@ export class PolygonEditor {
     if (!i) return;
 
     const dist = this.screenDist(i.startScreen.x, i.startScreen.y, e.clientX, e.clientY);
+    const shouldEmit =
+      this._dirtyEmit ||
+      ((i.mode === 'dragAnchor' || i.mode === 'dragHandle' || i.mode === 'dragPath') && i.activated);
 
     if (i.mode === 'navigate' && dist <= CLICK_THRESHOLD_PX) {
       this.scheduleClickAction(i);
@@ -634,6 +658,10 @@ export class PolygonEditor {
     this._dragStart = null;
     this.cursorState.clearTransient();
     this.updateHoverCursor(e);
+    if (shouldEmit) {
+      this._dirtyEmit = false;
+      this.emitChange();
+    }
     this.draw();
   }
 

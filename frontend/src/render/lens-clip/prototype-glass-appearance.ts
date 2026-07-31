@@ -193,7 +193,7 @@ export interface PrototypeGlassAppearance {
 /**
  * Map admin/preset material-layer settings onto the prototype glass appearance model.
  * Tint HEX is supplied by the customer tint — never altered here.
- * The original lens remains underneath in the compositor; these layers enhance it.
+ * Layers paint on the replacement glass base (sheet or canvas), never on original lens pixels.
  */
 export function resolvePrototypeGlassAppearance(
   render: ResolvedLensClipRender,
@@ -218,8 +218,8 @@ export function resolvePrototypeGlassAppearance(
   const edgeSoftnessAmt = edgeOn ? clamp01(render.edgeSoftness) : 0;
   const edgeStrength = clamp01(edgeOpacityAmt * (0.55 + edgeDensity * 0.45));
 
-  // Density gradient retired with Glass Sheet architecture.
-  const densityOn = false;
+  // Density gradient — optional glass-surface gradient (independent of original lens).
+  const densityOn = Boolean(render.densityGradientEnabled);
 
   const glassPresent =
     darkOp > 1e-4 ||
@@ -233,7 +233,7 @@ export function resolvePrototypeGlassAppearance(
   const [dr, dg, db] = parseHex(render.darkLayerColor);
   const tintLum = (0.2126 * tr + 0.7152 * tg + 0.0722 * tb) / 255;
 
-  // Dark layer — prototype buildDarkLayer (flat fill + optional gradasi sheen).
+  // Dark layer — glass body density on the replacement substrate (not original lens).
   const glow = clamp01(render.darkLayerGlow / 100);
   const glowSize = clamp01(render.darkLayerGlowSize / 100);
   const glowX = clamp01(render.darkLayerGlowX / 100);
@@ -300,14 +300,26 @@ export function resolvePrototypeGlassAppearance(
     (0.28 + transform.scale * 0.22) *
     (0.85 + (1 - appearance.softBlur) * 0.25);
 
-  // Density gradient — retired; stub geometry kept for type compatibility.
-  const twoColor = false;
-  const densityStops: Array<{ offset: number; color: string; opacity: number }> = [];
-  const densityKind: "linear" | "radial" = "linear";
-  const dx1 = cx;
-  const dy1 = minY;
-  const dx2 = cx;
-  const dy2 = minY + height;
+  const twoColor = Boolean(render.densityGradientTwoColor);
+  const densityStops = densityOn
+    ? buildDensityGradientStops({
+        startFalloff: render.densityGradientStartFalloff,
+        endFalloff: render.densityGradientEndFalloff,
+        position: render.densityGradientPosition,
+        curve: render.densityGradientCurve,
+        startColor: render.densityGradientStartColor || "#1E1E1E",
+        endColor: render.densityGradientEndColor || "#4B4B4B",
+        twoColor,
+      })
+    : [];
+  const densityKind: "linear" | "radial" =
+    render.densityGradientMode === "radial" ? "radial" : "linear";
+  const densityAngleRad = ((render.densityGradientAngle || 90) * Math.PI) / 180;
+  const densityReach = Math.max(width, height) * 0.65;
+  const dx1 = cx - Math.cos(densityAngleRad) * densityReach;
+  const dy1 = cy - Math.sin(densityAngleRad) * densityReach;
+  const dx2 = cx + Math.cos(densityAngleRad) * densityReach;
+  const dy2 = cy + Math.sin(densityAngleRad) * densityReach;
   const dRadius = Math.max(width, height) * 0.62;
 
   // Boundary edge — tint-aware ring, Strength × Falloff.

@@ -106,7 +106,7 @@ describe("resolvePrototypeGlassAppearance", () => {
     expect(multiply.tint.colorOpacity).toBeCloseTo(0.8);
   });
 
-  it("keeps density gradient disabled (retired with Glass Sheet)", () => {
+  it("keeps density gradient off by default and enables it when configured", () => {
     const off = resolvePrototypeGlassAppearance(DEFAULT_LENS_CLIP_RENDER, "#8F1830", lens, [
       lens,
     ]);
@@ -127,10 +127,11 @@ describe("resolvePrototypeGlassAppearance", () => {
       lens,
       [lens],
     );
-    expect(forced.densityGradient.enabled).toBe(false);
+    expect(forced.densityGradient.enabled).toBe(true);
+    expect(forced.densityGradient.stops.length).toBeGreaterThan(0);
   });
 
-  it("ignores density gradient colour settings when retired", () => {
+  it("applies density gradient colours on the replacement glass surface", () => {
     const appearance = resolvePrototypeGlassAppearance(
       {
         ...DEFAULT_LENS_CLIP_RENDER,
@@ -146,8 +147,9 @@ describe("resolvePrototypeGlassAppearance", () => {
       lens,
       [lens],
     );
-    expect(appearance.densityGradient.enabled).toBe(false);
-    expect(appearance.densityGradient.stops).toHaveLength(0);
+    expect(appearance.densityGradient.enabled).toBe(true);
+    expect(appearance.densityGradient.stops.length).toBeGreaterThan(0);
+    expect(appearance.densityGradient.twoColor).toBe(true);
   });
 
   it("builds tint-aware boundary edge without bottom Y darkening", () => {

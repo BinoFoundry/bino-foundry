@@ -117,6 +117,11 @@ export function FramePartTransformCanvas({
   } | null>(null);
   const smoothZoomRef = useRef<SmoothCursorZoom | null>(null);
   const toolRef = useRef<CanvasTool>("select");
+  const drawRafRef = useRef(0);
+  const zoomLabelSyncAtRef = useRef(0);
+  const drawRef = useRef<() => void>(() => {});
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const migratedPartsRef = useRef<Array<{ outer: PathAnchor[]; holes: PathAnchor[][] }>>([]);
 
   const [ready, setReady] = useState(false);
   const [tool, setTool] = useState<CanvasTool>("select");
@@ -143,8 +148,19 @@ export function FramePartTransformCanvas({
     }
   }, []);
 
-  const syncZoomLabel = useCallback(() => {
+  const syncZoomLabel = useCallback((force = false) => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (!force && now - zoomLabelSyncAtRef.current < 80) return;
+    zoomLabelSyncAtRef.current = now;
     setZoomLabel(formatZoomPercent(viewRef.current.scale));
+  }, []);
+
+  const scheduleDraw = useCallback(() => {
+    if (drawRafRef.current) return;
+    drawRafRef.current = requestAnimationFrame(() => {
+      drawRafRef.current = 0;
+      drawRef.current();
+    });
   }, []);
 
   const fitToView = useCallback(() => {
@@ -157,7 +173,7 @@ export function FramePartTransformCanvas({
     const imgH = image.naturalHeight || image.height;
     const next = fitViewportToScreen(rect.width, rect.height, imgW, imgH);
     viewRef.current = { ...next, imgW, imgH };
-    syncZoomLabel();
+    syncZoomLabel(true);
   }, [syncZoomLabel]);
 
   const resetView = useCallback(() => {
@@ -170,7 +186,7 @@ export function FramePartTransformCanvas({
     const imgH = image.naturalHeight || image.height;
     const next = resetViewportToDefault(rect.width, rect.height, imgW, imgH);
     viewRef.current = { ...next, imgW, imgH };
-    syncZoomLabel();
+    syncZoomLabel(true);
   }, [syncZoomLabel]);
 
   const clientToImage = useCallback((clientX: number, clientY: number) => {
@@ -207,31 +223,42 @@ export function FramePartTransformCanvas({
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
-    ctx.drawImage(image, 0, 0, imgW, imgH);
+
+    let bg = bgCanvasRef.current;
+    if (!bg || bg.width !== imgW || bg.height !== imgH) {
+      bg = document.createElement("canvas");
+      bg.width = imgW;
+      bg.height = imgH;
+      const bctx = bg.getContext("2d");
+      if (bctx) bctx.drawImage(image, 0, 0, imgW, imgH);
+      bgCanvasRef.current = bg;
+    }
+    ctx.drawImage(bg, 0, 0, imgW, imgH);
 
     const list = partsRef.current;
+    const cached = migratedPartsRef.current;
     const active = activeIndexRef.current;
     const lw = 2 / scale;
 
     list.forEach((part, index) => {
       if (part.visible === false) return;
       const isActive = index === active;
+      const cachedPart = cached[index];
       const outerPoints =
         isActive && activeSubpathRef.current === "outer" && previewPointsRef.current
           ? previewPointsRef.current
-          : migrateAnchors(part.points ?? []);
+          : (cachedPart?.outer ?? migrateAnchors(part.points ?? []));
       if (outerPoints.length < 2) return;
 
       const holePointsList =
         isActive && previewHolePointsRef.current
           ? previewHolePointsRef.current
           : isActive && activeSubpathRef.current !== "outer" && previewPointsRef.current
-            ? (part.holes ?? []).map((hole, hi) =>
-                hi === activeSubpathRef.current
-                  ? previewPointsRef.current!
-                  : migrateAnchors(hole.points ?? []),
+            ? (cachedPart?.holes ?? []).map((holePts, hi) =>
+                hi === activeSubpathRef.current ? previewPointsRef.current! : holePts,
               )
-            : (part.holes ?? []).map((hole) => migrateAnchors(hole.points ?? []));
+            : (cachedPart?.holes ??
+              (part.holes ?? []).map((hole) => migrateAnchors(hole.points ?? [])));
 
       drawCompoundPart(ctx, outerPoints, holePointsList, imgW, imgH, {
         fill: isActive ? "rgba(37, 99, 235, 0.28)" : "rgba(15, 23, 42, 0.18)",
@@ -253,14 +280,17 @@ export function FramePartTransformCanvas({
 
     ctx.restore();
   }, []);
+  drawRef.current = draw;
 
   useEffect(() => {
     let destroyed = false;
     setReady(false);
+    bgCanvasRef.current = null;
     void loadImage(imageUrl)
       .then((image) => {
         if (destroyed) return;
         imageRef.current = image;
+        bgCanvasRef.current = null;
         fitToView();
         setReady(true);
         draw();
@@ -270,10 +300,18 @@ export function FramePartTransformCanvas({
       });
     return () => {
       destroyed = true;
+      if (drawRafRef.current) {
+        cancelAnimationFrame(drawRafRef.current);
+        drawRafRef.current = 0;
+      }
     };
   }, [imageUrl, fitToView, draw]);
 
   useEffect(() => {
+    migratedPartsRef.current = parts.map((part) => ({
+      outer: migrateAnchors(part.points ?? []),
+      holes: (part.holes ?? []).map((hole) => migrateAnchors(hole.points ?? [])),
+    }));
     previewPointsRef.current = null;
     previewHolePointsRef.current = null;
     draw();
@@ -331,7 +369,7 @@ export function FramePartTransformCanvas({
         viewRef.current.offsetY = next.offsetY;
       },
       onFrame: () => {
-        draw();
+        scheduleDraw();
         syncZoomLabel();
       },
     });
@@ -340,7 +378,7 @@ export function FramePartTransformCanvas({
       zoom.destroy();
       smoothZoomRef.current = null;
     };
-  }, [draw, syncZoomLabel]);
+  }, [scheduleDraw, syncZoomLabel]);
 
   /**
    * Native non-passive wheel listener — React's onWheel is passive, so preventDefault
@@ -672,7 +710,7 @@ export function FramePartTransformCanvas({
       );
       viewRef.current.offsetX = pan.offsetX;
       viewRef.current.offsetY = pan.offsetY;
-      draw();
+      scheduleDraw();
       return;
     }
 
@@ -706,7 +744,7 @@ export function FramePartTransformCanvas({
       previewHoleBaselinesRef.current = null;
     }
     previewBaselineRef.current = drag.startBaseline ? applyTo(drag.startBaseline) : null;
-    draw();
+    scheduleDraw();
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
