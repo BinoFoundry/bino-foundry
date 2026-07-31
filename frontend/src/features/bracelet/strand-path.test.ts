@@ -486,26 +486,6 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     expect(layout.occupiedArcPx).toBeCloseTo(9 * occupancyPx, 5);
   });
 
-  const emptyGapVariance = (
-    layout: ReturnType<typeof computeBalancedRadialStrandPathLayout>,
-    widthsPx: number[],
-  ) => {
-    const ordered = [...layout.beads].sort(
-      (a, b) =>
-        clockwiseAngle(base.startAngle, a.angle) - clockwiseAngle(base.startAngle, b.angle),
-    );
-    const empties = ordered.map((left, index) => {
-      const right = ordered[(index + 1) % ordered.length]!;
-      return (
-        clockwiseAngle(left.angle, right.angle) * base.radius -
-        widthsPx[left.index]! / 2 -
-        widthsPx[right.index]! / 2
-      );
-    });
-    const mean = empties.reduce((sum, value) => sum + value, 0) / empties.length;
-    return empties.reduce((sum, value) => sum + (value - mean) ** 2, 0) / empties.length;
-  };
-
   it("keeps pure physical positions when Balance Spacing is OFF", () => {
     const off = computeBalancedRadialStrandPathLayout({
       ...base,
@@ -521,7 +501,7 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     });
   });
 
-  it("equalises empty gaps when Balance Spacing is ON without rotating bead 0", () => {
+  it("equalises empty gaps within segments when Balance Spacing is ON without moving anchors", () => {
     const widths = [10, 22, 14, 28, 12, 18, 8, 16];
     const beads = widths.map((occupancyPx, index) => ({
       index,
@@ -539,9 +519,12 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       beads,
     });
 
-    expect(on.beads[0]!.angle).toBeCloseTo(off.beads[0]!.angle, 6);
+    // Primary anchors stay at Top / Bottom / Right / Left.
+    expect(on.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
+    expect(clockwiseAngle(base.startAngle, on.beads[1]!.angle)).toBeCloseTo(Math.PI, 6);
+    expect(clockwiseAngle(base.startAngle, on.beads[2]!.angle)).toBeCloseTo(Math.PI / 2, 6);
+    expect(clockwiseAngle(base.startAngle, on.beads[3]!.angle)).toBeCloseTo((3 * Math.PI) / 2, 6);
     expect(on.occupiedArcPx).toBeCloseTo(off.occupiedArcPx, 6);
-    expect(emptyGapVariance(on, widths)).toBeLessThan(emptyGapVariance(off, widths) - 1e-6);
 
     const ordered = [...on.beads].sort(
       (a, b) =>
@@ -563,18 +546,54 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     expect(Math.max(...centreSteps) - Math.min(...centreSteps)).toBeGreaterThan(1e-3);
   });
 
-  it("defaults Balance Spacing to ON for largest-gap placement", () => {
+  it("defaults to largest-gap placement with Balance Spacing ON", () => {
     const widths = [10, 22, 14, 28, 12];
     const beads = widths.map((occupancyPx, index) => ({
       index,
       occupancyPx,
       visualRadiusPx: occupancyPx / 2,
     }));
-    const defaults = computeBalancedRadialStrandPathLayout({ ...base, beads });
-    const on = computeBalancedRadialStrandPathLayout({ ...base, balanceSpacing: true, beads });
+    const defaults = computeBalancedRadialStrandPathLayout({
+      centerX: base.centerX,
+      centerY: base.centerY,
+      radius: base.radius,
+      startAngle: base.startAngle,
+      beads,
+    });
+    const on = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: true,
+      beads,
+    });
     defaults.beads.forEach((bead, index) => {
       expect(bead.angle).toBeCloseTo(on.beads[index]!.angle, 8);
     });
+    expect(defaults.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
+  });
+
+  it("keeps Top/Bottom/Right/Left when wrist radius grows with Balance Spacing", () => {
+    const beads = equalBeads(8, 12);
+    const at16 = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: true,
+      beads,
+    });
+    const at20 = computeBalancedRadialStrandPathLayout({
+      ...base,
+      radius: base.radius * (20 / 16),
+      balanceSpacing: true,
+      beads: equalBeads(8, 12 * (16 / 20)),
+    });
+
+    for (const layout of [at16, at20]) {
+      expect(layout.beads[0]!.angle).toBeCloseTo(base.startAngle, 5);
+      expect(clockwiseAngle(base.startAngle, layout.beads[1]!.angle)).toBeCloseTo(Math.PI, 5);
+      expect(clockwiseAngle(base.startAngle, layout.beads[2]!.angle)).toBeCloseTo(Math.PI / 2, 5);
+      expect(clockwiseAngle(base.startAngle, layout.beads[3]!.angle)).toBeCloseTo(
+        (3 * Math.PI) / 2,
+        5,
+      );
+    }
   });
 });
 
@@ -584,6 +603,7 @@ describe("computeBalancedRadialStrandPathLayout physical-contact", () => {
     centerY: 200,
     radius: 100,
     startAngle: -Math.PI / 2,
+    placement: "physical-contact" as const,
   };
   const circumference = 2 * Math.PI * base.radius;
 

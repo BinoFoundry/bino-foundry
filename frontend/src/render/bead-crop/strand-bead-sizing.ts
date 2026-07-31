@@ -11,6 +11,7 @@ import {
   hasPreNormalizedStrandAsset,
   beadCropClipPathStyles,
   mergeSizeOfferFromCatalogue,
+  resolveStrandDeliveryUrl,
 } from "./apply-crop";
 import { resolveBeadCropConfig } from "./resolve-bead-crop-config";
 import {
@@ -22,6 +23,7 @@ import {
 } from "@bino-foundry/shared/types/bead-crop";
 import { layoutDiameterPxForMm } from "./canonical-strand-mm-scale";
 import { resolveBeadCropGeometryDebug } from "./crop-geometry-audit";
+import { peekProcessedStrandMetrics } from "./processed-strand-metrics";
 import { resolveStrandRenderProfile } from "./strand-render-profile";
 
 export interface BeadSlotDimensions {
@@ -201,6 +203,31 @@ interface UniformStrandImageLayout {
   exportFillRatio: number | null;
 }
 
+/**
+ * Prefer alpha-measured bounds from the processed PNG when available.
+ * Crop-mask metrics overstate diameter when the silhouette has transparent padding
+ * inside the path — that makes same-mm charms look smaller than filled beads.
+ */
+function resolveStrandLayoutMetrics(
+  entry: BeadLibraryEntry | null,
+  preferProcessedCanvas: boolean,
+): ReturnType<typeof resolveBeadPhysicalMetrics> {
+  const config = entry ? resolveBeadCropConfig(entry) : null;
+  const stored = config ? resolveBeadPhysicalMetrics(config) : null;
+
+  if (!preferProcessedCanvas || !entry) return stored;
+
+  const url = resolveStrandDeliveryUrl(entry);
+  const live = peekProcessedStrandMetrics(url);
+  if (!live || resolveBeadVisibleDiameterPx(live) <= 0) return stored;
+
+  return {
+    metrics: live,
+    source: "physicalMetrics",
+    needsRecropReview: false,
+  };
+}
+
 /** Uniform scale for crop bitmap inside mm wrapper — scaleX always equals scaleY. */
 function resolveUniformStrandImageLayout(
   dimensions: BeadSlotDimensions,
@@ -211,7 +238,7 @@ function resolveUniformStrandImageLayout(
   },
 ): UniformStrandImageLayout {
   const config = entry ? resolveBeadCropConfig(entry) : null;
-  const renderResolution = config ? resolveBeadPhysicalMetrics(config) : null;
+  const renderResolution = resolveStrandLayoutMetrics(entry, options.preferProcessedCanvas);
   const wrapperDiameter = Math.max(dimensions.width, dimensions.height);
 
   const visualBounds = config ? deriveBeadVisualBoundsNorm(config) : null;

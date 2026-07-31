@@ -32,6 +32,9 @@ import {
   resolveBeadSlotSizing,
   useStrandRenderConfigCache,
   STRAND_CORD,
+  loadProcessedStrandMetrics,
+  resolveStrandDeliveryUrl,
+  subscribeProcessedStrandMetrics,
   type BeadSlotDimensions,
 } from "@/render/bead-crop";
 import { normalizeFromSlots, strandCircumferenceMm } from "@/features/bracelet/composition";
@@ -179,6 +182,8 @@ interface SortableBeadProps {
   ringCenterY: number;
   scaleFactor: number;
   sizingCatalogue?: BeadSlotSizingCatalogueContext;
+  /** Invalidates memo when processed-PNG alpha metrics refresh. */
+  processedMetricsEpoch?: number;
 }
 
 function SortableBeadInner({
@@ -204,6 +209,7 @@ function SortableBeadInner({
   ringCenterY,
   scaleFactor,
   sizingCatalogue,
+  processedMetricsEpoch: _processedMetricsEpoch = 0,
 }: SortableBeadProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useSortable({
     id: `bead-${position}`,
@@ -400,7 +406,8 @@ const SortableBead = memo(SortableBeadInner, (prev, next) =>
   prev.ringCenterX === next.ringCenterX &&
   prev.ringCenterY === next.ringCenterY &&
   prev.scaleFactor === next.scaleFactor &&
-  prev.sizingCatalogue === next.sizingCatalogue,
+  prev.sizingCatalogue === next.sizingCatalogue &&
+  prev.processedMetricsEpoch === next.processedMetricsEpoch,
 );
 
 const SortableCircularStrand = ({
@@ -510,6 +517,20 @@ const SortableCircularStrand = ({
     () => normalized.map((placed) => placed.bead).filter((bead): bead is BeadLibraryEntry => Boolean(bead)),
     [normalized],
   );
+
+  /** Bumps when processed-PNG alpha metrics land — corrects padded-mask underscaling. */
+  const [processedMetricsEpoch, setProcessedMetricsEpoch] = useState(0);
+  useEffect(() => {
+    const unsub = subscribeProcessedStrandMetrics(() => {
+      setProcessedMetricsEpoch((n) => n + 1);
+    });
+    for (const placed of normalized) {
+      const url = resolveStrandDeliveryUrl(placed.bead);
+      if (url) void loadProcessedStrandMetrics(url);
+    }
+    return unsub;
+  }, [normalized]);
+
   const { getForBead } = useStrandRenderConfigCache({
     beadTypes,
     subBeadTypes,
@@ -636,8 +657,8 @@ const SortableCircularStrand = ({
         );
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
 
-        // Physical-contact packing: edge-to-edge occupancy; leftover wrist length is one empty arc.
-        // Optional Balance Spacing only applies to legacy largest-gap placement.
+        // Top → Bottom → Right → Left, then remaining beads fill largest arcs.
+        // Balance Spacing locks those anchors and equalises occupancy gaps per segment.
         const sequential = computeBalancedRadialStrandPathLayout({
           beads: normalized.map((_, i) => ({
             index: i,
@@ -650,7 +671,7 @@ const SortableCircularStrand = ({
           radius: wristRadius,
           startAngle: pathStartAngle,
           balanceSpacing,
-          placement: "physical-contact",
+          placement: "largest-gap",
         });
         radius = sequential.resolvedRadiusPx ?? wristRadius;
         const pathLayout = sequential.beads;
@@ -798,7 +819,7 @@ const SortableCircularStrand = ({
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
     };
-  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing]);
+  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing, processedMetricsEpoch]);
 
   const renderCanvasSize = canvasSize;
   const ringStrokeWidth = computeStrandRingStrokePx(scaleFactor);
@@ -1153,6 +1174,7 @@ const SortableCircularStrand = ({
                 ringCenterY={center}
                 scaleFactor={scaleFactor}
                 sizingCatalogue={sizingCatalogue}
+                processedMetricsEpoch={processedMetricsEpoch}
               />
             ))}
           </SortableContext>

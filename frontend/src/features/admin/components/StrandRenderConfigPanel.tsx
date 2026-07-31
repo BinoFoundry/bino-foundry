@@ -156,11 +156,11 @@ export function StrandRenderConfigPanel({
                   checked={value.balanceSpacing}
                   onChange={(e) => onChange({ balanceSpacing: e.target.checked })}
                 />
-                Equalise empty neighbour gaps (legacy largest-gap layout only)
+                Equalise empty gaps within Top / Right / Bottom / Left segments
               </label>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Bracelet Builder packs beads edge-to-edge; leftover wrist length stays one empty arc.
-                This toggle only affects legacy radial distribution.
+                Keeps Top, Bottom, Right, and Left fixed. Remaining beads are spaced evenly in each
+                arc using actual item occupancy. Recalculates when wrist size changes.
               </p>
             </Field>
           </>

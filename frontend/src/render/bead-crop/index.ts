@@ -80,6 +80,7 @@ export {
   isBeadCropEditorValid,
   measureCanvasVisibleFootprint,
   normalizedExportCanvasSidePx,
+  physicalMetricsFromVisibleFootprint,
   upgradeBeadCropOnSave,
   type BitmapExportComparison,
   type NormalizedExportRenderDiagnosis,
@@ -102,6 +103,13 @@ export {
   mergeSizeOfferFromCatalogue,
   resolvePreNormalizedDeliveryUrl,
 } from "./apply-crop";
+export {
+  clearProcessedStrandMetricsCache,
+  loadProcessedStrandMetrics,
+  peekProcessedStrandMetrics,
+  seedProcessedStrandMetrics,
+  subscribeProcessedStrandMetrics,
+} from "./processed-strand-metrics";
 export {
   getBeadImageUrl,
   getBeadSlotDimensions,

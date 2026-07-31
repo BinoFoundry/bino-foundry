@@ -254,7 +254,11 @@ export function computeProcessedExportDimensions(mask: {
   };
 }
 
-/** Save-time only — visible bounds metadata for mm-based rendering. */
+/**
+ * Crop-mask bounding box estimate (path fill), not painted-pixel bounds.
+ * Prefer {@link physicalMetricsFromVisibleFootprint} after export — loose crops with
+ * transparent padding inside the mask overstate diameter and underscale on the strand.
+ */
 export function computeBeadPhysicalMetricsForSave(
   imageWidth: number,
   imageHeight: number,
@@ -489,6 +493,28 @@ export interface BeadCropDeliveryBlobs {
   png: Blob;
   webp: Blob;
   avif: Blob | null;
+  /** Alpha-measured silhouette on the export canvas — authoritative for strand mm sizing. */
+  physicalMetrics: BeadCropPhysicalMetrics;
+}
+
+/** Build physical metrics from a measured export footprint (painted pixels, not crop-mask bbox). */
+export function physicalMetricsFromVisibleFootprint(
+  footprint: CanvasVisibleFootprint,
+  canvasWidth: number,
+  canvasHeight: number,
+): BeadCropPhysicalMetrics {
+  const canvasMax = Math.max(canvasWidth, canvasHeight);
+  const diameter = footprint.diameterPx;
+  return {
+    visibleWidthPx: footprint.width,
+    visibleHeightPx: footprint.height,
+    referenceDiameterPx: diameter,
+    visibleDiameterPx: diameter,
+    processedWidthPx: canvasWidth,
+    processedHeightPx: canvasHeight,
+    occupancyRatio:
+      canvasMax > 0 && diameter > 0 ? Math.min(1, Math.max(0.05, diameter / canvasMax)) : undefined,
+  };
 }
 
 export interface NormalizedBeadDeliveryBlobs {
@@ -545,7 +571,7 @@ export async function exportCroppedBeadDeliveryBlobs(
   config: BeadCropConfig,
   options?: { targetVisibleDiameterPx?: number },
 ): Promise<BeadCropDeliveryBlobs> {
-  const { canvas } = await renderCroppedBeadCanvas(config, options);
+  const { canvas, footprintAfterScale } = await renderCroppedBeadCanvas(config, options);
   const [png, webp] = await Promise.all([
     canvasToBlob(canvas, "image/png"),
     canvasToBlob(canvas, "image/webp", 0.9),
@@ -556,7 +582,16 @@ export async function exportCroppedBeadDeliveryBlobs(
   } catch {
     avif = null;
   }
-  return { png, webp, avif };
+  return {
+    png,
+    webp,
+    avif,
+    physicalMetrics: physicalMetricsFromVisibleFootprint(
+      footprintAfterScale,
+      canvas.width,
+      canvas.height,
+    ),
+  };
 }
 
 export function deliveryUrlsFromUploads(uploads: {

@@ -1,6 +1,5 @@
-import type { BeadCropPhysicalMetrics } from "@bino-foundry/shared/types";
-
 import { detectContentBoundsFromRgba } from "@/render/image-bounds/content-bounds";
+import type { BeadCropPhysicalMetrics } from "@bino-foundry/shared/types";
 import { loadImage } from "./image-loader";
 
 const cache = new Map<string, BeadCropPhysicalMetrics>();
@@ -14,6 +13,17 @@ function notify(): void {
 export function peekProcessedStrandMetrics(url: string | null | undefined): BeadCropPhysicalMetrics | null {
   if (!url) return null;
   return cache.get(url.trim()) ?? null;
+}
+
+/** Test/helper — seed measured alpha metrics as if the processed PNG had been scanned. */
+export function seedProcessedStrandMetrics(
+  url: string,
+  metrics: BeadCropPhysicalMetrics,
+): void {
+  const key = url.trim();
+  if (!key) return;
+  cache.set(key, metrics);
+  notify();
 }
 
 export function subscribeProcessedStrandMetrics(listener: () => void): () => void {
@@ -60,6 +70,10 @@ export async function loadProcessedStrandMetrics(
         visibleDiameterPx: referenceDiameterPx,
         processedWidthPx: w,
         processedHeightPx: h,
+        occupancyRatio:
+          Math.max(w, h) > 0
+            ? Math.min(1, Math.max(0.05, referenceDiameterPx / Math.max(w, h)))
+            : undefined,
       };
       cache.set(key, metrics);
       notify();

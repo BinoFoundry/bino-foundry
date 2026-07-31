@@ -271,16 +271,12 @@ export function BeadCropEditor({
           avif: avifUrl,
         });
 
-        const points = getBeadCropPoints(config);
-        const physicalMetrics =
-          computeBeadPhysicalMetricsForSave(config.imageWidth, config.imageHeight, points) ??
-          config.physicalMetrics;
-
         const next = {
           ...config,
           processedUrl: pngUp.imageUrl,
           deliveryUrls,
-          physicalMetrics: physicalMetrics ?? config.physicalMetrics,
+          // Alpha-measured on the export canvas — not crop-mask bbox (padding inside mask).
+          physicalMetrics: blobs.physicalMetrics,
           updatedAt: Date.now(),
         };
         draftRef.current = next;

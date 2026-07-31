@@ -385,14 +385,17 @@ function boundedIsotonicProjection(values: number[], upperBound: number): number
 }
 
 /**
- * Final optical pass: equalise empty neighbour gaps while keeping occupancy widths.
- * Pins bead 0 so the bracelet does not rotate. Not equal-angle — centre arcs still
- * vary with bead size; only free space between footprints is shared evenly.
+ * Balance Spacing: lock primary Top / Bottom / Right / Left anchors, then equalise
+ * empty gaps within each clockwise segment using occupancy widths.
  *
- * Prefer {@link computeBalancedRadialStrandPathLayout} with `placement: "physical-contact"`
- * for wrist-size changes — equalising leftover circumference stretches under-filled bracelets.
+ * Segments (when all four anchors exist):
+ *   Top → Right → Bottom → Left → Top
+ *
+ * Does not rotate the bracelet or move the cardinal anchors. Leftover circumference is
+ * shared evenly inside each segment so wrist-size changes recalculate cleanly without
+ * a global “stretch every gap” pass that drifts Bottom/Right/Left.
  */
-function balanceEmptyNeighbourGapsPx(params: {
+function balanceSegmentEmptyGapsPx(params: {
   positionsPx: number[];
   widthsPx: number[];
   circumferencePx: number;
@@ -402,69 +405,103 @@ function balanceEmptyNeighbourGapsPx(params: {
   const count = positionsPx.length;
   if (count < 2) return [...positionsPx];
 
-  const order = Array.from({ length: count }, (_, index) => index).sort(
-    (a, b) => positionsPx[a]! - positionsPx[b]!,
-  );
-  const occupiedPx = widthsPx.reduce((sum, width) => sum + width, 0);
-  const freePx = Math.max(0, circumferencePx - occupiedPx - count * gapPx);
-  const targetEmptyPx = freePx / count;
+  const result = [...positionsPx];
+  const primaryCount = Math.min(4, count);
+  const anchorFractions = [0, 0.5, 0.25, 0.75] as const;
 
-  const balanced = new Array<number>(count);
-  const anchorIndex = 0;
-  const startSlot = order.indexOf(anchorIndex);
-  const rotatedOrder = [
-    ...order.slice(startSlot),
-    ...order.slice(0, startSlot),
-  ];
+  for (let i = 0; i < primaryCount; i++) {
+    result[i] = anchorFractions[i]! * circumferencePx;
+  }
 
-  let cursorPx = positionsPx[anchorIndex]!;
-  balanced[anchorIndex] = cursorPx;
-  for (let slot = 0; slot < rotatedOrder.length - 1; slot++) {
-    const leftIndex = rotatedOrder[slot]!;
-    const rightIndex = rotatedOrder[slot + 1]!;
-    cursorPx = normalizeArcDistancePx(
-      cursorPx +
-        widthsPx[leftIndex]! / 2 +
-        gapPx +
-        targetEmptyPx +
-        widthsPx[rightIndex]! / 2,
-      circumferencePx,
+  if (count <= primaryCount) return result;
+
+  // Clockwise cardinal chain from Top: Top → Right → Bottom → Left → Top
+  const clockwiseAnchors = [0, 2, 1, 3].filter((index) => index < primaryCount);
+  if (clockwiseAnchors.length < 2) return result;
+
+  const interiorsBySegment = clockwiseAnchors.map(() => [] as number[]);
+  for (let index = primaryCount; index < count; index++) {
+    const pos = normalizeArcDistancePx(positionsPx[index]!, circumferencePx);
+    let assigned = false;
+    for (let segment = 0; segment < clockwiseAnchors.length; segment++) {
+      const left = clockwiseAnchors[segment]!;
+      const right = clockwiseAnchors[(segment + 1) % clockwiseAnchors.length]!;
+      const leftPos = result[left]!;
+      const span = clockwiseArcDistancePx(leftPos, result[right]!, circumferencePx);
+      const offset = clockwiseArcDistancePx(leftPos, pos, circumferencePx);
+      if (offset > 1e-6 && offset < span - 1e-6) {
+        interiorsBySegment[segment]!.push(index);
+        assigned = true;
+        break;
+      }
+    }
+    if (!assigned) {
+      // Fallback: nearest segment midpoint (e.g. bead landed exactly on an anchor).
+      let bestSegment = 0;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (let segment = 0; segment < clockwiseAnchors.length; segment++) {
+        const left = clockwiseAnchors[segment]!;
+        const right = clockwiseAnchors[(segment + 1) % clockwiseAnchors.length]!;
+        const leftPos = result[left]!;
+        const span = clockwiseArcDistancePx(leftPos, result[right]!, circumferencePx);
+        const mid = normalizeArcDistancePx(leftPos + span / 2, circumferencePx);
+        const distance = Math.min(
+          clockwiseArcDistancePx(mid, pos, circumferencePx),
+          clockwiseArcDistancePx(pos, mid, circumferencePx),
+        );
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestSegment = segment;
+        }
+      }
+      interiorsBySegment[bestSegment]!.push(index);
+    }
+  }
+
+  for (let segment = 0; segment < clockwiseAnchors.length; segment++) {
+    const leftIndex = clockwiseAnchors[segment]!;
+    const rightIndex = clockwiseAnchors[(segment + 1) % clockwiseAnchors.length]!;
+    const leftPos = result[leftIndex]!;
+    const rightPos = result[rightIndex]!;
+    const segmentSpanPx = clockwiseArcDistancePx(leftPos, rightPos, circumferencePx);
+    const interiors = interiorsBySegment[segment]!.sort(
+      (a, b) =>
+        clockwiseArcDistancePx(leftPos, positionsPx[a]!, circumferencePx) -
+        clockwiseArcDistancePx(leftPos, positionsPx[b]!, circumferencePx),
     );
-    balanced[rightIndex] = cursorPx;
+
+    const interiorWidthSum = interiors.reduce((sum, index) => sum + widthsPx[index]!, 0);
+    const gapCount = interiors.length + 1;
+    const occupiedPx =
+      widthsPx[leftIndex]! / 2 +
+      interiorWidthSum +
+      widthsPx[rightIndex]! / 2 +
+      gapCount * gapPx;
+    const freePx = Math.max(0, segmentSpanPx - occupiedPx);
+    const emptyPx = freePx / gapCount;
+
+    let cursorPx = leftPos + widthsPx[leftIndex]! / 2 + gapPx + emptyPx;
+    for (const index of interiors) {
+      result[index] = normalizeArcDistancePx(
+        cursorPx + widthsPx[index]! / 2,
+        circumferencePx,
+      );
+      cursorPx += widthsPx[index]! + gapPx + emptyPx;
+    }
   }
 
-  return balanced;
+  return result;
 }
 
 /**
- * Edge-to-edge packing along the ring. Leftover circumference stays as one unfinished
- * empty arc (loop closure) — wrist growth does not invent gaps between beads.
- */
-function packPhysicalContactPositionsPx(params: {
-  widthsPx: number[];
-  circumferencePx: number;
-  gapPx: number;
-}): number[] {
-  const { widthsPx, gapPx } = params;
-  const positionsPx = new Array<number>(widthsPx.length).fill(0);
-  let cursorPx = 0;
-  for (let i = 0; i < widthsPx.length; i++) {
-    const width = widthsPx[i]!;
-    positionsPx[i] = cursorPx + width / 2;
-    cursorPx += width + gapPx;
-  }
-  return positionsPx;
-}
-
-/**
- * Occupancy-aware strand placement.
+ * Occupancy-aware strand placement with fixed orientation.
  *
- * Default `placement: "physical-contact"` packs beads edge-to-edge from startAngle.
- * Leftover wrist circumference forms one empty unfinished arc — increasing wrist size
- * with a fixed bead set does not stretch gaps between every bead.
+ * Default `placement: "largest-gap"`:
+ *   Top → Bottom → Right → Left, then remaining beads fill the largest empty arcs.
+ * Optional Balance Spacing locks those primary anchors and equalises occupancy-aware
+ * empty gaps inside each Top/Right/Bottom/Left segment.
  *
- * Legacy `placement: "largest-gap"` keeps the builder-style radial fill (top → bottom →
- * sides → bisect) and optional Balance Spacing equalisation.
+ * Opt-in `placement: "physical-contact"` packs edge-to-edge (leftover = one unfinished arc).
  */
 export function computeBalancedRadialStrandPathLayout(params: {
   beads: SequentialStrandBeadInput[];
@@ -475,13 +512,13 @@ export function computeBalancedRadialStrandPathLayout(params: {
   /** Minimum clearance between neighbouring beads along the strand (px). Default 0. */
   minGapPx?: number;
   /**
-   * When true and placement is `"largest-gap"`, run empty-gap balancing after placement.
-   * Ignored for `"physical-contact"` (leftover stays one unfinished arc).
+   * When true (default) with `"largest-gap"`, lock Top/Bottom/Right/Left and equalise
+   * empty gaps within each quadrant segment using occupancy widths.
    */
   balanceSpacing?: boolean;
   /**
-   * `"physical-contact"` (default): edge-to-edge occupancy packing.
-   * `"largest-gap"`: legacy radial distribution for tests / opt-in aesthetics.
+   * `"largest-gap"` (default): Top → Bottom → Right → Left, then fill largest arcs.
+   * `"physical-contact"`: edge-to-edge packing (opt-in).
    */
   placement?: "physical-contact" | "largest-gap";
   /**
@@ -501,7 +538,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
     startAngle = STRAND_PATH_START_ANGLE,
     minGapPx = 0,
     balanceSpacing = true,
-    placement = "physical-contact",
+    placement = "largest-gap",
   } = params;
   const circumferencePx = 2 * Math.PI * Math.max(radius, 1e-6);
   const gapPx = Math.max(0, minGapPx);
@@ -625,7 +662,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
     }
 
     if (balanceSpacing) {
-      positionsPx = balanceEmptyNeighbourGapsPx({
+      positionsPx = balanceSegmentEmptyGapsPx({
         positionsPx,
         widthsPx,
         circumferencePx,
@@ -679,6 +716,23 @@ export function computeBalancedRadialStrandPathLayout(params: {
     occupiedArcPx,
     isOverCapacity,
   };
+}
+
+/** Edge-to-edge packing along the ring (opt-in physical-contact placement). */
+function packPhysicalContactPositionsPx(params: {
+  widthsPx: number[];
+  circumferencePx: number;
+  gapPx: number;
+}): number[] {
+  const { widthsPx, gapPx } = params;
+  const positionsPx = new Array<number>(widthsPx.length).fill(0);
+  let cursorPx = 0;
+  for (let i = 0; i < widthsPx.length; i++) {
+    const width = widthsPx[i]!;
+    positionsPx[i] = cursorPx + width / 2;
+    cursorPx += width + gapPx;
+  }
+  return positionsPx;
 }
 
 /** Even angular step for n beads around a full circle. */

@@ -28,9 +28,8 @@ export interface StrandRenderProfile {
    */
   layoutScale: number;
   /**
-   * Legacy largest-gap optical pass only. Bracelet Builder uses physical-contact packing
-   * (edge-to-edge; leftover wrist length = one unfinished arc), so this does not stretch
-   * gaps when the wrist size grows with a fixed bead set.
+   * When true, lock Top / Bottom / Right / Left and equalise empty gaps inside each
+   * quadrant segment using occupancy widths. Preserves orientation when wrist size changes.
    */
   balanceSpacing: boolean;
   /** Inline on occupied arc, or between two neighbours (connectors). */
