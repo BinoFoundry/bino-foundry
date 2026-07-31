@@ -39,7 +39,7 @@ export class PolygonEditor {
    * @param {HTMLCanvasElement} canvas
    * @param {HTMLImageElement} image
    * @param {import('./types.js').LensPolygon[]} lenses
-   * @param {{ onChange?: () => void, tool?: string }} options
+   * @param {{ onChange?: () => void, tool?: string, externalHistory?: boolean }} options
    */
   constructor(canvas, image, lenses, options = {}) {
     this.canvas = canvas;
@@ -53,6 +53,8 @@ export class PolygonEditor {
     this.onToolChange = options.onToolChange ?? (() => {});
     this.onHistoryChange = options.onHistoryChange ?? (() => {});
     this.onViewportChange = options.onViewportChange ?? (() => {});
+    /** When true, parent owns undo/redo + Delete; skip internal history/shortcuts. */
+    this.externalHistory = Boolean(options.externalHistory);
 
     /** @type {import('./lens-history.js').EditorHistorySnapshot[]} */
     this._historyPast = [];
@@ -761,6 +763,7 @@ export class PolygonEditor {
     }
 
     if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedPointIndex >= 0) {
+      if (this.externalHistory) return;
       e.preventDefault();
       this.removeSelectedPoint();
     }
@@ -777,11 +780,13 @@ export class PolygonEditor {
       }
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      if (this.externalHistory) return;
       e.preventDefault();
       if (e.shiftKey) this.redo();
       else this.undo();
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+      if (this.externalHistory) return;
       e.preventDefault();
       this.redo();
     }
@@ -840,6 +845,7 @@ export class PolygonEditor {
   }
 
   _recordHistory() {
+    if (this.externalHistory) return;
     if (this._historyApplying) return;
     this._historyPast.push(captureEditorState(this));
     if (this._historyPast.length > MAX_EDITOR_HISTORY) {

@@ -14,13 +14,14 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PolygonEditorShell } from "@/render/editor/PolygonEditorShell";
+import type { PolygonEditorShellHandle } from "@/render/editor/PolygonEditorShell";
 import { EditorTool } from "@/render/mask/editor-interaction";
 import {
   createLensPolygon,
@@ -48,6 +49,13 @@ import {
   type FramePartStartShape,
   type FramePartSubpath,
 } from "@/features/admin/lib/frame-parts";
+import {
+  HISTORY_COALESCE_MS,
+  MAX_MANUAL_DETAILS_HISTORY,
+  captureManualDetailsSnapshot,
+  isTypingInFormField,
+  type ManualDetailsSnapshot,
+} from "@/features/admin/lib/manual-details-history";
 import { FramePartTransformCanvas } from "@/features/admin/components/FramePartTransformCanvas";
 
 /** Internal mode id kept for persistence wiring; UI copy says Manual Details. */
@@ -93,6 +101,8 @@ const START_SHAPES: { value: FramePartStartShape; label: string; hint: string }[
 /** Lens clip path editor (polygon/curve tools → persisted as SVG clip paths). */
 export function FrameMaskEditor({
   plateUrl,
+  width,
+  height,
   initialMask,
   lensRevision = 0,
   focusedLensId,
@@ -116,6 +126,8 @@ export function FrameMaskEditor({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [insetPx, setInsetPx] = useState(2);
   const [showInsetForm, setShowInsetForm] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   const [partList, setPartListState] = useState<LensPolygon[]>(() =>
     getFrameParts(initialMaskRef.current),
@@ -126,23 +138,58 @@ export function FrameMaskEditor({
     setPartListState(next);
   }, []);
 
+  const activePartIndexRef = useRef(activePartIndex);
+  activePartIndexRef.current = activePartIndex;
+  const activeSubpathRef = useRef(activeSubpath);
+  activeSubpathRef.current = activeSubpath;
+  const editPhaseRef = useRef(editPhase);
+  editPhaseRef.current = editPhase;
+
+  const historyPastRef = useRef<ManualDetailsSnapshot[]>([]);
+  const historyFutureRef = useRef<ManualDetailsSnapshot[]>([]);
+  const historyCoalesceRef = useRef(false);
+  const historyCoalesceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applyingHistoryRef = useRef(false);
+  const vertexEditorHandleRef = useRef<PolygonEditorShellHandle | null>(null);
+
+  const syncHistoryButtons = useCallback(() => {
+    setCanUndo(historyPastRef.current.length > 0);
+    setCanRedo(historyFutureRef.current.length > 0);
+  }, []);
+
+  const captureNow = useCallback(
+    (): ManualDetailsSnapshot =>
+      captureManualDetailsSnapshot(
+        partListRef.current,
+        activePartIndexRef.current,
+        activeSubpathRef.current,
+      ),
+    [],
+  );
+
+  const recordHistory = useCallback(() => {
+    if (applyingHistoryRef.current) return;
+    historyPastRef.current.push(captureNow());
+    if (historyPastRef.current.length > MAX_MANUAL_DETAILS_HISTORY) {
+      historyPastRef.current.shift();
+    }
+    historyFutureRef.current = [];
+    syncHistoryButtons();
+  }, [captureNow, syncHistoryButtons]);
+
+  const endHistoryCoalesce = useCallback(() => {
+    historyCoalesceRef.current = false;
+    if (historyCoalesceTimerRef.current) {
+      clearTimeout(historyCoalesceTimerRef.current);
+      historyCoalesceTimerRef.current = null;
+    }
+  }, []);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
     }),
   );
-
-  useEffect(() => {
-    if (editMode !== "exclusions" || editPhase !== "vertex") return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setEditPhase("transform");
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editMode, editPhase]);
 
   const emitParts = useCallback((list: LensPolygon[]) => {
     const ordered = withListOrderDepth(list);
@@ -159,7 +206,34 @@ export function FrameMaskEditor({
   }, []);
 
   const commitList = useCallback(
-    (list: LensPolygon[], options?: { selectIndex?: number; bumpRevision?: boolean }) => {
+    (
+      list: LensPolygon[],
+      options?: {
+        selectIndex?: number;
+        bumpRevision?: boolean;
+        /** Skip pushing history (undo/redo apply). */
+        skipHistory?: boolean;
+        /** Coalesce rapid updates (vertex drag, opacity) into one undo step. */
+        coalesce?: boolean;
+      },
+    ) => {
+      if (!options?.skipHistory && !applyingHistoryRef.current) {
+        if (options?.coalesce) {
+          if (!historyCoalesceRef.current) {
+            recordHistory();
+            historyCoalesceRef.current = true;
+          }
+          if (historyCoalesceTimerRef.current) clearTimeout(historyCoalesceTimerRef.current);
+          historyCoalesceTimerRef.current = setTimeout(() => {
+            historyCoalesceRef.current = false;
+            historyCoalesceTimerRef.current = null;
+          }, HISTORY_COALESCE_MS);
+        } else {
+          endHistoryCoalesce();
+          recordHistory();
+        }
+      }
+
       const ordered = withListOrderDepth(list);
       setPartList(ordered);
       if (options?.selectIndex != null) {
@@ -170,8 +244,46 @@ export function FrameMaskEditor({
       }
       emitParts(ordered);
     },
-    [emitParts, setPartList],
+    [emitParts, endHistoryCoalesce, recordHistory, setPartList],
   );
+
+  const applyHistorySnapshot = useCallback(
+    (snap: ManualDetailsSnapshot) => {
+      applyingHistoryRef.current = true;
+      endHistoryCoalesce();
+      try {
+        const ordered = withListOrderDepth(snap.parts);
+        setPartList(ordered);
+        setActivePartIndex(
+          Math.max(0, Math.min(snap.activePartIndex, Math.max(0, ordered.length - 1))),
+        );
+        setActiveSubpath(snap.activeSubpath);
+        setEditPhase("transform");
+        setPartRevision((r) => r + 1);
+        emitParts(ordered);
+      } finally {
+        applyingHistoryRef.current = false;
+        syncHistoryButtons();
+      }
+    },
+    [emitParts, endHistoryCoalesce, setPartList, syncHistoryButtons],
+  );
+
+  const undoManualDetails = useCallback(() => {
+    if (!historyPastRef.current.length) return;
+    const current = captureNow();
+    const prev = historyPastRef.current.pop()!;
+    historyFutureRef.current.push(current);
+    applyHistorySnapshot(prev);
+  }, [applyHistorySnapshot, captureNow]);
+
+  const redoManualDetails = useCallback(() => {
+    if (!historyFutureRef.current.length) return;
+    const current = captureNow();
+    const next = historyFutureRef.current.pop()!;
+    historyPastRef.current.push(current);
+    applyHistorySnapshot(next);
+  }, [applyHistorySnapshot, captureNow]);
 
   const patchActive = useCallback(
     (partial: Partial<LensPolygon>) => {
@@ -185,7 +297,7 @@ export function FrameMaskEditor({
             }
           : part,
       );
-      commitList(next);
+      commitList(next, { coalesce: true });
     },
     [activePartIndex, commitList],
   );
@@ -237,7 +349,7 @@ export function FrameMaskEditor({
             };
           }),
         };
-        commitList(next);
+        commitList(next, { coalesce: true });
         return;
       }
 
@@ -304,14 +416,84 @@ export function FrameMaskEditor({
     commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
   };
 
-  const removeActivePart = () => {
+  const removeActivePart = useCallback(() => {
     if (!partListRef.current.length) return;
-    const next = partListRef.current.filter((_, i) => i !== activePartIndex);
-    const nextIndex = next.length === 0 ? 0 : Math.min(activePartIndex, next.length - 1);
+    const next = partListRef.current.filter((_, i) => i !== activePartIndexRef.current);
+    const nextIndex = next.length === 0 ? 0 : Math.min(activePartIndexRef.current, next.length - 1);
     setEditPhase("transform");
     setActiveSubpath("outer");
     commitList(next, { selectIndex: nextIndex, bumpRevision: true });
-  };
+  }, [commitList]);
+
+  const deleteActiveCutout = useCallback(() => {
+    if (activeSubpathRef.current === "outer") return;
+    const part = partListRef.current[activePartIndexRef.current];
+    if (!part) return;
+    const holes = (part.holes ?? []).filter((_, i) => i !== activeSubpathRef.current);
+    const next = partListRef.current.map((item, i) =>
+      i === activePartIndexRef.current ? { ...item, holes } : item,
+    );
+    setActiveSubpath("outer");
+    commitList(next, { bumpRevision: true });
+  }, [commitList]);
+
+  /** Shared by Delete button and keyboard Delete / Backspace. */
+  const deleteSelectedElement = useCallback(() => {
+    if (editPhaseRef.current === "vertex") {
+      const api = vertexEditorHandleRef.current;
+      if (api?.hasSelectedPoint()) {
+        api.removeSelectedPoint();
+        return;
+      }
+    }
+    if (activeSubpathRef.current !== "outer") {
+      deleteActiveCutout();
+      return;
+    }
+    removeActivePart();
+  }, [deleteActiveCutout, removeActivePart]);
+
+  useEffect(() => {
+    if (editMode !== "exclusions") return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingInFormField(e.target)) return;
+
+      if (e.key === "Escape" && editPhaseRef.current === "vertex") {
+        e.preventDefault();
+        setEditPhase("transform");
+        return;
+      }
+
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        if (e.shiftKey) redoManualDetails();
+        else undoManualDetails();
+        return;
+      }
+      if (mod && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault();
+        redoManualDetails();
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (!partListRef.current.length) return;
+        e.preventDefault();
+        deleteSelectedElement();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      if (historyCoalesceTimerRef.current) {
+        clearTimeout(historyCoalesceTimerRef.current);
+        historyCoalesceTimerRef.current = null;
+      }
+    };
+  }, [deleteSelectedElement, editMode, redoManualDetails, undoManualDetails]);
 
   const commitTransformedGeometry = (
     index: number,
@@ -346,10 +528,12 @@ export function FrameMaskEditor({
         ? createCutoutFromPreset(part.points ?? [], shape, label)
         : createScaledCutout(part.points ?? [], label);
     const holes = [...(part.holes ?? []), hole];
-    patchActive({ holes });
+    const next = partListRef.current.map((item, i) =>
+      i === activePartIndex ? { ...item, holes } : item,
+    );
     setActiveSubpath(holes.length - 1);
     setEditPhase("transform");
-    setPartRevision((r) => r + 1);
+    commitList(next, { bumpRevision: true });
   };
 
   const resetActiveShape = () => {
@@ -380,10 +564,12 @@ export function FrameMaskEditor({
     );
     if (!hole) return;
     const holes = [...(part.holes ?? []), hole];
-    patchActive({ holes });
+    const next = partListRef.current.map((item, i) =>
+      i === activePartIndex ? { ...item, holes } : item,
+    );
     setActiveSubpath(holes.length - 1);
     setShowInsetForm(false);
-    setPartRevision((r) => r + 1);
+    commitList(next, { bumpRevision: true });
   };
 
   const duplicateActiveCutout = () => {
@@ -393,19 +579,11 @@ export function FrameMaskEditor({
     if (!part || !source) return;
     const copy = duplicateCutout(source, `${source.label || "Cutout"} copy`);
     const holes = [...(part.holes ?? []), copy];
-    patchActive({ holes });
+    const next = partListRef.current.map((item, i) =>
+      i === activePartIndex ? { ...item, holes } : item,
+    );
     setActiveSubpath(holes.length - 1);
-    setPartRevision((r) => r + 1);
-  };
-
-  const deleteActiveCutout = () => {
-    if (activeSubpath === "outer") return;
-    const part = partListRef.current[activePartIndex];
-    if (!part) return;
-    const holes = (part.holes ?? []).filter((_, i) => i !== activeSubpath);
-    patchActive({ holes });
-    setActiveSubpath("outer");
-    setPartRevision((r) => r + 1);
+    commitList(next, { bumpRevision: true });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -556,7 +734,7 @@ export function FrameMaskEditor({
                 size="sm"
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
-                onClick={removeActivePart}
+                onClick={deleteSelectedElement}
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                 Delete
@@ -748,6 +926,31 @@ export function FrameMaskEditor({
               <Button
                 type="button"
                 size="sm"
+                variant="ghost"
+                className="h-8 px-2"
+                disabled={!canUndo}
+                onClick={undoManualDetails}
+                title="Undo (⌘Z / Ctrl+Z)"
+              >
+                <Undo2 className="mr-1 h-3.5 w-3.5" />
+                Undo
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2"
+                disabled={!canRedo}
+                onClick={redoManualDetails}
+                title="Redo (⇧⌘Z / Ctrl+Y)"
+              >
+                <Redo2 className="mr-1 h-3.5 w-3.5" />
+                Redo
+              </Button>
+              <span className="mx-0.5 text-border">|</span>
+              <Button
+                type="button"
+                size="sm"
                 variant={editPhase === "transform" ? "default" : "outline"}
                 onClick={() => setEditPhase("transform")}
               >
@@ -846,6 +1049,8 @@ export function FrameMaskEditor({
                     activeSubpath === "outer" ? 0 : Math.min(activeSubpath + 1, activeHoles.length)
                   }
                   defaultTool={EditorTool.SELECT}
+                  externalHistory
+                  editorHandleRef={vertexEditorHandleRef}
                   onActivePathChange={(index) => {
                     setActiveSubpath(index <= 0 ? "outer" : index - 1);
                   }}
@@ -855,7 +1060,7 @@ export function FrameMaskEditor({
                   showThumbnailPreview={false}
                   lensRevision={partRevision + lensRevision}
                   handlesLabel="Control points"
-                  helpText="Select: drag a vertex, drag inside the shape to move it, or click an edge to add a point · Del removes a point (min 3) · Draw (P) appends points · Reset Shape restores the Circle/Rectangle baseline"
+                  helpText="Select: drag a vertex, drag inside the shape to move it, or click an edge to add a point · Del removes a point (min 3) · Undo/Redo use the Manual Details toolbar · Draw (P) appends points"
                 />
               </div>
             )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,19 @@ export interface PolygonEditorShellProps {
   lensRevision?: number;
   /** Initial tool when the editor mounts (Manual Details vertex mode uses Select). */
   defaultTool?: string;
+  /**
+   * Parent owns undo/redo (Manual Details). Hides shell history buttons and disables
+   * the editor's internal history / Delete / Cmd+Z shortcuts.
+   */
+  externalHistory?: boolean;
+  /** Imperative handle for parent keyboard Delete (selected vertex). */
+  editorHandleRef?: MutableRefObject<PolygonEditorShellHandle | null>;
 }
+
+export type PolygonEditorShellHandle = {
+  hasSelectedPoint: () => boolean;
+  removeSelectedPoint: () => boolean;
+};
 
 /**
  * Reusable polygon/curve editor stage (pan, zoom, draw, select, curve handles).
@@ -67,6 +79,8 @@ export function PolygonEditorShell({
   showThumbnailPreview = true,
   lensRevision = 0,
   defaultTool = EditorTool.DRAW,
+  externalHistory = false,
+  editorHandleRef,
 }: PolygonEditorShellProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbRef = useRef<HTMLCanvasElement>(null);
@@ -81,6 +95,8 @@ export function PolygonEditorShell({
   defaultActivePathIndexRef.current = defaultActivePathIndex;
   const defaultToolRef = useRef(defaultTool);
   defaultToolRef.current = defaultTool;
+  const externalHistoryRef = useRef(externalHistory);
+  externalHistoryRef.current = externalHistory;
 
   const tabs = pathTabs?.length
     ? pathTabs
@@ -175,6 +191,7 @@ export function PolygonEditorShell({
 
         editor = new PolygonEditor(canvas, image, getInitialLensesRef.current(), {
           tool: defaultToolRef.current,
+          externalHistory: externalHistoryRef.current,
           onChange: () => emitChangeRef.current(),
           onToolChange: (t) => setTool(t),
           onHistoryChange: () => syncHistoryRef.current(),
@@ -184,6 +201,16 @@ export function PolygonEditorShell({
         });
         editorRef.current = editor;
         setTool(defaultToolRef.current);
+        if (editorHandleRef) {
+          editorHandleRef.current = {
+            hasSelectedPoint: () => (editor?.selectedPointIndex ?? -1) >= 0,
+            removeSelectedPoint: () => {
+              if (!editor || editor.selectedPointIndex < 0) return false;
+              editor.removeSelectedPoint();
+              return true;
+            },
+          };
+        }
 
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -214,8 +241,9 @@ export function PolygonEditorShell({
       resizeObserver?.disconnect();
       editor?.destroy();
       editorRef.current = null;
+      if (editorHandleRef) editorHandleRef.current = null;
     };
-  }, [imageUrl]);
+  }, [imageUrl, editorHandleRef]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -305,24 +333,28 @@ export function PolygonEditorShell({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={!editorReady || !canUndo}
-          onClick={() => runEditor((e) => e.undo())}
-        >
-          Undo
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={!editorReady || !canRedo}
-          onClick={() => runEditor((e) => e.redo())}
-        >
-          Redo
-        </Button>
+        {!externalHistory ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={!editorReady || !canUndo}
+              onClick={() => runEditor((e) => e.undo())}
+            >
+              Undo
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={!editorReady || !canRedo}
+              onClick={() => runEditor((e) => e.redo())}
+            >
+              Redo
+            </Button>
+          </>
+        ) : null}
         <Button
           type="button"
           size="sm"
