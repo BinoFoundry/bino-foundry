@@ -61,7 +61,11 @@ export function getApiPublicPrefix(): string {
   return withSlash.replace(/\/$/, "");
 }
 
-/** Optional admin key for catalogue mutations (matches backend `ADMIN_API_KEY`). */
+/** Optional admin key for catalogue mutations (matches backend `ADMIN_API_KEY`).
+ * Injected at Vite build/dev via `vite-resolve-env.ts` (merges root + frontend env,
+ * and mirrors `ADMIN_API_KEY` when `VITE_ADMIN_API_KEY` is unset).
+ * Logged-in admins with `catalogue.write` can also mutate via Bearer JWT.
+ */
 export function getAdminApiKey(): string | undefined {
   const key = import.meta.env.VITE_ADMIN_API_KEY?.trim();
   return key && key.length > 0 ? key : undefined;

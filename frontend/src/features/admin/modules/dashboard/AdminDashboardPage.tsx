@@ -42,9 +42,7 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
   return (
     <AdminPage>
       <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
-        Manage catalogue products and sunglasses builder pricing. Mutations require{" "}
-        <code className="rounded bg-muted px-1 py-0.5 text-xs">VITE_ADMIN_API_KEY</code> when calling
-        the API.
+        Manage catalogue products and sunglasses builder pricing.
       </p>
 
       <div className="mb-8 grid gap-3 sm:grid-cols-3">

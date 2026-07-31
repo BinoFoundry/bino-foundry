@@ -3,7 +3,6 @@ import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getAdminApiKey } from "@/config/env";
 import { checkPermission } from "@/lib/permissions";
 import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
@@ -33,7 +32,6 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
   );
   const activeNav = visibleNavItems.find((n) => n.id === section);
   const [refreshing, setRefreshing] = useState(false);
-  const hasAdminApiKey = Boolean(getAdminApiKey());
 
   const refreshConfig = useMemo(() => {
     const defaults = getDefaultSectionRefresh(section, catalogue, sunglasses);
@@ -64,14 +62,6 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
           {refreshConfig.label}
         </Button>
       </header>
-
-      {!hasAdminApiKey ? (
-        <p className="shrink-0 border-b border-status-warning bg-status-warning px-4 py-2 text-center text-xs">
-          Set <code className="rounded bg-background/80 px-1">VITE_ADMIN_API_KEY</code> to match server{" "}
-          <code className="rounded bg-background/80 px-1">ADMIN_API_KEY</code> before saving catalogue changes.
-          Reads work without a key; writes are blocked on the API.
-        </p>
-      ) : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <nav

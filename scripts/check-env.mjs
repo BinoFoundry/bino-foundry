@@ -66,6 +66,18 @@ if (isStrict && !fs.existsSync(frontendProd) && !process.env.VITE_API_BASE_URL) 
   );
 }
 
+const adminKey = process.env.ADMIN_API_KEY?.trim();
+const viteAdminKey = process.env.VITE_ADMIN_API_KEY?.trim();
+if (adminKey && !viteAdminKey) {
+  console.log(
+    "  ℹ VITE_ADMIN_API_KEY unset — Vite will mirror ADMIN_API_KEY into the SPA at dev/build time",
+  );
+} else if (adminKey && viteAdminKey && adminKey !== viteAdminKey) {
+  warnings.push(
+    "ADMIN_API_KEY and VITE_ADMIN_API_KEY differ — catalogue writes via x-api-key will 401 until they match (or rely on admin JWT)",
+  );
+}
+
 console.log(`\nBino Foundry env check (APP_ENV=${appEnv})\n`);
 
 if (warnings.length) {

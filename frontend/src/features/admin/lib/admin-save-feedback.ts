@@ -14,27 +14,47 @@ export function notifyAdminDeleted(resourceLabel = "Item"): void {
   toast.success(`${resourceLabel} deleted successfully.`);
 }
 
-export function notifyAdminSaveFailed(err: unknown, fallback = "Could not save changes."): void {
-  if (isApiError(err)) {
-    if (err.status === 401) {
-      toast.error(err.message || "Your session has expired. Please sign in again.");
-      return;
-    }
-    if (err.status === 403) {
-      toast.error(err.message || "You do not have permission to perform this action.");
-      return;
-    }
-    if (err.status >= 500) {
-      toast.error(err.message || "Server error. Please try again.");
-      return;
-    }
-    toast.error(err.message || formatApiErrorMessage(err) || fallback);
-    return;
+/** Map API failures to admin-facing copy (no env vars / auth implementation details). */
+function adminFacingSaveError(err: unknown, fallback: string): string {
+  if (!isApiError(err)) {
+    return formatApiErrorMessage(err) || fallback;
   }
-  toast.error(formatApiErrorMessage(err) || fallback);
+
+  if (err.status === 401) {
+    if (err.code === "SESSION_EXPIRED") {
+      return "Your session has expired. Please sign in again.";
+    }
+    return "You do not have permission to modify this catalogue.";
+  }
+
+  if (err.status === 403) {
+    return "You do not have permission to modify this catalogue.";
+  }
+
+  if (err.status >= 500 || err.code === "NETWORK_ERROR" || err.code === "GATEWAY_ERROR") {
+    return "Something went wrong while saving your changes. Please try again.";
+  }
+
+  // Prefer generic save copy over raw backend auth/config phrasing.
+  const raw = (err.message || "").trim();
+  if (!raw || /api[_ -]?key|ADMIN_API|authentication required/i.test(raw)) {
+    return fallback;
+  }
+
+  return raw;
 }
 
-export function notifyAdminDeleteFailed(err: unknown, fallback = "Could not delete."): void {
+export function notifyAdminSaveFailed(
+  err: unknown,
+  fallback = "Unable to save changes. Please try again.",
+): void {
+  toast.error(adminFacingSaveError(err, fallback));
+}
+
+export function notifyAdminDeleteFailed(
+  err: unknown,
+  fallback = "Unable to delete. Please try again.",
+): void {
   notifyAdminSaveFailed(err, fallback);
 }
 
