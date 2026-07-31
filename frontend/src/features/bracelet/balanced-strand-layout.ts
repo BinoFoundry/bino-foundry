@@ -5,8 +5,9 @@
  *   top → bottom → right → left → bisect remaining gaps …
  *
  * This module retains the theoretical slot helpers used by legacy callers and tests.
- * Live Bracelet Builder placement replays occupancy-aware largest-gap insertion in
- * `computeBalancedRadialStrandPathLayout`.
+ * Live Bracelet Builder placement uses physical-contact packing in
+ * `computeBalancedRadialStrandPathLayout` (edge-to-edge; leftover = one empty arc).
+ * Legacy largest-gap helpers below remain for tests and opt-in aesthetics.
  */
 
 /** Theoretical largest-gap bisection points (sorted). Used only to decide insert slots. */

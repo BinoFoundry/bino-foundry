@@ -28,6 +28,14 @@ describe("manual-details-history", () => {
     expect(snap.parts).toHaveLength(1);
   });
 
+  it("does not store Transform/Edit Shape navigation in history snapshots", () => {
+    const part = createFramePart("A", "rectangle");
+    const snap = captureManualDetailsSnapshot([part], 0, "outer");
+    expect(Object.keys(snap).sort()).toEqual(["activePartIndex", "activeSubpath", "parts"]);
+    expect(snap).not.toHaveProperty("editPhase");
+    expect(snap).not.toHaveProperty("activeTab");
+  });
+
   it("detects typing targets so Delete does not steal keystrokes", () => {
     const input = document.createElement("input");
     expect(isTypingInFormField(input)).toBe(true);

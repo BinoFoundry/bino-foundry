@@ -636,8 +636,8 @@ const SortableCircularStrand = ({
         );
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
 
-        // Top → bottom → right → left anchors, then occupancy-aware largest-gap insertion.
-        // Optional Balance Spacing equalises leftover empty gaps without changing occupancy.
+        // Physical-contact packing: edge-to-edge occupancy; leftover wrist length is one empty arc.
+        // Optional Balance Spacing only applies to legacy largest-gap placement.
         const sequential = computeBalancedRadialStrandPathLayout({
           beads: normalized.map((_, i) => ({
             index: i,
@@ -650,6 +650,7 @@ const SortableCircularStrand = ({
           radius: wristRadius,
           startAngle: pathStartAngle,
           balanceSpacing,
+          placement: "physical-contact",
         });
         radius = sequential.resolvedRadiusPx ?? wristRadius;
         const pathLayout = sequential.beads;

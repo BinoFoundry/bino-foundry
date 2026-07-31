@@ -28,8 +28,9 @@ export interface StrandRenderProfile {
    */
   layoutScale: number;
   /**
-   * When true, run a final optical pass that equalises empty neighbour gaps after
-   * physical largest-gap placement. Occupancy and insertion order are preserved.
+   * Legacy largest-gap optical pass only. Bracelet Builder uses physical-contact packing
+   * (edge-to-edge; leftover wrist length = one unfinished arc), so this does not stretch
+   * gaps when the wrist size grows with a fixed bead set.
    */
   balanceSpacing: boolean;
   /** Inline on occupied arc, or between two neighbours (connectors). */

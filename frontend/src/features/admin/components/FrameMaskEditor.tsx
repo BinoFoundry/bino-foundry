@@ -258,7 +258,7 @@ export function FrameMaskEditor({
           Math.max(0, Math.min(snap.activePartIndex, Math.max(0, ordered.length - 1))),
         );
         setActiveSubpath(snap.activeSubpath);
-        setEditPhase("transform");
+        // Keep the user's current Transform / Edit Shape tab — history stores geometry only.
         setPartRevision((r) => r + 1);
         emitParts(ordered);
       } finally {

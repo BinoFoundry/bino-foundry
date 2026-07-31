@@ -317,6 +317,8 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     centerY: 200,
     radius: 100,
     startAngle: -Math.PI / 2,
+    /** Legacy radial fill — kept for opt-in / historical coverage. */
+    placement: "largest-gap" as const,
   };
   const circumference = 2 * Math.PI * base.radius;
 
@@ -455,6 +457,7 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       centerY: 0,
       radius,
       balanceSpacing: false,
+      placement: "largest-gap",
       beads: equalBeads(8, occupancyPx),
     });
     const layout = computeBalancedRadialStrandPathLayout({
@@ -462,6 +465,7 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       centerY: 0,
       radius,
       balanceSpacing: false,
+      placement: "largest-gap",
       beads: equalBeads(9, occupancyPx),
     });
     const ordered = [...layout.beads].sort((a, b) => a.angle - b.angle);
@@ -559,7 +563,7 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     expect(Math.max(...centreSteps) - Math.min(...centreSteps)).toBeGreaterThan(1e-3);
   });
 
-  it("defaults Balance Spacing to ON", () => {
+  it("defaults Balance Spacing to ON for largest-gap placement", () => {
     const widths = [10, 22, 14, 28, 12];
     const beads = widths.map((occupancyPx, index) => ({
       index,
@@ -571,6 +575,108 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     defaults.beads.forEach((bead, index) => {
       expect(bead.angle).toBeCloseTo(on.beads[index]!.angle, 8);
     });
+  });
+});
+
+describe("computeBalancedRadialStrandPathLayout physical-contact", () => {
+  const base = {
+    centerX: 200,
+    centerY: 200,
+    radius: 100,
+    startAngle: -Math.PI / 2,
+  };
+  const circumference = 2 * Math.PI * base.radius;
+
+  const clockwiseAngle = (from: number, to: number) => {
+    const delta = (to - from) % (2 * Math.PI);
+    return delta < 0 ? delta + 2 * Math.PI : delta;
+  };
+
+  const equalBeads = (count: number, occupancyPx: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      index,
+      occupancyPx,
+      visualRadiusPx: occupancyPx / 2,
+    }));
+
+  it("defaults to physical-contact packing edge-to-edge", () => {
+    const occupancyPx = 20;
+    const beads = equalBeads(5, occupancyPx);
+    const layout = computeBalancedRadialStrandPathLayout({ ...base, beads });
+    for (let i = 1; i < layout.beads.length; i++) {
+      const prev = layout.beads[i - 1]!;
+      const curr = layout.beads[i]!;
+      const centerDist = clockwiseAngle(prev.angle, curr.angle) * base.radius;
+      expect(centerDist).toBeCloseTo(occupancyPx, 5);
+    }
+  });
+
+  it("keeps beads edge-to-edge when wrist circumference grows (same bead set)", () => {
+    const occupancyAt16 = 18;
+    const beads16 = equalBeads(8, occupancyAt16);
+    // Same physical mm mapped onto a larger ring → proportionally smaller occupancy arcs.
+    const radius20 = base.radius * (20 / 16);
+    const occupancyAt20 = occupancyAt16 * (16 / 20);
+    const beads20 = equalBeads(8, occupancyAt20);
+
+    const at16 = computeBalancedRadialStrandPathLayout({
+      ...base,
+      beads: beads16,
+    });
+    const at20 = computeBalancedRadialStrandPathLayout({
+      ...base,
+      radius: radius20,
+      beads: beads20,
+    });
+
+    const neighbourGap = (layout: typeof at16, radius: number, width: number) => {
+      const ordered = [...layout.beads].sort(
+        (a, b) =>
+          clockwiseAngle(base.startAngle, a.angle) - clockwiseAngle(base.startAngle, b.angle),
+      );
+      const gaps: number[] = [];
+      for (let i = 0; i < ordered.length - 1; i++) {
+        const left = ordered[i]!;
+        const right = ordered[i + 1]!;
+        gaps.push(clockwiseAngle(left.angle, right.angle) * radius - width);
+      }
+      return gaps;
+    };
+
+    for (const gap of neighbourGap(at16, base.radius, occupancyAt16)) {
+      expect(Math.abs(gap)).toBeLessThan(1e-5);
+    }
+    for (const gap of neighbourGap(at20, radius20, occupancyAt20)) {
+      expect(Math.abs(gap)).toBeLessThan(1e-5);
+    }
+
+    // Leftover circumference concentrates in the single unfinished (closure) arc.
+    const closureGap = (layout: typeof at16, radius: number, width: number, count: number) => {
+      const first = layout.beads[0]!;
+      const last = layout.beads[count - 1]!;
+      return clockwiseAngle(last.angle, first.angle) * radius - width;
+    };
+    expect(closureGap(at20, radius20, occupancyAt20, 8)).toBeGreaterThan(
+      closureGap(at16, base.radius, occupancyAt16, 8) + 1,
+    );
+  });
+
+  it("ignores Balance Spacing for physical-contact (no even gap stretch)", () => {
+    const beads = equalBeads(6, 12);
+    const off = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: false,
+      beads,
+    });
+    const on = computeBalancedRadialStrandPathLayout({
+      ...base,
+      balanceSpacing: true,
+      beads,
+    });
+    off.beads.forEach((bead, index) => {
+      expect(bead.angle).toBeCloseTo(on.beads[index]!.angle, 8);
+    });
+    expect(circumference).toBeGreaterThan(0);
   });
 });
 

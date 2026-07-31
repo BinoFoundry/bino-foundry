@@ -26,7 +26,9 @@ function cloneAnchors(points: PathAnchor[] | null | undefined): PathAnchor[] {
   return migrateAnchors(points ?? []).map(cloneAnchor);
 }
 
-/** Deep-clone Manual Detail polygons (holes + shape presets) for undo/redo. */
+/** Deep-clone Manual Detail polygons (holes + shape presets) for undo/redo.
+ * Snapshots intentionally omit UI/navigation state (Transform vs Edit Shape tab).
+ */
 export function cloneManualDetailParts(parts: LensPolygon[]): LensPolygon[] {
   return parts.map((part) => ({
     id: part.id,

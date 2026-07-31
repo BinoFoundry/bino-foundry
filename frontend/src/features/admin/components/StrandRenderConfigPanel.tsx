@@ -156,11 +156,11 @@ export function StrandRenderConfigPanel({
                   checked={value.balanceSpacing}
                   onChange={(e) => onChange({ balanceSpacing: e.target.checked })}
                 />
-                Equalise empty neighbour gaps after physical placement
+                Equalise empty neighbour gaps (legacy largest-gap layout only)
               </label>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Final optical pass only — keeps occupancy, insertion order, and no-overlap rules.
-                Turn off for pure physical strand layout.
+                Bracelet Builder packs beads edge-to-edge; leftover wrist length stays one empty arc.
+                This toggle only affects legacy radial distribution.
               </p>
             </Field>
           </>

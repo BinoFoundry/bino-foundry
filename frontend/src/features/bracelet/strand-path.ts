@@ -388,6 +388,9 @@ function boundedIsotonicProjection(values: number[], upperBound: number): number
  * Final optical pass: equalise empty neighbour gaps while keeping occupancy widths.
  * Pins bead 0 so the bracelet does not rotate. Not equal-angle — centre arcs still
  * vary with bead size; only free space between footprints is shared evenly.
+ *
+ * Prefer {@link computeBalancedRadialStrandPathLayout} with `placement: "physical-contact"`
+ * for wrist-size changes — equalising leftover circumference stretches under-filled bracelets.
  */
 function balanceEmptyNeighbourGapsPx(params: {
   positionsPx: number[];
@@ -434,15 +437,34 @@ function balanceEmptyNeighbourGapsPx(params: {
 }
 
 /**
- * Occupancy-aware largest-gap insertion.
+ * Edge-to-edge packing along the ring. Leftover circumference stays as one unfinished
+ * empty arc (loop closure) — wrist growth does not invent gaps between beads.
+ */
+function packPhysicalContactPositionsPx(params: {
+  widthsPx: number[];
+  circumferencePx: number;
+  gapPx: number;
+}): number[] {
+  const { widthsPx, gapPx } = params;
+  const positionsPx = new Array<number>(widthsPx.length).fill(0);
+  let cursorPx = 0;
+  for (let i = 0; i < widthsPx.length; i++) {
+    const width = widthsPx[i]!;
+    positionsPx[i] = cursorPx + width / 2;
+    cursorPx += width + gapPx;
+  }
+  return positionsPx;
+}
+
+/**
+ * Occupancy-aware strand placement.
  *
- * Beads 1–4 are fixed at top, bottom, right, and left. Every later bead is inserted
- * at the centre of the largest edge-to-edge empty arc. If its occupancy does not fit,
- * bounded isotonic relaxation moves the smallest possible neighbouring region while
- * keeping the new bead at the chosen gap centre.
+ * Default `placement: "physical-contact"` packs beads edge-to-edge from startAngle.
+ * Leftover wrist circumference forms one empty unfinished arc — increasing wrist size
+ * with a fixed bead set does not stretch gaps between every bead.
  *
- * Optional `balanceSpacing` then equalises remaining empty gaps without changing
- * occupancy, order, or the bracelet's absolute rotation.
+ * Legacy `placement: "largest-gap"` keeps the builder-style radial fill (top → bottom →
+ * sides → bisect) and optional Balance Spacing equalisation.
  */
 export function computeBalancedRadialStrandPathLayout(params: {
   beads: SequentialStrandBeadInput[];
@@ -453,10 +475,15 @@ export function computeBalancedRadialStrandPathLayout(params: {
   /** Minimum clearance between neighbouring beads along the strand (px). Default 0. */
   minGapPx?: number;
   /**
-   * When true (default), run a final optical empty-gap balancing pass after physical
-   * placement. When false, keep pure largest-gap / occupancy positions.
+   * When true and placement is `"largest-gap"`, run empty-gap balancing after placement.
+   * Ignored for `"physical-contact"` (leftover stays one unfinished arc).
    */
   balanceSpacing?: boolean;
+  /**
+   * `"physical-contact"` (default): edge-to-edge occupancy packing.
+   * `"largest-gap"`: legacy radial distribution for tests / opt-in aesthetics.
+   */
+  placement?: "physical-contact" | "largest-gap";
   /**
    * @deprecated Informational only — positions come from occupancy along the strand.
    */
@@ -474,6 +501,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
     startAngle = STRAND_PATH_START_ANGLE,
     minGapPx = 0,
     balanceSpacing = true,
+    placement = "physical-contact",
   } = params;
   const circumferencePx = 2 * Math.PI * Math.max(radius, 1e-6);
   const gapPx = Math.max(0, minGapPx);
@@ -497,105 +525,113 @@ export function computeBalancedRadialStrandPathLayout(params: {
   const widthsPx = rawWidthsPx.map((width) => width * scale);
   let positionsPx = new Array<number>(beads.length).fill(0);
 
-  // Stable visual anchors: top, bottom, right, left.
-  const anchorFractions = [0, 0.5, 0.25, 0.75] as const;
-  for (let index = 0; index < Math.min(beads.length, anchorFractions.length); index++) {
-    positionsPx[index] = anchorFractions[index]! * circumferencePx;
-  }
-
-  // Tie preference reproduces the requested first split sequence. Later equal gaps
-  // prefer the point furthest from the most recently inserted bead.
-  const preferredFractions = [0, 0.5, 0.25, 0.75, 0.125, 0.625, 0.875, 0.375] as const;
-
-  for (let newIndex = 4; newIndex < beads.length; newIndex++) {
-    const existing = Array.from({ length: newIndex }, (_, index) => index).sort(
-      (a, b) => positionsPx[a]! - positionsPx[b]!,
-    );
-    const gaps = existing.map((leftIndex, slot) => {
-      const rightIndex = existing[(slot + 1) % existing.length]!;
-      const centerArcPx = clockwiseArcDistancePx(
-        positionsPx[leftIndex]!,
-        positionsPx[rightIndex]!,
-        circumferencePx,
-      );
-      const emptyArcPx =
-        centerArcPx - widthsPx[leftIndex]! / 2 - widthsPx[rightIndex]! / 2 - gapPx;
-      const midpointPx = normalizeArcDistancePx(
-        positionsPx[leftIndex]! +
-          widthsPx[leftIndex]! / 2 +
-          gapPx / 2 +
-          Math.max(0, emptyArcPx) / 2,
-        circumferencePx,
-      );
-      return { leftIndex, rightIndex, emptyArcPx, midpointPx };
-    });
-
-    const largestEmptyArcPx = Math.max(...gaps.map((gap) => gap.emptyArcPx));
-    const tiedLargest = gaps.filter(
-      (gap) => largestEmptyArcPx - gap.emptyArcPx <= 1e-6,
-    );
-    const preferredPx =
-      newIndex < preferredFractions.length
-        ? preferredFractions[newIndex]! * circumferencePx
-        : positionsPx[newIndex - 1]! + circumferencePx / 2;
-    const selectedGap = tiedLargest.reduce((best, candidate) => {
-      const bestDistance = Math.min(
-        clockwiseArcDistancePx(best.midpointPx, preferredPx, circumferencePx),
-        clockwiseArcDistancePx(preferredPx, best.midpointPx, circumferencePx),
-      );
-      const candidateDistance = Math.min(
-        clockwiseArcDistancePx(candidate.midpointPx, preferredPx, circumferencePx),
-        clockwiseArcDistancePx(preferredPx, candidate.midpointPx, circumferencePx),
-      );
-      return candidateDistance < bestDistance - 1e-6 ? candidate : best;
-    });
-
-    const targetPx = selectedGap.midpointPx;
-    positionsPx[newIndex] = targetPx;
-
-    // Cut the circle at the inserted bead and find the least-movement valid placement
-    // for all existing beads under occupancy + minimum-spacing constraints.
-    const clockwiseExisting = existing
-      .map((index) => ({
-        index,
-        distancePx: clockwiseArcDistancePx(targetPx, positionsPx[index]!, circumferencePx),
-      }))
-      .sort((a, b) => a.distancePx - b.distancePx);
-    const requiredPositionsPx: number[] = [];
-    let requiredPx = 0;
-    let previousIndex = newIndex;
-    clockwiseExisting.forEach(({ index }) => {
-      requiredPx += widthsPx[previousIndex]! / 2 + widthsPx[index]! / 2 + gapPx;
-      requiredPositionsPx.push(requiredPx);
-      previousIndex = index;
-    });
-    const slackPx = Math.max(
-      0,
-      circumferencePx -
-        requiredPx -
-        widthsPx[previousIndex]! / 2 -
-        widthsPx[newIndex]! / 2 -
-        gapPx,
-    );
-    const freeOffsetsPx = clockwiseExisting.map(
-      ({ distancePx }, index) => distancePx - requiredPositionsPx[index]!,
-    );
-    const projectedOffsetsPx = boundedIsotonicProjection(freeOffsetsPx, slackPx);
-    clockwiseExisting.forEach(({ index }, orderIndex) => {
-      positionsPx[index] = normalizeArcDistancePx(
-        targetPx + requiredPositionsPx[orderIndex]! + projectedOffsetsPx[orderIndex]!,
-        circumferencePx,
-      );
-    });
-  }
-
-  if (balanceSpacing) {
-    positionsPx = balanceEmptyNeighbourGapsPx({
-      positionsPx,
+  if (placement === "physical-contact") {
+    positionsPx = packPhysicalContactPositionsPx({
       widthsPx,
       circumferencePx,
       gapPx,
     });
+  } else {
+    // Stable visual anchors: top, bottom, right, left.
+    const anchorFractions = [0, 0.5, 0.25, 0.75] as const;
+    for (let index = 0; index < Math.min(beads.length, anchorFractions.length); index++) {
+      positionsPx[index] = anchorFractions[index]! * circumferencePx;
+    }
+
+    // Tie preference reproduces the requested first split sequence. Later equal gaps
+    // prefer the point furthest from the most recently inserted bead.
+    const preferredFractions = [0, 0.5, 0.25, 0.75, 0.125, 0.625, 0.875, 0.375] as const;
+
+    for (let newIndex = 4; newIndex < beads.length; newIndex++) {
+      const existing = Array.from({ length: newIndex }, (_, index) => index).sort(
+        (a, b) => positionsPx[a]! - positionsPx[b]!,
+      );
+      const gaps = existing.map((leftIndex, slot) => {
+        const rightIndex = existing[(slot + 1) % existing.length]!;
+        const centerArcPx = clockwiseArcDistancePx(
+          positionsPx[leftIndex]!,
+          positionsPx[rightIndex]!,
+          circumferencePx,
+        );
+        const emptyArcPx =
+          centerArcPx - widthsPx[leftIndex]! / 2 - widthsPx[rightIndex]! / 2 - gapPx;
+        const midpointPx = normalizeArcDistancePx(
+          positionsPx[leftIndex]! +
+            widthsPx[leftIndex]! / 2 +
+            gapPx / 2 +
+            Math.max(0, emptyArcPx) / 2,
+          circumferencePx,
+        );
+        return { leftIndex, rightIndex, emptyArcPx, midpointPx };
+      });
+
+      const largestEmptyArcPx = Math.max(...gaps.map((gap) => gap.emptyArcPx));
+      const tiedLargest = gaps.filter(
+        (gap) => largestEmptyArcPx - gap.emptyArcPx <= 1e-6,
+      );
+      const preferredPx =
+        newIndex < preferredFractions.length
+          ? preferredFractions[newIndex]! * circumferencePx
+          : positionsPx[newIndex - 1]! + circumferencePx / 2;
+      const selectedGap = tiedLargest.reduce((best, candidate) => {
+        const bestDistance = Math.min(
+          clockwiseArcDistancePx(best.midpointPx, preferredPx, circumferencePx),
+          clockwiseArcDistancePx(preferredPx, best.midpointPx, circumferencePx),
+        );
+        const candidateDistance = Math.min(
+          clockwiseArcDistancePx(candidate.midpointPx, preferredPx, circumferencePx),
+          clockwiseArcDistancePx(preferredPx, candidate.midpointPx, circumferencePx),
+        );
+        return candidateDistance < bestDistance - 1e-6 ? candidate : best;
+      });
+
+      const targetPx = selectedGap.midpointPx;
+      positionsPx[newIndex] = targetPx;
+
+      // Cut the circle at the inserted bead and find the least-movement valid placement
+      // for all existing beads under occupancy + minimum-spacing constraints.
+      const clockwiseExisting = existing
+        .map((index) => ({
+          index,
+          distancePx: clockwiseArcDistancePx(targetPx, positionsPx[index]!, circumferencePx),
+        }))
+        .sort((a, b) => a.distancePx - b.distancePx);
+      const requiredPositionsPx: number[] = [];
+      let requiredPx = 0;
+      let previousIndex = newIndex;
+      clockwiseExisting.forEach(({ index }) => {
+        requiredPx += widthsPx[previousIndex]! / 2 + widthsPx[index]! / 2 + gapPx;
+        requiredPositionsPx.push(requiredPx);
+        previousIndex = index;
+      });
+      const slackPx = Math.max(
+        0,
+        circumferencePx -
+          requiredPx -
+          widthsPx[previousIndex]! / 2 -
+          widthsPx[newIndex]! / 2 -
+          gapPx,
+      );
+      const freeOffsetsPx = clockwiseExisting.map(
+        ({ distancePx }, index) => distancePx - requiredPositionsPx[index]!,
+      );
+      const projectedOffsetsPx = boundedIsotonicProjection(freeOffsetsPx, slackPx);
+      clockwiseExisting.forEach(({ index }, orderIndex) => {
+        positionsPx[index] = normalizeArcDistancePx(
+          targetPx + requiredPositionsPx[orderIndex]! + projectedOffsetsPx[orderIndex]!,
+          circumferencePx,
+        );
+      });
+    }
+
+    if (balanceSpacing) {
+      positionsPx = balanceEmptyNeighbourGapsPx({
+        positionsPx,
+        widthsPx,
+        circumferencePx,
+        gapPx,
+      });
+    }
   }
 
   const layouts = beads.map((bead, i) => {
