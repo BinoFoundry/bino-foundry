@@ -6,9 +6,11 @@ import {
   inferStrandRenderDefaultsForType,
   mergeLazyStrandRenderOverride,
   normalizeBeadLibraryStrandMetadata,
+  normalizeSubBeadTypeStrandMetadata,
   pruneStrandRenderOverride,
   resolvedTypeStrandProfile,
   strandRenderDefaultsForBehaviorPreset,
+  subBeadTypeInheritsBeadTypeStrandDefaults,
   typeNeedsStrandRenderInitialization,
 } from "./strand-render-migration.js";
 
@@ -72,14 +74,42 @@ describe("strand render migration helpers", () => {
     expect(next.anchorPreset).toBeUndefined();
   });
 
-  it("normalizes library metadata to inheritance when override is empty", () => {
+  it("normalizes library metadata to inheritance when override is empty and inherit is unset", () => {
     const inherited = inferStrandRenderDefaultsForType({ slug: "crystal" });
     const normalized = normalizeBeadLibraryStrandMetadata(
-      { strandRenderOverride: {}, useTypeStrandDefaults: false },
+      { strandRenderOverride: {} },
       inherited,
     );
     expect(normalized.strandRenderOverride).toBeUndefined();
     expect(normalized.useTypeStrandDefaults).toBe(true);
     expect(beadLibraryInheritsTypeStrandDefaults(normalized)).toBe(true);
+  });
+
+  it("preserves explicit inherit opt-out when override is empty", () => {
+    const inherited = inferStrandRenderDefaultsForType({ slug: "crystal" });
+    const library = normalizeBeadLibraryStrandMetadata(
+      { strandRenderOverride: {}, useTypeStrandDefaults: false },
+      inherited,
+    );
+    expect(library.useTypeStrandDefaults).toBe(false);
+    expect(beadLibraryInheritsTypeStrandDefaults(library)).toBe(false);
+
+    const subType = normalizeSubBeadTypeStrandMetadata(
+      { useBeadTypeStrandDefaults: false },
+      inherited,
+    );
+    expect(subType.useBeadTypeStrandDefaults).toBe(false);
+    expect(subType.strandRenderOverride).toBeUndefined();
+    expect(subBeadTypeInheritsBeadTypeStrandDefaults(subType)).toBe(false);
+  });
+
+  it("honours explicit false on sub bead type inherit helpers", () => {
+    expect(
+      subBeadTypeInheritsBeadTypeStrandDefaults({ useBeadTypeStrandDefaults: false }),
+    ).toBe(false);
+    expect(
+      subBeadTypeInheritsBeadTypeStrandDefaults({ useBeadTypeStrandDefaults: true }),
+    ).toBe(true);
+    expect(subBeadTypeInheritsBeadTypeStrandDefaults({})).toBe(true);
   });
 });

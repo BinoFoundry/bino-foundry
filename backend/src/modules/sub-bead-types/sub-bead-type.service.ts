@@ -65,11 +65,15 @@ async function resolveInheritedProfile(beadTypeId: string): Promise<ReturnType<t
 }
 
 function normalizeMetadataForSave(
-  beadTypeId: string,
+  _beadTypeId: string,
   metadata: Record<string, unknown> | undefined,
   inherited: ReturnType<typeof resolvedTypeStrandProfile>,
 ): Record<string, unknown> {
   const base = { ...(metadata ?? {}) };
+  // Explicit opt-out must persist even with an empty override.
+  if (base.useBeadTypeStrandDefaults === false) {
+    return normalizeSubBeadTypeStrandMetadata(base, inherited);
+  }
   if (subBeadTypeInheritsBeadTypeStrandDefaults(base)) {
     return { useBeadTypeStrandDefaults: true };
   }

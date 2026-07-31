@@ -19,8 +19,8 @@ export interface SunglassesCompositorProps {
   fillHeight?: boolean;
   compactLabel?: boolean;
   /**
-   * Step 1 — Frame: show the original plate asset with no lens compositing.
-   * Lens config remains on the frame; it is simply not applied.
+   * Step 1 — Frame: show the cropped plate asset only (no lens compositing).
+   * Lens config remains on the frame; it is simply not applied until Step 2+.
    */
   plateOnly?: boolean;
 }
@@ -53,17 +53,11 @@ export function SunglassesCompositor({
   const clipConfig = plateView ? resolveLensClipConfig(plateView) : null;
 
   if (plateView?.plateUrl) {
-    const originalUrl = plateView.originalPlateUrl?.trim();
-    const useOriginal = plateOnly && Boolean(originalUrl);
-    const plateUrl = useOriginal ? originalUrl! : plateView.plateUrl;
-    const width =
-      useOriginal && plateView.originalWidth && plateView.originalWidth > 0
-        ? plateView.originalWidth
-        : plateView.width;
-    const height =
-      useOriginal && plateView.originalHeight && plateView.originalHeight > 0
-        ? plateView.originalHeight
-        : plateView.height;
+    // Step 1 uses the cropped plate as-is. Do not fall back to originalPlateUrl —
+    // that would undo the frame crop. Lens clip/render stay inactive via plateOnly.
+    const plateUrl = plateView.plateUrl;
+    const width = plateView.width;
+    const height = plateView.height;
 
     return (
       <SvgClipCompositorView

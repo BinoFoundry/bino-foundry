@@ -44,7 +44,7 @@ export interface SvgClipCompositorViewProps {
   compactLabel?: boolean;
   /**
    * When true (Sunglasses Builder Step 1 — Frame), skip all lens compositing and
-   * show the plate image as-is. Prefer passing the original upload URL/size.
+   * show the plate image as-is (cropped frame asset; original lens pixels untouched).
    */
   plateOnly?: boolean;
 }

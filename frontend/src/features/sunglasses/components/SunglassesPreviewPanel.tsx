@@ -10,7 +10,7 @@ interface SunglassesPreviewPanelProps {
   config: SunglassesCompositorConfig;
   unavailableFrame?: boolean;
   /**
-   * When true (Step 1 — Frame), show original plate assets with no lens compositing.
+   * When true (Step 1 — Frame), show the cropped plate with no lens compositing.
    */
   plateOnly?: boolean;
 }

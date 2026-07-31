@@ -152,7 +152,7 @@ export interface BeadLibraryStrandMetadata {
   strandRenderOverride?: Partial<StrandRenderProfile>;
 }
 
-/** Normalize library metadata — drop empty overrides, prefer inheritance. */
+/** Normalize library metadata — drop empty overrides; honor explicit inherit opt-out. */
 export function normalizeBeadLibraryStrandMetadata(
   metadata: Record<string, unknown> | null | undefined,
   inherited: StrandRenderProfile,
@@ -160,10 +160,16 @@ export function normalizeBeadLibraryStrandMetadata(
   const base = { ...(metadata ?? {}) } as Record<string, unknown>;
   const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
   const pruned = pruneStrandRenderOverride(rawOverride, inherited);
+  const explicitOptOut = base.useTypeStrandDefaults === false;
 
   if (strandRenderOverrideIsEmpty(pruned)) {
     delete base.strandRenderOverride;
-    base.useTypeStrandDefaults = true;
+    // Keep an explicit "do not inherit" flag; only default to inherit when unset.
+    if (!explicitOptOut) {
+      base.useTypeStrandDefaults = true;
+    } else {
+      base.useTypeStrandDefaults = false;
+    }
     return base;
   }
 
@@ -186,6 +192,8 @@ export function beadLibraryInheritsTypeStrandDefaults(
 ): boolean {
   if (!metadata || typeof metadata !== "object") return true;
   const meta = metadata as BeadLibraryStrandMetadata & Record<string, unknown>;
+  // Explicit false must win — never treat it as inherit via empty-override fallback.
+  if (meta.useTypeStrandDefaults === false) return false;
   if (meta.useTypeStrandDefaults === true) return true;
   if (meta.strandRenderOverride == null) return true;
   return strandRenderOverrideIsEmpty(parseStrandRenderProfile(meta.strandRenderOverride));
@@ -201,12 +209,14 @@ export function subBeadTypeInheritsBeadTypeStrandDefaults(
 ): boolean {
   if (!metadata || typeof metadata !== "object") return true;
   const meta = metadata as SubBeadTypeStrandMetadata & Record<string, unknown>;
+  // Explicit false must win — empty override alone must not force inherit back on.
+  if (meta.useBeadTypeStrandDefaults === false) return false;
   if (meta.useBeadTypeStrandDefaults === true) return true;
   if (meta.strandRenderOverride == null) return true;
   return strandRenderOverrideIsEmpty(parseStrandRenderProfile(meta.strandRenderOverride));
 }
 
-/** Normalize sub-type metadata — drop empty overrides, prefer inheritance. */
+/** Normalize sub-type metadata — drop empty overrides; honor explicit inherit opt-out. */
 export function normalizeSubBeadTypeStrandMetadata(
   metadata: Record<string, unknown> | null | undefined,
   inherited: StrandRenderProfile,
@@ -214,10 +224,15 @@ export function normalizeSubBeadTypeStrandMetadata(
   const base = { ...(metadata ?? {}) } as Record<string, unknown>;
   const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
   const pruned = pruneStrandRenderOverride(rawOverride, inherited);
+  const explicitOptOut = base.useBeadTypeStrandDefaults === false;
 
   if (strandRenderOverrideIsEmpty(pruned)) {
     delete base.strandRenderOverride;
-    base.useBeadTypeStrandDefaults = true;
+    if (!explicitOptOut) {
+      base.useBeadTypeStrandDefaults = true;
+    } else {
+      base.useBeadTypeStrandDefaults = false;
+    }
     return base;
   }
 

@@ -38,7 +38,9 @@ function updateSubTypeStrandOverride(form: SubBeadTypeEntry, patch: Record<strin
   const current = subTypeOverrideFromForm(form) ?? {};
   const next = mergeLazyStrandRenderOverride(current, patch, inherited);
   if (strandRenderOverrideIsEmpty(next)) {
-    return setInheritBeadTypeDefaults(form, true);
+    // Keep an explicit opt-out; only snap back to inherit when already inheriting.
+    const keepOptOut = form.metadata?.useBeadTypeStrandDefaults === false;
+    return setInheritBeadTypeDefaults(form, !keepOptOut);
   }
   return {
     ...form,
