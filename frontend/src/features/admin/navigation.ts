@@ -87,8 +87,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   },
   {
     id: "lens-render-presets",
-    label: "Lens rendering presets",
-    description: "Optical material presets with live preview",
+    label: "Lens glass look",
+    description: "Set replacement glass, tint, reflection, and edge",
     icon: Glasses,
     group: "sunglasses",
   },

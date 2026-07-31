@@ -177,10 +177,10 @@ export function LensRenderingPresetsAdminPage() {
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Lens Rendering Presets</h2>
+          <h2 className="text-base font-semibold text-foreground">Lens glass look</h2>
           <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
-            Configure glass sheet material for the lens hole. Hierarchy: Frame Override → Preset →
-            System Default. Live preview matches customer rendering.
+            Set how replacement glass looks on frames. Choose Soft glass or a photo sheet, then tint,
+            reflection, and edge. Hierarchy: Frame override → Preset → System default.
           </p>
         </div>
       </div>

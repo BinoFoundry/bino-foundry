@@ -165,9 +165,17 @@ const INNER_FRAME_BLEND_LABELS: Record<
   screen: "Screen",
 };
 
+const COMPOSITION_ORDER_LABELS: Record<
+  NonNullable<LensClipRenderSettings["glassCompositionOrder"]>,
+  string
+> = {
+  hybrid: "Recommended",
+  "under-frame": "Glass behind frame",
+  "over-surface": "Glass in front",
+};
+
 /**
  * Glass sheet foundation + optical layers (tint / reflection / edge).
- * A sheet is always used when a URL exists — no enable toggle.
  * Draft uploads stay local until the parent Save finalizes storage.
  */
 export function LensRenderingSettingsPanel({
@@ -199,6 +207,16 @@ export function LensRenderingSettingsPanel({
   const crop = value?.glassSheetCrop ?? null;
   const naturalWidth = value?.glassSheetNaturalWidth ?? 1024;
   const naturalHeight = value?.glassSheetNaturalHeight ?? 576;
+  const compositionOrder =
+    value?.glassCompositionOrder === "under-frame" ||
+    value?.glassCompositionOrder === "over-surface" ||
+    value?.glassCompositionOrder === "hybrid"
+      ? value.glassCompositionOrder
+      : DEFAULT_LENS_CLIP_RENDER.glassCompositionOrder;
+  // Photo glass when explicitly sheet, or when a sheet URL exists and canvas wasn't forced.
+  const usePhotoGlass =
+    value?.glassBaseSource === "sheet" ||
+    (value?.glassBaseSource !== "canvas" && Boolean(sheetUrl?.trim()));
 
   const tintEnabled = value?.glassTintEnabled ?? DEFAULT_LENS_CLIP_RENDER.glassTintEnabled;
   const tintOpacity = Math.round(
@@ -264,6 +282,7 @@ export function LensRenderingSettingsPanel({
       glassSheetNaturalWidth: null,
       glassSheetNaturalHeight: null,
       glassSheetCrop: null,
+      glassBaseSource: "canvas",
     });
   };
 
@@ -333,6 +352,7 @@ export function LensRenderingSettingsPanel({
         glassSheetNaturalWidth: cropSession.width,
         glassSheetNaturalHeight: cropSession.height,
         glassSheetCrop: nextCrop,
+        glassBaseSource: "sheet",
       });
     } else {
       if (cropSession.isNewUpload) {
@@ -362,18 +382,76 @@ export function LensRenderingSettingsPanel({
   return (
     <div className={cn("space-y-3 rounded-md border border-border/80 bg-muted/20 p-3", className)}>
       <div>
-        <p className="type-label text-muted-foreground">Lens optics</p>
+        <p className="type-label text-muted-foreground">Lens glass look</p>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          Glass sheet provides texture. Tint colours it. Reflection and edge finish the material.
-          Upload is temporary until you click Save on this preset.
+          Replace the photo lens with new glass, then colour it with tint, reflection, and edge.
+          Changes preview live — click Save on this preset when you are happy.
         </p>
       </div>
 
       <div className="space-y-3 rounded-md border border-border/70 bg-background/60 p-3">
         <div>
-          <p className="text-sm font-medium text-foreground">Glass sheet</p>
+          <p className="text-sm font-medium text-foreground">1. Glass type</p>
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-            Always active when a sheet is uploaded. Manage upload, crop, fit, and material texture.
+            Choose how the replacement glass is made. The original lens colour is never used.
+          </p>
+        </div>
+
+        <ToolGroup
+          label="Glass source"
+          valueLabel={usePhotoGlass ? "Photo glass" : "Soft glass"}
+        >
+          <ToolButton
+            active={usePhotoGlass}
+            disabled={disabled}
+            onClick={() => patch({ glassBaseSource: "sheet" })}
+          >
+            Photo glass
+          </ToolButton>
+          <ToolButton
+            active={!usePhotoGlass}
+            disabled={disabled}
+            onClick={() => patch({ glassBaseSource: "canvas" })}
+          >
+            Soft glass
+          </ToolButton>
+        </ToolGroup>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          {usePhotoGlass
+            ? "Uses an uploaded glass photo inside the lens hole. Upload a sheet below."
+            : "Builds a clear glass surface automatically — no photo upload required."}
+        </p>
+
+        <ToolGroup label="Layer order" valueLabel={COMPOSITION_ORDER_LABELS[compositionOrder]}>
+          {(
+            [
+              ["hybrid", "Recommended"],
+              ["under-frame", "Glass behind frame"],
+              ["over-surface", "Glass in front"],
+            ] as const
+          ).map(([mode, label]) => (
+            <ToolButton
+              key={mode}
+              active={compositionOrder === mode}
+              disabled={disabled}
+              onClick={() => patch({ glassCompositionOrder: mode })}
+            >
+              {label}
+            </ToolButton>
+          ))}
+        </ToolGroup>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          Try Recommended first. Switch only if frame parts look wrong over the glass.
+        </p>
+      </div>
+
+      <div className="space-y-3 rounded-md border border-border/70 bg-background/60 p-3">
+        <div>
+          <p className="text-sm font-medium text-foreground">2. Photo glass sheet</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            {usePhotoGlass
+              ? "Upload, crop, and position the glass photo used inside each lens."
+              : "Optional — Soft glass is active. You can still upload a sheet, then switch to Photo glass."}
           </p>
         </div>
 
@@ -399,7 +477,9 @@ export function LensRenderingSettingsPanel({
             </div>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              No sheet yet — upload one to replace the original lens.
+              {usePhotoGlass
+                ? "No sheet yet — upload one, or switch to Soft glass."
+                : "No sheet uploaded (Soft glass does not need one)."}
             </p>
           )}
 
@@ -430,6 +510,11 @@ export function LensRenderingSettingsPanel({
           {sheetUrl?.startsWith("blob:") ? (
             <p className="text-[10px] text-amber-700 dark:text-amber-400">
               Draft sheet — not saved to storage until you click Save.
+            </p>
+          ) : null}
+          {usePhotoGlass && !sheetUrl ? (
+            <p className="text-[10px] text-amber-700 dark:text-amber-400">
+              Photo glass needs a sheet. Soft glass is used until you upload one.
             </p>
           ) : null}
         </div>
@@ -491,9 +576,11 @@ export function LensRenderingSettingsPanel({
         />
       </div>
 
+      <p className="text-[11px] font-medium text-foreground">3. Finish the glass</p>
+
       <LayerCard
         title="Tint layer"
-        description="Colours the glass sheet. Customer tint HEX stays outside this panel."
+        description="Colours the new glass (not the original photo lens). Customer tint HEX stays outside this panel."
         enabled={tintEnabled}
         disabled={disabled}
         onToggle={(glassTintEnabled) => patch({ glassTintEnabled })}

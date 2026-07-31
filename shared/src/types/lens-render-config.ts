@@ -2,6 +2,8 @@ import type { LensClipRenderSettings } from "./lens-clip.js";
 
 /** Material keys that participate in the preset hierarchy (admin-editable optics). */
 export const LENS_RENDER_PRESET_KEYS = [
+  "glassCompositionOrder",
+  "glassBaseSource",
   "glassSheetEnabled",
   "glassSheetUrl",
   "glassSheetNaturalWidth",
@@ -196,6 +198,8 @@ export type ResolvedLensRenderMaterial = Required<
 export const LENS_RENDER_SYSTEM_DEFAULTS: Required<
   Pick<LensClipRenderSettings, LensRenderPresetKey>
 > = {
+  glassCompositionOrder: "hybrid",
+  glassBaseSource: "canvas",
   glassSheetEnabled: false,
   glassSheetUrl: null,
   glassSheetNaturalWidth: null,

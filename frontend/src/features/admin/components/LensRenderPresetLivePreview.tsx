@@ -66,7 +66,10 @@ function pickDefaultPreviewPair(frames: FrameEntry[]): { darkId: string; clearId
  * Preview-only layer gates — mirrors Lens Rendering editor layers exactly.
  * Never written to presets / overrides / system defaults.
  */
+export type PreviewLookStage = "original" | "glass-only" | "glass-and-tint" | "full";
+
 export interface PreviewRenderMode {
+  look: PreviewLookStage;
   glassSheet: boolean;
   tintLayer: boolean;
   reflection: boolean;
@@ -76,6 +79,7 @@ export interface PreviewRenderMode {
 }
 
 export const DEFAULT_PREVIEW_RENDER_MODE: PreviewRenderMode = {
+  look: "full",
   glassSheet: true,
   tintLayer: true,
   reflection: true,
@@ -83,6 +87,13 @@ export const DEFAULT_PREVIEW_RENDER_MODE: PreviewRenderMode = {
   innerFrame: true,
   manualDetails: true,
 };
+
+const PREVIEW_LOOK_OPTIONS: Array<{ id: PreviewLookStage; label: string; hint: string }> = [
+  { id: "original", label: "Original photo", hint: "Product image only" },
+  { id: "glass-only", label: "Glass only", hint: "New glass, no tint" },
+  { id: "glass-and-tint", label: "Glass + tint", hint: "Glass coloured, no shine/edge" },
+  { id: "full", label: "Full look", hint: "Everything on" },
+];
 
 /**
  * Apply temporary preview toggles onto draft material settings.
@@ -92,16 +103,30 @@ export function applyPreviewRenderMode(
   draftSettings: LensClipRenderSettings,
   mode: PreviewRenderMode,
 ): LensClipRenderSettings {
+  const look = mode.look ?? "full";
   return {
     ...draftSettings,
-    glassTintEnabled: mode.tintLayer,
-    reflectionEnabled: mode.reflection,
-    edgeEnabled: mode.edge,
-    innerFrameEnabled: mode.innerFrame,
+    glassTintEnabled: mode.tintLayer && look !== "original" && look !== "glass-only",
+    reflectionEnabled: mode.reflection && look === "full",
+    edgeEnabled: mode.edge && look === "full",
+    innerFrameEnabled: mode.innerFrame && look !== "original",
     // Sheet is always-on when a URL exists in saved config; preview may temporarily clear it.
-    glassSheetUrl: mode.glassSheet ? draftSettings.glassSheetUrl : null,
-    // Retired controls — never reintroduced via preview.
-    densityGradientEnabled: false,
+    glassSheetUrl: mode.glassSheet && look !== "original" ? draftSettings.glassSheetUrl : null,
+    glassBaseSource:
+      look === "original"
+        ? draftSettings.glassBaseSource
+        : mode.glassSheet
+          ? draftSettings.glassBaseSource ?? (draftSettings.glassSheetUrl ? "sheet" : "canvas")
+          : "canvas",
+    glassDebugStage:
+      look === "original"
+        ? "original"
+        : look === "glass-only"
+          ? "glass-base"
+          : look === "glass-and-tint"
+            ? "glass-tint"
+            : "full",
+    // Keep environment retired; preserve density gradient from draft when present.
     backgroundVisibility: 0,
     environmentTransparency: 0,
   };
@@ -208,11 +233,11 @@ export function LensRenderPresetLivePreview({
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-foreground/80">
-              Preview
+              Live preview
             </p>
             <p className="text-[10px] text-muted-foreground">
-              Front view only. Layer toggles match Lens Rendering and are temporary — they never
-              change the saved preset.
+              Compare looks on real frames. These toggles are temporary and never change the saved
+              preset.
             </p>
           </div>
         </div>
@@ -298,7 +323,7 @@ function PreviewPane({
         </div>
       ) : (
         <SunglassesCompositor
-          key={`${selectedId}-front-${mode.glassSheet}-${mode.tintLayer}-${mode.reflection}-${mode.edge}-${mode.innerFrame}-${mode.manualDetails}`}
+          key={`${selectedId}-front-${mode.look}-${mode.glassSheet}-${mode.tintLayer}-${mode.reflection}-${mode.edge}-${mode.innerFrame}-${mode.manualDetails}`}
           config={config}
           view="front"
           label="Front"
@@ -325,10 +350,33 @@ function PreviewPane({
 
       <div className="space-y-1.5 border-t border-border/60 pt-2">
         <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Compare look
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {PREVIEW_LOOK_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              title={option.hint}
+              onClick={() => patchMode({ look: option.id })}
+              className={
+                mode.look === option.id
+                  ? "rounded border border-foreground/40 bg-foreground px-2 py-1 text-[10px] font-medium text-background"
+                  : "rounded border border-border/70 bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/40"
+              }
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-1.5 border-t border-border/60 pt-2">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Layers
         </p>
         <PreviewToggle
-          label="Glass sheet"
+          label="Photo glass"
           checked={mode.glassSheet}
           onChange={(glassSheet) => patchMode({ glassSheet })}
         />

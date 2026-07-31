@@ -26,6 +26,7 @@ describe("applyPreviewRenderMode", () => {
       edgeEnabled: true,
     };
     const tintOnly = applyPreviewRenderMode(draft, {
+      look: "full",
       glassSheet: true,
       tintLayer: true,
       reflection: false,
@@ -51,6 +52,7 @@ describe("applyPreviewRenderMode", () => {
       glassSheet: false,
     });
     expect(next.glassSheetUrl).toBeNull();
+    expect(next.glassBaseSource).toBe("canvas");
     expect(draft.glassSheetUrl).toBe("https://cdn.example/sheet.png");
   });
 
@@ -67,18 +69,22 @@ describe("applyPreviewRenderMode", () => {
     expect(draft.innerFrameEnabled).toBe(true);
   });
 
-  it("never re-enables retired density or background controls", () => {
-    const next = applyPreviewRenderMode(
-      {
-        ...DEFAULT_LENS_CLIP_RENDER,
-        densityGradientEnabled: true,
-        backgroundVisibility: 0.5,
-        environmentTransparency: 0.4,
-      },
-      DEFAULT_PREVIEW_RENDER_MODE,
-    );
-    expect(next.densityGradientEnabled).toBe(false);
-    expect(next.backgroundVisibility).toBe(0);
-    expect(next.environmentTransparency).toBe(0);
+  it("maps compare-look stages without mutating the draft", () => {
+    const draft = {
+      ...DEFAULT_LENS_CLIP_RENDER,
+      densityGradientEnabled: true,
+      glassSheetUrl: "https://cdn.example/sheet.png",
+    };
+    const glassOnly = applyPreviewRenderMode(draft, {
+      ...DEFAULT_PREVIEW_RENDER_MODE,
+      look: "glass-only",
+    });
+    expect(glassOnly.glassDebugStage).toBe("glass-base");
+    expect(glassOnly.glassTintEnabled).toBe(false);
+    expect(glassOnly.reflectionEnabled).toBe(false);
+    expect(draft.densityGradientEnabled).toBe(true);
+    expect(glassOnly.densityGradientEnabled).toBe(true);
+    expect(glassOnly.backgroundVisibility).toBe(0);
+    expect(glassOnly.environmentTransparency).toBe(0);
   });
 });
