@@ -42,6 +42,9 @@ type DragState = {
   startPoints: PathAnchor[];
   /** When transforming the outer path, companion holes move/scale/rotate with it. */
   startHolePoints: PathAnchor[][];
+  /** Transform-clean baseline for Reset Shape (same transform as live points). */
+  startBaseline: PathAnchor[] | null;
+  startHoleBaselines: Array<PathAnchor[] | null>;
   bounds: ReturnType<typeof pathBounds>;
   startAngle: number;
   transformGroup: boolean;
@@ -59,7 +62,11 @@ export interface FramePartTransformCanvasProps {
   onSelectSubpath?: (subpath: FramePartSubpath) => void;
   onCommitGeometry: (
     index: number,
-    geometry: { points: PathAnchor[]; holes: LensPolygon[] },
+    geometry: {
+      points: PathAnchor[];
+      holes: LensPolygon[];
+      shapeBaseline?: PathAnchor[];
+    },
   ) => void;
   onEnterVertexEdit: (index: number) => void;
   /**
@@ -100,6 +107,8 @@ export function FramePartTransformCanvas({
   const dragRef = useRef<DragState | null>(null);
   const previewPointsRef = useRef<PathAnchor[] | null>(null);
   const previewHolePointsRef = useRef<PathAnchor[][] | null>(null);
+  const previewBaselineRef = useRef<PathAnchor[] | null>(null);
+  const previewHoleBaselinesRef = useRef<Array<PathAnchor[] | null> | null>(null);
   const viewRef = useRef({ scale: 1, offsetX: 0, offsetY: 0, imgW: 1, imgH: 1 });
   const spaceDownRef = useRef(false);
   const panRef = useRef<{
@@ -111,23 +120,21 @@ export function FramePartTransformCanvas({
 
   const [ready, setReady] = useState(false);
   const [tool, setTool] = useState<CanvasTool>("select");
-  const [status, setStatus] = useState("Select tool active · click a detail to select and edit");
+  /** Gesture feedback — rendered as a canvas overlay so the toolbar never shifts. */
+  const [gestureStatus, setGestureStatus] = useState<string | null>(null);
   const [zoomLabel, setZoomLabel] = useState("100%");
   toolRef.current = tool;
 
   const setToolAndStatus = useCallback((next: CanvasTool) => {
     dragRef.current = null;
     previewPointsRef.current = null;
+    previewHolePointsRef.current = null;
+    previewBaselineRef.current = null;
+    previewHoleBaselinesRef.current = null;
     panRef.current = null;
+    setGestureStatus(null);
     setTool(next);
     toolRef.current = next;
-    setStatus(
-      next === "pan"
-        ? "Pan tool active · drag the canvas"
-        : next === "zoom"
-          ? "Zoom tool active · use the mouse wheel to zoom"
-          : "Select tool active · click a detail to select and edit",
-    );
     // Zoom/Pan should become the active interaction target immediately.
     if (next === "zoom" || next === "pan") {
       requestAnimationFrame(() => {
@@ -259,7 +266,7 @@ export function FramePartTransformCanvas({
         draw();
       })
       .catch(() => {
-        if (!destroyed) setStatus("Failed to load plate image");
+        if (!destroyed) setReady(false);
       });
     return () => {
       destroyed = true;
@@ -364,12 +371,53 @@ export function FramePartTransformCanvas({
     };
   }, []);
 
+  const hitSubpathOnPart = (part: LensPolygon, imgX: number, imgY: number): FramePartSubpath => {
+    const { imgW, imgH, scale } = viewRef.current;
+    const threshold = 12 / scale;
+    const ctx = canvasRef.current?.getContext("2d");
+    const holes = part.holes ?? [];
+
+    for (let hi = holes.length - 1; hi >= 0; hi--) {
+      const holePts = migrateAnchors(holes[hi]?.points ?? []);
+      if (holePts.length >= 2 && hitTestPathEdge(imgX, imgY, holePts, imgW, imgH, threshold)) {
+        return hi;
+      }
+    }
+
+    if (ctx) {
+      for (let hi = holes.length - 1; hi >= 0; hi--) {
+        const hole = holes[hi];
+        const holePts = migrateAnchors(hole?.points ?? []);
+        if (holePts.length < 3) continue;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.beginPath();
+        traceLensPath(
+          ctx,
+          { id: hole?.id ?? `cutout-${hi}`, label: hole?.label ?? "", points: holePts },
+          imgW,
+          imgH,
+          true,
+        );
+        const insideHole = ctx.isPointInPath(imgX, imgY);
+        ctx.restore();
+        if (insideHole) return hi;
+      }
+    }
+
+    const points = migrateAnchors(part.points ?? []);
+    if (points.length >= 2 && hitTestPathEdge(imgX, imgY, points, imgW, imgH, threshold)) {
+      return "outer";
+    }
+    return "outer";
+  };
+
   const hitPartIndex = (imgX: number, imgY: number): number => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     const { imgW, imgH, scale } = viewRef.current;
     if (!ctx) return -1;
-    const threshold = 10 / scale;
+    const threshold = 12 / scale;
     // Prefer active, then top-most (later in list).
     const order = [
       activeIndexRef.current,
@@ -381,13 +429,28 @@ export function FramePartTransformCanvas({
       if (!part || part.visible === false) continue;
       const points = migrateAnchors(part.points ?? []);
       if (points.length < 2) continue;
-      if (hitTestPathEdge(imgX, imgY, points, imgW, imgH, threshold) >= 0) {
+      if (hitTestPathEdge(imgX, imgY, points, imgW, imgH, threshold)) {
         return index;
       }
       for (const hole of part.holes ?? []) {
         const holePts = migrateAnchors(hole.points ?? []);
-        if (holePts.length >= 2 && hitTestPathEdge(imgX, imgY, holePts, imgW, imgH, threshold) >= 0) {
+        if (holePts.length >= 2 && hitTestPathEdge(imgX, imgY, holePts, imgW, imgH, threshold)) {
           return index;
+        }
+        if (holePts.length >= 3) {
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.beginPath();
+          traceLensPath(
+            ctx,
+            { id: hole.id, label: hole.label, points: holePts },
+            imgW,
+            imgH,
+            true,
+          );
+          const insideHole = ctx.isPointInPath(imgX, imgY);
+          ctx.restore();
+          if (insideHole) return index;
         }
       }
       if (points.length >= 3) {
@@ -439,12 +502,27 @@ export function FramePartTransformCanvas({
     const startHolePoints = transformGroup
       ? (part.holes ?? []).map((hole) => migrateAnchors(hole.points ?? []))
       : [];
+    const startBaseline =
+      subpath === "outer"
+        ? migrateAnchors(part.shapeBaseline ?? part.points ?? [])
+        : migrateAnchors(
+            part.holes?.[subpath]?.shapeBaseline ?? part.holes?.[subpath]?.points ?? [],
+          );
+    const startHoleBaselines = transformGroup
+      ? (part.holes ?? []).map((hole) =>
+          hole.shapeBaseline?.length
+            ? migrateAnchors(hole.shapeBaseline)
+            : migrateAnchors(hole.points ?? []),
+        )
+      : [];
     dragRef.current = {
       kind: handle,
       startClient: { x: 0, y: 0 },
       startImg: img,
       startPoints,
       startHolePoints,
+      startBaseline: startBaseline.length ? startBaseline : null,
+      startHoleBaselines,
       bounds,
       startAngle: Math.atan2(
         img.y - bounds.cy * viewRef.current.imgH,
@@ -454,6 +532,8 @@ export function FramePartTransformCanvas({
     };
     previewPointsRef.current = startPoints;
     previewHolePointsRef.current = transformGroup ? startHolePoints : null;
+    previewBaselineRef.current = startBaseline.length ? startBaseline : null;
+    previewHoleBaselinesRef.current = transformGroup ? startHoleBaselines : null;
   };
 
   const commitPreview = (index: number) => {
@@ -467,30 +547,53 @@ export function FramePartTransformCanvas({
     if (!part) {
       previewPointsRef.current = null;
       previewHolePointsRef.current = null;
+      previewBaselineRef.current = null;
+      previewHoleBaselinesRef.current = null;
       return;
     }
     const subpath = activeSubpathRef.current;
+    const baselinePreview = previewBaselineRef.current;
     if (subpath === "outer") {
       const holePts = previewHolePointsRef.current;
+      const holeBaselines = previewHoleBaselinesRef.current;
       const holes = (part.holes ?? []).map((hole, hi) => ({
         ...hole,
         points: applySnapToLensEdge(holePts?.[hi] ?? hole.points ?? [], {
           enabled: snapToLensEdge,
           lensOpenings,
         }),
+        shapeBaseline: holeBaselines?.[hi]?.length
+          ? migrateAnchors(holeBaselines[hi]!)
+          : hole.shapeBaseline,
       }));
       previewPointsRef.current = null;
       previewHolePointsRef.current = null;
-      onCommitGeometry(index, { points: snapped, holes });
+      previewBaselineRef.current = null;
+      previewHoleBaselinesRef.current = null;
+      onCommitGeometry(index, {
+        points: snapped,
+        holes,
+        shapeBaseline: baselinePreview?.length ? migrateAnchors(baselinePreview) : snapped,
+      });
       return;
     }
     const holes = [...(part.holes ?? [])];
     if (holes[subpath]) {
-      holes[subpath] = { ...holes[subpath]!, points: snapped };
+      holes[subpath] = {
+        ...holes[subpath]!,
+        points: snapped,
+        shapeBaseline: baselinePreview?.length ? migrateAnchors(baselinePreview) : snapped,
+      };
     }
     previewPointsRef.current = null;
     previewHolePointsRef.current = null;
-    onCommitGeometry(index, { points: migrateAnchors(part.points ?? []), holes });
+    previewBaselineRef.current = null;
+    previewHoleBaselinesRef.current = null;
+    onCommitGeometry(index, {
+      points: migrateAnchors(part.points ?? []),
+      holes,
+      shapeBaseline: part.shapeBaseline,
+    });
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -505,17 +608,15 @@ export function FramePartTransformCanvas({
         startClient: { x: e.clientX, y: e.clientY },
         startOffset: { x: viewRef.current.offsetX, y: viewRef.current.offsetY },
       };
-      setStatus("Panning…");
+      setGestureStatus("Panning");
       return;
     }
 
     if (tool === "zoom") {
-      setStatus("Zoom tool active · use the mouse wheel to zoom");
       return;
     }
 
     if (spaceDownRef.current || e.altKey) {
-      setStatus("Select tool active · click a detail to select and edit");
       return;
     }
     if (e.button !== 0) return;
@@ -523,34 +624,42 @@ export function FramePartTransformCanvas({
     const img = clientToImage(e.clientX, e.clientY);
     const handle = hitHandle(img.x, img.y);
     if (handle) {
+      e.preventDefault();
       const active = partsRef.current[activeIndexRef.current];
       if (!active) return;
+      if (handle === "move") {
+        const preferred = hitSubpathOnPart(active, img.x, img.y);
+        if (preferred !== activeSubpathRef.current) {
+          onSelectSubpath?.(preferred);
+          activeSubpathRef.current = preferred;
+        }
+      }
       beginTransformDrag(handle, img, active);
       if (dragRef.current) {
         dragRef.current.startClient = { x: e.clientX, y: e.clientY };
       }
-      setStatus(handle === "rotate" ? "Rotating…" : handle === "move" ? "Moving…" : "Scaling…");
+      setGestureStatus(handle === "rotate" ? "Rotating" : handle === "move" ? "Moving" : "Scaling");
       return;
     }
 
     const hit = hitPartIndex(img.x, img.y);
     if (hit >= 0) {
-      onSelect(hit);
-      onSelectSubpath?.("outer");
-      activeSubpathRef.current = "outer";
+      e.preventDefault();
       const part = partsRef.current[hit];
       if (!part) return;
+      const subpath = hitSubpathOnPart(part, img.x, img.y);
+      onSelect(hit);
+      onSelectSubpath?.(subpath);
+      activeSubpathRef.current = subpath;
+      activeIndexRef.current = hit;
       beginTransformDrag("move", img, part);
       if (dragRef.current) {
         dragRef.current.startClient = { x: e.clientX, y: e.clientY };
       }
-      activeIndexRef.current = hit;
-      setStatus("Moving…");
+      setGestureStatus("Moving");
       draw();
       return;
     }
-
-    setStatus("Select tool active · click a detail to select and edit");
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -589,9 +698,14 @@ export function FramePartTransformCanvas({
     previewPointsRef.current = applyTo(drag.startPoints);
     if (drag.transformGroup) {
       previewHolePointsRef.current = drag.startHolePoints.map((pts) => applyTo(pts));
+      previewHoleBaselinesRef.current = drag.startHoleBaselines.map((pts) =>
+        pts ? applyTo(pts) : null,
+      );
     } else {
       previewHolePointsRef.current = null;
+      previewHoleBaselinesRef.current = null;
     }
+    previewBaselineRef.current = drag.startBaseline ? applyTo(drag.startBaseline) : null;
     draw();
   };
 
@@ -604,14 +718,14 @@ export function FramePartTransformCanvas({
     }
     if (panRef.current) {
       panRef.current = null;
-      setStatus(tool === "pan" ? "Pan tool active · drag the canvas" : status);
+      setGestureStatus(null);
       return;
     }
     if (dragRef.current) {
       const index = activeIndexRef.current;
       dragRef.current = null;
       commitPreview(index);
-      setStatus("Double-click to edit vertices · Esc exits vertex mode");
+      setGestureStatus(null);
       draw();
     }
   };
@@ -627,78 +741,77 @@ export function FramePartTransformCanvas({
   };
 
   const cursorClass =
-    tool === "pan"
-      ? panRef.current
-        ? "cursor-grabbing"
-        : "cursor-grab"
-      : tool === "zoom"
-        ? "cursor-zoom-in"
-        : "cursor-default";
+    gestureStatus === "Moving" || gestureStatus === "Scaling" || gestureStatus === "Rotating"
+      ? "cursor-move"
+      : tool === "pan" || gestureStatus === "Panning"
+        ? gestureStatus === "Panning"
+          ? "cursor-grabbing"
+          : "cursor-grab"
+        : tool === "zoom"
+          ? "cursor-zoom-in"
+          : "cursor-default";
 
   return (
     <div className={cn("space-y-2", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">{status}</p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant={tool === "select" ? "default" : "outline"}
-            onClick={() => setToolAndStatus("select")}
-          >
-            <MousePointer2 className="h-3.5 w-3.5" />
-            Select
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={tool === "pan" ? "default" : "outline"}
-            onClick={() => setToolAndStatus("pan")}
-          >
-            <Hand className="h-3.5 w-3.5" />
-            Pan
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={tool === "zoom" ? "default" : "outline"}
-            onClick={() => setToolAndStatus("zoom")}
-          >
-            <Search className="h-3.5 w-3.5" />
-            Zoom
-          </Button>
-          <span
-            className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[10px] tabular-nums text-muted-foreground"
-            aria-live="polite"
-            title="Current zoom"
-          >
-            {zoomLabel}
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              fitToView();
-              draw();
-            }}
-          >
-            <ScanSearch className="h-3.5 w-3.5" />
-            Fit
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              resetView();
-              draw();
-            }}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reset
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          variant={tool === "select" ? "default" : "outline"}
+          onClick={() => setToolAndStatus("select")}
+        >
+          <MousePointer2 className="h-3.5 w-3.5" />
+          Select
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={tool === "pan" ? "default" : "outline"}
+          onClick={() => setToolAndStatus("pan")}
+        >
+          <Hand className="h-3.5 w-3.5" />
+          Pan
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={tool === "zoom" ? "default" : "outline"}
+          onClick={() => setToolAndStatus("zoom")}
+        >
+          <Search className="h-3.5 w-3.5" />
+          Zoom
+        </Button>
+        <span
+          className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[10px] tabular-nums text-muted-foreground"
+          aria-live="polite"
+          title="Current zoom"
+        >
+          {zoomLabel}
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            fitToView();
+            draw();
+          }}
+        >
+          <ScanSearch className="h-3.5 w-3.5" />
+          Fit
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            resetView();
+            draw();
+          }}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reset
+        </Button>
       </div>
       <div
         ref={stageRef}
@@ -707,7 +820,7 @@ export function FramePartTransformCanvas({
           height: "min(52vh, 520px)",
           minHeight: 360,
           overscrollBehavior: "contain",
-          touchAction: tool === "select" ? "auto" : "none",
+          touchAction: "none",
         }}
       >
         <canvas
@@ -728,10 +841,18 @@ export function FramePartTransformCanvas({
             }
           }}
         />
+        {gestureStatus ? (
+          <div
+            className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-white/15 bg-black/55 px-2.5 py-1 text-[11px] font-medium tracking-wide text-white/90 shadow-sm"
+            aria-live="polite"
+          >
+            {gestureStatus}
+          </div>
+        ) : null}
       </div>
       <p className="text-[10px] text-muted-foreground">
-        Select edits details · Pan drags the canvas · Zoom uses the mouse wheel · Fit and Reset do
-        not change the active tool
+        Drag inside a shape to move it · drag handles to scale / rotate · click a cutout edge or
+        interior to select it · double-click for vertices · Pan / Zoom leave the selection alone
       </p>
     </div>
   );

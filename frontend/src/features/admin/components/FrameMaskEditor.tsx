@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PolygonEditorShell } from "@/render/editor/PolygonEditorShell";
+import { EditorTool } from "@/render/mask/editor-interaction";
 import {
   createLensPolygon,
   createMaskConfig,
@@ -37,9 +38,13 @@ import {
 import {
   createFramePart,
   createFramePartFromLensClip,
+  createCutoutFromPreset,
   createInsetCutoutFromOuter,
   createScaledCutout,
   duplicateCutout,
+  isShapeGeometryEdited,
+  resetSubpathToShapeBaseline,
+  shapePresetLabel,
   type FramePartStartShape,
   type FramePartSubpath,
 } from "@/features/admin/lib/frame-parts";
@@ -80,9 +85,9 @@ function withListOrderDepth(list: LensPolygon[]): LensPolygon[] {
 }
 
 const START_SHAPES: { value: FramePartStartShape; label: string; hint: string }[] = [
-  { value: "rectangle", label: "Rectangle", hint: "Quick box — transform, then refine." },
-  { value: "ellipse", label: "Ellipse", hint: "Rounded starting shape." },
-  { value: "free", label: "Free Polygon", hint: "Empty path — draw vertices yourself." },
+  { value: "rectangle", label: "Rectangle", hint: "Quick box — transform, then Edit Shape to refine." },
+  { value: "ellipse", label: "Circle", hint: "Rounded starting shape — Edit Shape to add points." },
+  { value: "free", label: "Polygon", hint: "Empty path — draw vertices yourself." },
 ];
 
 /** Lens clip path editor (polygon/curve tools → persisted as SVG clip paths). */
@@ -219,11 +224,18 @@ export function FrameMaskEditor({
           id: current.id,
           label: current.label,
           points: outer?.points ?? current.points,
-          holes: holePaths.map((hole, hi) => ({
-            id: current.holes?.[hi]?.id ?? hole.id ?? `cutout-${hi}`,
-            label: current.holes?.[hi]?.label ?? hole.label ?? `Cutout ${hi + 1}`,
-            points: hole.points ?? [],
-          })),
+          shapePreset: current.shapePreset,
+          shapeBaseline: current.shapeBaseline,
+          holes: holePaths.map((hole, hi) => {
+            const prev = current.holes?.[hi];
+            return {
+              id: prev?.id ?? hole.id ?? `cutout-${hi}`,
+              label: prev?.label ?? hole.label ?? `Cutout ${hi + 1}`,
+              points: hole.points ?? [],
+              shapePreset: prev?.shapePreset,
+              shapeBaseline: prev?.shapeBaseline,
+            };
+          }),
         };
         commitList(next);
         return;
@@ -303,23 +315,55 @@ export function FrameMaskEditor({
 
   const commitTransformedGeometry = (
     index: number,
-    geometry: { points: PathAnchor[]; holes: LensPolygon[] },
+    geometry: {
+      points: PathAnchor[];
+      holes: LensPolygon[];
+      shapeBaseline?: PathAnchor[];
+    },
   ) => {
     const next = partListRef.current.map((part, i) =>
-      i === index ? { ...part, points: geometry.points, holes: geometry.holes } : part,
+      i === index
+        ? {
+            ...part,
+            points: geometry.points,
+            holes: geometry.holes,
+            shapeBaseline:
+              geometry.shapeBaseline !== undefined
+                ? geometry.shapeBaseline
+                : part.shapeBaseline,
+          }
+        : part,
     );
     commitList(next);
   };
 
-  const addCutout = () => {
+  const addCutout = (shape: FramePartStartShape = "free") => {
     const part = partListRef.current[activePartIndex];
     if (!part) return;
     const label = `Cutout ${(part.holes?.length ?? 0) + 1}`;
-    const hole = createScaledCutout(part.points ?? [], label);
+    const hole =
+      shape === "rectangle" || shape === "ellipse"
+        ? createCutoutFromPreset(part.points ?? [], shape, label)
+        : createScaledCutout(part.points ?? [], label);
     const holes = [...(part.holes ?? []), hole];
     patchActive({ holes });
     setActiveSubpath(holes.length - 1);
+    setEditPhase("transform");
     setPartRevision((r) => r + 1);
+  };
+
+  const resetActiveShape = () => {
+    const part = partListRef.current[activePartIndex];
+    if (!part) return;
+    const target =
+      activeSubpath === "outer" ? part : part.holes?.[activeSubpath];
+    if (!target?.shapePreset || target.shapePreset === "free") return;
+    if (!isShapeGeometryEdited(target) && (target.shapeBaseline?.length ?? 0) > 0) return;
+    const nextPart = resetSubpathToShapeBaseline(part, activeSubpath);
+    const next = partListRef.current.map((item, i) =>
+      i === activePartIndex ? nextPart : item,
+    );
+    commitList(next, { bumpRevision: true });
   };
 
   const addInsetCutout = () => {
@@ -387,9 +431,9 @@ export function FrameMaskEditor({
     return (
       <div className={cn("space-y-3", className)}>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Manual Details sit above the glass (rivets, screws, logos, inner lips). Drag to move, use
-          handles to scale and rotate. Add cutouts for true transparent holes. Double-click for
-          vertex edits.
+          Manual Details sit above the glass (rivets, screws, logos, inner lips). Start with Circle
+          or Rectangle, then use Edit Shape when you need custom vertices. Cutouts stay fully
+          editable.
         </p>
 
         <div className="rounded-md border border-border/70 bg-muted/10">
@@ -560,9 +604,23 @@ export function FrameMaskEditor({
             </div>
 
             <div className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Compound shape
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Compound shape
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {(() => {
+                    const target =
+                      activeSubpath === "outer"
+                        ? activePart
+                        : activeHoles[activeSubpath];
+                    const preset = target?.shapePreset;
+                    if (!preset) return null;
+                    const edited = isShapeGeometryEdited(target);
+                    return `${shapePresetLabel(preset)}${edited ? " · edited" : ""}`;
+                  })()}
+                </p>
+              </div>
               <div className="flex flex-col gap-1">
                 <button
                   type="button"
@@ -575,6 +633,9 @@ export function FrameMaskEditor({
                   onClick={() => setActiveSubpath("outer")}
                 >
                   Outer Polygon
+                  {activePart.shapePreset
+                    ? ` · ${shapePresetLabel(activePart.shapePreset)}`
+                    : ""}
                 </button>
                 <p className="px-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Cutouts
@@ -597,12 +658,39 @@ export function FrameMaskEditor({
                       onClick={() => setActiveSubpath(hi)}
                     >
                       {hole.label || `Cutout ${hi + 1}`}
+                      {hole.shapePreset
+                        ? ` · ${shapePresetLabel(hole.shapePreset)}`
+                        : ""}
                     </button>
                   ))
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5 pt-1">
-                <Button type="button" size="sm" variant="outline" className="h-7" onClick={addCutout}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  onClick={() => addCutout("ellipse")}
+                >
+                  Add Circle Cutout
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  onClick={() => addCutout("rectangle")}
+                >
+                  Add Rectangle Cutout
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  onClick={() => addCutout("free")}
+                >
                   Add Cutout
                 </Button>
                 <Button
@@ -671,18 +759,41 @@ export function FrameMaskEditor({
                 variant={editPhase === "vertex" ? "default" : "outline"}
                 onClick={() => setEditPhase("vertex")}
               >
-                Edit vertices
+                Edit Shape
               </Button>
+              {(() => {
+                const target =
+                  activeSubpath === "outer"
+                    ? activePart
+                    : activeHoles[typeof activeSubpath === "number" ? activeSubpath : -1];
+                const canReset =
+                  target?.shapePreset === "rectangle" || target?.shapePreset === "ellipse";
+                if (!canReset) return null;
+                return (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={!isShapeGeometryEdited(target)}
+                    onClick={resetActiveShape}
+                    title={`Restore the original ${shapePresetLabel(target?.shapePreset)} after vertex edits`}
+                  >
+                    Reset Shape
+                  </Button>
+                );
+              })()}
             </div>
 
             {editPhase === "transform" ? (
               <FramePartTransformCanvas
-                key={`transform-${partRevision}-${lensRevision}-${String(activeSubpath)}`}
+                key={`transform-${partRevision}-${lensRevision}`}
                 imageUrl={plateUrl}
                 parts={partList}
                 activeIndex={activePartIndex}
                 activeSubpath={activeSubpath}
-                onSelect={(index) => selectPart(index, "outer")}
+                onSelect={(index) => {
+                  setActivePartIndex(index);
+                }}
                 onSelectSubpath={setActiveSubpath}
                 onCommitGeometry={commitTransformedGeometry}
                 onEnterVertexEdit={(index) => {
@@ -696,8 +807,8 @@ export function FrameMaskEditor({
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground">
-                    Vertex mode — Outer and Cutout tabs · Esc or Transform returns to move / scale /
-                    rotate.
+                    Edit Shape — add / move / delete points on the selected Outer or Cutout · Esc
+                    returns to Transform.
                   </p>
                   <Button
                     type="button"
@@ -734,6 +845,7 @@ export function FrameMaskEditor({
                   defaultActivePathIndex={
                     activeSubpath === "outer" ? 0 : Math.min(activeSubpath + 1, activeHoles.length)
                   }
+                  defaultTool={EditorTool.SELECT}
                   onActivePathChange={(index) => {
                     setActiveSubpath(index <= 0 ? "outer" : index - 1);
                   }}
@@ -743,7 +855,7 @@ export function FrameMaskEditor({
                   showThumbnailPreview={false}
                   lensRevision={partRevision + lensRevision}
                   handlesLabel="Control points"
-                  helpText="Fine-tune vertices · Shift+click edge to insert · Del removes selected point · cutouts subtract from the outer"
+                  helpText="Select: drag a vertex, drag inside the shape to move it, or click an edge to add a point · Del removes a point (min 3) · Draw (P) appends points · Reset Shape restores the Circle/Rectangle baseline"
                 />
               </div>
             )}

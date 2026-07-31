@@ -23,9 +23,13 @@
  *   visible?: boolean,
  *   notes?: string,
  *   holes?: LensPolygon[],
+ *   shapePreset?: 'rectangle' | 'ellipse' | 'free',
+ *   shapeBaseline?: PathAnchor[],
  * }} LensPolygon
  *
  * `holes` — inner polygons for compound glass occluders (even-odd fill). Outer path = `points`.
+ * `shapePreset` — Manual Detail / cutout setup preset (Circle≈ellipse, Rectangle, Free).
+ * `shapeBaseline` — last transform-clean geometry for Reset Shape (vertex edits do not update it).
  */
 
 /**
@@ -156,10 +160,21 @@ export function normalizeExclusionsBySide(exclusions) {
 /** @param {LensPolygon} polygon */
 function normalizeHolePolygon(polygon) {
   if (!polygon?.id) return null;
+  const shapePreset =
+    polygon.shapePreset === "rectangle" ||
+    polygon.shapePreset === "ellipse" ||
+    polygon.shapePreset === "free"
+      ? polygon.shapePreset
+      : undefined;
+  const shapeBaseline = Array.isArray(polygon.shapeBaseline)
+    ? migrateAnchors(polygon.shapeBaseline)
+    : undefined;
   return {
     id: polygon.id,
     label: polygon.label || "Hole",
     points: migrateAnchors(polygon.points ?? []),
+    ...(shapePreset ? { shapePreset } : {}),
+    ...(shapeBaseline?.length ? { shapeBaseline } : {}),
   };
 }
 
@@ -181,6 +196,15 @@ function normalizeExclusionPolygon(polygon) {
   const holes = Array.isArray(polygon.holes)
     ? polygon.holes.map(normalizeHolePolygon).filter(Boolean)
     : [];
+  const shapePreset =
+    polygon.shapePreset === "rectangle" ||
+    polygon.shapePreset === "ellipse" ||
+    polygon.shapePreset === "free"
+      ? polygon.shapePreset
+      : undefined;
+  const shapeBaseline = Array.isArray(polygon.shapeBaseline)
+    ? migrateAnchors(polygon.shapeBaseline)
+    : undefined;
   return {
     id: polygon.id,
     label: polygon.label || "Frame part",
@@ -191,6 +215,8 @@ function normalizeExclusionPolygon(polygon) {
     visible: polygon.visible !== false,
     notes: typeof polygon.notes === "string" ? polygon.notes : "",
     holes,
+    ...(shapePreset ? { shapePreset } : {}),
+    ...(shapeBaseline?.length ? { shapeBaseline } : {}),
   };
 }
 
@@ -198,7 +224,7 @@ function normalizeExclusionPolygon(polygon) {
  * @param {string} id
  * @param {string} label
  * @param {PathAnchor[]} [points]
- * @param {Partial<Pick<LensPolygon, 'layerOrder' | 'opacity' | 'depth' | 'visible' | 'notes' | 'holes'>>} [extras]
+ * @param {Partial<Pick<LensPolygon, 'layerOrder' | 'opacity' | 'depth' | 'visible' | 'notes' | 'holes' | 'shapePreset' | 'shapeBaseline'>>} [extras]
  * @returns {LensPolygon}
  */
 export function createLensPolygon(id, label, points = [], extras = {}) {
@@ -213,6 +239,8 @@ export function createLensPolygon(id, label, points = [], extras = {}) {
       visible: extras.visible !== false,
       notes: extras.notes ?? "",
       holes: extras.holes ?? [],
+      shapePreset: extras.shapePreset,
+      shapeBaseline: extras.shapeBaseline,
     }) ?? {
       id,
       label,

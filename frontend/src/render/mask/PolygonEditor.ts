@@ -6,6 +6,7 @@ import {
   insertPointOnSegment,
   normFromPx,
   toggleSegmentCurved,
+  traceLensPath,
 } from "./bezier-path";
 import {
   SmoothCursorZoom,
@@ -225,11 +226,11 @@ export class PolygonEditor {
     const handle = hitTestHandle(ip.x, ip.y, lens.points, this.imgW, this.imgH, hitR * 0.9);
     const anchor = hitTestVertex(ip.x, ip.y, lens.points, this.imgW, this.imgH, hitR);
     let edge = false;
-    if (
-      this._shiftHeld &&
-      this.cursorState.getTool() === EditorTool.DRAW &&
-      lens.points.length > 0
-    ) {
+    const tool = this.cursorState.getTool();
+    const allowEdge =
+      tool === EditorTool.SELECT ||
+      (tool === EditorTool.DRAW && this._shiftHeld);
+    if (allowEdge && lens.points.length > 0) {
       edge = Boolean(
         hitTestPathEdge(ip.x, ip.y, lens.points, this.imgW, this.imgH, 12 / this.scale),
       );
@@ -239,6 +240,18 @@ export class PolygonEditor {
       anchor: Boolean(anchor),
       edge,
     };
+  }
+
+  isPointInActivePath(ip) {
+    const lens = this.activeLens;
+    if (lens.points.length < 3) return false;
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.beginPath();
+    traceLensPath(this.ctx, lens, this.imgW, this.imgH, true);
+    const inside = this.ctx.isPointInPath(ip.x, ip.y);
+    this.ctx.restore();
+    return inside;
   }
 
   updateHoverCursor(e) {
@@ -251,6 +264,19 @@ export class PolygonEditor {
       ? this.screenToImage(e.clientX, e.clientY)
       : { x: -9999, y: -9999 };
     const hits = e ? this.hitTestHover(ip) : null;
+    if (
+      e &&
+      hits &&
+      !hits.handle &&
+      !hits.anchor &&
+      !hits.edge &&
+      this.cursorState.getTool() === EditorTool.SELECT &&
+      this.isPointInActivePath(ip)
+    ) {
+      this.cursorState.setTransient(CursorState.MOVE);
+      return;
+    }
+    this.cursorState.clearTransient();
     this.cursorState.applyIdle(
       hits ? { handle: hits.handle, anchor: hits.anchor, edge: hits.edge } : null,
     );
@@ -443,6 +469,40 @@ export class PolygonEditor {
       return;
     }
 
+    if (tool === EditorTool.SELECT) {
+      const edgeHit =
+        lens.points.length > 0
+          ? hitTestPathEdge(ip.x, ip.y, lens.points, this.imgW, this.imgH, 12 / this.scale)
+          : null;
+      if (edgeHit) {
+        this.interaction = {
+          mode: 'navigate',
+          startScreen,
+          startOffset,
+          startImage: { ...ip },
+          shiftKey: e.shiftKey,
+          activated: false,
+        };
+        this.cursorState.setTransient(CursorState.HOVER_EDGE);
+        return;
+      }
+      if (lens.points.length >= 3 && this.isPointInActivePath(ip)) {
+        this.selectedPointIndex = -1;
+        this._historyRecordedForGesture = false;
+        this.interaction = {
+          mode: 'dragPath',
+          lensIndex: this.activeLensIndex,
+          startScreen,
+          startImage: { ...ip },
+          startPoints: migrateAnchors(lens.points),
+          activated: false,
+        };
+        this.cursorState.setTransient(CursorState.MOVE);
+        this.draw();
+        return;
+      }
+    }
+
     this.interaction = {
       mode: 'navigate',
       startScreen,
@@ -526,6 +586,30 @@ export class PolygonEditor {
 
       this.emitChange();
       this.draw();
+      return;
+    }
+
+    if (i.mode === 'dragPath') {
+      if (!i.activated && dist < DRAG_THRESHOLD_PX) return;
+      if (!i.activated && !this._historyRecordedForGesture) {
+        this._recordHistory();
+        this._historyRecordedForGesture = true;
+      }
+      i.activated = true;
+      this.cursorState.setTransient(CursorState.MOVE);
+      const ip = this.screenToImage(e.clientX, e.clientY);
+      const dx = (ip.x - i.startImage.x) / this.imgW;
+      const dy = (ip.y - i.startImage.y) / this.imgH;
+      const lens = this.lenses[i.lensIndex];
+      lens.points = i.startPoints.map((p) => ({
+        ...p,
+        x: p.x + dx,
+        y: p.y + dy,
+        handleIn: p.handleIn ? { x: p.handleIn.x + dx, y: p.handleIn.y + dy } : undefined,
+        handleOut: p.handleOut ? { x: p.handleOut.x + dx, y: p.handleOut.y + dy } : undefined,
+      }));
+      this.emitChange();
+      this.draw();
     }
   }
 
@@ -588,20 +672,29 @@ export class PolygonEditor {
       return;
     }
 
-    if (tool === EditorTool.SELECT) {
-      return;
-    }
+    const edge =
+      lens.points.length > 0
+        ? hitTestPathEdge(ip.x, ip.y, lens.points, this.imgW, this.imgH, 12 / this.scale)
+        : null;
 
-    if (tool === EditorTool.DRAW && i.shiftKey && lens.points.length > 0) {
-      const edge = hitTestPathEdge(ip.x, ip.y, lens.points, this.imgW, this.imgH, 12 / this.scale);
+    if (tool === EditorTool.SELECT) {
       if (edge) {
         this._recordHistory();
         lens.points = insertPointOnSegment(lens.points, edge.segIndex, edge.t, this.imgW, this.imgH);
         this.selectedPointIndex = edge.insertAt;
         this.emitChange();
         this.draw();
-        return;
       }
+      return;
+    }
+
+    if (tool === EditorTool.DRAW && i.shiftKey && edge) {
+      this._recordHistory();
+      lens.points = insertPointOnSegment(lens.points, edge.segIndex, edge.t, this.imgW, this.imgH);
+      this.selectedPointIndex = edge.insertAt;
+      this.emitChange();
+      this.draw();
+      return;
     }
 
     if (tool === EditorTool.DRAW) {
@@ -711,6 +804,7 @@ export class PolygonEditor {
   removeSelectedPoint() {
     const lens = this.activeLens;
     if (this.selectedPointIndex < 0 || !lens.points.length) return;
+    if (lens.points.length <= 3) return;
     this._recordHistory();
     lens.points.splice(this.selectedPointIndex, 1);
     this.selectedPointIndex = Math.min(this.selectedPointIndex, lens.points.length - 1);

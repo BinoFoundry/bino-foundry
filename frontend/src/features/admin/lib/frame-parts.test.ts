@@ -4,12 +4,15 @@ import { createLensPolygon } from "@/render/mask";
 
 import {
   applySnapToLensEdge,
+  createCutoutFromPreset,
   createFramePart,
   createFramePartFromLensClip,
   createInsetCutoutFromOuter,
   createScaledCutout,
   duplicateCutout,
+  isShapeGeometryEdited,
   pathBounds,
+  resetPolygonToShapeBaseline,
   rotateAnchors,
   scaleAnchors,
   translateAnchors,
@@ -68,6 +71,32 @@ describe("frame-parts", () => {
 
     const rotated = rotateAnchors(part.points, Math.PI / 2, bounds.cx, bounds.cy);
     expect(rotated).toHaveLength(part.points.length);
+  });
+
+  it("tracks shape presets and resets vertex edits to the baseline", () => {
+    const circle = createFramePart("Pad", "ellipse");
+    expect(circle.shapePreset).toBe("ellipse");
+    expect(circle.shapeBaseline?.length).toBe(12);
+
+    const edited = {
+      ...circle,
+      points: [...circle.points, { x: 0.5, y: 0.5, curved: false, handleIn: null, handleOut: null }],
+    };
+    expect(isShapeGeometryEdited(edited)).toBe(true);
+    const reset = resetPolygonToShapeBaseline(edited);
+    expect(reset.points).toHaveLength(12);
+    expect(isShapeGeometryEdited(reset)).toBe(false);
+  });
+
+  it("creates Circle and Rectangle cutout presets inside the outer", () => {
+    const outer = createFramePart("Ring", "rectangle").points;
+    const circleCut = createCutoutFromPreset(outer, "ellipse", "Cutout C");
+    const rectCut = createCutoutFromPreset(outer, "rectangle", "Cutout R");
+    expect(circleCut.shapePreset).toBe("ellipse");
+    expect(circleCut.points.length).toBe(12);
+    expect(rectCut.shapePreset).toBe("rectangle");
+    expect(rectCut.points.length).toBe(4);
+    expect(pathBounds(circleCut.points).width).toBeLessThan(pathBounds(outer).width);
   });
 
   it("keeps snap-to-lens-edge as a no-op until enabled", () => {

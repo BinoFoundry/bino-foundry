@@ -51,6 +51,23 @@ export interface LensExclusionShape {
   visible?: boolean;
   /** Optional admin notes. */
   notes?: string;
+  /**
+   * Manual Detail / cutout setup preset. Geometry (`pathD`) remains authoritative for render.
+   * `ellipse` is the Circle preset in the admin UI.
+   */
+  shapePreset?: "rectangle" | "ellipse" | "free";
+  /**
+   * Last transform-clean outer path (`d`) used by Reset Shape.
+   * Vertex edits do not update this; transforms do.
+   */
+  shapeBaselinePathD?: string;
+  /**
+   * Per-hole setup presets aligned with {@link holePathDs} indices.
+   * Used by Manual Detail cutouts (Circle / Rectangle starting shapes).
+   */
+  holeShapePresets?: Array<"rectangle" | "ellipse" | "free" | null>;
+  /** Per-hole baseline paths aligned with {@link holePathDs} (Reset Shape for cutouts). */
+  holeBaselinePathDs?: Array<string | null>;
 }
 
 /**
@@ -114,6 +131,26 @@ export function resolveFrameExclusionObject(
   const layerOrder = LAYER_ORDERS.has(shape.layerOrder as FrameExclusionLayerOrder)
     ? (shape.layerOrder as FrameExclusionLayerOrder)
     : "behind";
+  const shapePreset =
+    shape.shapePreset === "rectangle" ||
+    shape.shapePreset === "ellipse" ||
+    shape.shapePreset === "free"
+      ? shape.shapePreset
+      : undefined;
+  const shapeBaselinePathD =
+    typeof shape.shapeBaselinePathD === "string" && shape.shapeBaselinePathD.trim()
+      ? shape.shapeBaselinePathD.trim()
+      : undefined;
+  const holeShapePresets = Array.isArray(shape.holeShapePresets)
+    ? shape.holeShapePresets.map((p) =>
+        p === "rectangle" || p === "ellipse" || p === "free" ? p : null,
+      )
+    : undefined;
+  const holeBaselinePathDs = Array.isArray(shape.holeBaselinePathDs)
+    ? shape.holeBaselinePathDs.map((d) =>
+        typeof d === "string" && d.trim() ? d.trim() : null,
+      )
+    : undefined;
   return {
     id: shape.id,
     label: shape.label || "Frame part",
@@ -125,6 +162,10 @@ export function resolveFrameExclusionObject(
     depth: clampPctField(shape.depth, 50),
     visible: shape.visible !== false,
     notes: typeof shape.notes === "string" ? shape.notes : "",
+    ...(shapePreset ? { shapePreset } : {}),
+    ...(shapeBaselinePathD ? { shapeBaselinePathD } : {}),
+    ...(holeShapePresets?.length ? { holeShapePresets } : {}),
+    ...(holeBaselinePathDs?.length ? { holeBaselinePathDs } : {}),
   };
 }
 

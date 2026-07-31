@@ -40,6 +40,8 @@ export interface PolygonEditorShellProps {
   showThumbnailPreview?: boolean;
   /** Bump when external lens paths change (auto-detect, reset) so the editor reloads anchors. */
   lensRevision?: number;
+  /** Initial tool when the editor mounts (Manual Details vertex mode uses Select). */
+  defaultTool?: string;
 }
 
 /**
@@ -64,6 +66,7 @@ export function PolygonEditorShell({
   footerExtra,
   showThumbnailPreview = true,
   lensRevision = 0,
+  defaultTool = EditorTool.DRAW,
 }: PolygonEditorShellProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbRef = useRef<HTMLCanvasElement>(null);
@@ -76,6 +79,8 @@ export function PolygonEditorShell({
   onActivePathChangeRef.current = onActivePathChange;
   const defaultActivePathIndexRef = useRef(defaultActivePathIndex);
   defaultActivePathIndexRef.current = defaultActivePathIndex;
+  const defaultToolRef = useRef(defaultTool);
+  defaultToolRef.current = defaultTool;
 
   const tabs = pathTabs?.length
     ? pathTabs
@@ -83,7 +88,7 @@ export function PolygonEditorShell({
       ? FRAME_LENS_TABS.map((t) => ({ id: t.id, label: t.label }))
       : null;
 
-  const [tool, setTool] = useState<string>(EditorTool.DRAW);
+  const [tool, setTool] = useState<string>(defaultTool);
   const [activeLens, setActiveLens] = useState(() =>
     Math.max(0, defaultActivePathIndex),
   );
@@ -169,7 +174,7 @@ export function PolygonEditorShell({
         if (destroyed) return;
 
         editor = new PolygonEditor(canvas, image, getInitialLensesRef.current(), {
-          tool: EditorTool.DRAW,
+          tool: defaultToolRef.current,
           onChange: () => emitChangeRef.current(),
           onToolChange: (t) => setTool(t),
           onHistoryChange: () => syncHistoryRef.current(),
@@ -178,6 +183,7 @@ export function PolygonEditorShell({
           },
         });
         editorRef.current = editor;
+        setTool(defaultToolRef.current);
 
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {

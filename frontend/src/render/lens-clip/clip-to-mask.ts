@@ -17,6 +17,8 @@ import {
 
 type PathCommand = { op: "M" | "L" | "C" | "Z"; args: number[] };
 
+type ShapePreset = "rectangle" | "ellipse" | "free";
+
 function tokenizePathD(pathD: string): PathCommand[] {
   const trimmed = pathD.trim();
   if (!trimmed) return [];
@@ -48,20 +50,17 @@ function pxToNorm(x: number, y: number, w: number, h: number): { x: number; y: n
   return { x: x / w, y: y / h };
 }
 
-/** Reconstruct editor anchors from exported SVG path `d` (M/L/C/Z). */
-export function pathDToLensPolygon(
-  shape: Pick<
-    LensClipShape | LensExclusionShape,
-    "id" | "label" | "pathD" | "layerOrder" | "opacity" | "depth" | "visible" | "notes"
-  >,
-  imageWidth: number,
-  imageHeight: number,
-): LensPolygon | null {
+function parseShapePreset(value: unknown): ShapePreset | undefined {
+  return value === "rectangle" || value === "ellipse" || value === "free" ? value : undefined;
+}
+
+/** Parse SVG path `d` into normalized anchors (no polygon metadata). */
+function pathDToAnchors(pathD: string, imageWidth: number, imageHeight: number): PathAnchor[] | null {
   const w = imageWidth;
   const h = imageHeight;
   if (!w || !h) return null;
 
-  const commands = tokenizePathD(shape.pathD);
+  const commands = tokenizePathD(pathD);
   const points: PathAnchor[] = [];
 
   const pushPoint = (x: number, y: number, extras?: Partial<PathAnchor>) => {
@@ -103,6 +102,41 @@ export function pathDToLensPolygon(
   const finalPoints = closed && points.length > 1 ? points.slice(0, -1) : points;
 
   if (migrateAnchors(finalPoints).length < 3) return null;
+  return finalPoints;
+}
+
+/** Reconstruct editor anchors from exported SVG path `d` (M/L/C/Z). */
+export function pathDToLensPolygon(
+  shape: Pick<
+    LensClipShape | LensExclusionShape,
+    | "id"
+    | "label"
+    | "pathD"
+    | "layerOrder"
+    | "opacity"
+    | "depth"
+    | "visible"
+    | "notes"
+    | "shapePreset"
+    | "shapeBaselinePathD"
+  >,
+  imageWidth: number,
+  imageHeight: number,
+): LensPolygon | null {
+  const finalPoints = pathDToAnchors(shape.pathD, imageWidth, imageHeight);
+  if (!finalPoints) return null;
+
+  const shapePreset = parseShapePreset(
+    "shapePreset" in shape ? shape.shapePreset : undefined,
+  );
+  let shapeBaseline: PathAnchor[] | undefined;
+  const baselinePathD =
+    "shapeBaselinePathD" in shape && typeof shape.shapeBaselinePathD === "string"
+      ? shape.shapeBaselinePathD
+      : "";
+  if (baselinePathD.trim()) {
+    shapeBaseline = pathDToAnchors(baselinePathD, imageWidth, imageHeight) ?? undefined;
+  }
 
   return createLensPolygon(shape.id, shape.label, finalPoints, {
     layerOrder: shape.layerOrder,
@@ -110,6 +144,8 @@ export function pathDToLensPolygon(
     depth: shape.depth,
     visible: shape.visible,
     notes: shape.notes,
+    shapePreset,
+    shapeBaseline,
   });
 }
 
@@ -121,16 +157,20 @@ function frameExclusionsFromClip(clip: LensClipConfig): LensPolygon[] {
     if (!polygon) continue;
     const holes: LensPolygon[] = [];
     for (let i = 0; i < shape.holePathDs.length; i++) {
+      const holePreset = parseShapePreset(shape.holeShapePresets?.[i]);
+      const holeBaselinePathD = shape.holeBaselinePathDs?.[i] ?? undefined;
       const hole = pathDToLensPolygon(
         {
           id: `${shape.id}-hole-${i + 1}`,
           label: `Hole ${i + 1}`,
           pathD: shape.holePathDs[i]!,
+          shapePreset: holePreset,
+          shapeBaselinePathD: holeBaselinePathD ?? undefined,
         },
         clip.imageWidth,
         clip.imageHeight,
       );
-      if (hole) holes.push({ id: hole.id, label: hole.label, points: hole.points });
+      if (hole) holes.push(hole);
     }
     polygons.push({ ...polygon, holes });
   }

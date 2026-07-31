@@ -57,9 +57,44 @@ export function exclusionPolygonsToShapes(
     .map((polygon) => {
       const pathD = lensPolygonToPathD(polygon, imageWidth, imageHeight);
       if (!pathD.trim()) return null;
-      const holePathDs = (polygon.holes ?? [])
-        .map((hole) => lensPolygonToPathD(hole, imageWidth, imageHeight))
-        .filter((d) => d.trim().length > 0);
+      const holes = polygon.holes ?? [];
+      const holeEntries = holes
+        .map((hole) => ({
+          hole,
+          pathD: lensPolygonToPathD(hole, imageWidth, imageHeight),
+        }))
+        .filter((entry) => entry.pathD.trim().length > 0);
+      const holePathDs = holeEntries.map((entry) => entry.pathD);
+      const holeShapePresets = holeEntries.map((entry) =>
+        entry.hole.shapePreset === "rectangle" ||
+        entry.hole.shapePreset === "ellipse" ||
+        entry.hole.shapePreset === "free"
+          ? entry.hole.shapePreset
+          : null,
+      );
+      const holeBaselinePathDs = holeEntries.map((entry) => {
+        const baseline = entry.hole.shapeBaseline;
+        if (!baseline?.length) return null;
+        const d = lensPolygonToPathD(
+          { id: entry.hole.id, label: entry.hole.label, points: baseline },
+          imageWidth,
+          imageHeight,
+        );
+        return d.trim() ? d : null;
+      });
+      const shapePreset =
+        polygon.shapePreset === "rectangle" ||
+        polygon.shapePreset === "ellipse" ||
+        polygon.shapePreset === "free"
+          ? polygon.shapePreset
+          : undefined;
+      const shapeBaselinePathD = polygon.shapeBaseline?.length
+        ? lensPolygonToPathD(
+            { id: polygon.id, label: polygon.label, points: polygon.shapeBaseline },
+            imageWidth,
+            imageHeight,
+          )
+        : "";
       return {
         id: polygon.id,
         label: polygon.label || "Frame part",
@@ -70,6 +105,14 @@ export function exclusionPolygonsToShapes(
         depth: polygon.depth ?? 50,
         visible: polygon.visible !== false,
         notes: typeof polygon.notes === "string" ? polygon.notes : "",
+        ...(shapePreset ? { shapePreset } : {}),
+        ...(shapeBaselinePathD.trim() ? { shapeBaselinePathD } : {}),
+        ...(holePathDs.length && holeShapePresets.some((p) => p)
+          ? { holeShapePresets }
+          : {}),
+        ...(holePathDs.length && holeBaselinePathDs.some((d) => d)
+          ? { holeBaselinePathDs }
+          : {}),
       };
     })
     .filter((shape): shape is LensExclusionShape => Boolean(shape));
