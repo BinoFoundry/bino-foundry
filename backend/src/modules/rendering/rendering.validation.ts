@@ -5,6 +5,12 @@ const lensExclusionShapeSchema = z.object({
   label: z.string(),
   pathD: z.string().min(8),
   holePathDs: z.array(z.string().min(8)).optional(),
+  holeShapePresets: z
+    .array(z.enum(["rectangle", "ellipse", "free"]).nullable())
+    .optional(),
+  holeBaselinePathDs: z.array(z.string().nullable()).optional(),
+  shapePreset: z.enum(["rectangle", "ellipse", "free"]).optional(),
+  shapeBaselinePathD: z.string().min(8).optional(),
   layerOrder: z.enum(["behind", "inside", "front"]).optional(),
   opacity: z.number().min(0).max(100).optional(),
   depth: z.number().min(0).max(100).optional(),
@@ -186,12 +192,16 @@ const lensPolygonSchema = z.object({
   depth: z.number().min(0).max(100).optional(),
   visible: z.boolean().optional(),
   notes: z.string().max(500).optional(),
+  shapePreset: z.enum(["rectangle", "ellipse", "free"]).optional(),
+  shapeBaseline: z.array(pathAnchorSchema).optional(),
   holes: z
     .array(
       z.object({
         id: z.string().min(1),
         label: z.string(),
         points: z.array(pathAnchorSchema),
+        shapePreset: z.enum(["rectangle", "ellipse", "free"]).optional(),
+        shapeBaseline: z.array(pathAnchorSchema).optional(),
       }),
     )
     .optional(),

@@ -19,6 +19,7 @@ import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES, FRAME_VIEW_LABELS } from "@/types/frame-rendering";
 import {
   editorPlateKey,
+  enrichMaskHolesFromSource,
   maskConfigToLensClipConfig,
   resolveMaskConfigForEditor,
 } from "@/render/lens-clip";
@@ -83,6 +84,21 @@ function emptyView(view: FrameViewAxis): FrameRenderView {
     maskConfig: null,
     maskStatus: "draft",
   };
+}
+
+/**
+ * Prefer in-progress editor draft/preview, but restore cutouts from the saved view when
+ * the local mask lost empty `holes` while clip still has `holePathDs`.
+ */
+function resolveEditorMask(
+  view: FrameRenderView,
+  local: MaskConfig | null | undefined,
+): MaskConfig | null {
+  const resolved = resolveMaskConfigForEditor(view);
+  if (local && hasAnyLensMask(local)) {
+    return resolved ? enrichMaskHolesFromSource(local, resolved) : local;
+  }
+  return resolved;
 }
 
 /** Views whose lens clip is complete enough to accept render settings. */
@@ -243,12 +259,21 @@ export const FrameRenderViewsSection = forwardRef<
     for (const axis of FRAME_VIEW_AXES) {
       const view = views.find((v) => v.view === axis);
       if (!view) continue;
-      if (draftRef.current[axis] && hasAnyLensMask(draftRef.current[axis]!)) continue;
       const resolved = resolveMaskConfigForEditor(view);
-      if (resolved && hasAnyLensMask(resolved)) {
-        draftRef.current[axis] = resolved;
-        setPreviewMasks((prev) => (prev[axis] ? prev : { ...prev, [axis]: resolved }));
+      if (!resolved || !hasAnyLensMask(resolved)) continue;
+
+      const existing = draftRef.current[axis];
+      if (existing && hasAnyLensMask(existing)) {
+        const enriched = enrichMaskHolesFromSource(existing, resolved);
+        if (enriched !== existing) {
+          draftRef.current[axis] = enriched;
+          setPreviewMasks((prev) => ({ ...prev, [axis]: enriched }));
+        }
+        continue;
       }
+
+      draftRef.current[axis] = resolved;
+      setPreviewMasks((prev) => (prev[axis] ? prev : { ...prev, [axis]: resolved }));
     }
   }, [views]);
 
@@ -421,10 +446,10 @@ export const FrameRenderViewsSection = forwardRef<
     setFramePathReady(false);
     if (panel === "left" || panel === "right" || panel === "exclusions") {
       const view = getView(axis);
-      const restored =
-        previewMasks[axis] ??
-        draftRef.current[axis] ??
-        resolveMaskConfigForEditor(view);
+      const restored = resolveEditorMask(
+        view,
+        previewMasks[axis] ?? draftRef.current[axis] ?? null,
+      );
       lensSnapshotRef.current[axis] = restored ? structuredClone(restored) : null;
       if (restored) {
         draftRef.current[axis] = restored;
@@ -443,13 +468,10 @@ export const FrameRenderViewsSection = forwardRef<
   };
 
   const resolvePreviewMask = (axis: FrameViewAxis, view: FrameRenderView): MaskConfig | null => {
-    const preview = previewMasks[axis];
-    if (preview && hasAnyLensMask(preview)) return preview;
-    const draft = draftRef.current[axis];
-    if (draft && hasAnyLensMask(draft)) return draft;
-    const resolved = resolveMaskConfigForEditor(view);
-    if (resolved && hasAnyLensMask(resolved)) return resolved;
-    return null;
+    return resolveEditorMask(
+      view,
+      previewMasks[axis] ?? draftRef.current[axis] ?? null,
+    );
   };
 
   const handleUpload = async (axis: FrameViewAxis, file: File) => {
@@ -1130,11 +1152,10 @@ export const FrameRenderViewsSection = forwardRef<
                           editSession={editSession[`${axis}-left`] ?? 0}
                           editMode="polygon"
                           getWorkingPlate={getWorkingPlate}
-                          initialMask={
-                            previewMasks[axis] ??
-                            draftRef.current[axis] ??
-                            resolveMaskConfigForEditor(view)
-                          }
+                          initialMask={resolveEditorMask(
+                            view,
+                            previewMasks[axis] ?? draftRef.current[axis] ?? null,
+                          )}
                           onChange={(config) => handleEditorChange(axis, config)}
                         />
                       </Suspense>
@@ -1185,11 +1206,10 @@ export const FrameRenderViewsSection = forwardRef<
                           editSession={editSession[`${axis}-right`] ?? 0}
                           editMode="polygon"
                           getWorkingPlate={getWorkingPlate}
-                          initialMask={
-                            previewMasks[axis] ??
-                            draftRef.current[axis] ??
-                            resolveMaskConfigForEditor(view)
-                          }
+                          initialMask={resolveEditorMask(
+                            view,
+                            previewMasks[axis] ?? draftRef.current[axis] ?? null,
+                          )}
                           onChange={(config) => handleEditorChange(axis, config)}
                         />
                       </Suspense>
@@ -1289,11 +1309,10 @@ export const FrameRenderViewsSection = forwardRef<
                           editSession={editSession[`${axis}-exclusions`] ?? 0}
                           editMode="exclusions"
                           getWorkingPlate={getWorkingPlate}
-                          initialMask={
-                            previewMasks[axis] ??
-                            draftRef.current[axis] ??
-                            resolveMaskConfigForEditor(view)
-                          }
+                          initialMask={resolveEditorMask(
+                            view,
+                            previewMasks[axis] ?? draftRef.current[axis] ?? null,
+                          )}
                           onChange={(config) => handleEditorChange(axis, config)}
                         />
                       </Suspense>

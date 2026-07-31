@@ -13,7 +13,7 @@ export {
 } from "@bino-foundry/shared/types";
 export { lensClipConfigToMaskConfig, pathDToLensPolygon } from "./clip-to-mask";
 export { maskConfigToLensClipConfig } from "./mask-to-clip";
-export { editorPlateKey, resolveMaskConfigForEditor } from "./mask-for-editor";
+export { editorPlateKey, enrichMaskHolesFromSource, resolveMaskConfigForEditor } from "./mask-for-editor";
 export { resolveLensClipConfig, isFrameViewClipReady } from "./resolve-clip";
 export {
   DEFAULT_LENS_CLIP_RENDER,

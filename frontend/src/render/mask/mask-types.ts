@@ -157,9 +157,16 @@ export function normalizeExclusionsBySide(exclusions) {
   };
 }
 
-/** @param {LensPolygon} polygon */
-function normalizeHolePolygon(polygon) {
-  if (!polygon?.id) return null;
+/**
+ * @param {Partial<LensPolygon> | null | undefined} polygon
+ * @param {number} [index]
+ */
+function normalizeHolePolygon(polygon, index = 0) {
+  if (!polygon || typeof polygon !== "object") return null;
+  const points = migrateAnchors(polygon.points ?? []);
+  const rawId = typeof polygon.id === "string" ? polygon.id.trim() : "";
+  // Older payloads sometimes omitted hole ids — keep geometry rather than dropping the cutout.
+  if (!rawId && points.length < 1) return null;
   const shapePreset =
     polygon.shapePreset === "rectangle" ||
     polygon.shapePreset === "ellipse" ||
@@ -170,9 +177,9 @@ function normalizeHolePolygon(polygon) {
     ? migrateAnchors(polygon.shapeBaseline)
     : undefined;
   return {
-    id: polygon.id,
+    id: rawId || `hole-${index + 1}`,
     label: polygon.label || "Hole",
-    points: migrateAnchors(polygon.points ?? []),
+    points,
     ...(shapePreset ? { shapePreset } : {}),
     ...(shapeBaseline?.length ? { shapeBaseline } : {}),
   };
@@ -194,7 +201,9 @@ function normalizeExclusionPolygon(polygon) {
       ? Math.max(0, Math.min(100, polygon.depth))
       : 50;
   const holes = Array.isArray(polygon.holes)
-    ? polygon.holes.map(normalizeHolePolygon).filter(Boolean)
+    ? polygon.holes
+        .map((hole, index) => normalizeHolePolygon(hole, index))
+        .filter(Boolean)
     : [];
   const shapePreset =
     polygon.shapePreset === "rectangle" ||

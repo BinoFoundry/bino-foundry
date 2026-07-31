@@ -156,14 +156,15 @@ function frameExclusionsFromClip(clip: LensClipConfig): LensPolygon[] {
     const polygon = pathDToLensPolygon(shape, clip.imageWidth, clip.imageHeight);
     if (!polygon) continue;
     const holes: LensPolygon[] = [];
-    for (let i = 0; i < shape.holePathDs.length; i++) {
+    const holePathDs = shape.holePathDs ?? [];
+    for (let i = 0; i < holePathDs.length; i++) {
       const holePreset = parseShapePreset(shape.holeShapePresets?.[i]);
       const holeBaselinePathD = shape.holeBaselinePathDs?.[i] ?? undefined;
       const hole = pathDToLensPolygon(
         {
           id: `${shape.id}-hole-${i + 1}`,
           label: `Hole ${i + 1}`,
-          pathD: shape.holePathDs[i]!,
+          pathD: holePathDs[i]!,
           shapePreset: holePreset,
           shapeBaselinePathD: holeBaselinePathD ?? undefined,
         },

@@ -196,14 +196,14 @@ export function FrameMaskEditor({
     const mask = initialMaskRef.current;
     const baseLenses = ensureFrameLensSet(mask?.lenses ?? defaultLensSet());
     const config = createMaskConfig(
-      mask?.imageWidth ?? 0,
-      mask?.imageHeight ?? 0,
+      mask?.imageWidth || width,
+      mask?.imageHeight || height,
       baseLenses,
       undefined,
       ordered.filter((part) => (part.points?.length ?? 0) >= 1),
     );
     onChangeRef.current?.(isMaskConfigValid(config) ? config : null);
-  }, []);
+  }, [height, width]);
 
   const commitList = useCallback(
     (
