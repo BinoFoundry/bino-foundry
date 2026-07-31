@@ -15,10 +15,12 @@ import {
 import { migrateAnchors, type LensPolygon, type PathAnchor } from "@/render/mask/mask-types";
 import {
   applySnapToLensEdge,
+  getSubpathPoints,
   pathBounds,
   rotateAnchors,
   scaleAnchors,
   translateAnchors,
+  type FramePartSubpath,
 } from "@/features/admin/lib/frame-parts";
 
 type HandleKind =
@@ -38,8 +40,11 @@ type DragState = {
   startClient: { x: number; y: number };
   startImg: { x: number; y: number };
   startPoints: PathAnchor[];
+  /** When transforming the outer path, companion holes move/scale/rotate with it. */
+  startHolePoints: PathAnchor[][];
   bounds: ReturnType<typeof pathBounds>;
   startAngle: number;
+  transformGroup: boolean;
 };
 
 type CanvasTool = "select" | "pan" | "zoom";
@@ -48,8 +53,14 @@ export interface FramePartTransformCanvasProps {
   imageUrl: string;
   parts: LensPolygon[];
   activeIndex: number;
+  /** Outer polygon or cutout index within the active Manual Detail. */
+  activeSubpath?: FramePartSubpath;
   onSelect: (index: number) => void;
-  onCommitPoints: (index: number, points: PathAnchor[]) => void;
+  onSelectSubpath?: (subpath: FramePartSubpath) => void;
+  onCommitGeometry: (
+    index: number,
+    geometry: { points: PathAnchor[]; holes: LensPolygon[] },
+  ) => void;
   onEnterVertexEdit: (index: number) => void;
   /**
    * Reserved: when true, transforms will snap to lens openings via applySnapToLensEdge.
@@ -68,8 +79,10 @@ export function FramePartTransformCanvas({
   imageUrl,
   parts,
   activeIndex,
+  activeSubpath = "outer",
   onSelect,
-  onCommitPoints,
+  onSelectSubpath,
+  onCommitGeometry,
   onEnterVertexEdit,
   snapToLensEdge = false,
   lensOpenings,
@@ -82,8 +95,11 @@ export function FramePartTransformCanvas({
   partsRef.current = parts;
   const activeIndexRef = useRef(activeIndex);
   activeIndexRef.current = activeIndex;
+  const activeSubpathRef = useRef<FramePartSubpath>(activeSubpath);
+  activeSubpathRef.current = activeSubpath;
   const dragRef = useRef<DragState | null>(null);
   const previewPointsRef = useRef<PathAnchor[] | null>(null);
+  const previewHolePointsRef = useRef<PathAnchor[][] | null>(null);
   const viewRef = useRef({ scale: 1, offsetX: 0, offsetY: 0, imgW: 1, imgH: 1 });
   const spaceDownRef = useRef(false);
   const panRef = useRef<{
@@ -192,27 +208,40 @@ export function FramePartTransformCanvas({
 
     list.forEach((part, index) => {
       if (part.visible === false) return;
-      const points =
-        index === active && previewPointsRef.current
-          ? previewPointsRef.current
-          : part.points ?? [];
-      if ((points?.length ?? 0) < 2) return;
       const isActive = index === active;
-      drawLensPath(ctx, { ...part, points }, imgW, imgH, {
+      const outerPoints =
+        isActive && activeSubpathRef.current === "outer" && previewPointsRef.current
+          ? previewPointsRef.current
+          : migrateAnchors(part.points ?? []);
+      if (outerPoints.length < 2) return;
+
+      const holePointsList =
+        isActive && previewHolePointsRef.current
+          ? previewHolePointsRef.current
+          : isActive && activeSubpathRef.current !== "outer" && previewPointsRef.current
+            ? (part.holes ?? []).map((hole, hi) =>
+                hi === activeSubpathRef.current
+                  ? previewPointsRef.current!
+                  : migrateAnchors(hole.points ?? []),
+              )
+            : (part.holes ?? []).map((hole) => migrateAnchors(hole.points ?? []));
+
+      drawCompoundPart(ctx, outerPoints, holePointsList, imgW, imgH, {
         fill: isActive ? "rgba(37, 99, 235, 0.28)" : "rgba(15, 23, 42, 0.18)",
         stroke: isActive ? "#2563eb" : "rgba(255,255,255,0.55)",
+        holeStroke: isActive ? "#f97316" : "rgba(255,255,255,0.35)",
         lineWidth: isActive ? lw * 1.4 : lw,
-        showHandles: false,
-        active: isActive,
+        emphasizeHoleIndex:
+          isActive && activeSubpathRef.current !== "outer" ? activeSubpathRef.current : null,
       });
     });
 
     const activePart = list[active];
-    const activePoints =
+    const editPoints =
       previewPointsRef.current ??
-      (activePart ? migrateAnchors(activePart.points ?? []) : []);
-    if (activePart && activePart.visible !== false && activePoints.length >= 2) {
-      drawTransformHandles(ctx, activePoints, imgW, imgH, scale);
+      (activePart ? getSubpathPoints(activePart, activeSubpathRef.current) : []);
+    if (activePart && activePart.visible !== false && editPoints.length >= 2) {
+      drawTransformHandles(ctx, editPoints, imgW, imgH, scale);
     }
 
     ctx.restore();
@@ -239,8 +268,9 @@ export function FramePartTransformCanvas({
 
   useEffect(() => {
     previewPointsRef.current = null;
+    previewHolePointsRef.current = null;
     draw();
-  }, [parts, activeIndex, draw]);
+  }, [parts, activeIndex, activeSubpath, draw]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -354,12 +384,24 @@ export function FramePartTransformCanvas({
       if (hitTestPathEdge(imgX, imgY, points, imgW, imgH, threshold) >= 0) {
         return index;
       }
+      for (const hole of part.holes ?? []) {
+        const holePts = migrateAnchors(hole.points ?? []);
+        if (holePts.length >= 2 && hitTestPathEdge(imgX, imgY, holePts, imgW, imgH, threshold) >= 0) {
+          return index;
+        }
+      }
       if (points.length >= 3) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.beginPath();
         traceLensPath(ctx, { ...part, points }, imgW, imgH, true);
-        const inside = ctx.isPointInPath(imgX, imgY);
+        for (const hole of part.holes ?? []) {
+          const holePts = migrateAnchors(hole.points ?? []);
+          if (holePts.length >= 3) {
+            traceLensPath(ctx, { id: hole.id, label: hole.label, points: holePts }, imgW, imgH, true);
+          }
+        }
+        const inside = ctx.isPointInPath(imgX, imgY, "evenodd");
         ctx.restore();
         if (inside) return index;
       }
@@ -370,7 +412,8 @@ export function FramePartTransformCanvas({
   const hitHandle = (imgX: number, imgY: number): HandleKind | null => {
     const active = partsRef.current[activeIndexRef.current];
     if (!active || active.visible === false) return null;
-    const points = previewPointsRef.current ?? migrateAnchors(active.points ?? []);
+    const points =
+      previewPointsRef.current ?? getSubpathPoints(active, activeSubpathRef.current);
     if (points.length < 2) return null;
     const { imgW, imgH, scale } = viewRef.current;
     const b = pathBounds(points);
@@ -384,6 +427,35 @@ export function FramePartTransformCanvas({
     return null;
   };
 
+  const beginTransformDrag = (
+    handle: HandleKind,
+    img: { x: number; y: number },
+    part: LensPolygon,
+  ) => {
+    const subpath = activeSubpathRef.current;
+    const startPoints = getSubpathPoints(part, subpath);
+    const bounds = pathBounds(startPoints);
+    const transformGroup = subpath === "outer";
+    const startHolePoints = transformGroup
+      ? (part.holes ?? []).map((hole) => migrateAnchors(hole.points ?? []))
+      : [];
+    dragRef.current = {
+      kind: handle,
+      startClient: { x: 0, y: 0 },
+      startImg: img,
+      startPoints,
+      startHolePoints,
+      bounds,
+      startAngle: Math.atan2(
+        img.y - bounds.cy * viewRef.current.imgH,
+        img.x - bounds.cx * viewRef.current.imgW,
+      ),
+      transformGroup,
+    };
+    previewPointsRef.current = startPoints;
+    previewHolePointsRef.current = transformGroup ? startHolePoints : null;
+  };
+
   const commitPreview = (index: number) => {
     const points = previewPointsRef.current;
     if (!points) return;
@@ -391,8 +463,34 @@ export function FramePartTransformCanvas({
       enabled: snapToLensEdge,
       lensOpenings,
     });
+    const part = partsRef.current[index];
+    if (!part) {
+      previewPointsRef.current = null;
+      previewHolePointsRef.current = null;
+      return;
+    }
+    const subpath = activeSubpathRef.current;
+    if (subpath === "outer") {
+      const holePts = previewHolePointsRef.current;
+      const holes = (part.holes ?? []).map((hole, hi) => ({
+        ...hole,
+        points: applySnapToLensEdge(holePts?.[hi] ?? hole.points ?? [], {
+          enabled: snapToLensEdge,
+          lensOpenings,
+        }),
+      }));
+      previewPointsRef.current = null;
+      previewHolePointsRef.current = null;
+      onCommitGeometry(index, { points: snapped, holes });
+      return;
+    }
+    const holes = [...(part.holes ?? [])];
+    if (holes[subpath]) {
+      holes[subpath] = { ...holes[subpath]!, points: snapped };
+    }
     previewPointsRef.current = null;
-    onCommitPoints(index, snapped);
+    previewHolePointsRef.current = null;
+    onCommitGeometry(index, { points: migrateAnchors(part.points ?? []), holes });
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -427,17 +525,10 @@ export function FramePartTransformCanvas({
     if (handle) {
       const active = partsRef.current[activeIndexRef.current];
       if (!active) return;
-      const startPoints = migrateAnchors(active.points ?? []);
-      const bounds = pathBounds(startPoints);
-      dragRef.current = {
-        kind: handle,
-        startClient: { x: e.clientX, y: e.clientY },
-        startImg: img,
-        startPoints,
-        bounds,
-        startAngle: Math.atan2(img.y - bounds.cy * viewRef.current.imgH, img.x - bounds.cx * viewRef.current.imgW),
-      };
-      previewPointsRef.current = startPoints;
+      beginTransformDrag(handle, img, active);
+      if (dragRef.current) {
+        dragRef.current.startClient = { x: e.clientX, y: e.clientY };
+      }
       setStatus(handle === "rotate" ? "Rotating…" : handle === "move" ? "Moving…" : "Scaling…");
       return;
     }
@@ -445,19 +536,14 @@ export function FramePartTransformCanvas({
     const hit = hitPartIndex(img.x, img.y);
     if (hit >= 0) {
       onSelect(hit);
+      onSelectSubpath?.("outer");
+      activeSubpathRef.current = "outer";
       const part = partsRef.current[hit];
       if (!part) return;
-      const startPoints = migrateAnchors(part.points ?? []);
-      const bounds = pathBounds(startPoints);
-      dragRef.current = {
-        kind: "move",
-        startClient: { x: e.clientX, y: e.clientY },
-        startImg: img,
-        startPoints,
-        bounds,
-        startAngle: 0,
-      };
-      previewPointsRef.current = startPoints;
+      beginTransformDrag("move", img, part);
+      if (dragRef.current) {
+        dragRef.current.startClient = { x: e.clientX, y: e.clientY };
+      }
       activeIndexRef.current = hit;
       setStatus("Moving…");
       draw();
@@ -491,16 +577,21 @@ export function FramePartTransformCanvas({
     const dyNorm = (img.y - drag.startImg.y) / imgH;
     const b = drag.bounds;
 
-    let next = drag.startPoints;
-    if (drag.kind === "move") {
-      next = translateAnchors(drag.startPoints, dxNorm, dyNorm);
-    } else if (drag.kind === "rotate") {
-      const angle = Math.atan2(img.y - b.cy * imgH, img.x - b.cx * imgW);
-      next = rotateAnchors(drag.startPoints, angle - drag.startAngle, b.cx, b.cy);
+    const applyTo = (pts: PathAnchor[]) => {
+      if (drag.kind === "move") return translateAnchors(pts, dxNorm, dyNorm);
+      if (drag.kind === "rotate") {
+        const angle = Math.atan2(img.y - b.cy * imgH, img.x - b.cx * imgW);
+        return rotateAnchors(pts, angle - drag.startAngle, b.cx, b.cy);
+      }
+      return scaleFromHandle(pts, b, drag.kind, img.x / imgW, img.y / imgH);
+    };
+
+    previewPointsRef.current = applyTo(drag.startPoints);
+    if (drag.transformGroup) {
+      previewHolePointsRef.current = drag.startHolePoints.map((pts) => applyTo(pts));
     } else {
-      next = scaleFromHandle(drag.startPoints, b, drag.kind, img.x / imgW, img.y / imgH);
+      previewHolePointsRef.current = null;
     }
-    previewPointsRef.current = next;
     draw();
   };
 
@@ -644,6 +735,63 @@ export function FramePartTransformCanvas({
       </p>
     </div>
   );
+}
+
+/** Fill outer − holes with evenodd; stroke outer solid and cutouts dashed. */
+function drawCompoundPart(
+  ctx: CanvasRenderingContext2D,
+  outerPoints: PathAnchor[],
+  holePointsList: PathAnchor[][],
+  imgW: number,
+  imgH: number,
+  style: {
+    fill: string;
+    stroke: string;
+    holeStroke: string;
+    lineWidth: number;
+    emphasizeHoleIndex: number | null;
+  },
+) {
+  const outer = { id: "outer", label: "Outer", points: outerPoints };
+  ctx.beginPath();
+  traceLensPath(ctx, outer, imgW, imgH, true);
+  for (const holePts of holePointsList) {
+    if (holePts.length < 3) continue;
+    traceLensPath(ctx, { id: "hole", label: "Hole", points: holePts }, imgW, imgH, true);
+  }
+  if (outerPoints.length >= 3) {
+    ctx.fillStyle = style.fill;
+    ctx.fill("evenodd");
+  }
+
+  drawLensPath(ctx, outer, imgW, imgH, {
+    fill: null,
+    stroke: style.stroke,
+    lineWidth: style.lineWidth,
+    showHandles: false,
+    active: false,
+  });
+
+  holePointsList.forEach((holePts, hi) => {
+    if (holePts.length < 2) return;
+    const emphasize = style.emphasizeHoleIndex === hi;
+    ctx.save();
+    ctx.setLineDash(emphasize ? [] : [5 / style.lineWidth, 4 / style.lineWidth]);
+    drawLensPath(
+      ctx,
+      { id: `hole-${hi}`, label: `Cutout ${hi + 1}`, points: holePts },
+      imgW,
+      imgH,
+      {
+        fill: null,
+        stroke: style.holeStroke,
+        lineWidth: emphasize ? style.lineWidth * 1.2 : style.lineWidth * 0.9,
+        showHandles: false,
+        active: false,
+      },
+    );
+    ctx.restore();
+  });
 }
 
 function transformHandlePositions(

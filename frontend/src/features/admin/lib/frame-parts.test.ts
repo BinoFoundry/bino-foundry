@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { createLensPolygon } from "@/render/mask";
+
 import {
   applySnapToLensEdge,
   createFramePart,
+  createFramePartFromLensClip,
+  createInsetCutoutFromOuter,
+  createScaledCutout,
+  duplicateCutout,
   pathBounds,
   rotateAnchors,
   scaleAnchors,
@@ -18,6 +24,36 @@ describe("frame-parts", () => {
     expect(ellipse.points.length).toBe(12);
     expect(free.points.length).toBe(0);
     expect(rect.label).toBe("Bridge");
+    expect(rect.holes).toEqual([]);
+  });
+
+  it("duplicates a lens clip into an editable Manual Detail outer", () => {
+    const lens = createLensPolygon("left", "Left", [
+      { x: 0.1, y: 0.2, curved: false, handleIn: null, handleOut: null },
+      { x: 0.4, y: 0.2, curved: false, handleIn: null, handleOut: null },
+      { x: 0.25, y: 0.5, curved: false, handleIn: null, handleOut: null },
+    ]);
+    const part = createFramePartFromLensClip(lens, "Inner lip L");
+    expect(part.id).not.toBe(lens.id);
+    expect(part.label).toBe("Inner lip L");
+    expect(part.points[0]?.x).toBeCloseTo(0.1);
+    expect(part.holes).toEqual([]);
+  });
+
+  it("creates scaled and inset cutouts from an outer polygon", () => {
+    const outer = createFramePart("Ring", "rectangle").points;
+    const scaled = createScaledCutout(outer, "Cutout 1", 0.5);
+    expect(scaled.points.length).toBe(4);
+    expect(pathBounds(scaled.points).width).toBeLessThan(pathBounds(outer).width);
+
+    const inset = createInsetCutoutFromOuter(outer, 1000, 500, 8, "Cutout 2");
+    expect(inset).not.toBeNull();
+    expect(inset!.points.length).toBeGreaterThanOrEqual(3);
+    expect(pathBounds(inset!.points).width).toBeLessThan(pathBounds(outer).width);
+
+    const copy = duplicateCutout(scaled, "Cutout copy");
+    expect(copy.id).not.toBe(scaled.id);
+    expect(copy.points[0]!.x).toBeGreaterThan(scaled.points[0]!.x);
   });
 
   it("translates, scales, and rotates whole polygons", () => {

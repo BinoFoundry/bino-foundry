@@ -215,11 +215,11 @@ export function LensRenderingSettingsPanel({
   );
 
   const edgeEnabled = value?.edgeEnabled ?? DEFAULT_LENS_CLIP_RENDER.edgeEnabled;
-  const edgeDensity = Math.round(
-    (value?.edgeDensity ?? DEFAULT_LENS_CLIP_RENDER.edgeDensity) * 100,
-  );
-  const edgeOpacity = Math.round(
+  const edgeStrength = Math.round(
     (value?.edgeOpacity ?? DEFAULT_LENS_CLIP_RENDER.edgeOpacity) * 100,
+  );
+  const edgeFalloff = Math.round(
+    (value?.edgeSoftness ?? DEFAULT_LENS_CLIP_RENDER.edgeSoftness) * 100,
   );
 
   const innerFrameEnabled =
@@ -561,22 +561,28 @@ export function LensRenderingSettingsPanel({
 
       <LayerCard
         title="Edge"
-        description="Rim thickness and darkness toward the lens edge."
+        description="Subtle perimeter thickness along the lens boundary — not a bottom vignette."
         enabled={edgeEnabled}
         disabled={disabled}
         onToggle={(next) => patch({ edgeEnabled: next })}
       >
         <SliderRow
-          label="Edge density"
-          value={edgeDensity}
+          label="Strength"
+          value={edgeStrength}
           disabled={disabled}
-          onChange={(pct) => patch({ edgeDensity: pct / 100 })}
+          onChange={(pct) =>
+            patch({
+              edgeOpacity: pct / 100,
+              edgeDarkness: pct / 100,
+              edgeDensity: pct / 100,
+            })
+          }
         />
         <SliderRow
-          label="Edge opacity"
-          value={edgeOpacity}
+          label="Falloff"
+          value={edgeFalloff}
           disabled={disabled}
-          onChange={(pct) => patch({ edgeOpacity: pct / 100, edgeDarkness: pct / 100 })}
+          onChange={(pct) => patch({ edgeSoftness: pct / 100 })}
         />
       </LayerCard>
 

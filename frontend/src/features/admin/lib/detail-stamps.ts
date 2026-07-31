@@ -60,7 +60,11 @@ export function saveDetailStampFromMask(
     ...part,
     id: `stamp-part-${Date.now()}-${index}`,
     points: migrateAnchors(part.points ?? []),
-    holes: [],
+    holes: (part.holes ?? []).map((hole, hi) => ({
+      ...hole,
+      id: `stamp-hole-${Date.now()}-${index}-${hi}`,
+      points: migrateAnchors(hole.points ?? []),
+    })),
     layerOrder: "front" as const,
   }));
   if (parts.length === 0) return null;
@@ -95,7 +99,11 @@ export function applyDetailStampToMask(
     ...part,
     id: `applied-${Date.now()}-${index}`,
     points: migrateAnchors(part.points ?? []),
-    holes: [],
+    holes: (part.holes ?? []).map((hole, hi) => ({
+      ...hole,
+      id: `applied-hole-${Date.now()}-${index}-${hi}`,
+      points: migrateAnchors(hole.points ?? []),
+    })),
     layerOrder: "front" as const,
     depth: existing.length + index,
   }));

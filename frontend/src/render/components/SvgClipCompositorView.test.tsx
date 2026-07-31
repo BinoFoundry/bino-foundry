@@ -194,4 +194,49 @@ describe("SvgClipCompositorView prototype glass model", () => {
     expect(markup).toContain("glass-left");
     expect(markup).toContain("glass-right");
   });
+
+  it("plateOnly skips all lens compositing and shows the plate as-is", () => {
+    const markup = renderToStaticMarkup(
+      <SvgClipCompositorView
+        view="front"
+        plateOnly
+        plate={{
+          plateUrl: "https://cdn.example/original.png",
+          width: 100,
+          height: 60,
+          clipConfig: {
+            version: 1,
+            imageWidth: 100,
+            imageHeight: 60,
+            lenses: [
+              { id: "lens", label: "Lens", pathD: "M 10 10 L 90 10 L 90 50 L 10 50 Z" },
+            ],
+            frameExclusions: [
+              {
+                id: "bridge",
+                label: "Bridge",
+                pathD: "M 45 10 L 55 10 L 55 20 L 45 20 Z",
+                layerOrder: "front",
+                opacity: 100,
+              },
+            ],
+            render: {
+              glassSheetUrl: "https://cdn.example/sheet.png",
+              tintLayerOpacity: 1,
+              reflectionEnabled: true,
+              darkLayerEnabled: true,
+            },
+          },
+        }}
+        tint={{ name: "Tint", top: "#8F1830", bottom: "#8F1830", opacity: 1 }}
+      />,
+    );
+    expect(markup).toContain("https://cdn.example/original.png");
+    expect(markup).not.toContain("frame-back");
+    expect(markup).not.toContain("glassSheet");
+    expect(markup).not.toContain("https://cdn.example/sheet.png");
+    expect(markup).not.toContain("mix-blend-mode");
+    expect(markup).not.toContain("#8F1830");
+    expect((markup.match(/<image /g) ?? []).length).toBe(1);
+  });
 });

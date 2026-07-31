@@ -18,6 +18,11 @@ export interface SunglassesCompositorProps {
   /** Fill parent height instead of fixed aspect ratio (builder dual preview). */
   fillHeight?: boolean;
   compactLabel?: boolean;
+  /**
+   * Step 1 — Frame: show the original plate asset with no lens compositing.
+   * Lens config remains on the frame; it is simply not applied.
+   */
+  plateOnly?: boolean;
 }
 
 
@@ -34,6 +39,7 @@ export function SunglassesCompositor({
   emptyMessage,
   fillHeight = false,
   compactLabel = false,
+  plateOnly = false,
 }: SunglassesCompositorProps) {
   const instanceId = useId().replace(/:/g, "");
   const stack = useMemo(() => buildCompositorStack(config, view), [config, view]);
@@ -47,17 +53,30 @@ export function SunglassesCompositor({
   const clipConfig = plateView ? resolveLensClipConfig(plateView) : null;
 
   if (plateView?.plateUrl) {
+    const originalUrl = plateView.originalPlateUrl?.trim();
+    const useOriginal = plateOnly && Boolean(originalUrl);
+    const plateUrl = useOriginal ? originalUrl! : plateView.plateUrl;
+    const width =
+      useOriginal && plateView.originalWidth && plateView.originalWidth > 0
+        ? plateView.originalWidth
+        : plateView.width;
+    const height =
+      useOriginal && plateView.originalHeight && plateView.originalHeight > 0
+        ? plateView.originalHeight
+        : plateView.height;
+
     return (
       <SvgClipCompositorView
         view={view}
+        plateOnly={plateOnly}
         plate={{
-          plateUrl: plateView.plateUrl,
-          width: plateView.width,
-          height: plateView.height,
+          plateUrl,
+          width,
+          height,
           clipConfig: clipConfig ?? {
             version: 1,
-            imageWidth: plateView.width,
-            imageHeight: plateView.height,
+            imageWidth: width,
+            imageHeight: height,
             lenses: [],
           },
         }}

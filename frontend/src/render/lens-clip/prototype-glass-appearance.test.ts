@@ -150,30 +150,37 @@ describe("resolvePrototypeGlassAppearance", () => {
     expect(appearance.densityGradient.stops).toHaveLength(0);
   });
 
-  it("keeps start dense longer when start falloff is high", () => {
-    const quickStart = buildDensityGradientStops({
-      startFalloff: 10,
-      endFalloff: 50,
-      position: 50,
-      curve: "linear",
-      startColor: "#111111",
-      endColor: "#EEEEEE",
-      twoColor: true,
-    });
-    const slowStart = buildDensityGradientStops({
-      startFalloff: 80,
-      endFalloff: 50,
-      position: 50,
-      curve: "linear",
-      startColor: "#111111",
-      endColor: "#EEEEEE",
-      twoColor: true,
-    });
-    // At 18% along the axis, high start falloff should still be closer to the start colour.
-    const q = quickStart.find((s) => s.offset === 0.18)!;
-    const s = slowStart.find((s) => s.offset === 0.18)!;
-    const qMix = Number.parseInt(q.color.match(/rgb\((\d+)/)?.[1] ?? "0", 10);
-    const sMix = Number.parseInt(s.color.match(/rgb\((\d+)/)?.[1] ?? "0", 10);
-    expect(sMix).toBeLessThan(qMix);
+  it("builds tint-aware boundary edge without bottom Y darkening", () => {
+    const yellow = resolvePrototypeGlassAppearance(
+      {
+        ...DEFAULT_LENS_CLIP_RENDER,
+        edgeEnabled: true,
+        edgeOpacity: 0.4,
+        edgeDensity: 0.4,
+        edgeSoftness: 0.7,
+        glassDepth: 50,
+        darkLayerEdge: 80,
+      },
+      "#E5E500",
+      lens,
+      [lens],
+    );
+    expect(yellow.edge.enabled).toBe(true);
+    expect(yellow.edge.widthPx).toBeGreaterThan(1);
+    expect(yellow.edge.blurPx).toBeGreaterThan(0);
+    expect(yellow.edge.color).not.toBe("rgb(0,0,0)");
+    expect(yellow.dark.edgeOpacity).toBe(0);
+    // Glass depth must not encode a heavy bottom wash.
+    expect(yellow.tint.depthBottom).toMatch(/rgba\([^)]+,0\.0000\)$/);
+  });
+
+  it("disables edge completely when Edge is off", () => {
+    const off = resolvePrototypeGlassAppearance(
+      { ...DEFAULT_LENS_CLIP_RENDER, edgeEnabled: false },
+      "#8FD8EA",
+      lens,
+      [lens],
+    );
+    expect(off.edge.enabled).toBe(false);
   });
 });

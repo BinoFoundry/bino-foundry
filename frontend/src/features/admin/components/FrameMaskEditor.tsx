@@ -36,7 +36,12 @@ import {
 } from "@/render/mask";
 import {
   createFramePart,
+  createFramePartFromLensClip,
+  createInsetCutoutFromOuter,
+  createScaledCutout,
+  duplicateCutout,
   type FramePartStartShape,
+  type FramePartSubpath,
 } from "@/features/admin/lib/frame-parts";
 import { FramePartTransformCanvas } from "@/features/admin/components/FramePartTransformCanvas";
 
@@ -69,8 +74,8 @@ function withListOrderDepth(list: LensPolygon[]): LensPolygon[] {
   return list.map((part, index) => ({
     ...part,
     depth: index,
-    holes: [],
-    layerOrder: "front",
+    holes: Array.isArray(part.holes) ? part.holes : [],
+    layerOrder: "front" as const,
   }));
 }
 
@@ -100,9 +105,12 @@ export function FrameMaskEditor({
   editModeRef.current = editMode;
 
   const [activePartIndex, setActivePartIndex] = useState(0);
+  const [activeSubpath, setActiveSubpath] = useState<FramePartSubpath>("outer");
   const [partRevision, setPartRevision] = useState(0);
   const [editPhase, setEditPhase] = useState<PartEditPhase>("transform");
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [insetPx, setInsetPx] = useState(2);
+  const [showInsetForm, setShowInsetForm] = useState(false);
 
   const [partList, setPartListState] = useState<LensPolygon[]>(() =>
     getFrameParts(initialMaskRef.current),
@@ -164,7 +172,13 @@ export function FrameMaskEditor({
     (partial: Partial<LensPolygon>) => {
       if (!partListRef.current.length) return;
       const next = partListRef.current.map((part, i) =>
-        i === activePartIndex ? { ...part, ...partial, holes: [] } : part,
+        i === activePartIndex
+          ? {
+              ...part,
+              ...partial,
+              holes: partial.holes !== undefined ? partial.holes : part.holes ?? [],
+            }
+          : part,
       );
       commitList(next);
     },
@@ -191,24 +205,26 @@ export function FrameMaskEditor({
   const handleLensesChange = useCallback(
     (lenses: LensPolygon[], meta: { imgW: number; imgH: number }) => {
       if (editModeRef.current === "exclusions") {
-        const edited = lenses[0];
+        // Vertex mode edits Outer + Cutouts as parallel paths in PolygonEditorShell.
         const next = [...partListRef.current];
-        if (!edited) {
+        const idx = Math.min(activePartIndex, Math.max(0, next.length - 1));
+        const current = next[idx];
+        if (!current || lenses.length === 0) {
           commitList(next);
           return;
         }
-        if (next.length === 0) {
-          next.push({ ...edited, holes: [] });
-        } else {
-          const idx = Math.min(activePartIndex, next.length - 1);
-          next[idx] = {
-            ...next[idx]!,
-            id: next[idx]!.id,
-            label: next[idx]!.label,
-            points: edited.points,
-            holes: [],
-          };
-        }
+        const [outer, ...holePaths] = lenses;
+        next[idx] = {
+          ...current,
+          id: current.id,
+          label: current.label,
+          points: outer?.points ?? current.points,
+          holes: holePaths.map((hole, hi) => ({
+            id: current.holes?.[hi]?.id ?? hole.id ?? `cutout-${hi}`,
+            label: current.holes?.[hi]?.label ?? hole.label ?? `Cutout ${hi + 1}`,
+            points: hole.points ?? [],
+          })),
+        };
         commitList(next);
         return;
       }
@@ -235,6 +251,14 @@ export function FrameMaskEditor({
       layerOrder: "front",
       holes: [],
     });
+  const activeHoles = activePart.holes ?? [];
+
+  const selectPart = (index: number, subpath: FramePartSubpath = "outer") => {
+    setActivePartIndex(index);
+    setActiveSubpath(subpath);
+    setEditPhase("transform");
+    setPartRevision((r) => r + 1);
+  };
 
   const addPart = (shape: FramePartStartShape) => {
     const next = [
@@ -244,7 +268,27 @@ export function FrameMaskEditor({
       }),
     ];
     setShowAddMenu(false);
+    setActiveSubpath("outer");
     setEditPhase(shape === "free" ? "vertex" : "transform");
+    commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
+  };
+
+  const addPartFromLens = (lensId: FrameLensSide) => {
+    const lenses = ensureFrameLensSet(initialMaskRef.current?.lenses ?? defaultLensSet());
+    const lens = lenses.find((l) => l.id === lensId);
+    if (!lens || (lens.points?.length ?? 0) < 3) {
+      setShowAddMenu(false);
+      return;
+    }
+    const label =
+      lensId === "left" ? "Inner lip L" : lensId === "right" ? "Inner lip R" : `From ${lens.label}`;
+    const next = [
+      ...partListRef.current,
+      createFramePartFromLensClip(lens, label, { depth: partListRef.current.length }),
+    ];
+    setShowAddMenu(false);
+    setActiveSubpath("outer");
+    setEditPhase("transform");
     commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
   };
 
@@ -253,14 +297,71 @@ export function FrameMaskEditor({
     const next = partListRef.current.filter((_, i) => i !== activePartIndex);
     const nextIndex = next.length === 0 ? 0 : Math.min(activePartIndex, next.length - 1);
     setEditPhase("transform");
+    setActiveSubpath("outer");
     commitList(next, { selectIndex: nextIndex, bumpRevision: true });
   };
 
-  const commitTransformedPoints = (index: number, points: PathAnchor[]) => {
+  const commitTransformedGeometry = (
+    index: number,
+    geometry: { points: PathAnchor[]; holes: LensPolygon[] },
+  ) => {
     const next = partListRef.current.map((part, i) =>
-      i === index ? { ...part, points, holes: [] } : part,
+      i === index ? { ...part, points: geometry.points, holes: geometry.holes } : part,
     );
     commitList(next);
+  };
+
+  const addCutout = () => {
+    const part = partListRef.current[activePartIndex];
+    if (!part) return;
+    const label = `Cutout ${(part.holes?.length ?? 0) + 1}`;
+    const hole = createScaledCutout(part.points ?? [], label);
+    const holes = [...(part.holes ?? []), hole];
+    patchActive({ holes });
+    setActiveSubpath(holes.length - 1);
+    setPartRevision((r) => r + 1);
+  };
+
+  const addInsetCutout = () => {
+    const part = partListRef.current[activePartIndex];
+    const mask = initialMaskRef.current;
+    if (!part || !mask) return;
+    const label = `Cutout ${(part.holes?.length ?? 0) + 1}`;
+    const hole = createInsetCutoutFromOuter(
+      part.points ?? [],
+      mask.imageWidth || width,
+      mask.imageHeight || height,
+      insetPx,
+      label,
+    );
+    if (!hole) return;
+    const holes = [...(part.holes ?? []), hole];
+    patchActive({ holes });
+    setActiveSubpath(holes.length - 1);
+    setShowInsetForm(false);
+    setPartRevision((r) => r + 1);
+  };
+
+  const duplicateActiveCutout = () => {
+    if (activeSubpath === "outer") return;
+    const part = partListRef.current[activePartIndex];
+    const source = part?.holes?.[activeSubpath];
+    if (!part || !source) return;
+    const copy = duplicateCutout(source, `${source.label || "Cutout"} copy`);
+    const holes = [...(part.holes ?? []), copy];
+    patchActive({ holes });
+    setActiveSubpath(holes.length - 1);
+    setPartRevision((r) => r + 1);
+  };
+
+  const deleteActiveCutout = () => {
+    if (activeSubpath === "outer") return;
+    const part = partListRef.current[activePartIndex];
+    if (!part) return;
+    const holes = (part.holes ?? []).filter((_, i) => i !== activeSubpath);
+    patchActive({ holes });
+    setActiveSubpath("outer");
+    setPartRevision((r) => r + 1);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -286,9 +387,9 @@ export function FrameMaskEditor({
     return (
       <div className={cn("space-y-3", className)}>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Manual Details sit above the glass (rivets, screws, logos). Drag to move, use handles to
-          scale and rotate. Double-click only when you need vertex-level edits. The Inner Frame lip
-          is automatic — edit it under Lens rendering.
+          Manual Details sit above the glass (rivets, screws, logos, inner lips). Drag to move, use
+          handles to scale and rotate. Add cutouts for true transparent holes. Double-click for
+          vertex edits.
         </p>
 
         <div className="rounded-md border border-border/70 bg-muted/10">
@@ -308,7 +409,7 @@ export function FrameMaskEditor({
                 Add Detail
               </Button>
               {showAddMenu ? (
-                <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-border bg-background p-1.5 shadow-md">
+                <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-border bg-background p-1.5 shadow-md">
                   <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Starting shape
                   </p>
@@ -323,6 +424,32 @@ export function FrameMaskEditor({
                       <span className="text-[10px] text-muted-foreground">{shape.hint}</span>
                     </button>
                   ))}
+                  <div className="my-1 border-t border-border/60" />
+                  <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    From lens clip
+                  </p>
+                  {(["left", "right"] as FrameLensSide[]).map((side) => {
+                    const lens = lensOpenings.find((l) => l.id === side);
+                    const ready = (lens?.points?.length ?? 0) >= 3;
+                    return (
+                      <button
+                        key={side}
+                        type="button"
+                        disabled={!ready}
+                        className="flex w-full flex-col rounded px-2 py-1.5 text-left text-[11px] hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => addPartFromLens(side)}
+                      >
+                        <span className="font-medium text-foreground">
+                          Duplicate {LENS_SIDE_LABELS[side]}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {ready
+                            ? "Uses the lens polygon as the outer path"
+                            : "Draw the lens clip first"}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>
@@ -330,7 +457,7 @@ export function FrameMaskEditor({
 
           {partList.length === 0 ? (
             <p className="px-2.5 py-2 text-[11px] text-muted-foreground">
-              No manual details yet — add a rectangle or ellipse to begin.
+              No manual details yet — add a shape or duplicate from a lens clip.
             </p>
           ) : (
             <DndContext
@@ -347,14 +474,14 @@ export function FrameMaskEditor({
                     <SortablePartChip
                       key={part.id}
                       id={part.id}
-                      label={part.label || `Part ${i + 1}`}
+                      label={
+                        (part.holes?.length ?? 0) > 0
+                          ? `${part.label || `Part ${i + 1}`} (${part.holes!.length} hole${part.holes!.length === 1 ? "" : "s"})`
+                          : part.label || `Part ${i + 1}`
+                      }
                       active={i === activePartIndex}
                       visible={part.visible !== false}
-                      onSelect={() => {
-                        setActivePartIndex(i);
-                        setEditPhase("transform");
-                        setPartRevision((r) => r + 1);
-                      }}
+                      onSelect={() => selectPart(i, "outer")}
                       onToggleVisible={(visible) => {
                         const next = partList.map((item, idx) =>
                           idx === i ? { ...item, visible } : item,
@@ -432,6 +559,103 @@ export function FrameMaskEditor({
               />
             </div>
 
+            <div className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Compound shape
+              </p>
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded px-2 py-1 text-left text-[11px] font-medium",
+                    activeSubpath === "outer"
+                      ? "bg-foreground text-background"
+                      : "text-foreground hover:bg-muted/60",
+                  )}
+                  onClick={() => setActiveSubpath("outer")}
+                >
+                  Outer Polygon
+                </button>
+                <p className="px-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Cutouts
+                </p>
+                {activeHoles.length === 0 ? (
+                  <p className="px-2 text-[11px] text-muted-foreground">
+                    No cutouts — add one for a transparent hole.
+                  </p>
+                ) : (
+                  activeHoles.map((hole, hi) => (
+                    <button
+                      key={hole.id || hi}
+                      type="button"
+                      className={cn(
+                        "rounded px-2 py-1 pl-4 text-left text-[11px]",
+                        activeSubpath === hi
+                          ? "bg-foreground text-background"
+                          : "text-foreground hover:bg-muted/60",
+                      )}
+                      onClick={() => setActiveSubpath(hi)}
+                    >
+                      {hole.label || `Cutout ${hi + 1}`}
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <Button type="button" size="sm" variant="outline" className="h-7" onClick={addCutout}>
+                  Add Cutout
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  onClick={() => setShowInsetForm((v) => !v)}
+                >
+                  Create Inset Cutout
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7"
+                  disabled={activeSubpath === "outer"}
+                  onClick={duplicateActiveCutout}
+                >
+                  Duplicate Cutout
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-destructive hover:text-destructive"
+                  disabled={activeSubpath === "outer"}
+                  onClick={deleteActiveCutout}
+                >
+                  Delete Cutout
+                </Button>
+              </div>
+              {showInsetForm ? (
+                <div className="flex flex-wrap items-end gap-2 border-t border-border/50 pt-2">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Offset (px)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={48}
+                      step={1}
+                      value={insetPx}
+                      onChange={(e) => setInsetPx(Math.max(1, Number(e.target.value) || 1))}
+                      className="h-7 w-20 text-sm"
+                    />
+                  </div>
+                  <Button type="button" size="sm" className="h-7" onClick={addInsetCutout}>
+                    Generate Hole
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
               <Button
                 type="button"
@@ -453,18 +677,18 @@ export function FrameMaskEditor({
 
             {editPhase === "transform" ? (
               <FramePartTransformCanvas
-                key={`transform-${partRevision}-${lensRevision}`}
+                key={`transform-${partRevision}-${lensRevision}-${String(activeSubpath)}`}
                 imageUrl={plateUrl}
                 parts={partList}
                 activeIndex={activePartIndex}
-                onSelect={setActivePartIndex}
-                onCommitPoints={commitTransformedPoints}
+                activeSubpath={activeSubpath}
+                onSelect={(index) => selectPart(index, "outer")}
+                onSelectSubpath={setActiveSubpath}
+                onCommitGeometry={commitTransformedGeometry}
                 onEnterVertexEdit={(index) => {
-                  setActivePartIndex(index);
+                  selectPart(index, activeSubpath);
                   setEditPhase("vertex");
-                  setPartRevision((r) => r + 1);
                 }}
-                // Reserved architecture hook — not active yet.
                 snapToLensEdge={false}
                 lensOpenings={lensOpenings}
               />
@@ -472,7 +696,8 @@ export function FrameMaskEditor({
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground">
-                    Vertex mode — Esc or Transform returns to move / scale / rotate.
+                    Vertex mode — Outer and Cutout tabs · Esc or Transform returns to move / scale /
+                    rotate.
                   </p>
                   <Button
                     type="button"
@@ -490,18 +715,35 @@ export function FrameMaskEditor({
                   getInitialLenses={() => [
                     {
                       id: activePart.id,
-                      label: activePart.label || "Frame part",
+                      label: "Outer Polygon",
                       points: activePart.points ?? [],
                     },
+                    ...activeHoles.map((hole, hi) => ({
+                      id: hole.id || `cutout-${hi}`,
+                      label: hole.label || `Cutout ${hi + 1}`,
+                      points: hole.points ?? [],
+                    })),
                   ]}
+                  pathTabs={[
+                    { id: activePart.id, label: "Outer" },
+                    ...activeHoles.map((hole, hi) => ({
+                      id: hole.id || `cutout-${hi}`,
+                      label: hole.label || `Cutout ${hi + 1}`,
+                    })),
+                  ]}
+                  defaultActivePathIndex={
+                    activeSubpath === "outer" ? 0 : Math.min(activeSubpath + 1, activeHoles.length)
+                  }
+                  onActivePathChange={(index) => {
+                    setActiveSubpath(index <= 0 ? "outer" : index - 1);
+                  }}
                   onLensesChange={handleLensesChange}
                   showLensTabs={false}
-                  singlePathLabel={activePart.label || "Frame part"}
                   previewLabel="Frame part"
                   showThumbnailPreview={false}
                   lensRevision={partRevision + lensRevision}
                   handlesLabel="Control points"
-                  helpText="Fine-tune vertices · Shift+click edge to insert · Del removes selected point"
+                  helpText="Fine-tune vertices · Shift+click edge to insert · Del removes selected point · cutouts subtract from the outer"
                 />
               </div>
             )}

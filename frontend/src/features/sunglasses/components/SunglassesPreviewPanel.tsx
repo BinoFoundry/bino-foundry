@@ -9,6 +9,10 @@ import { SUNGLASSES_COPY } from "../copy";
 interface SunglassesPreviewPanelProps {
   config: SunglassesCompositorConfig;
   unavailableFrame?: boolean;
+  /**
+   * When true (Step 1 — Frame), show original plate assets with no lens compositing.
+   */
+  plateOnly?: boolean;
 }
 
 function PreviewSlot({
@@ -16,11 +20,13 @@ function PreviewSlot({
   axis,
   aspectRatio,
   label,
+  plateOnly,
 }: {
   config: SunglassesCompositorConfig;
   axis: ReturnType<typeof getCustomiserDisplayViews>[number]["axis"];
   aspectRatio: ReturnType<typeof getCustomiserDisplayViews>[number]["aspectRatio"];
   label: string;
+  plateOnly?: boolean;
 }) {
   return (
     <SunglassesCompositor
@@ -33,12 +39,17 @@ function PreviewSlot({
       className="h-full min-h-0 w-full"
       fillHeight
       compactLabel
+      plateOnly={plateOnly}
     />
   );
 }
 
 /** Front + optional side / 45° live previews (synced to the same configuration). */
-export function SunglassesPreviewPanel({ config, unavailableFrame = false }: SunglassesPreviewPanelProps) {
+export function SunglassesPreviewPanel({
+  config,
+  unavailableFrame = false,
+  plateOnly = false,
+}: SunglassesPreviewPanelProps) {
   const displayViews = getCustomiserDisplayViews(config);
   const primary = displayViews[0];
   const secondary = displayViews.slice(1);
@@ -75,6 +86,7 @@ export function SunglassesPreviewPanel({ config, unavailableFrame = false }: Sun
               axis={primary.axis}
               aspectRatio={primary.aspectRatio}
               label={primary.label}
+              plateOnly={plateOnly}
             />
           </div>
 
@@ -86,6 +98,7 @@ export function SunglassesPreviewPanel({ config, unavailableFrame = false }: Sun
                   axis={secondary[0]!.axis}
                   aspectRatio={secondary[0]!.aspectRatio}
                   label={secondary[0]!.label}
+                  plateOnly={plateOnly}
                 />
               </div>
             ) : (
@@ -97,6 +110,7 @@ export function SunglassesPreviewPanel({ config, unavailableFrame = false }: Sun
                     axis={view.axis}
                     aspectRatio={view.aspectRatio}
                     label={view.label}
+                    plateOnly={plateOnly}
                   />
                 ))}
               </div>

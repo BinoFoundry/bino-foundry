@@ -1,9 +1,10 @@
 import type { LensClipShape } from "@bino-foundry/shared/types";
+import { insetClosedPathD } from "./inset-path";
 import type { PrototypeGlassAppearance } from "./prototype-glass-appearance";
 
 /**
  * SVG material layers from `lens-glass-clip.html`:
- * dark body → tint (kaca / color / normal / multiply) → specular.
+ * dark body → tint (kaca / color / normal / multiply) → boundary edge → specular.
  * Drawn above the original lens plate (compositor foundation).
  */
 export function PrototypeGlassElement({
@@ -26,6 +27,14 @@ export function PrototypeGlassElement({
   const rimR1 = Math.max(width, height) * 0.58;
   const soft = Math.max(0.05, Math.min(1, dark.sheenSoft));
   const densityId = `${prefix}-density`;
+
+  const edgeRingD =
+    edge.enabled && edge.widthPx > 0
+      ? (() => {
+          const inset = insetClosedPathD(lens.pathD, edge.widthPx);
+          return inset ? `${lens.pathD.trim()} ${inset}` : null;
+        })()
+      : null;
 
   return (
     <g clipPath={`url(#${uid}-glass-${lens.id})`}>
@@ -65,31 +74,7 @@ export function PrototypeGlassElement({
           <stop offset="100%" stopColor="#fff" stopOpacity={0} />
         </radialGradient>
 
-        <linearGradient
-          id={`${prefix}-darkEdge`}
-          gradientUnits="userSpaceOnUse"
-          x1={cx}
-          y1={minY + height * 0.35}
-          x2={cx}
-          y2={minY + height}
-        >
-          <stop offset="0%" stopColor="#000" stopOpacity={0} />
-          <stop offset="100%" stopColor="#000" stopOpacity={dark.edgeOpacity * 0.65} />
-        </linearGradient>
-
-        <linearGradient
-          id={`${prefix}-tintDepth`}
-          gradientUnits="userSpaceOnUse"
-          x1={cx}
-          y1={minY}
-          x2={cx}
-          y2={minY + height}
-        >
-          <stop offset="0%" stopColor={tint.depthMid} stopOpacity={0} />
-          <stop offset="40%" stopColor={tint.depthMid} />
-          <stop offset="100%" stopColor={tint.depthBottom} />
-        </linearGradient>
-
+        {/* Perimeter thickness rim (tint-aware) — no vertical floor wash. */}
         <radialGradient
           id={`${prefix}-tintRim`}
           gradientUnits="userSpaceOnUse"
@@ -97,9 +82,9 @@ export function PrototypeGlassElement({
           cy={cy}
           r={rimR1}
         >
-          <stop offset="0%" stopColor="#000" stopOpacity={0} />
-          <stop offset="45%" stopColor="#000" stopOpacity={0} />
-          <stop offset="100%" stopColor="#000" stopOpacity={tint.depthRimOpacity} />
+          <stop offset="0%" stopColor={tint.depthMid} stopOpacity={0} />
+          <stop offset="62%" stopColor={tint.depthMid} stopOpacity={0} />
+          <stop offset="100%" stopColor={tint.depthMid} stopOpacity={tint.depthRimOpacity} />
         </radialGradient>
 
         <linearGradient
@@ -115,22 +100,17 @@ export function PrototypeGlassElement({
           <stop offset="100%" stopColor={tint.bandTop} stopOpacity={0} />
         </linearGradient>
 
-        {edge.enabled ? (
-          <radialGradient
-            id={`${prefix}-edgeDensity`}
-            gradientUnits="userSpaceOnUse"
-            cx={cx}
-            cy={cy}
-            r={rimR1}
+        {edge.enabled && edge.blurPx > 0.05 ? (
+          <filter
+            id={`${prefix}-edgeBlur`}
+            x="-25%"
+            y="-25%"
+            width="150%"
+            height="150%"
+            colorInterpolationFilters="sRGB"
           >
-            <stop offset="0%" stopColor="#000" stopOpacity={0} />
-            <stop
-              offset={`${Math.max(20, 100 - edge.density * 55)}%`}
-              stopColor="#000"
-              stopOpacity={0}
-            />
-            <stop offset="100%" stopColor="#000" stopOpacity={0.45 * edge.opacity * edge.density} />
-          </radialGradient>
+            <feGaussianBlur stdDeviation={edge.blurPx} />
+          </filter>
         ) : null}
 
         {densityGradient.enabled ? (
@@ -218,15 +198,6 @@ export function PrototypeGlassElement({
           style={{ mixBlendMode: "screen" }}
         />
       ) : null}
-      {dark.enabled && dark.edgeOpacity > 1e-4 ? (
-        <rect
-          x={minX - 4}
-          y={minY - 4}
-          width={width + 8}
-          height={height + 8}
-          fill={`url(#${prefix}-darkEdge)`}
-        />
-      ) : null}
 
       {/* 2. Tint material layer */}
       {tint.enabled && tint.blend === "kaca" ? (
@@ -278,13 +249,6 @@ export function PrototypeGlassElement({
             y={minY - 4}
             width={width + 8}
             height={height + 8}
-            fill={`url(#${prefix}-tintDepth)`}
-          />
-          <rect
-            x={minX - 4}
-            y={minY - 4}
-            width={width + 8}
-            height={height + 8}
             fill={`url(#${prefix}-tintRim)`}
           />
           <rect
@@ -293,6 +257,7 @@ export function PrototypeGlassElement({
             width={width + 8}
             height={height + 8}
             fill={`url(#${prefix}-tintBand)`}
+            style={{ mixBlendMode: "soft-light" }}
           />
         </>
       ) : null}
@@ -311,14 +276,15 @@ export function PrototypeGlassElement({
         />
       ) : null}
 
-      {/* 3. Edge density */}
-      {edge.enabled ? (
-        <rect
-          x={minX - 4}
-          y={minY - 4}
-          width={width + 8}
-          height={height + 8}
-          fill={`url(#${prefix}-edgeDensity)`}
+      {/* 3. Boundary edge — outer − inset ring (follows lens path, tint-aware) */}
+      {edge.enabled && edgeRingD ? (
+        <path
+          d={edgeRingD}
+          fill={edge.color}
+          fillRule="evenodd"
+          opacity={edge.opacity}
+          filter={edge.blurPx > 0.05 ? `url(#${prefix}-edgeBlur)` : undefined}
+          data-layer="lens-edge"
         />
       ) : null}
 

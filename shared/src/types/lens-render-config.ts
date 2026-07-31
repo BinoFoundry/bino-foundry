@@ -237,7 +237,7 @@ export const LENS_RENDER_SYSTEM_DEFAULTS: Required<
   darkLayerGlowX: 45,
   darkLayerGlowY: 34,
   darkLayerSoft: 70,
-  darkLayerEdge: 28,
+  darkLayerEdge: 0,
   edgeEnabled: true,
   densityGradientEnabled: false,
   densityGradientMode: "vertical",

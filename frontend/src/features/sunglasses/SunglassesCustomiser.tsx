@@ -384,6 +384,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
             <SunglassesPreviewPanel
               config={state.compositorConfig}
               unavailableFrame={isUnavailableFrame(state.frameSku)}
+              plateOnly={flow.step === "frame"}
             />
           </div>
         }

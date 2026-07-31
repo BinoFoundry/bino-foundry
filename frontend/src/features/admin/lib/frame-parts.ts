@@ -1,6 +1,12 @@
 import { createLensPolygon, migrateAnchors, type LensPolygon, type PathAnchor } from "@/render/mask/mask-types";
+import { insetClosedPathD } from "@/render/lens-clip/inset-path";
+import { lensPolygonToPathD } from "@/render/lens-clip/svg-path-builder";
+import { pathDToLensPolygon } from "@/render/lens-clip/clip-to-mask";
 
 export type FramePartStartShape = "rectangle" | "ellipse" | "free";
+
+/** Which path inside a Manual Detail is being edited. */
+export type FramePartSubpath = "outer" | number;
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
@@ -17,6 +23,10 @@ function mapNormPoint(
   if (!p) return null;
   const next = map(p.x, p.y);
   return { x: clamp01(next.x), y: clamp01(next.y) };
+}
+
+function newPartId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 /** Axis-aligned rectangle in normalized plate space (default centered). */
@@ -53,9 +63,9 @@ export function ellipsePoints(
 export function createFramePart(
   label: string,
   shape: FramePartStartShape,
-  extras?: Partial<Pick<LensPolygon, "layerOrder" | "opacity" | "visible" | "depth">>,
+  extras?: Partial<Pick<LensPolygon, "layerOrder" | "opacity" | "visible" | "depth" | "holes">>,
 ): LensPolygon {
-  const id = `frame-part-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = newPartId("frame-part");
   const points =
     shape === "rectangle" ? rectanglePoints() : shape === "ellipse" ? ellipsePoints() : [];
   return createLensPolygon(id, label, points, {
@@ -63,8 +73,102 @@ export function createFramePart(
     opacity: extras?.opacity ?? 100,
     depth: extras?.depth ?? 50,
     visible: extras?.visible !== false,
+    holes: extras?.holes ?? [],
+  });
+}
+
+/** Copy a lens-opening polygon into a new Manual Detail (outer only — fully editable). */
+export function createFramePartFromLensClip(
+  lens: LensPolygon,
+  label: string,
+  extras?: Partial<Pick<LensPolygon, "layerOrder" | "opacity" | "visible" | "depth">>,
+): LensPolygon {
+  return createLensPolygon(newPartId("frame-part"), label, migrateAnchors(lens.points ?? []), {
+    layerOrder: extras?.layerOrder ?? "front",
+    opacity: extras?.opacity ?? 100,
+    depth: extras?.depth ?? 50,
+    visible: extras?.visible !== false,
     holes: [],
   });
+}
+
+/** Starting cutout: scaled copy of the outer polygon (editable). */
+export function createScaledCutout(
+  outer: PathAnchor[],
+  label: string,
+  scale = 0.72,
+): LensPolygon {
+  const bounds = pathBounds(outer);
+  const points =
+    migrateAnchors(outer).length >= 3
+      ? scaleAnchors(migrateAnchors(outer), scale, scale, bounds.cx, bounds.cy)
+      : rectanglePoints(
+          bounds.cx,
+          bounds.cy,
+          Math.max(0.02, bounds.width * 0.25),
+          Math.max(0.015, bounds.height * 0.25),
+        );
+  return createLensPolygon(newPartId("cutout"), label, points);
+}
+
+/** Duplicate an existing cutout with a slight offset so it is visible as a new shape. */
+export function duplicateCutout(hole: LensPolygon, label?: string): LensPolygon {
+  const points = translateAnchors(migrateAnchors(hole.points ?? []), 0.02, 0.02);
+  return createLensPolygon(newPartId("cutout"), label ?? hole.label ?? "Cutout", points);
+}
+
+/**
+ * Generate an inset hole from the outer polygon (pixel inset toward centroid).
+ * Uses the same inset helper as Automatic Inner Frame — result stays editable.
+ */
+export function createInsetCutoutFromOuter(
+  outer: PathAnchor[],
+  imageWidth: number,
+  imageHeight: number,
+  insetPx: number,
+  label = "Cutout",
+): LensPolygon | null {
+  if (!(insetPx > 0) || !(imageWidth > 0) || !(imageHeight > 0)) return null;
+  const anchors = migrateAnchors(outer);
+  if (anchors.length < 3) return null;
+  const pathD = lensPolygonToPathD(
+    { id: "tmp", label: "tmp", points: anchors },
+    imageWidth,
+    imageHeight,
+  );
+  const insetD = insetClosedPathD(pathD, insetPx);
+  if (!insetD) return null;
+  return pathDToLensPolygon(
+    { id: newPartId("cutout"), label, pathD: insetD },
+    imageWidth,
+    imageHeight,
+  );
+}
+
+export function getSubpathPoints(part: LensPolygon, subpath: FramePartSubpath): PathAnchor[] {
+  if (subpath === "outer") return migrateAnchors(part.points ?? []);
+  const hole = part.holes?.[subpath];
+  return migrateAnchors(hole?.points ?? []);
+}
+
+export function setSubpathPoints(
+  part: LensPolygon,
+  subpath: FramePartSubpath,
+  points: PathAnchor[],
+  holesOverride?: LensPolygon[],
+): LensPolygon {
+  if (subpath === "outer") {
+    return {
+      ...part,
+      points: migrateAnchors(points),
+      holes: holesOverride ?? part.holes ?? [],
+    };
+  }
+  const holes = [...(part.holes ?? [])];
+  const existing = holes[subpath];
+  if (!existing) return part;
+  holes[subpath] = { ...existing, points: migrateAnchors(points) };
+  return { ...part, holes };
 }
 
 export type PathBounds = {

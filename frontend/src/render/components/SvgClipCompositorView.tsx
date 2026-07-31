@@ -42,6 +42,11 @@ export interface SvgClipCompositorViewProps {
   className?: string;
   fillHeight?: boolean;
   compactLabel?: boolean;
+  /**
+   * When true (Sunglasses Builder Step 1 — Frame), skip all lens compositing and
+   * show the plate image as-is. Prefer passing the original upload URL/size.
+   */
+  plateOnly?: boolean;
 }
 
 function lensFillSpec(
@@ -300,6 +305,7 @@ function SvgClipCompositorViewInner({
   className,
   fillHeight = false,
   compactLabel = false,
+  plateOnly = false,
 }: SvgClipCompositorViewProps) {
   const uid = useId().replace(/:/g, "");
   const tintSpec = useMemo(() => normalizeTintRenderSpec(tint), [tint]);
@@ -315,12 +321,15 @@ function SvgClipCompositorViewInner({
   const { viewBox } = usePlateContentBounds(plate?.plateUrl, plateW, plateH);
 
   const { lenses, frameObjects } = useMemo(() => {
+    if (plateOnly) {
+      return { lenses: [] as LensClipShape[], frameObjects: [] as ResolvedFrameExclusionObject[] };
+    }
     const clip = plate?.clipConfig ? normalizeLensClipConfig(plate.clipConfig) : null;
     return {
       lenses: (clip?.lenses ?? []).filter((l) => l.pathD?.trim()),
       frameObjects: resolveFrameExclusionShapes(clip),
     };
-  }, [plate?.clipConfig]);
+  }, [plate?.clipConfig, plateOnly]);
 
   if (!plate?.plateUrl) {
     return (
@@ -337,7 +346,7 @@ function SvgClipCompositorViewInner({
   }
 
   const { width: w, height: h } = plate;
-  const hasLensClip = lenses.length > 0;
+  const showOriginalPlate = plateOnly || lenses.length === 0;
 
   return (
     <CompositorViewport
@@ -355,7 +364,7 @@ function SvgClipCompositorViewInner({
           role="img"
           aria-label={label ?? "Sunglasses preview"}
         >
-          {!hasLensClip ? (
+          {showOriginalPlate ? (
             <image
               href={plate.plateUrl}
               x={0}
@@ -400,6 +409,7 @@ export const SvgClipCompositorView = memo(
   SvgClipCompositorViewInner,
   (prev, next) =>
     prev.plate?.plateUrl === next.plate?.plateUrl &&
+    prev.plateOnly === next.plateOnly &&
     tintRenderKey(normalizeTintRenderSpec(prev.tint)) === tintRenderKey(normalizeTintRenderSpec(next.tint)) &&
     prev.aspectRatio === next.aspectRatio &&
     prev.label === next.label &&

@@ -157,8 +157,20 @@ export interface PrototypeGlassAppearance {
   };
   edge: {
     enabled: boolean;
-    density: number;
+    /** Combined visibility 0–1 (from edgeOpacity × edgeDensity). */
+    strength: number;
+    /** Soft falloff into the lens interior 0–1 (from edgeSoftness). */
+    falloff: number;
+    /** Perimeter ring thickness in path pixels. */
+    widthPx: number;
+    /** Gaussian blur for soft falloff. */
+    blurPx: number;
+    /** Tint-aware rim colour — never pure black on bright glass. */
+    color: string;
+    /** Peak fill opacity for the rim. */
     opacity: number;
+    /** @deprecated kept for callers; equals strength. */
+    density: number;
   };
   densityGradient: {
     enabled: boolean;
@@ -203,6 +215,8 @@ export function resolvePrototypeGlassAppearance(
   const edgeOn = render.edgeEnabled;
   const edgeDensity = edgeOn ? clamp01(render.edgeDensity) : 0;
   const edgeOpacityAmt = edgeOn ? clamp01(render.edgeOpacity) : 0;
+  const edgeSoftnessAmt = edgeOn ? clamp01(render.edgeSoftness) : 0;
+  const edgeStrength = clamp01(edgeOpacityAmt * (0.55 + edgeDensity * 0.45));
 
   // Density gradient retired with Glass Sheet architecture.
   const densityOn = false;
@@ -212,11 +226,12 @@ export function resolvePrototypeGlassAppearance(
     tintOp > 1e-4 ||
     densityOn ||
     (render.reflectionEnabled && shine > 0.02) ||
-    edgeDensity * edgeOpacityAmt > 1e-4 ||
+    edgeStrength > 1e-4 ||
     env > 1e-4;
 
   const [tr, tg, tb] = parseHex(tintHex);
   const [dr, dg, db] = parseHex(render.darkLayerColor);
+  const tintLum = (0.2126 * tr + 0.7152 * tg + 0.0722 * tb) / 255;
 
   // Dark layer — prototype buildDarkLayer (flat fill + optional gradasi sheen).
   const glow = clamp01(render.darkLayerGlow / 100);
@@ -224,7 +239,8 @@ export function resolvePrototypeGlassAppearance(
   const glowX = clamp01(render.darkLayerGlowX / 100);
   const glowY = clamp01(render.darkLayerGlowY / 100);
   const soft = clamp01(render.darkLayerSoft / 100);
-  const darkEdge = clamp01(render.darkLayerEdge / 100);
+  // Bottom Y-ramp retired — it muddied bright tints (was darkLayerEdge).
+  const darkEdge = 0;
   const gLift = 0.18 + glow * 0.55;
   const sheenColor = rgb(
     dr + (175 - dr) * gLift,
@@ -254,14 +270,15 @@ export function resolvePrototypeGlassAppearance(
     tintOn && (render.glassTintBlend === "color" || render.glassTintBlend === "multiply")
       ? tintOp
       : 0;
-  const depthFactor = 0.35 + (1 - depth) * 0.4;
-  const depthMid = rgba(tr * depthFactor, tg * depthFactor, tb * depthFactor, 0.15 * depth);
-  const depthBottom = rgba(tr * depthFactor, tg * depthFactor, tb * depthFactor, 0.55 * depth);
+  // Glass depth: subtle perimeter thickness only — no vertical floor wash.
+  const depthFactor = 0.55 + (1 - depth) * 0.25;
+  const depthMid = rgba(tr * depthFactor, tg * depthFactor, tb * depthFactor, 0.08 * depth);
+  const depthBottom = rgba(tr * depthFactor, tg * depthFactor, tb * depthFactor, 0);
   const bandTop = rgba(
     tr + (255 - tr) * 0.42,
     tg + (255 - tg) * 0.38,
     tb + (255 - tb) * 0.35,
-    0.28,
+    0.18,
   );
   const tintBandY = minY + height * 0.32;
 
@@ -293,6 +310,21 @@ export function resolvePrototypeGlassAppearance(
   const dy2 = minY + height;
   const dRadius = Math.max(width, height) * 0.62;
 
+  // Boundary edge — tint-aware ring, Strength × Falloff.
+  const minDim = Math.max(8, Math.min(width, height));
+  const edgeWidthPx = Math.max(
+    1.25,
+    minDim * (0.014 + edgeStrength * 0.032) * (0.75 + edgeSoftnessAmt * 0.45),
+  );
+  const edgeBlurPx = edgeSoftnessAmt * Math.max(0.45, edgeWidthPx * 0.7);
+  const edgeDarken = 0.22 + tintLum * 0.28;
+  const edgeColor = rgb(
+    tr * (1 - edgeDarken * 0.65),
+    tg * (1 - edgeDarken * 0.65),
+    tb * (1 - edgeDarken * 0.65),
+  );
+  const edgePeakOpacity = edgeStrength * (0.2 + (1 - tintLum) * 0.22);
+
   return {
     bounds,
     glassPresent,
@@ -311,7 +343,7 @@ export function resolvePrototypeGlassAppearance(
       glowSpecCy,
       glowSpecRadius: Math.max(4, glowSpecRadius),
       glowSpecOpacity,
-      edgeOpacity: render.darkLayerMode === "gradasi" ? darkEdge : 0,
+      edgeOpacity: darkEdge,
     },
     tint: {
       enabled: tintOn && tintOp > 1e-4,
@@ -323,7 +355,7 @@ export function resolvePrototypeGlassAppearance(
       depth,
       depthMid,
       depthBottom,
-      depthRimOpacity: 0.28 * depth,
+      depthRimOpacity: 0.16 * depth * (0.55 + (1 - tintLum) * 0.45),
       bandTop,
       bandY1: tintBandY - height * 0.22,
       bandY2: tintBandY + height * 0.28,
@@ -336,9 +368,14 @@ export function resolvePrototypeGlassAppearance(
       peakOpacity: 0.42 * clamp01(shineAmt),
     },
     edge: {
-      enabled: edgeOn && edgeDensity * edgeOpacityAmt > 1e-4,
-      density: edgeDensity,
-      opacity: edgeOpacityAmt,
+      enabled: edgeOn && edgeStrength > 1e-4 && edgePeakOpacity > 1e-4,
+      strength: edgeStrength,
+      falloff: edgeSoftnessAmt,
+      widthPx: edgeWidthPx,
+      blurPx: edgeBlurPx,
+      color: edgeColor,
+      opacity: edgePeakOpacity,
+      density: edgeStrength,
     },
     densityGradient: {
       enabled: densityOn,
