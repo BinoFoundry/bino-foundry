@@ -11,6 +11,12 @@ import { BeadTagsField } from "@/features/admin/components/BeadTagsField";
 import { StrandRenderConfigPanel } from "@/features/admin/components/StrandRenderConfigPanel";
 import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import { formatUploadErrorMessage, validateUploadFile } from "@/features/admin/lib/upload-pipeline";
+import {
+  ADMIN_UNSAVED_COPY,
+  snapshotsEqual,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { resolveStrandRenderConfigForBead, resolveStrandRenderConfigForSubBeadType } from "@/render/bead-crop";
@@ -145,6 +151,18 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
   const [sizeRows, setSizeRows] = useState<BeadSizeDraftRow[]>(() =>
     buildSizeRows(globalSizes, initial?.id, initial?.id ? sizesForLibrary(cat.beadLibrarySizes, initial.id) : []),
   );
+  const [cropDraftDirty, setCropDraftDirty] = useState(false);
+
+  const dirtySnapshot = useMemo(
+    () => ({ form, tagNames, sizeRows }),
+    [form, tagNames, sizeRows],
+  );
+  const { isDirty: formDirty, markClean } = useDirtySnapshot(
+    dirtySnapshot,
+    initial?.id ?? "new",
+  );
+  const isDirty = formDirty || cropDraftDirty;
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty, `bead-form:${initial?.id ?? "new"}`);
 
   const resetSizeRows = useCallback(
     (libraryId?: string) => {
@@ -203,10 +221,12 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
 
   const handleCropDraft = (config: BeadCropConfig | null, _valid: boolean) => {
     draftCropRef.current = config;
+    setCropDraftDirty(!snapshotsEqual(config, form.cropConfig ?? null));
   };
 
   const handleSaveCrop = (config: BeadCropConfig) => {
     draftCropRef.current = config;
+    setCropDraftDirty(false);
     setForm((f) => ({
       ...f,
       cropConfig: config,
@@ -217,6 +237,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
 
   const handleProcessed = (processedUrl: string, config: BeadCropConfig) => {
     draftCropRef.current = config;
+    setCropDraftDirty(false);
     setForm((f) => ({
       ...f,
       processedImage: processedUrl,
@@ -291,6 +312,8 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         },
         sizes,
       );
+      setCropDraftDirty(false);
+      markClean();
     } finally {
       setSaving(false);
     }
@@ -584,8 +607,13 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         ) : null}
       </section>
 
-      <div className="flex justify-end gap-2 border-t border-border pt-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-2">
+        {isDirty ? (
+          <p className="mr-auto text-xs text-muted-foreground" role="status" aria-live="polite">
+            {ADMIN_UNSAVED_COPY.status}
+          </p>
+        ) : null}
+        <Button type="button" variant="outline" onClick={() => confirmLeave(onCancel)} disabled={saving}>
           Cancel
         </Button>
         <Button type="submit" disabled={saving}>

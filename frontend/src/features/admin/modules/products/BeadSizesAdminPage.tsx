@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { RefreshCw, Ruler, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,12 @@ import {
   runRefreshBeadAssetsJob,
   type NormalizedRegenJobProgress,
 } from "@/features/admin/lib/normalized-asset-regen";
+import {
+  ADMIN_UNSAVED_COPY,
+  useAdminUnsavedChangesContext,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { formatApiErrorMessage } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
@@ -66,6 +72,13 @@ function SizeForm({
   const [sizeError, setSizeError] = useState<string | null>(null);
   const sizeRef = useRef<HTMLInputElement>(null);
 
+  const dirtySnapshot = useMemo(
+    () => ({ sizeMm, label, order, active, isDefault }),
+    [sizeMm, label, order, active, isDefault],
+  );
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -85,6 +98,7 @@ function SizeForm({
         isActive: active,
         isDefault,
       });
+      markClean();
     } finally {
       setSaving(false);
     }
@@ -139,7 +153,10 @@ function SizeForm({
         Pricing is set per bead under Bead library → Available sizes, not here.
       </p>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+        {isDirty ? (
+          <p className="mr-auto self-center text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
+        <Button type="button" variant="outline" onClick={() => confirmLeave(onCancel)} disabled={saving}>
           Cancel
         </Button>
         <Button type="submit" disabled={saving}>
@@ -153,6 +170,7 @@ function SizeForm({
 export function BeadSizesAdminPage() {
   const cat = useCatalogue();
   const developerMode = useAdminDeveloperMode();
+  const { confirmLeave } = useAdminUnsavedChangesContext();
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [modal, setModal] = useState<AdminEditorModalState<BeadSizeEntry>>(null);
@@ -185,7 +203,7 @@ export function BeadSizesAdminPage() {
         searchPlaceholder="Search sizes…"
         onAdd={modal ? undefined : () => setModal({ type: "add" })}
         addLabel="Add size"
-        onBack={modal ? () => setModal(null) : undefined}
+        onBack={modal ? () => confirmLeave(() => setModal(null)) : undefined}
         title={modal ? (modal.type === "add" ? "New bead size" : "Edit bead size") : "Bead sizes"}
         trailing={
           !modal ? (

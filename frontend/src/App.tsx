@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, createBrowserRouter, createRoutesFromElements } from "react-router-dom";
 import { lazy, Suspense } from "react";
 
 import { LoadingState } from "@/components/common";
@@ -9,9 +9,12 @@ import NotFound from "./pages/NotFound.tsx";
 
 const CustomerPortalApp = lazy(() => import("@/features/customer-portal/CustomerPortalApp"));
 
-const App = () => (
-  <AppProviders>
-    <Routes>
+/**
+ * Data router so builders can use `useBlocker` for unsaved-change navigation guards.
+ */
+export const appRouter = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<AppProviders />}>
       <Route path="/" element={<Navigate to="/bracelet" replace />} />
       <Route
         path="/account/*"
@@ -22,12 +25,9 @@ const App = () => (
         }
       />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
-      {/* Nested admin deep links: /admin, /admin/beads/:id, … */}
       <Route path="/admin/*" element={<Index />} />
       <Route path="/:module" element={<Index />} />
       <Route path="*" element={<NotFound />} />
-    </Routes>
-  </AppProviders>
+    </Route>,
+  ),
 );
-
-export default App;

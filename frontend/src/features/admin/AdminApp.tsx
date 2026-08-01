@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react
 import { AdminLayout } from "./components/AdminLayout";
 import { AdminMobileNav } from "./components/AdminMobileNav";
 import { AdminSectionRefreshProvider } from "./context/AdminSectionRefreshContext";
+import { AdminUnsavedChangesProvider } from "./unsaved-changes";
 import { AdminDashboardPage } from "./modules/dashboard/AdminDashboardPage";
 import { HowWePrepareAdminPage } from "./modules/settings/HowWePrepareAdminPage";
 import { GeneralSettingsPage } from "./modules/settings/GeneralSettingsPage";
@@ -35,10 +36,12 @@ function AdminShellLayout() {
 
   return (
     <AdminSectionRefreshProvider>
-      <AdminLayout section={section} onSectionChange={handleSectionChange}>
-        <AdminMobileNav section={section} onSectionChange={handleSectionChange} />
-        <Outlet />
-      </AdminLayout>
+      <AdminUnsavedChangesProvider>
+        <AdminLayout section={section} onSectionChange={handleSectionChange}>
+          <AdminMobileNav section={section} onSectionChange={handleSectionChange} />
+          <Outlet />
+        </AdminLayout>
+      </AdminUnsavedChangesProvider>
     </AdminSectionRefreshProvider>
   );
 }

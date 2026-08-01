@@ -28,6 +28,8 @@ import {
   fingerprintBraceletPayload,
   fingerprintBraceletVisual,
 } from "@/features/designs/design-save-fingerprint";
+import { BuilderDraftRecoveryDialog } from "@/features/designs/BuilderDraftRecoveryDialog";
+import { useBuilderDraftRecovery } from "@/features/designs/useBuilderDraftRecovery";
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import {
   clearStaleDesignUrl,
@@ -133,7 +135,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     builder.pricing.placedCount > 0 &&
     !builder.isOverCapacity &&
     !builder.hasUnavailableBeads;
-  const autoSaveEnabled = Boolean(user) && canConfigureSave;
+  // Track dirty + local drafts for everyone; server writes only happen via explicit Save / checkout flush.
+  const draftTrackingEnabled = canConfigureSave;
 
   const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
 
@@ -267,18 +270,60 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const autoSaveInteractionHold =
     libraryDragActive || strandDragActive || isPanning || isZoomAnimating;
 
-  const { status: autoSaveStatus, setBaseline, flush, hasPendingChanges } = useDesignAutoSave({
-    enabled: autoSaveEnabled,
+  const {
+    status: autoSaveStatus,
+    setBaseline,
+    flush,
+    hasPendingChanges,
+    clearLocalDraft,
+    leaveGuard,
+  } = useDesignAutoSave({
+    enabled: draftTrackingEnabled,
     paused: autoSavePaused,
+    productType: "bracelet",
     designId: savedDesignId,
     saveDesign: saveDesignForAutoSave,
     onSaved: handleDesignSaved,
     getFingerprint: getBraceletFingerprint,
     getVisualFingerprint: getBraceletVisualFingerprint,
     buildRequest: buildBraceletRequest,
-    debounceMs: 1000,
     interactionHold: autoSaveInteractionHold,
   });
+
+  const recoveryBaselineFp =
+    hydrationDone && braceletPayload
+      ? fingerprintBraceletPayload(braceletPayload, braceletName)
+      : null;
+
+  const { recoveryOpen, takeDraftForRestore, discardDraft } = useBuilderDraftRecovery({
+    productType: "bracelet",
+    designId: savedDesignId,
+    hydrationDone,
+    baselineFingerprint: recoveryBaselineFp,
+  });
+
+  const handleRestoreDraft = useCallback(() => {
+    const draft = takeDraftForRestore();
+    const bracelet = draft?.request.bracelet;
+    if (!draft || !bracelet) return;
+    builder.loadFromSaved({
+      twinning: bracelet.twinning,
+      wristSizeCmA: bracelet.wristSizeCmA,
+      wristSizeCmB: bracelet.wristSizeCmB,
+      items: bracelet.items.map((item) => ({
+        strandIndex: item.strandIndex,
+        slotPosition: item.slotPosition,
+        beadLibraryId: item.beadLibraryId,
+        beadSizeMm: item.beadSizeMm,
+        offerKey: item.offerKey,
+        catalogIssue: item.catalogIssue ?? null,
+        unitPrice: item.unitPrice,
+      })),
+    });
+    if (draft.request.title?.trim()) setBraceletName(draft.request.title.trim());
+    setBaseline(draft.baselineFingerprint ?? `__unsaved__:${draft.key}`);
+    baselineSetRef.current = true;
+  }, [takeDraftForRestore, builder.loadFromSaved, setBaseline]);
 
   useEffect(() => {
     if (!hydrationDone || baselineSetRef.current || !braceletPayload) return;
@@ -435,10 +480,16 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
     setSavingDesign(true);
     try {
-      if (user && savedDesignId && hasPendingChanges()) {
+      if (user && hasPendingChanges()) {
         const saved = await flush();
-        if (saved) toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
-        return;
+        if (saved) {
+          toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+          return;
+        }
+        if (hasPendingChanges()) {
+          toast.error(CUSTOMER_COPY.saveDesignFailed);
+          return;
+        }
       }
 
       const request = await buildBraceletRequest({ includeThumbnail: true });
@@ -449,6 +500,13 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       const saved = await saveDesign(request, { designId: savedDesignId ?? undefined });
       if (saved) {
         handleDesignSaved(saved);
+        if (braceletPayload) {
+          setBaseline(
+            fingerprintBraceletPayload(braceletPayload, saved.title ?? braceletName),
+            fingerprintBraceletVisual(braceletPayload),
+          );
+        }
+        await clearLocalDraft();
         toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
       }
     } catch (err) {
@@ -467,6 +525,10 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     builder.pricing.placedCount,
     builder.isOverCapacity,
     builder.hasUnavailableBeads,
+    braceletPayload,
+    braceletName,
+    setBaseline,
+    clearLocalDraft,
   ]);
 
   const saveDisabled =
@@ -489,16 +551,24 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   if (!wristConfirmed) {
     return (
-      <div className="relative flex h-full w-full flex-1 flex-col animate-fade-in bg-gradient-to-b from-background via-background to-muted/20">
-        <div className="flex min-h-0 flex-1 items-center justify-center p-6 sm:p-12">
-          <WristSizeStep
-            sizes={builder.wristSizes}
-            selectedId={builder.draftWristIdA}
-            onSelect={builder.selectDraftWristA}
-            onConfirm={builder.confirmWristSizes}
-          />
+      <>
+        <div className="relative flex h-full w-full flex-1 flex-col animate-fade-in bg-gradient-to-b from-background via-background to-muted/20">
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6 sm:p-12">
+            <WristSizeStep
+              sizes={builder.wristSizes}
+              selectedId={builder.draftWristIdA}
+              onSelect={builder.selectDraftWristA}
+              onConfirm={builder.confirmWristSizes}
+            />
+          </div>
         </div>
-      </div>
+        {leaveGuard}
+        <BuilderDraftRecoveryDialog
+          open={recoveryOpen}
+          onRestore={handleRestoreDraft}
+          onDiscard={discardDraft}
+        />
+      </>
     );
   }
 
@@ -772,6 +842,12 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       currencyCode={builder.currencyCode}
       defaultEmail={user?.email}
       defaultName={user?.displayName}
+    />
+    {leaveGuard}
+    <BuilderDraftRecoveryDialog
+      open={recoveryOpen}
+      onRestore={handleRestoreDraft}
+      onDiscard={discardDraft}
     />
     </>
   );

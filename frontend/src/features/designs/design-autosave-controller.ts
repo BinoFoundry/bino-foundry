@@ -2,6 +2,9 @@ import type { SaveDesignRequest, SavedDesignSummary } from "@bino-foundry/shared
 
 export type DesignAutoSaveStatus = "idle" | "pending" | "saving" | "saved" | "error" | "offline";
 
+/** `explicit` (default): track dirty locally; server save only via `flush()`. `autosave`: legacy debounce → server. */
+export type DesignPersistMode = "explicit" | "autosave";
+
 export type DesignAutoSaveBuildContext = {
   includeThumbnail: boolean;
 };
@@ -17,17 +20,27 @@ export type DesignAutoSaveSaveFn = (
 
 export interface DesignAutoSaveControllerOptions {
   debounceMs?: number;
+  /** Default `explicit` — no server calls until `flush()`. */
+  mode?: DesignPersistMode;
   save: DesignAutoSaveSaveFn;
   onStatus: (status: DesignAutoSaveStatus) => void;
   onSaved?: (summary: SavedDesignSummary) => void;
+  /** Called when the dirty draft changes (local persistence). Never triggers a server save. */
+  onDraftChange?: (draft: {
+    fingerprint: string;
+    visualFingerprint: string;
+    build: DesignAutoSaveBuildFn;
+  }) => void;
   getDesignId: () => string | null;
 }
 
 export class DesignAutoSaveController {
   private debounceMs: number;
+  private mode: DesignPersistMode;
   private save: DesignAutoSaveSaveFn;
   private onStatus: (status: DesignAutoSaveStatus) => void;
   private onSaved?: (summary: SavedDesignSummary) => void;
+  private onDraftChange?: DesignAutoSaveControllerOptions["onDraftChange"];
   private getDesignId: () => string | null;
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -44,9 +57,11 @@ export class DesignAutoSaveController {
 
   constructor(options: DesignAutoSaveControllerOptions) {
     this.debounceMs = options.debounceMs ?? 1000;
+    this.mode = options.mode ?? "explicit";
     this.save = options.save;
     this.onStatus = options.onStatus;
     this.onSaved = options.onSaved;
+    this.onDraftChange = options.onDraftChange;
     this.getDesignId = options.getDesignId;
   }
 
@@ -57,7 +72,7 @@ export class DesignAutoSaveController {
     }
   }
 
-  /** Pause debounced saves while the user is dragging, zooming, or panning. */
+  /** Pause debounced autosaves while the user is dragging, zooming, or panning. */
   setInteractionHold(hold: boolean): void {
     if (this.interactionHold === hold) return;
     this.interactionHold = hold;
@@ -69,6 +84,7 @@ export class DesignAutoSaveController {
   }
 
   private armDebounce(): void {
+    if (this.mode !== "autosave") return;
     if (this.paused || this.interactionHold) return;
     if (!this.pendingFingerprint || !this.pendingBuild) return;
     if (this.pendingFingerprint === this.lastSavedFingerprint) return;
@@ -131,6 +147,7 @@ export class DesignAutoSaveController {
     this.pendingVisualFingerprint = visualFingerprint;
     this.pendingBuild = build;
     this.onStatus("pending");
+    this.onDraftChange?.({ fingerprint, visualFingerprint, build });
 
     this.armDebounce();
   }
@@ -178,9 +195,7 @@ export class DesignAutoSaveController {
       this.pendingVisualFingerprint != null &&
       this.pendingVisualFingerprint !== this.lastThumbnailFingerprint;
 
-    const request = await Promise.resolve(
-      build({ includeThumbnail }),
-    );
+    const request = await Promise.resolve(build({ includeThumbnail }));
     if (!request) return null;
 
     this.inFlight = true;
@@ -196,6 +211,11 @@ export class DesignAutoSaveController {
         if (includeThumbnail && this.pendingVisualFingerprint) {
           this.lastThumbnailFingerprint = this.pendingVisualFingerprint;
         }
+        // Only clear pending if nothing newer arrived during the in-flight save.
+        if (this.pendingFingerprint === fingerprint) {
+          this.pendingFingerprint = null;
+          this.pendingBuild = null;
+        }
         this.onSaved?.(saved);
         this.onStatus("saved");
         return saved;
@@ -210,7 +230,11 @@ export class DesignAutoSaveController {
       if (this.coalesceAfterFlight) {
         this.coalesceAfterFlight = false;
         if (this.pendingFingerprint && this.pendingFingerprint !== this.lastSavedFingerprint) {
-          void this.runSave(force);
+          if (this.mode === "autosave" || force) {
+            void this.runSave(force);
+          } else {
+            this.onStatus("pending");
+          }
         }
       }
     }

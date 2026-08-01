@@ -7,7 +7,7 @@ export const BUILDER_COPY = {
   cartComingSoon: "Your cart will appear here when checkout is enabled.",
   addToCart: "Add to cart",
   addToCartComingSoon: "Add to cart will be available when checkout launches.",
-  saveDesign: "Save design",
+  saveDesign: "Save Design",
   savingDesign: "Saving…",
   configurationSummary: "Configuration summary",
   costBreakdown: "Cost breakdown",

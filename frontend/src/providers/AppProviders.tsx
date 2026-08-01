@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { BrowserRouter } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,27 +13,26 @@ import { SunglassesCatalogProvider } from "@/state/sunglasses-catalog";
 
 import { createAppQueryClient } from "./query-client";
 
-export function AppProviders({ children }: { children: ReactNode }) {
+/** App-wide providers for the data router layout route (`<Outlet />`). */
+export function AppProviders({ children }: { children?: ReactNode }) {
   const [queryClient] = useState(createAppQueryClient);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <CatalogueProvider>
-            <SunglassesCatalogProvider>
-              <RenderProvider>
-                <TooltipProvider>
-                  {children}
-                  <AuthModal />
-                  <Toaster />
-                  <Sonner />
-                </TooltipProvider>
-              </RenderProvider>
-            </SunglassesCatalogProvider>
-          </CatalogueProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <AuthProvider>
+        <CatalogueProvider>
+          <SunglassesCatalogProvider>
+            <RenderProvider>
+              <TooltipProvider>
+                {children ?? <Outlet />}
+                <AuthModal />
+                <Toaster />
+                <Sonner />
+              </TooltipProvider>
+            </RenderProvider>
+          </SunglassesCatalogProvider>
+        </CatalogueProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

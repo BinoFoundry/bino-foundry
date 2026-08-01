@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_SITE_GENERAL_SETTINGS } from "@bino-foundry/shared/types";
 
@@ -22,6 +22,11 @@ import {
   notifyAdminSaveFailed,
   notifyAdminSavedEdit,
 } from "@/features/admin/lib/admin-save-feedback";
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 import { siteSettingsKeys } from "@/hooks/use-site-settings";
 import { isApiError } from "@/services/api";
 import { settingsApi } from "@/services/api/settings";
@@ -45,6 +50,14 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
   const [beadRenderCalibrationFactor, setBeadRenderCalibrationFactor] = useState(
     DEFAULT_SITE_GENERAL_SETTINGS.beadRenderCalibrationFactor,
   );
+  const [hydrateKey, setHydrateKey] = useState(0);
+
+  const dirtySnapshot = useMemo(
+    () => ({ currencyCode, braceletBuilderLibraryTitle, beadRenderCalibrationFactor }),
+    [currencyCode, braceletBuilderLibraryTitle, beadRenderCalibrationFactor],
+  );
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, hydrateKey);
+  const { confirmLeave } = useUnsavedChangesGuard(!loading && isDirty);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +73,7 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
       );
       syncBeadRenderCalibrationFromSettings(data);
       setValidationError(null);
+      setHydrateKey((k) => k + 1);
     } catch (err) {
       setError(isApiError(err) ? err.message : "Failed to load general settings");
     } finally {
@@ -87,6 +101,7 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
       syncBeadRenderCalibrationFromSettings({ beadRenderCalibrationFactor });
       await queryClient.invalidateQueries({ queryKey: siteSettingsKeys.general() });
       notifyAdminSavedEdit();
+      markClean();
     } catch (err) {
       notifyAdminSaveFailed(err, "Failed to save general settings");
       const msg = isApiError(err)
@@ -193,7 +208,16 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
       ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={saving}>
+        {isDirty ? (
+          <p className="mr-auto text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => confirmLeave(() => void load())}
+          disabled={saving}
+        >
           Reset
         </Button>
         <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving}>

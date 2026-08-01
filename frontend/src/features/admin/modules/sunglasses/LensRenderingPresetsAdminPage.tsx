@@ -12,6 +12,11 @@ import { LensRenderPresetLivePreview } from "@/features/admin/components/LensRen
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/common";
 import { ErrorState } from "@/components/common";
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 import { isApiError } from "@/services/api";
 import { sunglassesApi } from "@/services/api/sunglasses";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
@@ -38,6 +43,30 @@ export function LensRenderingPresetsAdminPage() {
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   /** Permanent glass sheet URL from the last loaded/saved draft (for replace/delete cleanup). */
   const savedSheetUrlRef = useRef<string | null>(null);
+
+  const dirtySnapshot = useMemo(() => {
+    if (!editing) return null;
+    return {
+      name: editing.name ?? "",
+      description: editing.description ?? "",
+      settings: editing.settings,
+      displayOrder: editing.displayOrder ?? 0,
+      isActive: editing.isActive !== false,
+      isDefault: Boolean(editing.isDefault),
+      editingSystemDefault,
+    };
+  }, [editing, editingSystemDefault]);
+
+  const baselineKey = editingSystemDefault
+    ? "system-default"
+    : editing?.id
+      ? editing.id
+      : editing
+        ? "new"
+        : "closed";
+
+  const { isDirty, resetBaseline } = useDirtySnapshot(dirtySnapshot, baselineKey);
+  const { confirmLeave } = useUnsavedChangesGuard(Boolean(editing) && isDirty);
 
   const discardDraftSheet = useCallback((settings: LensClipRenderSettings | null | undefined) => {
     discardPendingGlassSheet(settings?.glassSheetUrl);
@@ -136,7 +165,20 @@ export function LensRenderingPresetsAdminPage() {
         };
         setSystemDefaults(merged);
         savedSheetUrlRef.current = merged.glassSheetUrl?.trim() || null;
-        setEditing((prev) => (prev ? { ...prev, settings: merged } : prev));
+        setEditing((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, settings: merged };
+          resetBaseline({
+            name: next.name ?? "",
+            description: next.description ?? "",
+            settings: merged,
+            displayOrder: next.displayOrder ?? 0,
+            isActive: next.isActive !== false,
+            isDefault: Boolean(next.isDefault),
+            editingSystemDefault: true,
+          });
+          return next;
+        });
         setSaveFeedback("Saved");
         await catalog.refreshAdminFromApi();
         window.setTimeout(() => setSaveFeedback(null), 2000);
@@ -154,7 +196,20 @@ export function LensRenderingPresetsAdminPage() {
 
       await sunglassesApi.updateLensRenderPreset(editing.id!, payload);
       savedSheetUrlRef.current = settingsPayload.glassSheetUrl?.trim() || null;
-      setEditing((prev) => (prev ? { ...prev, settings: finalized } : prev));
+      setEditing((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, settings: finalized };
+        resetBaseline({
+          name: next.name ?? "",
+          description: next.description ?? "",
+          settings: finalized,
+          displayOrder: next.displayOrder ?? 0,
+          isActive: next.isActive !== false,
+          isDefault: Boolean(next.isDefault),
+          editingSystemDefault: false,
+        });
+        return next;
+      });
       setSaveFeedback("Saved");
       await refresh();
       window.setTimeout(() => setSaveFeedback(null), 2000);
@@ -200,7 +255,7 @@ export function LensRenderingPresetsAdminPage() {
                 className={`flex w-full items-center gap-2 px-3 py-3 text-left ${
                   editingSystemDefault ? "bg-muted/50" : ""
                 }`}
-                onClick={openSystemDefault}
+                onClick={() => confirmLeave(openSystemDefault)}
               >
                 <Settings2 className="h-4 w-4 shrink-0" />
                 <span>
@@ -219,7 +274,7 @@ export function LensRenderingPresetsAdminPage() {
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
-                    onClick={() => openEdit(preset)}
+                    onClick={() => confirmLeave(() => openEdit(preset))}
                   >
                     <p className="truncate text-sm font-medium text-foreground">{preset.name}</p>
                     <p className="truncate text-[11px] text-muted-foreground">
@@ -234,7 +289,7 @@ export function LensRenderingPresetsAdminPage() {
                       variant="ghost"
                       className="h-7 w-7"
                       title="Edit"
-                      onClick={() => openEdit(preset)}
+                      onClick={() => confirmLeave(() => openEdit(preset))}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -294,8 +349,10 @@ export function LensRenderingPresetsAdminPage() {
                 <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
                   {saveFeedback ? (
                     <span className="mr-auto text-xs text-muted-foreground">{saveFeedback}</span>
+                  ) : isDirty ? (
+                    <span className="mr-auto text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</span>
                   ) : null}
-                  <Button type="button" variant="outline" onClick={closeEditor}>
+                  <Button type="button" variant="outline" onClick={() => confirmLeave(closeEditor)}>
                     Close
                   </Button>
                   <Button

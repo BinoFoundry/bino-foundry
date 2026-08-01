@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +18,11 @@ import {
   notifyAdminSaveFailed,
   notifyAdminSavedEdit,
 } from "@/features/admin/lib/admin-save-feedback";
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 import { adminSettingsApi } from "@/services/api/admin-settings";
 import { isApiError } from "@/services/api";
 import type { SmtpEncryption, SmtpSettingsPublic, SmtpTemplateTestType } from "@bino-foundry/shared/types";
@@ -68,6 +73,11 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
     fromName: "",
     fromEmail: "",
   });
+  const [hydrateKey, setHydrateKey] = useState(0);
+
+  const dirtySnapshot = useMemo(() => form, [form]);
+  const { isDirty } = useDirtySnapshot(dirtySnapshot, hydrateKey);
+  const { confirmLeave } = useUnsavedChangesGuard(!loading && isDirty);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,6 +88,7 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
       setForm(toFormState(data));
       setValidationError(null);
       setTestResult(null);
+      setHydrateKey((k) => k + 1);
     } catch (err) {
       setError(isApiError(err) ? err.message : "Failed to load SMTP settings");
     } finally {
@@ -163,6 +174,7 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
       const updated = await adminSettingsApi.updateSmtp(buildUpdatePayload());
       setStored(updated);
       setForm(toFormState(updated));
+      setHydrateKey((k) => k + 1);
       notifyAdminSavedEdit();
     } catch (err) {
       notifyAdminSaveFailed(err, "Failed to save SMTP settings");
@@ -413,7 +425,16 @@ export function SmtpSettingsAdmin({ onRegisterReload }: { onRegisterReload?: (re
       ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={saving || testingTemplate !== null}>
+        {isDirty ? (
+          <p className="mr-auto text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => confirmLeave(() => void load())}
+          disabled={saving || testingTemplate !== null}
+        >
           Reset
         </Button>
         <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving || testingTemplate !== null}>

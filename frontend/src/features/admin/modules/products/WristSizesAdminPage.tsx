@@ -11,6 +11,12 @@ import {
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
+import {
+  ADMIN_UNSAVED_COPY,
+  useAdminUnsavedChangesContext,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminActiveInactiveStatusField } from "../../components/AdminActiveInactiveStatusField";
@@ -38,6 +44,13 @@ function WristSizeForm({
   const [sizeError, setSizeError] = useState<string | null>(null);
   const sizeRef = useRef<HTMLInputElement>(null);
 
+  const dirtySnapshot = useMemo(
+    () => ({ sizeCm, label, order, active, isDefault, notes }),
+    [sizeCm, label, order, active, isDefault, notes],
+  );
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -57,6 +70,7 @@ function WristSizeForm({
         isDefault,
         notes: notes.trim() || null,
       });
+      markClean();
     } finally {
       setSaving(false);
     }
@@ -119,7 +133,10 @@ function WristSizeForm({
         Default selection
       </label>
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
+        {isDirty ? (
+          <p className="mr-auto self-center text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
+        <Button type="button" variant="ghost" onClick={() => confirmLeave(onCancel)} disabled={saving}>
           Cancel
         </Button>
         <Button type="submit" disabled={saving}>
@@ -134,6 +151,7 @@ export function WristSizesAdminPage() {
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
   const editor = useAdminResourceEditor("wrist-sizes");
+  const { confirmLeave } = useAdminUnsavedChangesContext();
   const list = useAdminList(cat.wristSizes, (s, q) => s.label.toLowerCase().includes(q));
   const editingEntry = useMemo(() => {
     if (!editor.itemId) return null;
@@ -154,7 +172,7 @@ export function WristSizesAdminPage() {
         searchPlaceholder="Search wrist sizes…"
         onAdd={editor.isOpen ? undefined : editor.openCreate}
         addLabel="Add wrist size"
-        onBack={editor.isOpen ? editor.close : undefined}
+        onBack={editor.isOpen ? () => confirmLeave(editor.close) : undefined}
         title={
           editor.isOpen
             ? editor.isCreating

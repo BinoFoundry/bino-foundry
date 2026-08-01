@@ -10,6 +10,11 @@ import {
   describeFrameSaveBlockers,
   isFrameViewSaveReady,
 } from "@/features/admin/lib/frameClipStatus";
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 import type { FrameEntry } from "@/data/glasses";
 import type { FrameRenderView } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES } from "@/types/frame-rendering";
@@ -77,6 +82,7 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   const [renderViews, setRenderViews] = useState<FrameRenderView[]>(
     normalizeViews(initial?.renderViews),
   );
+  const [viewsDraftDirty, setViewsDraftDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [viewsError, setViewsError] = useState<string | null>(null);
@@ -89,6 +95,28 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   const viewsSectionRef = useRef<FrameRenderViewsSectionHandle>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const viewsBlockRef = useRef<HTMLDivElement>(null);
+
+  const dirtySnapshot = useMemo(
+    () => ({
+      name: form.name,
+      price: form.price,
+      description: form.description,
+      isActive: form.isActive,
+      availabilityStatusCode: form.availabilityStatusCode,
+      displayOrder: form.displayOrder,
+      modelFamily: form.modelFamily,
+      lensRenderPresetId: form.lensRenderPresetId,
+      useLensRenderPreset: form.useLensRenderPreset,
+      renderViews,
+    }),
+    [form, renderViews],
+  );
+  const { isDirty: formDirty, markClean } = useDirtySnapshot(
+    dirtySnapshot,
+    initial?.id ?? "new",
+  );
+  const isDirty = formDirty || viewsDraftDirty;
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty, `frame-form:${initial?.id ?? "new"}`);
 
   const frontView = useMemo(
     () => renderViews.find((v) => v.view === "front"),
@@ -135,6 +163,8 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
         frameImages: legacyImages,
         lensColors: [],
       });
+      setViewsDraftDirty(false);
+      markClean();
     } finally {
       setSaving(false);
     }
@@ -262,7 +292,11 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
         <FrameRenderViewsSection
           ref={viewsSectionRef}
           views={renderViews}
-          onChange={setRenderViews}
+          onChange={(next) => {
+            setRenderViews(next);
+            setViewsDraftDirty(false);
+          }}
+          onDraftTouch={() => setViewsDraftDirty(true)}
           modelFamily={form.modelFamily ?? null}
           lensRenderPresetId={form.lensRenderPresetId ?? null}
           useLensRenderPreset={form.useLensRenderPreset !== false}
@@ -291,13 +325,19 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
                 ? payload.useLensRenderPreset
                 : f.useLensRenderPreset,
           }));
+          setViewsDraftDirty(false);
           setViewsError(null);
           toast.success("Configuration copied — review and adjust before saving.");
         }}
       />
 
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+        {isDirty ? (
+          <p className="mr-auto text-xs text-muted-foreground" role="status" aria-live="polite">
+            {ADMIN_UNSAVED_COPY.status}
+          </p>
+        ) : null}
+        <Button type="button" variant="outline" onClick={() => confirmLeave(onCancel)} disabled={saving}>
           Cancel
         </Button>
         <Button type="submit" disabled={saving}>

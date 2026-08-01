@@ -20,6 +20,7 @@ import { AdminPage } from "../../components/AdminPage";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { useAdminSectionRefresh } from "../../context/AdminSectionRefreshContext";
+import { useAdminUnsavedChangesContext } from "../../unsaved-changes";
 import { formatDesignDisplayTitle } from "@/features/designs/display-title";
 import { UserForm, type UserFormValues } from "./UserForm";
 import { ASSIGNABLE_ROLE_OPTIONS, STATUS_LABELS, displayRoleLabel, formatAdminDate } from "./user-labels";
@@ -37,6 +38,7 @@ function statusVariant(status: AccountStatus): "success" | "muted" | "danger" {
 }
 
 export function UsersAdminPage() {
+  const { confirmLeave } = useAdminUnsavedChangesContext();
   const [view, setView] = useState<ViewState>({ mode: "list" });
   const [items, setItems] = useState<AdminUserSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -166,9 +168,17 @@ export function UsersAdminPage() {
   if (view.mode === "create") {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <AdminToolbar title="New user" onBack={() => setView({ mode: "list" })} hideSearch />
+        <AdminToolbar
+          title="New user"
+          onBack={() => confirmLeave(() => setView({ mode: "list" }))}
+          hideSearch
+        />
         <AdminPage>
-          <UserForm mode="create" onCancel={() => setView({ mode: "list" })} onSave={handleCreate} />
+          <UserForm
+            mode="create"
+            onCancel={() => setView({ mode: "list" })}
+            onSave={handleCreate}
+          />
         </AdminPage>
       </div>
     );
@@ -179,7 +189,7 @@ export function UsersAdminPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <AdminToolbar
           title={`Edit · ${view.user.displayName ?? view.user.email ?? "User"}`}
-          onBack={() => setView({ mode: "list" })}
+          onBack={() => confirmLeave(() => setView({ mode: "list" }))}
           hideSearch
         />
         <AdminPage>

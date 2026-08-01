@@ -155,6 +155,8 @@ interface FrameRenderViewsSectionProps {
     lensRenderPresetId: string | null;
     useLensRenderPreset: boolean;
   }) => void;
+  /** Fired when live editor drafts change (mask/crop) before they are committed to `views`. */
+  onDraftTouch?: () => void;
 }
 
 export type FrameRenderViewsSectionHandle = {
@@ -178,6 +180,7 @@ export const FrameRenderViewsSection = forwardRef<
     lensRenderPresets = [],
     lensRenderSystemDefaults,
     onLensRenderAssignmentChange,
+    onDraftTouch,
   },
   ref,
 ) {
@@ -751,7 +754,8 @@ export const FrameRenderViewsSection = forwardRef<
     // Live edits stay in draft only — avoid mask→clip conversion and parent form
     // re-renders on every pointer frame. Commit via Save / flushPendingEdits.
     draftRef.current[axis] = mask;
-  }, []);
+    onDraftTouch?.();
+  }, [onDraftTouch]);
 
   const saveLensEditor = (axis: FrameViewAxis, side: FrameLensSide) => {
     const mask = draftRef.current[axis];

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Package, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,12 @@ import {
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
+import {
+  ADMIN_UNSAVED_COPY,
+  useAdminUnsavedChangesContext,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
@@ -66,6 +72,49 @@ function HowWePrepareForm({
   const [sortOrder, setSortOrder] = useState(initial?.sortOrder ?? 0);
   const [saving, setSaving] = useState(false);
 
+  const dirtySnapshot = useMemo(
+    () => ({
+      name,
+      slug,
+      shortDescription,
+      fullDescription,
+      optionType,
+      priceType,
+      price,
+      defaultQuantity,
+      minimumQuantity,
+      maximumQuantity,
+      quantityEnabled,
+      benefits,
+      highlightTitle,
+      highlightDescription,
+      badge,
+      status,
+      sortOrder,
+    }),
+    [
+      name,
+      slug,
+      shortDescription,
+      fullDescription,
+      optionType,
+      priceType,
+      price,
+      defaultQuantity,
+      minimumQuantity,
+      maximumQuantity,
+      quantityEnabled,
+      benefits,
+      highlightTitle,
+      highlightDescription,
+      badge,
+      status,
+      sortOrder,
+    ],
+  );
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+
   const handleNameChange = (value: string) => {
     setName(value);
     if (!slugTouched) setSlug(slugifyName(value));
@@ -112,6 +161,7 @@ function HowWePrepareForm({
         status,
         sortOrder,
       });
+      markClean();
     } finally {
       setSaving(false);
     }
@@ -339,7 +389,10 @@ function HowWePrepareForm({
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
+        {isDirty ? (
+          <p className="mr-auto self-center text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
+        <Button type="button" variant="ghost" onClick={() => confirmLeave(onCancel)} disabled={saving}>
           Cancel
         </Button>
         <Button type="submit" disabled={saving}>
@@ -355,6 +408,7 @@ export function HowWePrepareAdminPage() {
   const currency = useFormatCurrency();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [modal, setModal] = useState<AdminEditorModalState<HowWePrepareOption>>(null);
+  const { confirmLeave } = useAdminUnsavedChangesContext();
   const list = useAdminList(cat.howWePrepareOptions, (item, q) =>
     `${item.name} ${item.slug} ${item.shortDescription}`.toLowerCase().includes(q),
   );
@@ -370,7 +424,7 @@ export function HowWePrepareAdminPage() {
         searchPlaceholder="Search preparation options…"
         onAdd={modal ? undefined : () => setModal({ type: "add" })}
         addLabel="Add option"
-        onBack={modal ? () => setModal(null) : undefined}
+        onBack={modal ? () => confirmLeave(() => setModal(null)) : undefined}
         title={modal ? (modal.type === "add" ? "New preparation option" : "Edit preparation option") : "How We Prepare"}
       />
 

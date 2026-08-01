@@ -15,6 +15,11 @@ import {
 } from "@bino-foundry/shared/types";
 import { useCatalogue } from "@/state/catalogue";
 
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "../unsaved-changes";
 import { adminFieldClass } from "./admin-styles";
 import { AdminActiveInactiveStatusField } from "./AdminActiveInactiveStatusField";
 import { StrandRenderConfigPanel } from "./StrandRenderConfigPanel";
@@ -80,6 +85,10 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
   const [saving, setSaving] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  const dirtySnapshot = useMemo(() => form, [form]);
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+
   const inheritBeadTypeDefaults = subBeadTypeInheritsBeadTypeStrandDefaults(form.metadata);
 
   const inheritedBeadTypeProfile = useMemo(() => {
@@ -126,6 +135,7 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         inheritedBeadTypeProfile,
       );
       await onSave({ ...form, beadTypeId: beadType.id, metadata: normalizedMetadata });
+      markClean();
     } finally {
       setSaving(false);
     }
@@ -216,10 +226,13 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
       </label>
 
       <div className="flex gap-2">
+        {isDirty ? (
+          <p className="mr-auto self-center text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
         <Button type="submit" disabled={saving}>
           {saving ? "Saving…" : "Save sub-type"}
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={() => confirmLeave(onCancel)}>
           Cancel
         </Button>
       </div>

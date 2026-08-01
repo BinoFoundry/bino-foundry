@@ -9,11 +9,13 @@ import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
 import { CheckoutDialog } from "@/features/account/components/CheckoutDialog";
 import { captureSunglassesThumbnail } from "@/features/designs/capture-thumbnail";
 import { fingerprintSunglassesConfig, fingerprintSunglassesVisual } from "@/features/designs/design-save-fingerprint";
+import { BuilderDraftRecoveryDialog } from "@/features/designs/BuilderDraftRecoveryDialog";
 import { setPendingDesignListener } from "@/features/designs/pending-design";
 import {
   clearStaleDesignUrl,
   createRecoveringSaveDesign,
 } from "@/features/designs/recovering-save-design";
+import { useBuilderDraftRecovery } from "@/features/designs/useBuilderDraftRecovery";
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import type { CustomiserStep } from "@/features/sunglasses/constants";
 import { designsApi } from "@/services/api/designs";
@@ -54,7 +56,8 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
   // Save is configurable whenever a tint is chosen — independent of auth so the
   // Save button can trigger the login flow and resume the save afterwards.
   const canConfigureSave = Boolean(tintId && !state.hasUnavailableFrame);
-  const autoSaveEnabled = Boolean(user && canConfigureSave);
+  // Track dirty + local drafts for everyone; server writes only via explicit Save / checkout flush.
+  const draftTrackingEnabled = canConfigureSave;
 
   const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
 
@@ -151,17 +154,70 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
     [designIdFromUrl, setSearchParams],
   );
 
-  const { status: autoSaveStatus, setBaseline, flush, hasPendingChanges } = useDesignAutoSave({
-    enabled: autoSaveEnabled,
+  const {
+    status: autoSaveStatus,
+    setBaseline,
+    flush,
+    hasPendingChanges,
+    clearLocalDraft,
+    leaveGuard,
+  } = useDesignAutoSave({
+    enabled: draftTrackingEnabled,
     paused: autoSavePaused,
+    productType: "sunglasses",
     designId: savedDesignId,
     saveDesign: saveDesignForAutoSave,
     onSaved: handleDesignSaved,
     getFingerprint: getSunglassesFingerprint,
     getVisualFingerprint: getSunglassesVisualFingerprint,
     buildRequest: buildSunglassesRequest,
-    debounceMs: 1000,
   });
+
+  const recoveryBaselineFp =
+    hydrationDone && sunglassesPayload
+      ? fingerprintSunglassesConfig(
+          {
+            frameId: sunglassesPayload.frameId,
+            lensTintId: sunglassesPayload.lensTintId,
+            selectedOptions: sunglassesPayload.selectedOptions,
+            builderStep: sunglassesPayload.builderStep,
+            subtotal: sunglassesPayload.subtotal,
+            currencyCode: sunglassesPayload.currencyCode,
+          },
+          sunglassesPayload.title,
+        )
+      : null;
+
+  const { recoveryOpen, takeDraftForRestore, discardDraft } = useBuilderDraftRecovery({
+    productType: "sunglasses",
+    designId: savedDesignId,
+    hydrationDone,
+    baselineFingerprint: recoveryBaselineFp,
+  });
+
+  const handleRestoreDraft = useCallback(() => {
+    const draft = takeDraftForRestore();
+    const sunglasses = draft?.request.sunglasses;
+    if (!draft || !sunglasses) return;
+    state.applyLoadedFrame(sunglasses.frameId);
+    if (sunglassesCatalog.getTintById(sunglasses.lensTintId)) {
+      state.selectTintById(sunglasses.lensTintId);
+    }
+    state.dispatch({ type: "SET_OPTIONS", options: sunglasses.selectedOptions });
+    if (sunglasses.builderStep) {
+      flow.goTo(sunglasses.builderStep as CustomiserStep);
+    }
+    setBaseline(draft.baselineFingerprint ?? `__unsaved__:${draft.key}`);
+    baselineSetRef.current = true;
+  }, [
+    takeDraftForRestore,
+    state.applyLoadedFrame,
+    state.selectTintById,
+    state.dispatch,
+    sunglassesCatalog.getTintById,
+    flow.goTo,
+    setBaseline,
+  ]);
 
   useEffect(() => {
     if (!hydrationDone || baselineSetRef.current || !sunglassesPayload) return;
@@ -311,11 +367,16 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
 
     setSavingDesign(true);
     try {
-      // Authenticated with queued autosave work — flush the debounced controller.
-      if (user && savedDesignId && hasPendingChanges()) {
+      if (user && hasPendingChanges()) {
         const saved = await flush();
-        if (saved) toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
-        return;
+        if (saved) {
+          toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
+          return;
+        }
+        if (hasPendingChanges()) {
+          toast.error(CUSTOMER_COPY.saveDesignFailed);
+          return;
+        }
       }
 
       const request = await buildSunglassesRequest({ includeThumbnail: true });
@@ -326,6 +387,25 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
       const saved = await saveDesign(request, { designId: savedDesignId ?? undefined });
       if (saved) {
         handleDesignSaved(saved);
+        setBaseline(
+          fingerprintSunglassesConfig(
+            {
+              frameId: sunglassesPayload.frameId,
+              lensTintId: sunglassesPayload.lensTintId,
+              selectedOptions: sunglassesPayload.selectedOptions,
+              builderStep: sunglassesPayload.builderStep,
+              subtotal: sunglassesPayload.subtotal,
+              currencyCode: sunglassesPayload.currencyCode,
+            },
+            saved.title ?? sunglassesPayload.title,
+          ),
+          fingerprintSunglassesVisual({
+            frameId: sunglassesPayload.frameId,
+            lensTintId: sunglassesPayload.lensTintId,
+            selectedOptions: sunglassesPayload.selectedOptions,
+          }),
+        );
+        await clearLocalDraft();
         toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
       }
     } catch (err) {
@@ -345,6 +425,8 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
     flow,
     state.hasUnavailableFrame,
     state.frameSku,
+    setBaseline,
+    clearLocalDraft,
   ]);
 
   if (sunglassesCatalog.isHydrating && sunglassesCatalog.lensTints.length === 0) {
@@ -413,6 +495,12 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
       currencyCode={currencyCode}
       defaultEmail={user?.email}
       defaultName={user?.displayName}
+    />
+    {leaveGuard}
+    <BuilderDraftRecoveryDialog
+      open={recoveryOpen}
+      onRestore={handleRestoreDraft}
+      onDiscard={discardDraft}
     />
     </>
   );

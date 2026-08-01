@@ -14,6 +14,11 @@ import {
 import { strandRenderMigrationApi } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
 
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "../unsaved-changes";
 import { adminFieldClass } from "./admin-styles";
 import { AdminActiveInactiveStatusField } from "./AdminActiveInactiveStatusField";
 import { StrandRenderConfigPanel } from "./StrandRenderConfigPanel";
@@ -80,6 +85,13 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [resetBeadsOnSave, setResetBeadsOnSave] = useState(true);
 
+  const dirtySnapshot = useMemo(
+    () => ({ form, resetBeadsOnSave }),
+    [form, resetBeadsOnSave],
+  );
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+
   // Same System → Type resolve the Builder uses for beads that inherit this type.
   const effective = useMemo(() => {
     return resolveStrandRenderConfig({
@@ -120,6 +132,7 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
     try {
       const normalized = normalizeTypeStrandMetadata(form, strandRenderDefaults);
       await onSave(normalized);
+      markClean();
       if (initial?.id && resetBeadsOnSave && overriddenBeadCount > 0) {
         const result = await strandRenderMigrationApi.applyTypeToLibraries(initial.id);
         await refreshFromApi();
@@ -260,7 +273,15 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
           {showAdvanced ? "Hide advanced" : "Show advanced"}
         </Button>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+          {isDirty ? (
+            <p className="mr-auto self-center text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => confirmLeave(onCancel)}
+            disabled={saving}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={saving}>

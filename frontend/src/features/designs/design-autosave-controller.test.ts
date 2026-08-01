@@ -11,10 +11,39 @@ describe("DesignAutoSaveController", () => {
     vi.useRealTimers();
   });
 
-  it("debounces saves and skips unchanged fingerprints", async () => {
+  it("explicit mode tracks dirty state without calling the server", async () => {
+    const save = vi.fn().mockResolvedValue({ id: "dsn_1" });
+    const onStatus = vi.fn();
+    const onDraftChange = vi.fn();
+    const controller = new DesignAutoSaveController({
+      mode: "explicit",
+      debounceMs: 500,
+      save,
+      onStatus,
+      onDraftChange,
+      getDesignId: () => null,
+    });
+
+    const build = vi.fn(() => ({ productType: "bracelet" as const }));
+    controller.schedule("fp-1", "vis-1", build);
+    expect(onStatus).toHaveBeenCalledWith("pending");
+    expect(onDraftChange).toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(save).not.toHaveBeenCalled();
+    expect(controller.hasPendingChanges()).toBe(true);
+
+    const saved = await controller.flush();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(saved).toEqual({ id: "dsn_1" });
+    expect(controller.hasPendingChanges()).toBe(false);
+  });
+
+  it("autosave mode debounces saves and skips unchanged fingerprints", async () => {
     const save = vi.fn().mockResolvedValue({ id: "dsn_1" });
     const onStatus = vi.fn();
     const controller = new DesignAutoSaveController({
+      mode: "autosave",
       debounceMs: 500,
       save,
       onStatus,
@@ -38,7 +67,7 @@ describe("DesignAutoSaveController", () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 
-  it("queues the latest state while a save is in flight", async () => {
+  it("autosave queues the latest state while a save is in flight", async () => {
     let resolveSave: (value: { id: string }) => void = () => {};
     const save = vi.fn(
       () =>
@@ -47,6 +76,7 @@ describe("DesignAutoSaveController", () => {
         }),
     );
     const controller = new DesignAutoSaveController({
+      mode: "autosave",
       debounceMs: 0,
       save,
       onStatus: vi.fn(),
@@ -67,9 +97,10 @@ describe("DesignAutoSaveController", () => {
     expect(save).toHaveBeenCalledTimes(2);
   });
 
-  it("defers debounced save while an interaction hold is active", async () => {
+  it("autosave defers debounced save while an interaction hold is active", async () => {
     const save = vi.fn().mockResolvedValue({ id: "dsn_1" });
     const controller = new DesignAutoSaveController({
+      mode: "autosave",
       debounceMs: 500,
       save,
       onStatus: vi.fn(),
@@ -91,6 +122,7 @@ describe("DesignAutoSaveController", () => {
     const save = vi.fn().mockRejectedValue(new Error("404"));
     const onStatus = vi.fn();
     const controller = new DesignAutoSaveController({
+      mode: "autosave",
       debounceMs: 0,
       save,
       onStatus,
@@ -109,6 +141,7 @@ describe("DesignAutoSaveController", () => {
   it("omits thumbnail when visual fingerprint is unchanged", async () => {
     const save = vi.fn().mockResolvedValue({ id: "dsn_1" });
     const controller = new DesignAutoSaveController({
+      mode: "explicit",
       debounceMs: 0,
       save,
       onStatus: vi.fn(),
@@ -121,13 +154,13 @@ describe("DesignAutoSaveController", () => {
     }));
 
     controller.schedule("fp-1", "vis-1", build);
-    await vi.runAllTimersAsync();
+    await controller.flush();
     expect(build).toHaveBeenCalledWith({ includeThumbnail: true });
 
     build.mockClear();
     controller.setBaseline("fp-1", "vis-1");
     controller.schedule("fp-2", "vis-1", build);
-    await vi.runAllTimersAsync();
+    await controller.flush();
     expect(build).toHaveBeenCalledWith({ includeThumbnail: false });
   });
 });

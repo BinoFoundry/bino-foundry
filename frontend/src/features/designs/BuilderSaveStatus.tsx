@@ -13,14 +13,10 @@ interface BuilderSaveStatusProps {
 export function BuilderSaveStatus({
   status,
   visible = true,
-  signedIn = true,
+  signedIn: _signedIn = true,
   className,
 }: BuilderSaveStatusProps) {
   if (!visible) return null;
-
-  // Unauthenticated users are handled by the visible "Save design" button, which
-  // opens the login flow on click — no permanent inline prompt in the layout.
-  if (!signedIn) return null;
 
   const label = labelForAutoSaveStatus(status);
   if (!label) return null;
@@ -30,6 +26,7 @@ export function BuilderSaveStatus({
       className={cn(
         "text-center text-[10px] leading-snug text-muted-foreground sm:text-xs",
         status === "error" && "text-destructive",
+        status === "pending" && "text-foreground/80",
         className,
       )}
       role="status"

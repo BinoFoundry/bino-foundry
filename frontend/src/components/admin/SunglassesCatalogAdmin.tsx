@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { DEFAULT_LENS_TINT_RENDER } from "@bino-foundry/shared/types";
 
@@ -12,6 +12,11 @@ import {
   validateHexFields,
 } from "@/features/admin/lib/adminHex";
 import { formatCurrencySurcharge } from "@bino-foundry/shared/currency";
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 
 import { Button } from "@/components/ui/button";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
@@ -378,6 +383,10 @@ function TintEditor({
   const [saving, setSaving] = useState(false);
   const isClassic = form.category === "classic";
 
+  const dirtySnapshot = useMemo(() => form, [form]);
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, entry.id || "new");
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+
   useEffect(() => {
     setForm(entry);
     setHexError(null);
@@ -424,7 +433,9 @@ function TintEditor({
           ? { ...form, gradientBottom: form.gradientTop }
           : form;
         setSaving(true);
-        void Promise.resolve(onSave(payload)).finally(() => setSaving(false));
+        void Promise.resolve(onSave(payload))
+          .then(() => markClean())
+          .finally(() => setSaving(false));
       }}
     >
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
@@ -655,7 +666,16 @@ function TintEditor({
       </div>
       {hexError ? <p className="text-sm text-destructive">{hexError}</p> : null}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+        {isDirty ? (
+          <p className="mr-auto self-center text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => confirmLeave(onCancel)}
+          disabled={saving}
+        >
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={saving}>
@@ -676,12 +696,16 @@ function OptionEditor({
   onCancel: () => void;
 }) {
   const [form, setForm] = useState(entry);
+  const dirtySnapshot = useMemo(() => form, [form]);
+  const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, entry.id || "new");
+  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+
   return (
     <form
       className="ml-2 space-y-3 rounded-xl border border-primary/30 border-l-2 border-l-primary bg-primary/5 p-4 sm:ml-4"
       onSubmit={(e) => {
         e.preventDefault();
-        void onSave(form);
+        void Promise.resolve(onSave(form)).then(() => markClean());
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">
@@ -797,7 +821,12 @@ function OptionEditor({
         </div>
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+        {isDirty ? (
+          <p className="mr-auto self-center text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
+        <Button type="button" variant="outline" size="sm" onClick={() => confirmLeave(onCancel)}>
+          Cancel
+        </Button>
         <Button type="submit" size="sm">Save option</Button>
       </div>
     </form>

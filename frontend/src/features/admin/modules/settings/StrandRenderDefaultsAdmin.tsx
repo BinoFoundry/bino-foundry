@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { settingsApi } from "@/services/api/settings";
@@ -8,6 +8,11 @@ import {
   notifyAdminSaveFailed,
   notifyAdminSavedEdit,
 } from "@/features/admin/lib/admin-save-feedback";
+import {
+  ADMIN_UNSAVED_COPY,
+  useDirtySnapshot,
+  useUnsavedChangesGuard,
+} from "@/features/admin/unsaved-changes";
 
 import { StrandRenderConfigPanel } from "../../components/StrandRenderConfigPanel";
 
@@ -28,7 +33,12 @@ export function StrandRenderDefaultsAdmin({
   const [saving, setSaving] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hydrateKey, setHydrateKey] = useState(0);
   const loadedRef = useRef(false);
+
+  const dirtySnapshot = useMemo(() => value, [value]);
+  const { isDirty } = useDirtySnapshot(dirtySnapshot, hydrateKey);
+  useUnsavedChangesGuard(!loading && isDirty);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,6 +46,7 @@ export function StrandRenderDefaultsAdmin({
     try {
       const defaults = strandRenderDefaults ?? (await settingsApi.getStrandRenderDefaults());
       setValue(defaults);
+      setHydrateKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load strand defaults");
     } finally {
@@ -59,6 +70,7 @@ export function StrandRenderDefaultsAdmin({
     try {
       const saved = await updateStrandRenderDefaults(value);
       setValue(saved);
+      setHydrateKey((k) => k + 1);
       notifyAdminSavedEdit();
     } catch (err) {
       notifyAdminSaveFailed(err);
@@ -83,6 +95,9 @@ export function StrandRenderDefaultsAdmin({
         onChange={(patch) => setValue((prev) => ({ ...prev, ...patch }))}
       />
       <div className="flex flex-wrap items-center gap-2">
+        {isDirty ? (
+          <p className="mr-auto text-xs text-muted-foreground">{ADMIN_UNSAVED_COPY.status}</p>
+        ) : null}
         <Button type="button" variant="outline" size="sm" onClick={() => setShowAdvanced((v) => !v)}>
           {showAdvanced ? "Hide advanced" : "Show advanced"}
         </Button>
