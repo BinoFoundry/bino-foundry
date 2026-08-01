@@ -35,7 +35,7 @@ function updateTypeStrandRender(form: BeadTypeEntry, patch: Record<string, unkno
 }
 
 export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
-  const { strandRenderDefaults, refreshFromApi } = useCatalogue();
+  const { strandRenderDefaults, refreshFromApi, beadLibraries } = useCatalogue();
   const blank: BeadTypeEntry = {
     id: "",
     slug: "",
@@ -56,6 +56,16 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
       beadTypeDefaults: typePartialFromForm(form),
     });
   }, [form, strandRenderDefaults]);
+
+  const previewImageUrl = useMemo(() => {
+    const typeId = form.id || initial?.id;
+    const sample = beadLibraries.find(
+      (b) =>
+        (typeId && b.beadTypeId === typeId) ||
+        (form.slug && b.beadTypeSlug === form.slug),
+    );
+    return sample?.processedImage?.trim() || sample?.image?.trim() || null;
+  }, [beadLibraries, form.id, form.slug, initial?.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +134,7 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
         value={effective}
         provenance={effective.provenance}
         showAdvanced={showAdvanced}
+        previewImageUrl={previewImageUrl}
         onChange={(patch) => setForm((f) => updateTypeStrandRender(f, patch))}
         onResetToSystem={() =>
           setForm((f) => ({

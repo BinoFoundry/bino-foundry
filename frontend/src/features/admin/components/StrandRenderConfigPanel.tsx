@@ -13,7 +13,9 @@ import {
   type StrandRotationMode,
 } from "@bino-foundry/shared/types";
 
+import { AdminDeferredNumberInput, AdminNumberWithSlider } from "./AdminDeferredNumberInput";
 import { adminFieldClass } from "./admin-styles";
+import { StrandRenderLivePreview } from "./StrandRenderLivePreview";
 
 export type StrandRenderConfigPanelMode = "system" | "beadType" | "subBeadType" | "bead";
 
@@ -31,6 +33,10 @@ export interface StrandRenderConfigPanelProps {
   onResetToSystem?: () => void;
   disabled?: boolean;
   showAdvanced?: boolean;
+  /** Sample asset for the live preview (optional placeholder when missing). */
+  previewImageUrl?: string | null;
+  /** Show lightweight strand preview (type / sub-type / bead editors). */
+  showLivePreview?: boolean;
 }
 
 function SourceBadge({ source }: { source?: StrandRenderConfigSource }) {
@@ -53,8 +59,12 @@ export function StrandRenderConfigPanel({
   onResetToSystem,
   disabled = false,
   showAdvanced = false,
+  previewImageUrl = null,
+  showLivePreview,
 }: StrandRenderConfigPanelProps) {
   const readOnly = disabled || ((mode === "bead" || mode === "subBeadType") && inheritTypeDefaults);
+  const livePreview =
+    showLivePreview ?? (mode === "beadType" || mode === "subBeadType" || mode === "bead");
   const title =
     mode === "system"
       ? "System rendering defaults"
@@ -125,15 +135,16 @@ export function StrandRenderConfigPanel({
         {mode === "system" ? (
           <>
             <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
-              <input
-                type="number"
-                step="0.1"
-                min={90}
-                max={110}
+              <AdminNumberWithSlider
+                value={value.layoutScale}
+                onCommit={(layoutScale) => onChange({ layoutScale })}
+                min={0.9}
+                max={1.1}
+                step={0.001}
+                displayScale={100}
+                decimals={1}
                 disabled={readOnly}
-                className={adminFieldClass()}
-                value={Number((value.layoutScale * 100).toFixed(2))}
-                onChange={(e) => onChange({ layoutScale: Number(e.target.value) / 100 })}
+                aria-label="Layout scale percent"
               />
               <p className="mt-1 text-[10px] text-muted-foreground">
                 Global positioning calibration (100% = measured rendered contact diameter). Does not
@@ -157,55 +168,47 @@ export function StrandRenderConfigPanel({
             </Field>
           </>
         ) : null}
-        <Field
-          label="Contact width"
-          source={provenance?.contactWidth}
-          readOnly={readOnly}
-        >
-          <input
-            type="number"
-            step="0.01"
+        <Field label="Contact width" source={provenance?.contactWidth} readOnly={readOnly}>
+          <AdminNumberWithSlider
+            value={value.contactWidth}
+            onCommit={(contactWidth) => onChange({ contactWidth })}
             min={STRAND_CONTACT_SPACING_MIN}
             max={STRAND_CONTACT_SPACING_MAX}
+            step={0.01}
+            decimals={2}
             disabled={readOnly}
-            className={adminFieldClass()}
-            value={value.contactWidth}
-            onChange={(e) => onChange({ contactWidth: Number(e.target.value) })}
+            aria-label="Contact width"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
             Tuning from natural touch (0 = neutral). Negative tightens; positive loosens. Legacy type
             defaults stored as 1 map to neutral.
           </p>
         </Field>
-        <Field
-          label="Contact adjustment"
-          source={provenance?.contactOffset}
-          readOnly={readOnly}
-        >
-          <input
-            type="number"
-            step="0.01"
+        <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
+          <AdminNumberWithSlider
+            value={value.contactOffset}
+            onCommit={(contactOffset) => onChange({ contactOffset })}
             min={STRAND_CONTACT_SPACING_MIN}
             max={STRAND_CONTACT_SPACING_MAX}
+            step={0.01}
+            decimals={2}
             disabled={readOnly}
-            className={adminFieldClass()}
-            value={value.contactOffset}
-            onChange={(e) => onChange({ contactOffset: Number(e.target.value) })}
+            aria-label="Contact adjustment"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
             Fine-tune neighbour spacing. Negative closes small gaps; positive adds slack.
           </p>
         </Field>
         <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
-          <input
-            type="number"
-            step="0.05"
+          <AdminNumberWithSlider
+            value={value.visualScale}
+            onCommit={(visualScale) => onChange({ visualScale })}
             min={0.25}
             max={3}
+            step={0.05}
+            decimals={2}
             disabled={readOnly}
-            className={adminFieldClass()}
-            value={value.visualScale}
-            onChange={(e) => onChange({ visualScale: Number(e.target.value) })}
+            aria-label="Render calibration"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
             Visual size only (1.00 = match physical mm slot). Does not change database mm, spacing, or
@@ -241,89 +244,88 @@ export function StrandRenderConfigPanel({
           </select>
         </Field>
         <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
-          <input
-            type="number"
-            step="0.01"
+          <AdminNumberWithSlider
+            value={value.verticalOffset}
+            onCommit={(verticalOffset) => onChange({ verticalOffset })}
             min={-1}
             max={1}
+            step={0.01}
+            displayScale={100}
+            decimals={0}
             disabled={readOnly}
-            className={adminFieldClass()}
-            value={value.verticalOffset}
-            onChange={(e) => onChange({ verticalOffset: Number(e.target.value) })}
+            aria-label="Vertical offset percent"
           />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Percent of bead height (−100 … 100). Negative pulls toward / above the cord; positive
+            hangs farther out.
+          </p>
         </Field>
         <Field label="Z priority" source={provenance?.zPriority} readOnly={readOnly}>
-          <input
-            type="number"
-            step="1"
-            disabled={readOnly}
-            className={adminFieldClass()}
+          <AdminDeferredNumberInput
             value={value.zPriority}
-            onChange={(e) => onChange({ zPriority: Number(e.target.value) })}
+            onCommit={(zPriority) => onChange({ zPriority: Math.round(zPriority) })}
+            step={1}
+            decimals={0}
+            disabled={readOnly}
+            aria-label="Z priority"
           />
         </Field>
       </div>
 
       {showAdvanced ? (
         <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
-          <Field
-            label="Leading overlap"
-            source={provenance?.leadingOverlap}
-            readOnly={readOnly}
-          >
-            <input
-              type="number"
-              step="0.01"
+          <Field label="Leading overlap" source={provenance?.leadingOverlap} readOnly={readOnly}>
+            <AdminDeferredNumberInput
+              value={value.leadingOverlap}
+              onCommit={(leadingOverlap) => onChange({ leadingOverlap })}
               min={0}
               max={0.5}
+              step={0.01}
+              decimals={2}
               disabled={readOnly}
-              className={adminFieldClass()}
-              value={value.leadingOverlap}
-              onChange={(e) => onChange({ leadingOverlap: Number(e.target.value) })}
             />
           </Field>
-          <Field
-            label="Trailing overlap"
-            source={provenance?.trailingOverlap}
-            readOnly={readOnly}
-          >
-            <input
-              type="number"
-              step="0.01"
+          <Field label="Trailing overlap" source={provenance?.trailingOverlap} readOnly={readOnly}>
+            <AdminDeferredNumberInput
+              value={value.trailingOverlap}
+              onCommit={(trailingOverlap) => onChange({ trailingOverlap })}
               min={0}
               max={0.5}
+              step={0.01}
+              decimals={2}
               disabled={readOnly}
-              className={adminFieldClass()}
-              value={value.trailingOverlap}
-              onChange={(e) => onChange({ trailingOverlap: Number(e.target.value) })}
             />
           </Field>
           <Field label="Hang offset" source={provenance?.hangOffset} readOnly={readOnly}>
-            <input
-              type="number"
-              step="0.01"
+            <AdminNumberWithSlider
+              value={value.hangOffset}
+              onCommit={(hangOffset) => onChange({ hangOffset })}
               min={-1}
               max={1}
+              step={0.01}
+              displayScale={100}
+              decimals={0}
               disabled={readOnly}
-              className={adminFieldClass()}
-              value={value.hangOffset}
-              onChange={(e) => onChange({ hangOffset: Number(e.target.value) })}
+              aria-label="Hang offset percent"
             />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Percent of bead height (−100 … 100). Supports negative values.
+            </p>
           </Field>
           <Field
             label="Strand occupancy (legacy)"
             source={provenance?.strandOccupancy}
             readOnly={readOnly}
           >
-            <input
-              type="number"
-              step="0.01"
+            <AdminNumberWithSlider
+              value={value.strandOccupancy}
+              onCommit={(strandOccupancy) => onChange({ strandOccupancy })}
               min={0.05}
               max={2}
+              step={0.01}
+              decimals={2}
               disabled={readOnly}
-              className={adminFieldClass()}
-              value={value.strandOccupancy}
-              onChange={(e) => onChange({ strandOccupancy: Number(e.target.value) })}
+              aria-label="Strand occupancy"
             />
           </Field>
           <Field label="Rotation (advanced)" source={provenance?.rotationMode} readOnly={readOnly}>
@@ -346,15 +348,14 @@ export function StrandRenderConfigPanel({
             source={provenance?.collisionPadding}
             readOnly={readOnly}
           >
-            <input
-              type="number"
-              step="0.5"
+            <AdminDeferredNumberInput
+              value={value.collisionPadding}
+              onCommit={(collisionPadding) => onChange({ collisionPadding })}
               min={0}
               max={20}
+              step={0.5}
+              decimals={1}
               disabled={readOnly}
-              className={adminFieldClass()}
-              value={value.collisionPadding}
-              onChange={(e) => onChange({ collisionPadding: Number(e.target.value) })}
             />
           </Field>
           <Field
@@ -362,15 +363,14 @@ export function StrandRenderConfigPanel({
             source={provenance?.stringOcclusion}
             readOnly={readOnly}
           >
-            <input
-              type="number"
-              step="0.05"
+            <AdminDeferredNumberInput
+              value={value.stringOcclusion}
+              onCommit={(stringOcclusion) => onChange({ stringOcclusion })}
               min={0}
               max={1}
+              step={0.05}
+              decimals={2}
               disabled={readOnly}
-              className={adminFieldClass()}
-              value={value.stringOcclusion}
-              onChange={(e) => onChange({ stringOcclusion: Number(e.target.value) })}
             />
           </Field>
         </div>
@@ -381,6 +381,14 @@ export function StrandRenderConfigPanel({
           Using parent calibration ({strandRenderSourceLabel("subBeadType")} /{" "}
           {strandRenderSourceLabel("beadType")}).
         </p>
+      ) : null}
+
+      {livePreview ? (
+        <StrandRenderLivePreview
+          className="border-t border-border pt-4"
+          profile={value}
+          imageUrl={previewImageUrl}
+        />
       ) : null}
     </section>
   );

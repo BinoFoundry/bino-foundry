@@ -64,7 +64,7 @@ function setInheritBeadTypeDefaults(form: SubBeadTypeEntry, inherit: boolean): S
 }
 
 export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBeadTypeFormProps) {
-  const { strandRenderDefaults } = useCatalogue();
+  const { strandRenderDefaults, beadLibraries } = useCatalogue();
   const blank: SubBeadTypeEntry = {
     id: "",
     beadTypeId: beadType.id,
@@ -99,6 +99,16 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
       inheritSubBeadTypeFromBeadType: inheritBeadTypeDefaults,
     });
   }, [form, beadType.metadata, strandRenderDefaults, inheritBeadTypeDefaults]);
+
+  const previewImageUrl = useMemo(() => {
+    const subId = form.id || initial?.id;
+    const bySub = subId
+      ? beadLibraries.find((b) => b.subBeadTypeId === subId)
+      : undefined;
+    const byType = beadLibraries.find((b) => b.beadTypeId === beadType.id);
+    const sample = bySub ?? byType;
+    return sample?.processedImage?.trim() || sample?.image?.trim() || null;
+  }, [beadLibraries, form.id, initial?.id, beadType.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,6 +179,7 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         inheritTypeDefaults={inheritBeadTypeDefaults}
         onInheritTypeDefaultsChange={(inherit) => setForm((prev) => setInheritBeadTypeDefaults(prev, inherit))}
         showAdvanced={showAdvanced}
+        previewImageUrl={previewImageUrl}
         onChange={(patch) => setForm((prev) => updateSubTypeStrandOverride(prev, patch))}
         onResetToType={() => setForm((prev) => setInheritBeadTypeDefaults(prev, true))}
         onResetToSystem={() =>

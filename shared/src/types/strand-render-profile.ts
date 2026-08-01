@@ -290,6 +290,7 @@ export function mergeStrandRenderProfile(
   merged.leadingOverlap = Math.max(0, Math.min(0.5, merged.leadingOverlap));
   merged.trailingOverlap = Math.max(0, Math.min(0.5, merged.trailingOverlap));
   merged.hangOffset = Math.max(-1, Math.min(1, merged.hangOffset));
+  merged.verticalOffset = Math.max(-1, Math.min(1, merged.verticalOffset));
   merged.visualScale = Math.max(0.25, Math.min(3, merged.visualScale));
   merged.stringOcclusion = Math.max(0, Math.min(1, merged.stringOcclusion));
   return merged;
