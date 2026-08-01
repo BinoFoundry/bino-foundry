@@ -677,8 +677,8 @@ const SortableCircularStrand = ({
       if (!isStrandEmpty) {
         const wristMm = wristCircumferenceMm(wristSize);
         const occupancyMm = normalized.map((placed) => placedBeadSizeMm(placed));
-        // Spacing uses mm occupancy only — hierarchical render calibration is visual-only.
-        // Strand-wide flags still follow hierarchy: Type/Sub/Bead override General.
+        // Contact arcs use sizeMm × contactWidth/Offset, then layoutScale. Capacity panel
+        // still charges catalogue sizeMm independently.
         const layoutScale =
           renderProfiles[0]?.layoutScale ?? strandRenderDefaults?.layoutScale ?? 1;
         const balanceSpacing =

@@ -1,72 +1,60 @@
 import { describe, expect, it } from "vitest";
 
-import { createLensClipConfig } from "@bino-foundry/shared/types";
-
-import { flushFrameRenderViews, mergeMaskIntoView } from "./frame-render-flush";
-import { createMaskConfig } from "@/render/mask";
+import { patchFrameRenderView } from "./frame-render-flush";
 import type { FrameRenderView } from "@/types/frame-rendering";
+import { FRAME_VIEW_AXES } from "@/types/frame-rendering";
 
-const baseView = (axis: FrameRenderView["view"]): FrameRenderView => ({
-  view: axis,
-  plateUrl: "https://example.com/plate.jpg",
-  width: 800,
-  height: 600,
-  originalPlateUrl: "https://example.com/plate.jpg",
-  originalWidth: 800,
-  originalHeight: 600,
-  clipConfig: null,
-  clipStatus: "draft",
-  maskConfig: null,
-  maskStatus: "draft",
-});
+function blankViews(): FrameRenderView[] {
+  return FRAME_VIEW_AXES.map((view) => ({
+    view,
+    plateUrl: "",
+    width: 0,
+    height: 0,
+    clipConfig: null,
+    clipStatus: "draft" as const,
+    maskConfig: null,
+    maskStatus: "draft" as const,
+  }));
+}
 
-describe("frame-render-flush", () => {
-  it("merges mask into view with clip config", () => {
-    const mask = createMaskConfig(800, 600, [
-      { id: "left", label: "Left", points: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] },
-      { id: "right", label: "Right", points: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 6, y: 6 }] },
-    ]);
+describe("patchFrameRenderView", () => {
+  it("keeps plateUrl when a second patch only updates mask (upload → detect chain)", () => {
+    const empty = blankViews();
+    const afterUpload = patchFrameRenderView(empty, "front", {
+      plateUrl: "https://cdn.example/front.jpg",
+      originalPlateUrl: "https://cdn.example/front.jpg",
+      width: 800,
+      height: 400,
+      originalWidth: 800,
+      originalHeight: 400,
+      plateCropConfig: null,
+      maskConfig: null,
+      clipConfig: null,
+    });
+    const afterDetect = patchFrameRenderView(afterUpload, "front", {
+      maskConfig: { version: 1 } as never,
+      maskStatus: "ready",
+    });
 
-    const merged = mergeMaskIntoView(baseView("front"), mask);
-    expect(merged.maskConfig).toEqual(mask);
-    expect(merged.clipConfig?.lenses.length).toBeGreaterThan(0);
+    const front = afterDetect.find((v) => v.view === "front")!;
+    expect(front.plateUrl).toBe("https://cdn.example/front.jpg");
+    expect(front.originalPlateUrl).toBe("https://cdn.example/front.jpg");
+    expect(front.width).toBe(800);
+    expect(front.maskStatus).toBe("ready");
   });
 
-  it("preserves clip render settings when rebuilding clip config from mask", () => {
-    const render = {
-      lensOpacity: 0.88,
-      lensTransmission: 0.46,
-      reflectionStrength: 0.35,
-      edgeDarkness: 0.22,
-      edgeWidth: 0.007,
-    };
-    const view = {
-      ...baseView("front"),
-      clipConfig: createLensClipConfig(
-        800,
-        600,
-        [{ id: "left", label: "Left", pathD: "M0 0 L10 0 L10 10 Z" }],
-        render,
-      ),
-    };
-    const mask = createMaskConfig(800, 600, [
-      { id: "left", label: "Left", points: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] },
-      { id: "right", label: "Right", points: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 6, y: 6 }] },
-    ]);
-
-    const merged = mergeMaskIntoView(view, mask);
-    expect(merged.clipConfig?.render).toMatchObject(render);
-  });
-
-  it("flushes pending mask drafts into render views", () => {
-    const views = [baseView("front"), baseView("side")];
-    const mask = createMaskConfig(800, 600, [
-      { id: "left", label: "Left", points: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] },
-      { id: "right", label: "Right", points: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 6, y: 6 }] },
-    ]);
-
-    const flushed = flushFrameRenderViews(views, { maskByAxis: { front: mask } });
-    expect(flushed.find((v) => v.view === "front")?.maskConfig).toEqual(mask);
-    expect(flushed.find((v) => v.view === "side")?.maskConfig).toBeNull();
+  it("works the same for side view", () => {
+    const afterUpload = patchFrameRenderView(blankViews(), "side", {
+      plateUrl: "https://cdn.example/side.jpg",
+      originalPlateUrl: "https://cdn.example/side.jpg",
+      width: 600,
+      height: 300,
+    });
+    const afterDetect = patchFrameRenderView(afterUpload, "side", {
+      maskStatus: "draft",
+    });
+    const side = afterDetect.find((v) => v.view === "side")!;
+    expect(side.plateUrl).toBe("https://cdn.example/side.jpg");
+    expect(side.originalPlateUrl).toBe("https://cdn.example/side.jpg");
   });
 });

@@ -13,7 +13,7 @@ import {
   saveDetailStampFromMask,
   type DetailStamp,
 } from "@/features/admin/lib/detail-stamps";
-import { flushFrameRenderViews } from "@/features/admin/lib/frame-render-flush";
+import { flushFrameRenderViews, patchFrameRenderView } from "@/features/admin/lib/frame-render-flush";
 import { isApiError, uploadApi } from "@/services/api";
 import type { FrameRenderView, FrameViewAxis } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES, FRAME_VIEW_LABELS } from "@/types/frame-rendering";
@@ -237,32 +237,35 @@ export const FrameRenderViewsSection = forwardRef<
     resolveRenderingScope(views),
   );
 
+  // Latest views for stable callbacks — reading through the ref keeps getWorkingPlate
+  // identity constant so the lens editor's plate effect does not re-run (and recreate
+  // the canvas) on every draft patch, which previously caused an infinite refresh loop.
+  // Also required so chained patchView calls (upload → detect) do not clobber plateUrl.
+  const viewsRef = useRef(views);
+  viewsRef.current = views;
+
   useImperativeHandle(
     ref,
     () => ({
       flushPendingEdits: () => {
+        const latestViews = viewsRef.current;
         const cropByAxis: Partial<Record<FrameViewAxis, BeadCropConfig | null>> = {};
         if (expandedEditor?.panel === "frame") {
           const config = frameCropEditorRef.current?.commitDraft();
           if (config) cropByAxis[expandedEditor.axis] = config;
         }
 
-        const flushed = flushFrameRenderViews(views, {
+        const flushed = flushFrameRenderViews(latestViews, {
           cropByAxis,
           maskByAxis: { ...draftRef.current },
         });
+        viewsRef.current = flushed;
         onChange(flushed);
         return flushed;
       },
     }),
-    [expandedEditor, onChange, views],
+    [expandedEditor, onChange],
   );
-
-  // Latest views for stable callbacks — reading through the ref keeps getWorkingPlate
-  // identity constant so the lens editor's plate effect does not re-run (and recreate
-  // the canvas) on every draft patch, which previously caused an infinite refresh loop.
-  const viewsRef = useRef(views);
-  viewsRef.current = views;
 
   const revokeDraftPlateUrl = useCallback((axis: FrameViewAxis) => {
     const url = draftPlateUrlsRef.current[axis];
@@ -310,19 +313,17 @@ export const FrameRenderViewsSection = forwardRef<
   }, [views]);
 
   const getView = useCallback(
-    (axis: FrameViewAxis) => views.find((v) => v.view === axis) ?? emptyView(axis),
-    [views],
+    (axis: FrameViewAxis) => viewsRef.current.find((v) => v.view === axis) ?? emptyView(axis),
+    [],
   );
 
   const patchView = useCallback(
     (axis: FrameViewAxis, patch: Partial<FrameRenderView>) => {
-      const next = FRAME_VIEW_AXES.map((v) => {
-        const current = views.find((x) => x.view === v) ?? emptyView(v);
-        return v === axis ? { ...current, ...patch, view: v } : current;
-      });
+      const next = patchFrameRenderView(viewsRef.current, axis, patch);
+      viewsRef.current = next;
       onChange(next);
     },
-    [onChange, views],
+    [onChange],
   );
 
   const setAxisNotice = (axis: FrameViewAxis, message: string, variant: "success" | "warning" = "warning") => {
@@ -373,8 +374,9 @@ export const FrameRenderViewsSection = forwardRef<
     customRender?: LensClipRenderSettings,
   ) => {
     const now = Date.now();
+    const currentViews = viewsRef.current;
     const next = FRAME_VIEW_AXES.map((v) => {
-      const current = views.find((x) => x.view === v) ?? emptyView(v);
+      const current = currentViews.find((x) => x.view === v) ?? emptyView(v);
       if (current.clipConfig && isLensClipConfigValid(current.clipConfig)) {
         const isCustomView = scope === "global" || v === scope;
         const render = isCustomView
@@ -388,6 +390,7 @@ export const FrameRenderViewsSection = forwardRef<
       }
       return current;
     });
+    viewsRef.current = next;
     onChange(next);
   };
 
@@ -402,7 +405,7 @@ export const FrameRenderViewsSection = forwardRef<
 
   const changeRenderingScope = (scope: LensRenderingScope) => {
     setRenderingScope(scope);
-    const clipViews = viewsWithValidClip(views);
+    const clipViews = viewsWithValidClip(viewsRef.current);
     const sourceAxis = scope === "side" ? "side" : "front";
     const source =
       clipViews.find((view) => view.view === sourceAxis)?.clipConfig?.render ??
@@ -535,7 +538,8 @@ export const FrameRenderViewsSection = forwardRef<
   const handleUpload = async (axis: FrameViewAxis, file: File) => {
     setUploading(axis);
     setNotice((prev) => ({ ...prev, [axis]: undefined }));
-    if (expandedEditor?.axis === axis) closeEditor();
+    setNoticeVariant((prev) => ({ ...prev, [axis]: undefined }));
+    // Keep crop panel intent: open Crop after upload even if another panel was open.
     revokeDraftPlateUrl(axis);
     draftRef.current[axis] = null;
     setPreviewMasks((prev) => ({ ...prev, [axis]: null }));
@@ -558,10 +562,10 @@ export const FrameRenderViewsSection = forwardRef<
       });
       onDraftTouch?.();
 
-      // Always open Crop immediately so upload → editor needs no extra click.
+      // Always open Crop immediately so upload → editor needs no extra click (front + side).
       openEditor(axis, "frame");
 
-      // Best-effort dual lens detection in the background; keep Crop open either way.
+      // Best-effort dual lens detection; patchView chains through viewsRef so plateUrl is kept.
       try {
         const detection = detectFrameLensMaskFromSource(img);
         if (detection.config && isDualLensMaskValid(detection.config)) {
@@ -642,7 +646,8 @@ export const FrameRenderViewsSection = forwardRef<
   const handleFramePathSave = (axis: FrameViewAxis, config: BeadCropConfig) => {
     revokeDraftPlateUrl(axis);
 
-    const next = flushFrameRenderViews(views, { cropByAxis: { [axis]: config } });
+    const next = flushFrameRenderViews(viewsRef.current, { cropByAxis: { [axis]: config } });
+    viewsRef.current = next;
     onChange(next);
     closeEditor();
     setAxisNotice(axis, "Frame clip path saved to draft.", "success");

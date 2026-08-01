@@ -796,17 +796,22 @@ export function computeBeadShellPosition(
 /** Visual shell size after hierarchical render calibration — does not affect occupancy. */
 export function strandLayoutShellDimensions(
   dim: BeadSlotDimensions,
-  profile: Pick<StrandRenderProfile, "visualScale" | "forceRoundFootprint" | "attachmentStyle">,
+  profile: Pick<
+    StrandRenderProfile,
+    "visualScale" | "layoutScale" | "forceRoundFootprint" | "attachmentStyle"
+  >,
 ): BeadSlotDimensions {
   return visualSlotDimensions(dim, profile);
 }
 
-/** Visual slot size after resolvedRenderScale — does not affect strand occupancy. */
+/** Visual slot size after layoutScale × visualScale — does not affect capacity mm. */
 export function visualSlotDimensions(
   dim: BeadSlotDimensions,
-  profile: Pick<StrandRenderProfile, "visualScale">,
+  profile: Pick<StrandRenderProfile, "visualScale" | "layoutScale">,
 ): BeadSlotDimensions {
-  const s = profile.visualScale;
+  const layout = Number.isFinite(profile.layoutScale) ? profile.layoutScale : 1;
+  const visual = Number.isFinite(profile.visualScale) ? profile.visualScale : 1;
+  const s = layout * visual;
   if (!Number.isFinite(s) || s <= 0 || s === 1) return dim;
   return { width: dim.width * s, height: dim.height * s };
 }

@@ -204,8 +204,8 @@ export function StrandRenderLivePreview({
     setPlacedBeads(seedBeads);
   }, [seedBeads]);
 
-  /** Default OFF so preview matches live Builder catalogue resolve. */
-  const [applyDraft, setApplyDraft] = useState(false);
+  /** Default ON so slider drafts update the preview instantly (same math as Builder). */
+  const [applyDraft, setApplyDraft] = useState(true);
 
   const sampleHasBeadOverride =
     sampleBead != null && !beadLibraryInheritsTypeStrandDefaults(sampleBead.metadata ?? null);
@@ -281,7 +281,18 @@ export function StrandRenderLivePreview({
         placedBeads.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
         applyDraft ? "draft" : "catalogue",
         applyDraft
-          ? `${profile.visualScale}:${profile.hangOffset}:${profile.verticalOffset}:${profile.anchorY}:${profile.orientationMode}`
+          ? [
+              profile.layoutScale,
+              profile.contactWidth,
+              profile.contactOffset,
+              profile.spacingAdjustment,
+              profile.visualScale,
+              profile.hangOffset,
+              profile.verticalOffset,
+              profile.anchorY,
+              profile.orientationMode,
+              profile.balanceSpacing ? 1 : 0,
+            ].join(":")
           : "cat",
       ].join("|"),
     [wristSizeCm, placedBeads, applyDraft, profile],
@@ -332,14 +343,17 @@ export function StrandRenderLivePreview({
             checked={applyDraft}
             onChange={(e) => setApplyDraft(e.target.checked)}
           />
-          Apply draft type/sub-type settings to preview
+          Apply draft settings to preview
         </label>
         {!applyDraft ? (
           <p className="text-xs text-muted-foreground">
-            Preview uses saved catalogue resolve — identical to the live Builder. Save to update
-            catalogue.
+            Preview uses saved catalogue resolve — identical to the live Builder after Save.
           </p>
-        ) : null}
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Draft values update the strand live (same layout pipeline as the Bracelet Builder).
+          </p>
+        )}
         {!sampleBead ? (
           <p className="text-xs text-muted-foreground">
             Add a bead of this type to seed the strand with a real asset.

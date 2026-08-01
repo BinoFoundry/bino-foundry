@@ -25,7 +25,7 @@ export function StrandRenderDefaultsAdmin({
   embedded = false,
   onRegisterReload,
 }: StrandRenderDefaultsAdminProps) {
-  const { strandRenderDefaults, updateStrandRenderDefaults } = useCatalogue();
+  const { strandRenderDefaults, updateStrandRenderDefaults, beadLibraries } = useCatalogue();
   const [value, setValue] = useState<StrandRenderProfile>(
     strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE,
   );
@@ -39,6 +39,13 @@ export function StrandRenderDefaultsAdmin({
   const dirtySnapshot = useMemo(() => value, [value]);
   const { isDirty } = useDirtySnapshot(dirtySnapshot, hydrateKey);
   useUnsavedChangesGuard(!loading && isDirty);
+
+  const previewSampleBead = useMemo(() => {
+    const withImage = beadLibraries.find(
+      (b) => Boolean(b.processedImage?.trim() || b.image?.trim()),
+    );
+    return withImage ?? beadLibraries[0] ?? null;
+  }, [beadLibraries]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,6 +99,7 @@ export function StrandRenderDefaultsAdmin({
         mode="system"
         value={value}
         showAdvanced={showAdvanced}
+        previewSampleBead={previewSampleBead}
         onChange={(patch) => setValue((prev) => ({ ...prev, ...patch }))}
       />
       <div className="flex flex-wrap items-center gap-2">

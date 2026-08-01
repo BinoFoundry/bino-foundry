@@ -67,7 +67,8 @@ export function StrandRenderConfigPanel({
 }: StrandRenderConfigPanelProps) {
   const readOnly = disabled || ((mode === "bead" || mode === "subBeadType") && inheritTypeDefaults);
   const livePreview =
-    showLivePreview ?? (mode === "beadType" || mode === "subBeadType" || mode === "bead");
+    showLivePreview ??
+    (mode === "beadType" || mode === "subBeadType" || mode === "bead" || mode === "system");
   const title =
     mode === "system"
       ? "System rendering defaults"
@@ -149,8 +150,8 @@ export function StrandRenderConfigPanel({
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
             {mode === "system"
-              ? "General default (100% = measured contact diameter). Types/sub-types can override this."
-              : "Overrides General when set on this type/sub-type/bead."}
+              ? "Scales bead size and contact diameter on the strand (100% = measured). Types can override."
+              : "Scales bead size and contact diameter relative to the bracelet layout."}
           </p>
         </Field>
         <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
@@ -181,8 +182,8 @@ export function StrandRenderConfigPanel({
             aria-label="Contact width"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Overrides General when set. Builder occupancy stays mm-based; this is stored for hierarchy /
-            diagnostics.
+            How much ring each bead claims (1 = full sizeMm). Lower leaves more empty gap between
+            beads; higher fills the strand.
           </p>
         </Field>
         <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
@@ -197,7 +198,7 @@ export function StrandRenderConfigPanel({
             aria-label="Contact adjustment"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Overrides General when set. Builder spacing remains mm occupancy.
+            Fine nudge added to contact width. Negative frees more gap; positive fills more.
           </p>
         </Field>
         <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>

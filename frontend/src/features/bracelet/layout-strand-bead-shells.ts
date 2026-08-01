@@ -1,6 +1,9 @@
-import type { StrandRenderProfile } from "@bino-foundry/shared/types";
+import {
+  contactArcPxFromCapacityMm,
+  type StrandRenderProfile,
+} from "@bino-foundry/shared/types";
 
-import { beadOccupancyArcPx } from "./strand-ring-geometry";
+import { effectiveLayoutDiameterPx } from "./strand-ring-geometry";
 import {
   calculateBeadRenderTransform,
   type BeadRenderTransform,
@@ -53,9 +56,12 @@ export interface StrandBeadShellLayout {
  * Shared strand shell layout pipeline used by Live Builder and Admin Preview.
  *
  * Steps (identical to SortableCircularStrand):
- * 1. mm occupancy → contact arcs
+ * 1. mm occupancy → contact arcs (contactWidth / contactOffset / layoutScale)
  * 2. balanced radial path (Top→Bottom→Right→Left + balance spacing)
  * 3. per-bead {@link calculateBeadRenderTransform}
+ *
+ * Capacity panel still charges catalogue sizeMm; these profile fields only tune
+ * how beads sit on the ring (spacing + calibrated contact diameter).
  */
 export function layoutStrandBeadShells(
   params: LayoutStrandBeadShellsParams,
@@ -85,21 +91,35 @@ export function layoutStrandBeadShells(
     };
   }
 
-  const occupancyMm = beads.map((b) => b.occupancyMm);
   const ringCircumferencePx = 2 * Math.PI * requestedRadius;
-  const occupancy = beadOccupancyArcPx(
-    occupancyMm,
-    wristCircumferenceMm,
-    ringCircumferencePx,
-  );
+  const contactArcs = beads.map((bead) => {
+    const base = contactArcPxFromCapacityMm(
+      bead.occupancyMm,
+      wristCircumferenceMm,
+      ringCircumferencePx,
+      bead.profile,
+    );
+    // layoutScale calibrates contact diameter (clamped 0.9–1.1) without changing capacity mm.
+    const contactArcPx = effectiveLayoutDiameterPx(base.contactArcPx, bead.profile.layoutScale);
+    return {
+      contactArcPx,
+      leadingOverlapPx: base.leadingOverlapPx,
+      trailingOverlapPx: base.trailingOverlapPx,
+    };
+  });
 
   const sequential = computeBalancedRadialStrandPathLayout({
-    beads: beads.map((_, i) => ({
-      index: i,
-      occupancyPx: occupancy.contactArcPx[i]!,
-      visualRadiusPx: occupancy.contactArcPx[i]! / 2,
-      contactAdjustmentPx: 0,
-    })),
+    beads: beads.map((_, i) => {
+      const arc = contactArcs[i]!;
+      return {
+        index: i,
+        occupancyPx: arc.contactArcPx,
+        visualRadiusPx: arc.contactArcPx / 2,
+        // Pair nudge is already encoded in contactArc via effectiveStrandContactWidth
+        // (contactWidth + contactOffset + spacingAdjustment).
+        contactAdjustmentPx: 0,
+      };
+    }),
     centerX,
     centerY,
     radius: requestedRadius,
@@ -139,9 +159,9 @@ export function layoutStrandBeadShells(
     insertionAngles: sequential.insertionAngles,
     occupiedArcPx: sequential.occupiedArcPx,
     isOverCapacity: sequential.isOverCapacity,
-    contactArcPx: occupancy.contactArcPx,
-    leadingOverlapPx: occupancy.leadingOverlapPx,
-    trailingOverlapPx: occupancy.trailingOverlapPx,
+    contactArcPx: contactArcs.map((c) => c.contactArcPx),
+    leadingOverlapPx: contactArcs.map((c) => c.leadingOverlapPx),
+    trailingOverlapPx: contactArcs.map((c) => c.trailingOverlapPx),
   };
 }
 

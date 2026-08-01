@@ -23,8 +23,8 @@ export type StrandLayoutMode = "inline" | "dangling";
  */
 export interface StrandRenderProfile {
   /**
-   * Global contact-layout calibration applied to the measured rendered tangent diameter.
-   * Positioning only: never changes bitmap/CSS size. 1 = 100%.
+   * Contact-layout calibration (typically 0.9–1.1). Scales positioning arcs and the
+   * matching shell size together. Does not change capacity mm. 1 = 100%.
    */
   layoutScale: number;
   /**

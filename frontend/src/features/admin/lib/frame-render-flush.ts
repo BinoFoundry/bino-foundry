@@ -49,6 +49,29 @@ export type PendingFrameEdits = {
   maskByAxis?: Partial<Record<FrameViewAxis, MaskConfig | null>>;
 };
 
+/** Patch one axis in a views array (pure). Safe to chain without stale closures. */
+export function patchFrameRenderView(
+  views: FrameRenderView[],
+  axis: FrameViewAxis,
+  patch: Partial<FrameRenderView>,
+): FrameRenderView[] {
+  return FRAME_VIEW_AXES.map((v) => {
+    const current =
+      views.find((x) => x.view === v) ??
+      ({
+        view: v,
+        plateUrl: "",
+        width: 0,
+        height: 0,
+        clipConfig: null,
+        clipStatus: "draft" as const,
+        maskConfig: null,
+        maskStatus: "draft" as const,
+      } satisfies FrameRenderView);
+    return v === axis ? { ...current, ...patch, view: v } : current;
+  });
+}
+
 /** Merge in-progress editor drafts into render views before Save frame. */
 export function flushFrameRenderViews(
   views: FrameRenderView[],
