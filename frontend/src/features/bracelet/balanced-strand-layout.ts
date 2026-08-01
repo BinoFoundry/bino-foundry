@@ -6,8 +6,8 @@
  *
  * This module retains the theoretical slot helpers used by legacy callers and tests.
  * Live Bracelet Builder placement uses Top → Bottom → Right → Left largest-gap insertion
- * in `computeBalancedRadialStrandPathLayout`, with Balance Spacing locking those anchors
- * and evening occupancy gaps inside each segment.
+ * in `computeBalancedRadialStrandPathLayout`, then optional Balance Spacing equalises
+ * empty neighbour gaps without changing insertion order or rotating bead 0.
  */
 
 /** Theoretical largest-gap bisection points (sorted). Used only to decide insert slots. */

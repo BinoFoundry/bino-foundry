@@ -501,7 +501,27 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     });
   });
 
-  it("equalises empty gaps within segments when Balance Spacing is ON without moving anchors", () => {
+  const emptyGapVariance = (
+    layout: ReturnType<typeof computeBalancedRadialStrandPathLayout>,
+    widthsPx: number[],
+  ) => {
+    const ordered = [...layout.beads].sort(
+      (a, b) =>
+        clockwiseAngle(base.startAngle, a.angle) - clockwiseAngle(base.startAngle, b.angle),
+    );
+    const empties = ordered.map((left, index) => {
+      const right = ordered[(index + 1) % ordered.length]!;
+      return (
+        clockwiseAngle(left.angle, right.angle) * base.radius -
+        widthsPx[left.index]! / 2 -
+        widthsPx[right.index]! / 2
+      );
+    });
+    const mean = empties.reduce((sum, value) => sum + value, 0) / empties.length;
+    return empties.reduce((sum, value) => sum + (value - mean) ** 2, 0) / empties.length;
+  };
+
+  it("equalises empty gaps when Balance Spacing is ON without rotating bead 0", () => {
     const widths = [10, 22, 14, 28, 12, 18, 8, 16];
     const beads = widths.map((occupancyPx, index) => ({
       index,
@@ -519,12 +539,19 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       beads,
     });
 
-    // Primary anchors stay at Top / Bottom / Right / Left.
-    expect(on.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
-    expect(clockwiseAngle(base.startAngle, on.beads[1]!.angle)).toBeCloseTo(Math.PI, 6);
-    expect(clockwiseAngle(base.startAngle, on.beads[2]!.angle)).toBeCloseTo(Math.PI / 2, 6);
-    expect(clockwiseAngle(base.startAngle, on.beads[3]!.angle)).toBeCloseTo((3 * Math.PI) / 2, 6);
+    expect(on.beads[0]!.angle).toBeCloseTo(off.beads[0]!.angle, 6);
     expect(on.occupiedArcPx).toBeCloseTo(off.occupiedArcPx, 6);
+    expect(emptyGapVariance(on, widths)).toBeLessThan(emptyGapVariance(off, widths) - 1e-6);
+
+    // Neighbour order from largest-gap must be preserved (no quadrant reshuffle).
+    const orderOf = (layout: typeof on) =>
+      [...layout.beads]
+        .sort(
+          (a, b) =>
+            clockwiseAngle(base.startAngle, a.angle) - clockwiseAngle(base.startAngle, b.angle),
+        )
+        .map((bead) => bead.index);
+    expect(orderOf(on)).toEqual(orderOf(off));
 
     const ordered = [...on.beads].sort(
       (a, b) =>
@@ -571,7 +598,7 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     expect(defaults.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
   });
 
-  it("keeps Top/Bottom/Right/Left when wrist radius grows with Balance Spacing", () => {
+  it("keeps Top bead fixed when wrist radius grows with Balance Spacing", () => {
     const beads = equalBeads(8, 12);
     const at16 = computeBalancedRadialStrandPathLayout({
       ...base,
@@ -587,13 +614,11 @@ describe("computeBalancedRadialStrandPathLayout", () => {
 
     for (const layout of [at16, at20]) {
       expect(layout.beads[0]!.angle).toBeCloseTo(base.startAngle, 5);
-      expect(clockwiseAngle(base.startAngle, layout.beads[1]!.angle)).toBeCloseTo(Math.PI, 5);
-      expect(clockwiseAngle(base.startAngle, layout.beads[2]!.angle)).toBeCloseTo(Math.PI / 2, 5);
-      expect(clockwiseAngle(base.startAngle, layout.beads[3]!.angle)).toBeCloseTo(
-        (3 * Math.PI) / 2,
-        5,
-      );
     }
+    // Equal footprints keep the classic largest-gap cardinals after balance.
+    expect(clockwiseAngle(base.startAngle, at16.beads[1]!.angle)).toBeCloseTo(Math.PI, 5);
+    expect(clockwiseAngle(base.startAngle, at16.beads[2]!.angle)).toBeCloseTo(Math.PI / 2, 5);
+    expect(clockwiseAngle(base.startAngle, at16.beads[3]!.angle)).toBeCloseTo((3 * Math.PI) / 2, 5);
   });
 });
 

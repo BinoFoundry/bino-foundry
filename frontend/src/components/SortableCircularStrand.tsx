@@ -658,7 +658,7 @@ const SortableCircularStrand = ({
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
 
         // Top → Bottom → Right → Left, then remaining beads fill largest arcs.
-        // Balance Spacing locks those anchors and equalises occupancy gaps per segment.
+        // Balance Spacing equalises leftover empty gaps without changing neighbour order.
         const sequential = computeBalancedRadialStrandPathLayout({
           beads: normalized.map((_, i) => ({
             index: i,
