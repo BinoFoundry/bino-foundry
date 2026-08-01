@@ -15,6 +15,11 @@ export type StrandRenderProfileKey = keyof StrandRenderProfile;
 export interface ResolvedStrandRenderConfig extends StrandRenderProfile {
   /** Which hierarchy level supplied each property (for admin display). */
   provenance: Record<StrandRenderProfileKey, StrandRenderConfigSource>;
+  /**
+   * Final visual render calibration after hierarchy resolve.
+   * Alias of {@link StrandRenderProfile.visualScale} — renderer should use this only.
+   */
+  resolvedRenderScale: number;
 }
 
 export const STRAND_RENDER_PROFILE_KEYS = [
@@ -110,7 +115,7 @@ export function resolveStrandRenderConfig(layers: StrandRenderConfigLayers): Res
     profile = applyLayer(profile, layers.beadOverride, "beadOverride", provenance);
   }
 
-  return { ...profile, provenance };
+  return { ...profile, provenance, resolvedRenderScale: profile.visualScale };
 }
 
 export function parseStrandRenderConfigFromMetadata(
@@ -123,13 +128,22 @@ export function parseStrandRenderConfigFromMetadata(
 export function strandRenderSourceLabel(source: StrandRenderConfigSource): string {
   switch (source) {
     case "beadOverride":
-      return "Custom override";
+      return "Custom Override";
     case "subBeadType":
-      return "Sub bead type";
+      return "AUTO (Sub Bead Type)";
     case "beadType":
-      return "Bead type";
+      return "AUTO (Bead Type)";
     case "system":
     default:
-      return "System default";
+      return "AUTO (System Default)";
   }
+}
+
+/** Renderer-facing alias for the resolved hierarchical visual scale. */
+export function resolvedRenderScale(
+  profile: Pick<StrandRenderProfile, "visualScale">,
+): number {
+  const scale = profile.visualScale;
+  if (!Number.isFinite(scale) || scale <= 0) return 1;
+  return scale;
 }

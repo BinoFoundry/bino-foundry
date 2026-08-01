@@ -35,17 +35,9 @@ export interface StrandRenderConfigPanelProps {
 
 function SourceBadge({ source }: { source?: StrandRenderConfigSource }) {
   if (!source) return null;
-  const label =
-    source === "system"
-      ? "AUTO (System default)"
-      : source === "beadType"
-        ? "AUTO (Inherited from bead type)"
-        : source === "subBeadType"
-          ? "AUTO (Inherited from sub-type)"
-          : "Custom override";
   return (
     <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-      {label}
+      {strandRenderSourceLabel(source)}
     </span>
   );
 }
@@ -125,7 +117,7 @@ export function StrandRenderConfigPanel({
             checked={inheritTypeDefaults}
             onChange={(e) => onInheritTypeDefaultsChange(e.target.checked)}
           />
-          {mode === "subBeadType" ? "Use bead type defaults" : "Use sub-type defaults"}
+          Use Parent Calibration
         </label>
       ) : null}
 
@@ -204,7 +196,7 @@ export function StrandRenderConfigPanel({
             Fine-tune neighbour spacing. Negative closes small gaps; positive adds slack.
           </p>
         </Field>
-        <Field label="Visual scale" source={provenance?.visualScale} readOnly={readOnly}>
+        <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
           <input
             type="number"
             step="0.05"
@@ -215,6 +207,10 @@ export function StrandRenderConfigPanel({
             value={value.visualScale}
             onChange={(e) => onChange({ visualScale: Number(e.target.value) })}
           />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Visual size only (1.00 = match physical mm slot). Does not change database mm, spacing, or
+            capacity. Inheritance: Individual → Sub Type → Bead Type → System.
+          </p>
         </Field>
         <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
           <select
@@ -382,7 +378,8 @@ export function StrandRenderConfigPanel({
 
       {mode === "bead" && inheritTypeDefaults ? (
         <p className="text-xs text-muted-foreground">
-          Using bead type values ({strandRenderSourceLabel("beadType")}).
+          Using parent calibration ({strandRenderSourceLabel("subBeadType")} /{" "}
+          {strandRenderSourceLabel("beadType")}).
         </p>
       ) : null}
     </section>
@@ -392,7 +389,6 @@ export function StrandRenderConfigPanel({
 function Field({
   label,
   source,
-  readOnly,
   children,
 }: {
   label: string;
@@ -404,7 +400,7 @@ function Field({
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
         <label className="text-xs text-muted-foreground">{label}</label>
-        {!readOnly && source ? <SourceBadge source={source} /> : null}
+        {source ? <SourceBadge source={source} /> : null}
       </div>
       {children}
     </div>

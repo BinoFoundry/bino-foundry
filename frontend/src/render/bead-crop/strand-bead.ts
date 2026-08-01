@@ -156,6 +156,30 @@ export function getStrandBeadImageStyle(
   };
 }
 
+/**
+ * Apply hierarchical resolvedRenderScale to image layout only.
+ * Slot/occupancy dimensions stay on physical mm sizing.
+ */
+export function scaleBeadSlotSizingForRenderScale<
+  T extends {
+    imageDimensions: BeadSlotDimensions;
+    imageOffsetPx: { left: number; top: number };
+  },
+>(sizing: T, renderScale: number): T {
+  if (!Number.isFinite(renderScale) || renderScale <= 0 || renderScale === 1) return sizing;
+  return {
+    ...sizing,
+    imageDimensions: {
+      width: sizing.imageDimensions.width * renderScale,
+      height: sizing.imageDimensions.height * renderScale,
+    },
+    imageOffsetPx: {
+      left: sizing.imageOffsetPx.left * renderScale,
+      top: sizing.imageOffsetPx.top * renderScale,
+    },
+  };
+}
+
 export function usesProcessedStrandAsset(bead: BeadLibraryEntry | null | undefined): boolean {
   return hasDistinctProcessedAsset(bead);
 }

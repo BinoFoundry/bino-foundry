@@ -177,8 +177,11 @@ export function GeneralSettingsAdmin({ embedded = false, onRegisterReload }: Gen
             onChange={(e) => setBeadRenderCalibrationFactor(Number(e.target.value))}
           />
           <p className="text-xs text-muted-foreground">
-            Uniform scale for all bead sizes in the bracelet builder (database mm labels unchanged).
-            Lower values render beads smaller while preserving proportional differences between sizes.
+            Uniform mm→px baseline for all beads in the bracelet builder (database mm labels
+            unchanged). Category and per-bead visual adjustments use{" "}
+            <span className="font-medium">Render calibration</span> under Bracelet rendering
+            defaults / Bead types / Sub-types / individual beads — that hierarchy does not change
+            spacing or capacity.
           </p>
         </div>
       </section>

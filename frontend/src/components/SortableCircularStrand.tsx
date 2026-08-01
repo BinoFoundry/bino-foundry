@@ -25,11 +25,11 @@ import {
   getBeadSlotDimensions,
   getGuideSlotDimensions,
   getMaxSlotExtent,
-  getBeadStrandTangentContactPx,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
   getStrandBeadRasterSize,
   resolveBeadSlotSizing,
+  scaleBeadSlotSizingForRenderScale,
   useStrandRenderConfigCache,
   STRAND_CORD,
   loadProcessedStrandMetrics,
@@ -51,7 +51,6 @@ import { resolveBeadIndexUnderPointer } from "@/features/bracelet/strand-reorder
 import { wristCircumferenceMm } from "@/features/bracelet/capacity";
 import {
   beadOccupancyArcPx,
-  effectiveLayoutDiameterPx,
 } from "@/features/bracelet/strand-ring-geometry";
 import {
   computeStrandAdjacencySpacingDebug,
@@ -269,6 +268,10 @@ function SortableBeadInner({
   const sizing = bead
     ? resolveBeadSlotSizing(bead, placedBeadSizeMm(bead), scaleFactor, sizingCatalogue)
     : null;
+  const renderScale =
+    slotDim.width > 1e-6 ? renderDim.width / slotDim.width : 1;
+  const renderSizing =
+    sizing != null ? scaleBeadSlotSizingForRenderScale(sizing, renderScale) : null;
 
   return (
     <div
@@ -314,9 +317,9 @@ function SortableBeadInner({
             draggable={false}
             loading="lazy"
             decoding="async"
-            {...getStrandBeadRasterSize(sizing?.imageDimensions ?? renderDim)}
+            {...getStrandBeadRasterSize(renderSizing?.imageDimensions ?? renderDim)}
             className="pointer-events-none select-none"
-            style={getStrandBeadImageStyle(bead.bead, sizing)}
+            style={getStrandBeadImageStyle(bead.bead, renderSizing)}
           />
         </div>
       ) : null}
@@ -643,18 +646,9 @@ const SortableCircularStrand = ({
         const renderDims = prelimDims.map((slotDim, i) =>
           strandLayoutShellDimensions(slotDim, renderProfiles[i]!),
         );
-        const visualDiametersPx = sizingResults.map((sizing, i) => {
-          const slotWidth = Math.max(prelimDims[i]!.width, 1e-6);
-          const renderScale = renderDims[i]!.width / slotWidth;
-          return getBeadStrandTangentContactPx(sizing) * renderScale;
-        });
+        // Spacing uses mm occupancy only — hierarchical render calibration is visual-only.
         const layoutScale = strandRenderDefaults?.layoutScale ?? 1;
         const balanceSpacing = strandRenderDefaults?.balanceSpacing ?? true;
-        // One positioning source of truth: metadata-measured rendered contact diameter,
-        // calibrated globally. This does not change bitmap/shell size or nominal capacity.
-        const effectiveLayoutDiametersPx = visualDiametersPx.map((diameterPx) =>
-          effectiveLayoutDiameterPx(diameterPx, layoutScale),
-        );
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
 
         // Top → Bottom → Right → Left, then remaining beads fill largest arcs.
@@ -694,7 +688,7 @@ const SortableCircularStrand = ({
           const averageSpacingMm = beadCount ? renderedOccupiedMm / beadCount : 0;
           let accumMm = 0;
           for (let i = 0; i < occupancyMm.length; i++) {
-            const effectiveDiameterMm = effectiveLayoutDiametersPx[i]! * pxToMm;
+            const effectiveDiameterMm = occupancy.contactArcPx[i]! * pxToMm;
             accumMm += occupancyMm[i]!;
             const angleDeg = ((pathLayout[i]!.angle * 180) / Math.PI + 360) % 360;
             console.log(
@@ -702,6 +696,7 @@ const SortableCircularStrand = ({
                 `[strand-occupancy] bead ${i}`,
                 `type=${normalized[i]!.bead?.beadTypeSlug ?? "?"}`,
                 `effectiveDiameter=${effectiveDiameterMm.toFixed(2)}mm`,
+                `renderScale=${renderProfiles[i]!.resolvedRenderScale.toFixed(3)}`,
                 `arcSpan=${((pathLayout[i]!.arcSpan * 180) / Math.PI).toFixed(2)}deg`,
                 `accumUsed=${accumMm.toFixed(2)}mm`,
                 `angleDeg=${angleDeg.toFixed(1)}`,
@@ -727,7 +722,7 @@ const SortableCircularStrand = ({
             computeStrandAdjacencySpacingDebug({
               sizingResults,
               profiles: renderProfiles,
-              contactArcPx: effectiveLayoutDiametersPx,
+              contactArcPx: occupancy.contactArcPx,
               leadingOverlapPx: occupancy.leadingOverlapPx,
               trailingOverlapPx: occupancy.trailingOverlapPx,
               angles: pathLayout.map((path) => path.angle),
@@ -1020,6 +1015,15 @@ const SortableCircularStrand = ({
     : null;
 
   const activeSlotDim = activeSizing?.dimensions ?? null;
+  const activeProfile = activeBead ? getForBead(activeBead.bead) : null;
+  const activeRenderDim =
+    activeSlotDim && activeProfile
+      ? strandLayoutShellDimensions(activeSlotDim, activeProfile)
+      : activeSlotDim;
+  const activeRenderSizing =
+    activeSizing && activeProfile
+      ? scaleBeadSlotSizingForRenderScale(activeSizing, activeProfile.resolvedRenderScale)
+      : activeSizing;
 
   const activeRotationDeg = activeBead
     ? (renderSlots.find((s) => s.index === activeBead.position)?.rotationDeg ?? 0)
@@ -1076,7 +1080,7 @@ const SortableCircularStrand = ({
           data-strand-canvas
           data-strand-content-size={renderCanvasSize}
         >
-          {activeBead && activeSlotDim && dragClientPos ? (() => {
+          {activeBead && activeRenderDim && dragClientPos ? (() => {
             const { x: localX, y: localY } = clientToCanvas(dragClientPos.x, dragClientPos.y);
             const dragImgUrl = getBeadImageUrl(activeBead, sizingCatalogue);
             const hasImage = !!dragImgUrl;
@@ -1084,12 +1088,12 @@ const SortableCircularStrand = ({
               <div
                 style={{
                   position: "absolute",
-                  left: localX - activeSlotDim.width / 2,
-                  top: localY - activeSlotDim.height / 2,
+                  left: localX - activeRenderDim.width / 2,
+                  top: localY - activeRenderDim.height / 2,
                   zIndex: 30,
                   pointerEvents: "none",
                   // When we have a bead image, ensure the wrapper does not paint any background.
-                  ...getPlacedBeadShellStyle(activeSlotDim, hasImage),
+                  ...getPlacedBeadShellStyle(activeRenderDim, hasImage),
                   opacity: 0.94,
                   transformOrigin: "center center",
                   transform: beadShellTransform(activeRotationDeg, { dragOverlay: true }),
@@ -1098,16 +1102,16 @@ const SortableCircularStrand = ({
                 {hasImage ? (
                   <div
                     className="relative overflow-visible"
-                    style={{ width: activeSlotDim.width, height: activeSlotDim.height }}
+                    style={{ width: activeRenderDim.width, height: activeRenderDim.height }}
                   >
                     <img
                       src={dragImgUrl!}
                       alt=""
                       draggable={false}
                       decoding="async"
-                      {...getStrandBeadRasterSize(activeSizing?.imageDimensions ?? activeSlotDim)}
+                      {...getStrandBeadRasterSize(activeRenderSizing?.imageDimensions ?? activeRenderDim)}
                       className="pointer-events-none"
-                      style={getStrandBeadImageStyle(activeBead.bead, activeSizing)}
+                      style={getStrandBeadImageStyle(activeBead.bead, activeRenderSizing)}
                     />
                   </div>
                 ) : null}

@@ -72,7 +72,7 @@ export interface StrandRenderProfile {
    * Negative moves toward ring centre (pulls hanging assets onto the cord).
    */
   verticalOffset: number;
-  /** Visual size multiplier — independent from strand occupancy. */
+  /** Visual render calibration multiplier (1 = same as mm slot). Independent from strand occupancy. */
   visualScale: number;
   /** Resolved facing — outward (away from centre) or inward (toward centre). */
   orientationMode: StrandOrientationMode;

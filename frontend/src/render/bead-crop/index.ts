@@ -125,6 +125,7 @@ export {
   getPlacedBeadImageFilter,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
+  scaleBeadSlotSizingForRenderScale,
   getBeadLibraryThumbnailStyle,
   getStrandBeadRasterSize,
   STRAND_CORD,
