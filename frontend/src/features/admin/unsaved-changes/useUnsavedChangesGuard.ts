@@ -10,6 +10,11 @@ export interface UseUnsavedChangesGuardResult {
    * Route changes (sidebar, browser back) are blocked automatically when dirty.
    */
   confirmLeave: (proceed: () => void) => void;
+  /**
+   * Clear this source's dirty flag synchronously so Save→navigate in the same
+   * tick is not blocked by a stale "unsaved changes" state.
+   */
+  clearDirtySync: () => void;
 }
 
 /**
@@ -17,8 +22,10 @@ export interface UseUnsavedChangesGuardResult {
  *
  * @example
  * const { isDirty, markClean } = useDirtySnapshot(form, initial?.id ?? "new");
- * const { confirmLeave } = useUnsavedChangesGuard(isDirty);
- * <Button onClick={() => confirmLeave(onCancel)}>Cancel</Button>
+ * const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
+ * // After successful save, before any navigate:
+ * markClean();
+ * clearDirtySync();
  */
 export function useUnsavedChangesGuard(
   dirty: boolean,
@@ -26,12 +33,16 @@ export function useUnsavedChangesGuard(
 ): UseUnsavedChangesGuardResult {
   const autoId = useId();
   const id = sourceId ?? autoId;
-  const { isDirty, setSourceDirty, confirmLeave } = useAdminUnsavedChangesContext();
+  const { isDirty, setSourceDirty, clearDirtySync, confirmLeave } = useAdminUnsavedChangesContext();
 
   useEffect(() => {
     setSourceDirty(id, dirty);
     return () => setSourceDirty(id, false);
   }, [id, dirty, setSourceDirty]);
 
-  return { isDirty: isDirty || dirty, confirmLeave };
+  return {
+    isDirty: isDirty || dirty,
+    confirmLeave,
+    clearDirtySync: () => clearDirtySync(id),
+  };
 }

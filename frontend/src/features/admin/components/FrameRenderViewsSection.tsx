@@ -471,10 +471,6 @@ export const FrameRenderViewsSection = forwardRef<
   };
 
   const openEditor = (axis: FrameViewAxis, panel: ExpandedPanel) => {
-    if (expandedControlled) {
-      setExpandedEditor({ axis, panel });
-      return;
-    }
     editorHydratingRef.current = true;
     setFramePathReady(false);
     if (panel === "left" || panel === "right" || panel === "exclusions") {
@@ -493,11 +489,11 @@ export const FrameRenderViewsSection = forwardRef<
       const sessionKey = `${axis}-${panel}`;
       setEditSession((s) => ({ ...s, [sessionKey]: (s[sessionKey] ?? 0) + 1 }));
     }
-    setExpandedEditor({ axis, panel });
     if (panel === "frame") {
       const view = getView(axis);
       setFramePathReady(Boolean(view.plateCropConfig && isBeadCropConfigValid(view.plateCropConfig)));
     }
+    setExpandedEditor({ axis, panel });
   };
 
   // Restore editor session when deep-linked / URL-controlled via ?axis=&panel=
@@ -560,33 +556,36 @@ export const FrameRenderViewsSection = forwardRef<
         plateCropConfig: null,
         ...clearLensState(),
       });
+      onDraftTouch?.();
 
-      // Always apply best-effort dual polygons so the admin has editable points.
+      // Always open Crop immediately so upload → editor needs no extra click.
+      openEditor(axis, "frame");
+
+      // Best-effort dual lens detection in the background; keep Crop open either way.
       try {
         const detection = detectFrameLensMaskFromSource(img);
         if (detection.config && isDualLensMaskValid(detection.config)) {
           commitMaskToView(axis, detection.config);
-          openEditor(axis, "left");
           const conf = detection.confidence ?? 0;
           setAxisNotice(
             axis,
             detection.message ??
               (conf >= 0.7
-                ? "Original saved and both lenses detected — review overlays, then Save frame."
-                : "Original saved with starting lens polygons — adjust and save."),
+                ? "Original saved and both lenses detected — crop the frame, then review lenses."
+                : "Original saved with starting lens polygons — crop the frame, then adjust lenses."),
             conf >= 0.7 ? "success" : "warning",
           );
         } else {
           setAxisNotice(
             axis,
-            "Original saved. Use Auto Detect Both Lenses to add starting polygons.",
+            "Original saved. Draw the frame crop path, then detect or draw lenses.",
             "success",
           );
         }
       } catch {
         setAxisNotice(
           axis,
-          "Original saved. Use Auto Detect Both Lenses to add starting polygons.",
+          "Original saved. Draw the frame crop path, then detect or draw lenses.",
           "success",
         );
       }

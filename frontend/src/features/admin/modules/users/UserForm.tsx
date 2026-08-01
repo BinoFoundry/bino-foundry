@@ -59,7 +59,7 @@ export function UserForm({ mode, initial, onCancel, onSave }: UserFormProps) {
 
   const dirtySnapshot = useMemo(() => values, [values]);
   const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
 
   const set = <K extends keyof UserFormValues>(key: K, value: UserFormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -76,9 +76,12 @@ export function UserForm({ mode, initial, onCancel, onSave }: UserFormProps) {
           return;
         }
         setSaving(true);
-        void onSave({ ...values, displayName: values.displayName.trim() })
-          .then(() => markClean())
-          .finally(() => setSaving(false));
+        // Clear dirty before onSave — create/update close the editor (route change) inside onSave.
+        markClean();
+        clearDirtySync();
+        void onSave({ ...values, displayName: values.displayName.trim() }).finally(() =>
+          setSaving(false),
+        );
       }}
     >
       <div>

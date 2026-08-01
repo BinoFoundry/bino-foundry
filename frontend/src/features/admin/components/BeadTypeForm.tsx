@@ -90,7 +90,7 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
     [form, resetBeadsOnSave],
   );
   const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
 
   // Same System → Type resolve the Builder uses for beads that inherit this type.
   const effective = useMemo(() => {
@@ -131,8 +131,9 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
     setBulkMessage(null);
     try {
       const normalized = normalizeTypeStrandMetadata(form, strandRenderDefaults);
-      await onSave(normalized);
       markClean();
+      clearDirtySync();
+      await onSave(normalized);
       if (initial?.id && resetBeadsOnSave && overriddenBeadCount > 0) {
         const result = await strandRenderMigrationApi.applyTypeToLibraries(initial.id);
         await refreshFromApi();

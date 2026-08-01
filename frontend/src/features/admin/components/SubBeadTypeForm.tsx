@@ -87,7 +87,7 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
 
   const dirtySnapshot = useMemo(() => form, [form]);
   const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
 
   const inheritBeadTypeDefaults = subBeadTypeInheritsBeadTypeStrandDefaults(form.metadata);
 
@@ -134,8 +134,9 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         form.metadata ?? {},
         inheritedBeadTypeProfile,
       );
-      await onSave({ ...form, beadTypeId: beadType.id, metadata: normalizedMetadata });
       markClean();
+      clearDirtySync();
+      await onSave({ ...form, beadTypeId: beadType.id, metadata: normalizedMetadata });
     } finally {
       setSaving(false);
     }

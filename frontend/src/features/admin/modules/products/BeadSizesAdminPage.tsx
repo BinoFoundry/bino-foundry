@@ -75,7 +75,7 @@ function SizeForm({
     [sizeMm, label, order, active, isDefault],
   );
   const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +89,8 @@ function SizeForm({
     setSizeError(null);
     setSaving(true);
     try {
+      markClean();
+      clearDirtySync();
       await onSave({
         sizeMm,
         label: label.trim(),
@@ -96,7 +98,6 @@ function SizeForm({
         isActive: active,
         isDefault,
       });
-      markClean();
     } finally {
       setSaving(false);
     }

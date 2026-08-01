@@ -111,7 +111,7 @@ function HowWePrepareForm({
     ],
   );
   const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
 
   const handleNameChange = (value: string) => {
     setName(value);
@@ -140,6 +140,8 @@ function HowWePrepareForm({
     if (saving) return;
     setSaving(true);
     try {
+      markClean();
+      clearDirtySync();
       await onSave({
         name: name.trim(),
         slug: slug.trim(),
@@ -159,7 +161,6 @@ function HowWePrepareForm({
         status,
         sortOrder,
       });
-      markClean();
     } finally {
       setSaving(false);
     }

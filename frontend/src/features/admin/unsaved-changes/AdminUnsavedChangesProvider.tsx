@@ -12,6 +12,7 @@ import { useBlocker } from "react-router-dom";
 
 import { ADMIN_UNSAVED_COPY } from "./copy";
 import { AdminUnsavedLeaveDialog } from "./AdminUnsavedLeaveDialog";
+import { shouldBlockAdminNavigation } from "./should-block-navigation";
 
 type ProceedFn = () => void;
 
@@ -20,6 +21,11 @@ interface AdminUnsavedChangesContextValue {
   isDirty: boolean;
   /** Register/update dirty state for a source id. Clears on unmount via hook. */
   setSourceDirty: (sourceId: string, dirty: boolean) => void;
+  /**
+   * Synchronously clear dirty for a source (and optionally all sources) so a
+   * subsequent navigate in the same tick is not blocked as "unsaved".
+   */
+  clearDirtySync: (sourceId?: string) => void;
   /**
    * Run `proceed` immediately when clean; otherwise open the leave dialog and
    * only call `proceed` if the user confirms Leave Without Saving.
@@ -32,45 +38,63 @@ const AdminUnsavedChangesContext = createContext<AdminUnsavedChangesContextValue
 export function AdminUnsavedChangesProvider({ children }: { children: ReactNode }) {
   const [dirtySources, setDirtySources] = useState<Record<string, true>>({});
   const [pendingProceed, setPendingProceed] = useState<ProceedFn | null>(null);
+  /** Sync mirror for useBlocker — React state alone is one tick too late after Save→navigate. */
+  const dirtySourcesRef = useRef<Record<string, true>>({});
 
   const isDirty = Object.keys(dirtySources).length > 0;
 
   const setSourceDirty = useCallback((sourceId: string, dirty: boolean) => {
-    setDirtySources((prev) => {
-      const has = Boolean(prev[sourceId]);
-      if (dirty && has) return prev;
-      if (!dirty && !has) return prev;
-      const next = { ...prev };
-      if (dirty) next[sourceId] = true;
-      else delete next[sourceId];
-      return next;
-    });
+    const has = Boolean(dirtySourcesRef.current[sourceId]);
+    if (dirty && has) return;
+    if (!dirty && !has) return;
+    const next = { ...dirtySourcesRef.current };
+    if (dirty) next[sourceId] = true;
+    else delete next[sourceId];
+    dirtySourcesRef.current = next;
+    setDirtySources(next);
   }, []);
 
-  const confirmLeave = useCallback(
-    (proceed: ProceedFn) => {
-      if (!isDirty) {
-        proceed();
-        return;
-      }
-      setPendingProceed(() => proceed);
-    },
-    [isDirty],
-  );
+  const clearDirtySync = useCallback((sourceId?: string) => {
+    if (sourceId) {
+      if (!dirtySourcesRef.current[sourceId]) return;
+      const next = { ...dirtySourcesRef.current };
+      delete next[sourceId];
+      dirtySourcesRef.current = next;
+      setDirtySources(next);
+      return;
+    }
+    if (Object.keys(dirtySourcesRef.current).length === 0) return;
+    dirtySourcesRef.current = {};
+    setDirtySources({});
+  }, []);
+
+  const confirmLeave = useCallback((proceed: ProceedFn) => {
+    if (Object.keys(dirtySourcesRef.current).length === 0) {
+      proceed();
+      return;
+    }
+    setPendingProceed(() => proceed);
+  }, []);
 
   // Browser refresh / close tab / close window.
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!isDirty) return;
+      if (Object.keys(dirtySourcesRef.current).length === 0) return;
       event.preventDefault();
       event.returnValue = ADMIN_UNSAVED_COPY.beforeUnload;
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [isDirty]);
+  }, []);
 
   // In-app navigation: sidebar, back/forward, deep links, logo, etc.
-  const blocker = useBlocker(isDirty);
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    shouldBlockAdminNavigation(
+      Object.keys(dirtySourcesRef.current).length > 0,
+      currentLocation.pathname,
+      nextLocation.pathname,
+    ),
+  );
   const routeBlocked = blocker.state === "blocked";
   const dialogOpen = routeBlocked || pendingProceed != null;
 
@@ -90,8 +114,8 @@ export function AdminUnsavedChangesProvider({ children }: { children: ReactNode 
   }, [blocker, pendingProceed]);
 
   const value = useMemo(
-    () => ({ isDirty, setSourceDirty, confirmLeave }),
-    [isDirty, setSourceDirty, confirmLeave],
+    () => ({ isDirty, setSourceDirty, clearDirtySync, confirmLeave }),
+    [isDirty, setSourceDirty, clearDirtySync, confirmLeave],
   );
 
   return (

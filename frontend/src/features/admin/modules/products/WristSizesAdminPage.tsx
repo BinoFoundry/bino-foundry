@@ -49,7 +49,7 @@ function WristSizeForm({
     [sizeCm, label, order, active, isDefault, notes],
   );
   const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +62,8 @@ function WristSizeForm({
     setSizeError(null);
     setSaving(true);
     try {
+      markClean();
+      clearDirtySync();
       await onSave({
         sizeCm,
         label: label.trim(),
@@ -70,7 +72,6 @@ function WristSizeForm({
         isDefault,
         notes: notes.trim() || null,
       });
-      markClean();
     } finally {
       setSaving(false);
     }

@@ -165,7 +165,10 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
     initial?.id ?? "new",
   );
   const isDirty = formDirty || cropDraftDirty;
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty, `bead-form:${initial?.id ?? "new"}`);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(
+    isDirty,
+    `bead-form:${initial?.id ?? "new"}`,
+  );
 
   const resetSizeRows = useCallback(
     (libraryId?: string) => {
@@ -312,6 +315,10 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
       const processedImage = form.processedImage?.trim() || cropProcessed;
       const originalImage = form.originalImage?.trim() || originalUrl;
 
+      setCropDraftDirty(false);
+      markClean();
+      clearDirtySync();
+
       await onSave(
         {
           ...form,
@@ -326,8 +333,6 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         },
         sizes,
       );
-      setCropDraftDirty(false);
-      markClean();
     } finally {
       setSaving(false);
     }

@@ -122,7 +122,10 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
     initial?.id ?? "new",
   );
   const isDirty = formDirty || viewsDraftDirty;
-  const { confirmLeave } = useUnsavedChangesGuard(isDirty, `frame-form:${initial?.id ?? "new"}`);
+  const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(
+    isDirty,
+    `frame-form:${initial?.id ?? "new"}`,
+  );
 
   const expandedEditor = useMemo(
     () => parseFrameExpandedEditor(searchParams.get("axis"), searchParams.get("panel")),
@@ -184,6 +187,11 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
       const preparedViews = await prepareRenderViewsForSave(flushedViews);
       const legacyImages = preparedViews.filter((v) => v.plateUrl).map((v) => v.plateUrl);
 
+      // Clear dirty BEFORE onSave — create flow navigates to the edit URL inside onSave.
+      setViewsDraftDirty(false);
+      markClean();
+      clearDirtySync();
+
       await onSave({
         ...form,
         id,
@@ -191,8 +199,6 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
         frameImages: legacyImages,
         lensColors: [],
       });
-      setViewsDraftDirty(false);
-      markClean();
     } finally {
       setSaving(false);
     }
