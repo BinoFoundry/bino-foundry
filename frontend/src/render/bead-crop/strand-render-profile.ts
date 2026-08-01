@@ -15,8 +15,33 @@ export type { ResolvedStrandRenderConfig, StrandRenderProfile };
 export interface StrandRenderCatalogueContext {
   beadTypes?: BeadTypeEntry[];
   subBeadTypes?: SubBeadTypeEntry[];
+  /**
+   * Live catalogue libraries — preferred source for inherit flags + bead overrides.
+   * Placed-strand snapshots can be stale after Admin saves.
+   */
+  beadLibraries?: BeadLibraryEntry[];
   /** Platform defaults from config_kv — loaded once with catalogue. */
   strandRenderDefaults?: StrandRenderProfile | null;
+}
+
+/**
+ * Prefer live catalogue metadata (type/sub ids + strand overrides) over a placed snapshot.
+ * Visual assets on the placed bead are left unchanged.
+ */
+export function hydrateBeadLibraryForStrandRender(
+  bead: BeadLibraryEntry | null | undefined,
+  catalogue?: StrandRenderCatalogueContext,
+): BeadLibraryEntry | null | undefined {
+  if (!bead?.id || !catalogue?.beadLibraries?.length) return bead;
+  const live = catalogue.beadLibraries.find((entry) => entry.id === bead.id);
+  if (!live) return bead;
+  return {
+    ...bead,
+    beadTypeId: live.beadTypeId ?? bead.beadTypeId,
+    beadTypeSlug: live.beadTypeSlug ?? bead.beadTypeSlug,
+    subBeadTypeId: live.subBeadTypeId ?? bead.subBeadTypeId,
+    metadata: live.metadata ?? bead.metadata,
+  };
 }
 
 function beadTypeFor(
@@ -73,16 +98,17 @@ export function resolveStrandRenderConfigForBead(
   bead: BeadLibraryEntry | null | undefined,
   catalogue?: StrandRenderCatalogueContext,
 ): ResolvedStrandRenderConfig {
-  const typeEntry = beadTypeFor(bead, catalogue);
-  const subTypeEntry = subBeadTypeFor(bead, catalogue);
+  const hydrated = hydrateBeadLibraryForStrandRender(bead, catalogue);
+  const typeEntry = beadTypeFor(hydrated, catalogue);
+  const subTypeEntry = subBeadTypeFor(hydrated, catalogue);
 
   return resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
     subBeadTypeOverride: subTypeOverrideFromEntry(subTypeEntry),
     inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subTypeEntry?.metadata),
-    beadOverride: libraryOverrideFromEntry(bead),
-    inheritBeadFromSubBeadType: libraryInheritsSubTypeDefaults(bead),
+    beadOverride: libraryOverrideFromEntry(hydrated),
+    inheritBeadFromSubBeadType: libraryInheritsSubTypeDefaults(hydrated),
   });
 }
 

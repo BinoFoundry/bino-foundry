@@ -26,6 +26,7 @@ export {
   type SquareFallbackReason,
 } from "./strand-bead-sizing";
 export {
+  hydrateBeadLibraryForStrandRender,
   resolveStrandRenderProfile,
   resolveStrandRenderProfileBySlug,
   resolveStrandRenderConfigForBead,

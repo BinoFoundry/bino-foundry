@@ -31,12 +31,13 @@ function subTypeOverrideFromForm(form: SubBeadTypeEntry) {
   return parseStrandRenderProfile(meta?.strandRenderOverride);
 }
 
-function updateSubTypeStrandOverride(form: SubBeadTypeEntry, patch: Record<string, unknown>): SubBeadTypeEntry {
-  const inherited = resolvedTypeStrandProfile(
-    parseStrandRenderProfile((form.metadata as { strandRender?: unknown })?.strandRender),
-  );
+function updateSubTypeStrandOverride(
+  form: SubBeadTypeEntry,
+  patch: Record<string, unknown>,
+  inheritedBeadTypeProfile: ReturnType<typeof resolvedTypeStrandProfile>,
+): SubBeadTypeEntry {
   const current = subTypeOverrideFromForm(form) ?? {};
-  const next = mergeLazyStrandRenderOverride(current, patch, inherited);
+  const next = mergeLazyStrandRenderOverride(current, patch, inheritedBeadTypeProfile);
   if (strandRenderOverrideIsEmpty(next)) {
     // Keep an explicit opt-out; only snap back to inherit when already inheriting.
     const keepOptOut = form.metadata?.useBeadTypeStrandDefaults === false;
@@ -89,6 +90,7 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
     );
   }, [beadType.metadata, strandRenderDefaults]);
 
+  // Same hierarchy layers the Builder uses for beads that inherit this sub-type.
   const effective = useMemo(() => {
     return resolveStrandRenderConfig({
       systemDefaults: strandRenderDefaults,
@@ -180,7 +182,9 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         onInheritTypeDefaultsChange={(inherit) => setForm((prev) => setInheritBeadTypeDefaults(prev, inherit))}
         showAdvanced={showAdvanced}
         previewImageUrl={previewImageUrl}
-        onChange={(patch) => setForm((prev) => updateSubTypeStrandOverride(prev, patch))}
+        onChange={(patch) =>
+          setForm((prev) => updateSubTypeStrandOverride(prev, patch, inheritedBeadTypeProfile))
+        }
         onResetToType={() => setForm((prev) => setInheritBeadTypeDefaults(prev, true))}
         onResetToSystem={() =>
           setForm((prev) => {

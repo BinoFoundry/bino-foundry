@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import {
-  effectiveStrandContactWidth,
-  type StrandRenderProfile,
-} from "@bino-foundry/shared/types";
+import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
 import {
   computeBeadShellPosition,
@@ -18,6 +15,11 @@ const ARC_RADIUS = 118;
 const ARC_CENTER_X = PREVIEW_W / 2;
 const ARC_CENTER_Y = PREVIEW_H + 36;
 const BEAD_COUNT = 5;
+/**
+ * Fixed angular step — matches Builder mm-occupancy model.
+ * Contact width / overlap do not change Builder spacing, so preview must not either.
+ */
+export const STRAND_RENDER_PREVIEW_ANGLE_STEP = 0.34;
 
 export interface StrandRenderLivePreviewProps {
   profile: StrandRenderProfile;
@@ -37,17 +39,17 @@ interface PreviewBeadLayout {
   isFocus: boolean;
 }
 
-function buildCurvedPreview(profile: StrandRenderProfile): {
+export function buildCurvedPreview(profile: StrandRenderProfile): {
   arcPath: string;
   beads: PreviewBeadLayout[];
 } {
   const slot = { width: BASE_SLOT_PX, height: BASE_SLOT_PX };
   const renderDim = strandLayoutShellDimensions(slot, profile);
-  const contact = effectiveStrandContactWidth(profile);
-  // Wider contact → larger angular gaps (occupancy / spacing cue).
-  const step = Math.max(0.2, Math.min(0.55, 0.34 * Math.max(0.45, contact)));
   const mid = Math.floor(BEAD_COUNT / 2);
-  const angles = Array.from({ length: BEAD_COUNT }, (_, i) => -Math.PI / 2 + (i - mid) * step);
+  const angles = Array.from(
+    { length: BEAD_COUNT },
+    (_, i) => -Math.PI / 2 + (i - mid) * STRAND_RENDER_PREVIEW_ANGLE_STEP,
+  );
 
   const start = angles[0]!;
   const end = angles[angles.length - 1]!;
@@ -78,7 +80,8 @@ function buildCurvedPreview(profile: StrandRenderProfile): {
 
 /**
  * Lightweight curved-strand preview for admin render defaults.
- * No builder state, no API, no animation — only the resolved profile.
+ * Applies the same visual fields as the Builder (scale, hang, rotation, anchor).
+ * Spacing stays fixed — Builder occupancy is mm-based, not contactWidth.
  */
 export function StrandRenderLivePreview({
   profile,
@@ -95,7 +98,8 @@ export function StrandRenderLivePreview({
         <div>
           <p className="text-sm font-medium">Live Preview</p>
           <p className="text-xs text-muted-foreground">
-            Curved strand section — updates as you edit. Does not save or open the builder.
+            Same visual resolve as the Builder (scale, hang, rotation). Spacing is mm-based and
+            unchanged by contact width.
           </p>
         </div>
         <p className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">

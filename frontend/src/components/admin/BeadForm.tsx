@@ -311,8 +311,13 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
   );
 
   const renderCatalogue = useMemo(
-    () => ({ beadTypes: cat.beadTypes, subBeadTypes: cat.subBeadTypes, strandRenderDefaults: cat.strandRenderDefaults }),
-    [cat.beadTypes, cat.subBeadTypes, cat.strandRenderDefaults],
+    () => ({
+      beadTypes: cat.beadTypes,
+      subBeadTypes: cat.subBeadTypes,
+      beadLibraries: cat.beadLibraries,
+      strandRenderDefaults: cat.strandRenderDefaults,
+    }),
+    [cat.beadTypes, cat.subBeadTypes, cat.beadLibraries, cat.strandRenderDefaults],
   );
   const resolvedStrand = useMemo(
     () => resolveStrandRenderConfigForBead(form, renderCatalogue),

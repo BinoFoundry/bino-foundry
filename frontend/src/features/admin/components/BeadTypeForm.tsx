@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { BeadTypeEntry } from "@/types/beads";
 import {
+  beadLibraryInheritsTypeStrandDefaults,
   DEFAULT_STRAND_RENDER_PROFILE,
   mergeStrandRenderProfile,
   parseStrandRenderProfile,
@@ -50,6 +51,7 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
+  // Same System → Type resolve the Builder uses for beads that inherit this type.
   const effective = useMemo(() => {
     return resolveStrandRenderConfig({
       systemDefaults: strandRenderDefaults,
@@ -57,15 +59,25 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
     });
   }, [form, strandRenderDefaults]);
 
-  const previewImageUrl = useMemo(() => {
+  const typeLibraryBeads = useMemo(() => {
     const typeId = form.id || initial?.id;
-    const sample = beadLibraries.find(
+    return beadLibraries.filter(
       (b) =>
         (typeId && b.beadTypeId === typeId) ||
         (form.slug && b.beadTypeSlug === form.slug),
     );
-    return sample?.processedImage?.trim() || sample?.image?.trim() || null;
   }, [beadLibraries, form.id, form.slug, initial?.id]);
+
+  const overriddenBeadCount = useMemo(
+    () => typeLibraryBeads.filter((b) => !beadLibraryInheritsTypeStrandDefaults(b.metadata)).length,
+    [typeLibraryBeads],
+  );
+
+  const previewImageUrl = useMemo(() => {
+    const inheriting = typeLibraryBeads.find((b) => beadLibraryInheritsTypeStrandDefaults(b.metadata));
+    const sample = inheriting ?? typeLibraryBeads[0];
+    return sample?.processedImage?.trim() || sample?.image?.trim() || null;
+  }, [typeLibraryBeads]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,35 +151,46 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
         onResetToSystem={() =>
           setForm((f) => ({
             ...f,
-            metadata: { ...(f.metadata ?? {}), strandRender: strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE },
+            metadata: {
+              ...(f.metadata ?? {}),
+              strandRender: strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE,
+            },
           }))
         }
       />
 
       {initial?.id ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/10 p-3">
-          <p className="text-xs text-muted-foreground">Bulk actions for beads of this type:</p>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={bulkBusy != null}
-            onClick={async () => {
-              setBulkBusy("apply");
-              setBulkMessage(null);
-              try {
-                const result = await strandRenderMigrationApi.applyTypeToLibraries(initial.id);
-                await refreshFromApi();
-                setBulkMessage(`Reset ${result.updated} bead(s) to inherit this type.`);
-              } catch {
-                setBulkMessage("Could not apply type defaults to beads.");
-              } finally {
-                setBulkBusy(null);
-              }
-            }}
-          >
-            {bulkBusy === "apply" ? "Applying…" : "Apply type defaults to existing beads"}
-          </Button>
+        <div className="space-y-2 rounded-lg border border-border bg-muted/10 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs text-muted-foreground">Bulk actions for beads of this type:</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={bulkBusy != null}
+              onClick={async () => {
+                setBulkBusy("apply");
+                setBulkMessage(null);
+                try {
+                  const result = await strandRenderMigrationApi.applyTypeToLibraries(initial.id);
+                  await refreshFromApi();
+                  setBulkMessage(`Reset ${result.updated} bead(s) to inherit this type.`);
+                } catch {
+                  setBulkMessage("Could not apply type defaults to beads.");
+                } finally {
+                  setBulkBusy(null);
+                }
+              }}
+            >
+              {bulkBusy === "apply" ? "Applying…" : "Apply type defaults to existing beads"}
+            </Button>
+          </div>
+          {overriddenBeadCount > 0 ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              {overriddenBeadCount} bead(s) have individual overrides and will not pick up type
+              changes until you apply type defaults (or clear each bead override).
+            </p>
+          ) : null}
         </div>
       ) : null}
       {bulkMessage ? <p className="text-xs text-muted-foreground">{bulkMessage}</p> : null}

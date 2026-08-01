@@ -434,10 +434,24 @@ const SortableCircularStrand = ({
   layoutKey = 0,
 }: SortableCircularStrandProps) => {
   const isMobile = useIsMobile();
-  const { beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, strandRenderDefaults } = useCatalogue();
+  const {
+    beadSizes,
+    beadLibrarySizes,
+    beadTypes,
+    subBeadTypes,
+    beadLibraries,
+    strandRenderDefaults,
+  } = useCatalogue();
   const sizingCatalogue = useMemo<BeadSlotSizingCatalogueContext>(
-    () => ({ beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, strandRenderDefaults }),
-    [beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, strandRenderDefaults],
+    () => ({
+      beadSizes,
+      beadLibrarySizes,
+      beadTypes,
+      subBeadTypes,
+      beadLibraries,
+      strandRenderDefaults,
+    }),
+    [beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, beadLibraries, strandRenderDefaults],
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragClientPos, setDragClientPos] = useState<{ x: number; y: number } | null>(null);
@@ -516,10 +530,6 @@ const SortableCircularStrand = ({
   );
 
   const normalized = useMemo(() => normalizeFromSlots(placedBeads), [placedBeads]);
-  const placedLibraries = useMemo(
-    () => normalized.map((placed) => placed.bead).filter((bead): bead is BeadLibraryEntry => Boolean(bead)),
-    [normalized],
-  );
 
   /** Bumps when processed-PNG alpha metrics land — corrects padded-mask underscaling. */
   const [processedMetricsEpoch, setProcessedMetricsEpoch] = useState(0);
@@ -534,10 +544,12 @@ const SortableCircularStrand = ({
     return unsub;
   }, [normalized]);
 
+  // Live catalogue libraries are the source of truth for inherit flags + overrides.
+  // Placed snapshots alone can stay stale after Admin Type/Sub/Bead saves.
   const { getForBead } = useStrandRenderConfigCache({
     beadTypes,
     subBeadTypes,
-    beadLibraries: placedLibraries,
+    beadLibraries,
     strandRenderDefaults,
   });
   const compositionMm = strandCircumferenceMm(normalized, guideSizeMm);

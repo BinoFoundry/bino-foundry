@@ -31,15 +31,19 @@ export function useStrandRenderConfigCache(params: {
   const librariesRef = useRef(beadLibraries);
   librariesRef.current = beadLibraries;
 
-  const cache = useMemo(() => {
-    const context: StrandRenderCatalogueContext = { beadTypes, subBeadTypes, strandRenderDefaults };
-    return buildStrandRenderConfigCache(librariesRef.current, context);
-  }, [beadTypes, subBeadTypes, strandRenderDefaults, version]);
-
   const context = useMemo(
-    (): StrandRenderCatalogueContext => ({ beadTypes, subBeadTypes, strandRenderDefaults }),
-    [beadTypes, subBeadTypes, strandRenderDefaults],
+    (): StrandRenderCatalogueContext => ({
+      beadTypes,
+      subBeadTypes,
+      beadLibraries,
+      strandRenderDefaults,
+    }),
+    [beadTypes, subBeadTypes, beadLibraries, strandRenderDefaults],
   );
+
+  const cache = useMemo(() => {
+    return buildStrandRenderConfigCache(librariesRef.current, context);
+  }, [context, version]);
 
   const getForBead = useMemo(
     () => (bead: BeadLibraryEntry | null | undefined) => {

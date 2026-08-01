@@ -141,4 +141,77 @@ describe("strand render profile", () => {
     expect(profile.visualScale).toBe(1);
     expect(profile.provenance.visualScale).toBe("beadType");
   });
+
+  it("hydrates stale placed snapshot from live catalogue library metadata", () => {
+    const catalogue = {
+      ...TEST_STRAND_RENDER_CATALOGUE,
+      beadTypes: [
+        {
+          id: "type-crystal",
+          slug: "crystal",
+          name: "Crystal",
+          description: "",
+          metadata: { strandRender: { visualScale: 0.85, hangOffset: 0.2 } },
+        },
+      ],
+      beadLibraries: [
+        {
+          id: "crystal-1",
+          name: "Crystal",
+          image: "",
+          beadTypeId: "type-crystal",
+          beadTypeSlug: "crystal",
+          description: "",
+          metadata: { useTypeStrandDefaults: true },
+        },
+      ],
+    };
+
+    const stalePlaced = {
+      id: "crystal-1",
+      name: "Crystal",
+      image: "",
+      beadTypeId: "type-crystal",
+      beadTypeSlug: "crystal",
+      description: "",
+      metadata: {
+        useTypeStrandDefaults: false,
+        strandRenderOverride: { visualScale: 1.4 },
+      },
+    };
+
+    const profile = resolveStrandRenderConfigForBead(stalePlaced, catalogue);
+    expect(profile.visualScale).toBe(0.85);
+    expect(profile.hangOffset).toBe(0.2);
+    expect(profile.provenance.visualScale).toBe("beadType");
+  });
+
+  it("applies live type defaults when bead inherits after catalogue type update", () => {
+    const profile = resolveStrandRenderConfigForBead(
+      {
+        id: "crystal-1",
+        name: "Crystal",
+        image: "",
+        beadTypeId: "type-crystal",
+        beadTypeSlug: "crystal",
+        description: "",
+        metadata: { useTypeStrandDefaults: true },
+      },
+      {
+        ...TEST_STRAND_RENDER_CATALOGUE,
+        beadTypes: [
+          {
+            id: "type-crystal",
+            slug: "crystal",
+            name: "Crystal",
+            description: "",
+            metadata: { strandRender: { visualScale: 0.72, verticalOffset: -0.1 } },
+          },
+        ],
+      },
+    );
+    expect(profile.visualScale).toBe(0.72);
+    expect(profile.verticalOffset).toBeCloseTo(-0.1);
+    expect(profile.provenance.visualScale).toBe("beadType");
+  });
 });
