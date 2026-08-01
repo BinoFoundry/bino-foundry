@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { DEFAULT_LENS_TINT_RENDER } from "@bino-foundry/shared/types";
 
@@ -17,6 +17,7 @@ import {
   adminSunglassesConfigPath,
   type SunglassesConfigSection,
 } from "@/features/admin/routing";
+import { pathIsCreateRoute } from "@/features/admin/hooks/useAdminResourceEditor";
 import {
   ADMIN_UNSAVED_COPY,
   useAdminUnsavedChangesContext,
@@ -78,9 +79,10 @@ export function SunglassesCatalogAdmin() {
   const navigate = useNavigate();
   const { confirmLeave } = useAdminUnsavedChangesContext();
   const params = useParams<{ catalogSection?: string; itemId?: string }>();
+  const { pathname } = useLocation();
   const section = parseCatalogSection(params.catalogSection);
   const rawItemId = params.itemId;
-  const isCreating = rawItemId === "new";
+  const isCreating = rawItemId === "new" || pathIsCreateRoute(pathname);
   const itemId = rawItemId && rawItemId !== "new" ? rawItemId : null;
   const isEditing = Boolean(itemId);
 

@@ -63,6 +63,10 @@ function DashboardRoute() {
 /**
  * Nested under App route `/admin/*`.
  * Paths here are relative to that splat ("" | "beads" | "beads/:id" | …), not absolute `/admin/...`.
+ *
+ * Static `…/new` routes are declared before `…/:itemId` so create URLs win over dynamic ids.
+ * `useAdminResourceEditor` also detects create from the pathname because static `/new`
+ * routes do not populate the `:itemId` param.
  */
 export function AdminApp() {
   return (
@@ -96,9 +100,9 @@ export function AdminApp() {
         <Route path="general-settings" element={<GeneralSettingsPage />} />
         <Route path="sunglasses-config" element={<SunglassesConfigPage />} />
         <Route path="sunglasses-config/:catalogSection" element={<SunglassesConfigPage />} />
+        <Route path="sunglasses-config/:catalogSection/new" element={<SunglassesConfigPage />} />
         <Route path="sunglasses-config/:catalogSection/:itemId" element={<SunglassesConfigPage />} />
         <Route path="lens-render-presets" element={<LensRenderingPresetsAdminPage />} />
-        <Route path="lens-render-presets/new" element={<LensRenderingPresetsAdminPage />} />
         <Route path="lens-render-presets/:itemId" element={<LensRenderingPresetsAdminPage />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>

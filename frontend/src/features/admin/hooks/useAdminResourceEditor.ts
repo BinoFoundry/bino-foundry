@@ -10,9 +10,19 @@ import {
 } from "../routing";
 import type { AdminSection } from "../types";
 
+/** True when the last path segment is the literal `new` create route. */
+export function pathIsCreateRoute(pathname: string): boolean {
+  const parts = pathname.split("/").filter(Boolean);
+  return parts[parts.length - 1] === "new";
+}
+
 /**
  * URL-driven editor mode for a standard admin resource list.
  * Paths: `/admin/:section`, `/admin/:section/new`, `/admin/:section/:itemId`
+ *
+ * Create mode is detected from either:
+ * - `:itemId` param === `"new"` (dynamic route), or
+ * - pathname ending in `/new` (static `…/new` route that does not set `itemId`)
  */
 export function useAdminResourceEditor(section: Exclude<AdminSection, "dashboard">) {
   const { itemId: rawItemId } = useParams<{ itemId?: string }>();
@@ -20,8 +30,8 @@ export function useAdminResourceEditor(section: Exclude<AdminSection, "dashboard
   const location = useLocation();
   const search = location.search;
 
+  const isCreating = rawItemId === "new" || pathIsCreateRoute(location.pathname);
   const itemId = rawItemId && rawItemId !== "new" ? rawItemId : null;
-  const isCreating = rawItemId === "new";
   const isEditing = Boolean(itemId);
   const isOpen = isCreating || isEditing;
 
@@ -61,11 +71,11 @@ export function useAdminBeadTypesRoute() {
   const path = location.pathname;
 
   const typeId = params.typeId && params.typeId !== "new" ? params.typeId : null;
-  const isCreatingType = path === "/admin/bead-types/new";
+  const isCreatingType = path === "/admin/bead-types/new" || params.typeId === "new";
   const isEditingType = Boolean(typeId) && !path.includes("/sub-types");
   const isSubTypesView = path.includes("/sub-types");
   const subId = params.subId && params.subId !== "new" ? params.subId : null;
-  const isCreatingSub = path.endsWith("/sub-types/new");
+  const isCreatingSub = path.endsWith("/sub-types/new") || params.subId === "new";
   const isEditingSub = Boolean(subId);
 
   const openTypesList = useCallback(() => {
