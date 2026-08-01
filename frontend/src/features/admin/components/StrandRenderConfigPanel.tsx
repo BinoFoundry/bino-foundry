@@ -35,6 +35,8 @@ export interface StrandRenderConfigPanelProps {
   showAdvanced?: boolean;
   /** Sample asset for the live preview (optional placeholder when missing). */
   previewImageUrl?: string | null;
+  /** Library bead used for Builder-matching slot sizing in the live preview. */
+  previewSampleBead?: import("@/types/beads").BeadLibraryEntry | null;
   /** Show lightweight strand preview (type / sub-type / bead editors). */
   showLivePreview?: boolean;
 }
@@ -60,6 +62,7 @@ export function StrandRenderConfigPanel({
   disabled = false,
   showAdvanced = false,
   previewImageUrl = null,
+  previewSampleBead = null,
   showLivePreview,
 }: StrandRenderConfigPanelProps) {
   const readOnly = disabled || ((mode === "bead" || mode === "subBeadType") && inheritTypeDefaults);
@@ -81,12 +84,12 @@ export function StrandRenderConfigPanel({
           <p className="text-sm font-medium">{title}</p>
           <p className="text-xs text-muted-foreground">
             {mode === "system"
-              ? "Fallback for all bead types and assets."
+              ? "General defaults. Type, sub-type, and bead settings override these."
               : mode === "beadType"
-                ? "Inherited by sub-types and beads unless overridden."
+                ? "Overrides General. Inherited by sub-types and beads unless they set their own values."
                 : mode === "subBeadType"
-                  ? "Inherited by beads of this sub-type unless individually overridden."
-                  : "Optional overrides for this asset only."}
+                  ? "Overrides General and Bead Type when not using parent calibration. Beads inherit unless overridden."
+                  : "Overrides General → Type → Sub-type for this asset only."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -132,42 +135,40 @@ export function StrandRenderConfigPanel({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {mode === "system" ? (
-          <>
-            <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
-              <AdminNumberWithSlider
-                value={value.layoutScale}
-                onCommit={(layoutScale) => onChange({ layoutScale })}
-                min={0.9}
-                max={1.1}
-                step={0.001}
-                displayScale={100}
-                decimals={1}
-                disabled={readOnly}
-                aria-label="Layout scale percent"
-              />
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                Global positioning calibration (100% = measured rendered contact diameter). Does not
-                resize bead images.
-              </p>
-            </Field>
-            <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  disabled={readOnly}
-                  checked={value.balanceSpacing}
-                  onChange={(e) => onChange({ balanceSpacing: e.target.checked })}
-                />
-                Equalise empty gaps within Top / Right / Bottom / Left segments
-              </label>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                Keeps Top, Bottom, Right, and Left fixed. Remaining beads are spaced evenly in each
-                arc using actual item occupancy. Recalculates when wrist size changes.
-              </p>
-            </Field>
-          </>
-        ) : null}
+        <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
+          <AdminNumberWithSlider
+            value={value.layoutScale}
+            onCommit={(layoutScale) => onChange({ layoutScale })}
+            min={0.9}
+            max={1.1}
+            step={0.001}
+            displayScale={100}
+            decimals={1}
+            disabled={readOnly}
+            aria-label="Layout scale percent"
+          />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {mode === "system"
+              ? "General default (100% = measured contact diameter). Types/sub-types can override this."
+              : "Overrides General when set on this type/sub-type/bead."}
+          </p>
+        </Field>
+        <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              disabled={readOnly}
+              checked={value.balanceSpacing}
+              onChange={(e) => onChange({ balanceSpacing: e.target.checked })}
+            />
+            Equalise empty gaps (Top / Right / Bottom / Left)
+          </label>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {mode === "system"
+              ? "General default. Type/sub-type settings override this in the Builder."
+              : "Overrides General for beads that inherit this level."}
+          </p>
+        </Field>
         <Field label="Contact width" source={provenance?.contactWidth} readOnly={readOnly}>
           <AdminNumberWithSlider
             value={value.contactWidth}
@@ -180,8 +181,8 @@ export function StrandRenderConfigPanel({
             aria-label="Contact width"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Tuning from natural touch (0 = neutral). Negative tightens; positive loosens. Legacy type
-            defaults stored as 1 map to neutral.
+            Overrides General when set. Builder occupancy stays mm-based; this is stored for hierarchy /
+            diagnostics.
           </p>
         </Field>
         <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
@@ -196,7 +197,7 @@ export function StrandRenderConfigPanel({
             aria-label="Contact adjustment"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Fine-tune neighbour spacing. Negative closes small gaps; positive adds slack.
+            Overrides General when set. Builder spacing remains mm occupancy.
           </p>
         </Field>
         <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
@@ -211,8 +212,7 @@ export function StrandRenderConfigPanel({
             aria-label="Render calibration"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Visual size only (1.00 = match physical mm slot). Does not change database mm, spacing, or
-            capacity. Inheritance: Individual → Sub Type → Bead Type → System.
+            Overrides General. Scales the bead in the Builder (does not change capacity mm).
           </p>
         </Field>
         <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
@@ -388,6 +388,7 @@ export function StrandRenderConfigPanel({
           className="border-t border-border pt-4"
           profile={value}
           imageUrl={previewImageUrl}
+          sampleBead={previewSampleBead}
         />
       ) : null}
     </section>

@@ -18,7 +18,7 @@ export { HowWePrepareSection } from "./components/HowWePrepareSection";
 export { WristSizeStep } from "./components/WristSizeStep";
 export { StrandCapacityCard } from "./components/StrandCapacityCard";
 export { CapacityAlertBanner } from "./components/CapacityAlertBanner";
-export { activeWristSizes, defaultWristSize, findWristSizeByCm } from "./wrist-sizes";
+export { activeWristSizes, defaultWristSize, findWristSizeByCm, catalogueWristSizeBounds } from "./wrist-sizes";
 export { StrandStage } from "./components/StrandStage";
 export { StrandViewport } from "./components/StrandViewport";
 export { StrandZoomControls } from "./components/StrandZoomControls";
@@ -96,7 +96,6 @@ export {
   BEAD_VISUAL_BLEED_BASE_PX,
 } from "./strand-ring-geometry";
 export { computeMaxRingRadiusPx } from "./strand-ring";
-export { catalogueWristSizeBounds } from "./wrist-sizes";
 export {
   EMPTY_GUIDE_SLOT_COUNT,
   normalizeSequence,
@@ -126,3 +125,17 @@ export {
   pointerAngleOnCanvas,
   beadTypeRotationOffsetDeg,
 } from "./strand-path";
+export {
+  calculateBeadRenderTransform,
+  beadShellCssTransform,
+  type BeadRenderTransform,
+  type BeadRenderTransformInput,
+} from "./strand-bead-render-transform";
+export {
+  layoutStrandBeadShells,
+  strandCordPathFromShells,
+  type LaidOutStrandBeadShell,
+  type LayoutStrandBeadShellsParams,
+  type StrandBeadShellLayout,
+  type StrandBeadShellLayoutInput,
+} from "./layout-strand-bead-shells";

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 
 import AdvancedSunglassesBuilder from "@/components/AdvancedSunglassesBuilder";
 import BraceletBuilder from "@/components/BraceletBuilder";
@@ -15,14 +15,16 @@ const AdminApp = lazy(() =>
   import("@/features/admin").then((m) => ({ default: m.AdminApp })),
 );
 
-function parseModule(raw: string | undefined): AppModule {
+function parseModule(raw: string | undefined, pathname: string): AppModule {
+  if (pathname.startsWith("/admin")) return "admin";
   if (raw === "bracelet" || raw === "sunglasses" || raw === "admin") return raw;
   return "bracelet";
 }
 
 const Index = () => {
   const { module } = useParams<{ module: string }>();
-  const activeModule = parseModule(module);
+  const { pathname } = useLocation();
+  const activeModule = parseModule(module, pathname);
   const catalogue = useCatalogue();
   const { user, isLoading: authLoading, hasPermission } = useAuth();
   const onBraceletPriceChange = useCallback((_p: number) => {}, []);

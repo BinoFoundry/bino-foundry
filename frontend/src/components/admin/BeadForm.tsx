@@ -534,6 +534,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         inheritTypeDefaults={inheritTypeDefaults}
         showAdvanced={showStrandAdvanced}
         previewImageUrl={form.processedImage?.trim() || form.image?.trim() || originalUrl || null}
+        previewSampleBead={form.id ? form : null}
         onInheritTypeDefaultsChange={(inherit) => setForm((f) => setInheritTypeDefaults(f, inherit))}
         onChange={(patch) => setForm((f) => updateStrandOverride(f, patch, inheritedSubTypeStrand))}
         onResetToType={() => setForm((f) => setInheritTypeDefaults(f, true))}

@@ -22,6 +22,8 @@ const App = () => (
         }
       />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      {/* Nested admin deep links: /admin, /admin/beads/:id, … */}
+      <Route path="/admin/*" element={<Index />} />
       <Route path="/:module" element={<Index />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

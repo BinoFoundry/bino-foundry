@@ -1,15 +1,16 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CircleDot, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useCatalogue } from "@/state/catalogue";
 import type { WristSizeEntry } from "@/types/wrist-sizes";
 import {
-  applyAdminSaveModalState,
+  notifyAdminCreated,
+  notifyAdminSavedEdit,
   notifyAdminSaveFailed,
-  type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
+import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminActiveInactiveStatusField } from "../../components/AdminActiveInactiveStatusField";
@@ -18,7 +19,6 @@ import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { useAdminList } from "../../hooks/useAdminList";
-
 function WristSizeForm({
   initial,
   onSave,
@@ -133,38 +133,53 @@ function WristSizeForm({
 export function WristSizesAdminPage() {
   const cat = useCatalogue();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [modal, setModal] = useState<AdminEditorModalState<WristSizeEntry>>(null);
+  const editor = useAdminResourceEditor("wrist-sizes");
   const list = useAdminList(cat.wristSizes, (s, q) => s.label.toLowerCase().includes(q));
+  const editingEntry = useMemo(() => {
+    if (!editor.itemId) return null;
+    return cat.wristSizes.find((s) => s.id === editor.itemId) ?? null;
+  }, [cat.wristSizes, editor.itemId]);
 
-  useAdminEditorScroll(scrollRef, modal);
+  useAdminEditorScroll(
+    scrollRef,
+    editor.isOpen ? { type: "edit" as const, entry: editingEntry ?? { id: "new" } } : null,
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <AdminToolbar
-        hideSearch={!!modal}
+        hideSearch={editor.isOpen}
         search={list.search}
         onSearchChange={list.setSearch}
         searchPlaceholder="Search wrist sizes…"
-        onAdd={modal ? undefined : () => setModal({ type: "add" })}
+        onAdd={editor.isOpen ? undefined : editor.openCreate}
         addLabel="Add wrist size"
-        onBack={modal ? () => setModal(null) : undefined}
-        title={modal ? (modal.type === "add" ? "New wrist size" : "Edit wrist size") : "Wrist sizes"}
+        onBack={editor.isOpen ? editor.close : undefined}
+        title={
+          editor.isOpen
+            ? editor.isCreating
+              ? "New wrist size"
+              : "Edit wrist size"
+            : "Wrist sizes"
+        }
       />
 
       <AdminPage scrollRef={scrollRef} footer={`${cat.wristSizes.length} wrist size option(s)`}>
-        {modal ? (
+        {editor.isCreating || (editor.isEditing && editingEntry) ? (
           <WristSizeForm
-            key={modal.type === "add" ? "new" : modal.entry.id}
-            initial={modal.type === "edit" ? modal.entry : undefined}
-            onCancel={() => setModal(null)}
+            key={editor.isCreating ? "new" : editingEntry!.id}
+            initial={editingEntry ?? undefined}
+            onCancel={editor.close}
             onSave={async (entry) => {
-              const mode = modal.type;
               try {
-                const saved =
-                  mode === "add"
-                    ? await cat.addWristSize(entry)
-                    : await cat.updateWristSize({ ...modal.entry, ...entry });
-                applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Wrist size" });
+                if (editor.isCreating) {
+                  const saved = await cat.addWristSize(entry);
+                  notifyAdminCreated("Wrist size");
+                  editor.openEdit(saved.id);
+                } else {
+                  await cat.updateWristSize({ ...editingEntry!, ...entry });
+                  notifyAdminSavedEdit();
+                }
               } catch (err) {
                 notifyAdminSaveFailed(err);
                 throw err;
@@ -182,7 +197,7 @@ export function WristSizesAdminPage() {
             {list.items.map((s) => (
               <AdminListRow
                 key={s.id}
-                onClick={() => setModal({ type: "edit", entry: s })}
+                onClick={() => editor.openEdit(s.id)}
                 actions={
                   list.isDeleting(s.id) ? (
                     <AdminDeleteConfirm

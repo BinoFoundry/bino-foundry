@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { useCatalogue } from "@/state/catalogue";
 import type { HowWePrepareOption, HowWePreparePriceType, HowWePrepareStatus } from "@bino-foundry/shared/types";
 import {
+  notifyAdminCreated,
+  notifyAdminSavedEdit,
   applyAdminSaveModalState,
   notifyAdminSaveFailed,
   type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
+import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminEmptyState } from "../../components/AdminEmptyState";

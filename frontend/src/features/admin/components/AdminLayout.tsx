@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { NavLink } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 import { getDefaultSectionRefresh } from "../admin-refresh";
 import { useAdminSectionRefreshOverride } from "../context/AdminSectionRefreshContext";
 import { ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS } from "../navigation";
+import { adminSectionPath } from "../routing";
 import type { AdminSection } from "../types";
 
 interface AdminLayoutProps {
@@ -19,7 +21,7 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
-export function AdminLayout({ section, onSectionChange, children }: AdminLayoutProps) {
+export function AdminLayout({ section, children }: AdminLayoutProps) {
   const catalogue = useCatalogue();
   const sunglasses = useSunglassesCatalog();
   const { permissions } = useAuth();
@@ -43,9 +45,7 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
       <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
         <div>
           <p className="type-label text-muted-foreground">Admin</p>
-          <h2 className="type-h3">
-            {activeNav?.label ?? "Dashboard"}
-          </h2>
+          <h2 className="type-h3">{activeNav?.label ?? "Dashboard"}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">{activeNav?.description}</p>
         </div>
         <Button
@@ -70,31 +70,32 @@ export function AdminLayout({ section, onSectionChange, children }: AdminLayoutP
         >
           {visibleGroups.map((group) => (
             <div key={group.id}>
-              <p className="type-label mb-2 px-2 text-muted-foreground">
-                {group.label}
-              </p>
+              <p className="type-label mb-2 px-2 text-muted-foreground">{group.label}</p>
               <ul className="flex flex-col gap-0.5">
-                {visibleNavItems.filter((item) => item.group === group.id).map((item) => {
-                  const Icon = item.icon;
-                  const active = section === item.id;
-                  return (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => onSectionChange(item.id)}
-                        className={cn(
-                          "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-                          active
-                            ? "bg-primary text-primary-foreground"
-                            : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
-                        )}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                    </li>
-                  );
-                })}
+                {visibleNavItems
+                  .filter((item) => item.group === group.id)
+                  .map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <li key={item.id}>
+                        <NavLink
+                          to={adminSectionPath(item.id)}
+                          end={item.id === "dashboard"}
+                          className={({ isActive }) =>
+                            cn(
+                              "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                              isActive
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                            )
+                          }
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </NavLink>
+                      </li>
+                    );
+                  })}
               </ul>
             </div>
           ))}

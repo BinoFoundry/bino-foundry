@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronRight, Settings2, Trash2 } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -9,19 +9,21 @@ import { SubBeadTypeForm } from "../../components/SubBeadTypeForm";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminTaxonomyStatusFilter } from "../../components/AdminTaxonomyStatusFilter";
 import { useCatalogue } from "@/state/catalogue";
-import type { BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import {
   filterByTaxonomyStatus,
   type TaxonomyStatusFilter,
 } from "@/features/admin/lib/taxonomy-status-filter";
 import {
-  applyAdminSaveModalState,
+  notifyAdminCreated,
   notifyAdminDeleteFailed,
   notifyAdminDeleted,
   notifyAdminSaveFailed,
-  type AdminEditorModalState,
+  notifyAdminSavedEdit,
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
+import { useAdminListQuery } from "@/features/admin/hooks/useAdminListQuery";
+import { useAdminBeadTypesRoute } from "@/features/admin/hooks/useAdminResourceEditor";
+import { ADMIN_QUERY, adminResourcePath } from "@/features/admin/routing";
 
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
@@ -29,9 +31,6 @@ import { AdminListRow } from "../../components/AdminListRow";
 import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { AdminListPagination } from "../../components/AdminListPagination";
-import { useAdminList } from "../../hooks/useAdminList";
-
-type View = "types" | "subtypes";
 
 function viewSubBeadTypeBeadsLabel(subTypeName: string, beadTypeName?: string): string {
   const base = `View ${subTypeName} Beads`;
@@ -42,22 +41,53 @@ const VIEW_SUB_BEAD_TYPE_BEADS_TOOLTIP = "Open the bead library filtered to this
 
 export function BeadTypesAdminPage() {
   const cat = useCatalogue();
-  const [, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<View>("types");
-  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
-  const [typeModal, setTypeModal] = useState<AdminEditorModalState<BeadTypeEntry>>(null);
-  const [subModal, setSubModal] = useState<AdminEditorModalState<SubBeadTypeEntry>>(null);
-  const [typeStatusFilter, setTypeStatusFilter] = useState<TaxonomyStatusFilter>("all");
-  const [subStatusFilter, setSubStatusFilter] = useState<TaxonomyStatusFilter>("all");
+  const route = useAdminBeadTypesRoute();
 
-  const selectedType = cat.beadTypes.find((t) => t.id === selectedTypeId);
+  const typeStatusFilter = (searchParams.get("typeStatus") as TaxonomyStatusFilter) || "all";
+  const subStatusFilter = (searchParams.get("subStatus") as TaxonomyStatusFilter) || "all";
+
+  const setTypeStatusFilter = (value: TaxonomyStatusFilter) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (value === "all") params.delete("typeStatus");
+        else params.set("typeStatus", value);
+        return params;
+      },
+      { replace: true },
+    );
+  };
+
+  const setSubStatusFilter = (value: TaxonomyStatusFilter) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (value === "all") params.delete("subStatus");
+        else params.set("subStatus", value);
+        return params;
+      },
+      { replace: true },
+    );
+  };
+
+  const selectedType = cat.beadTypes.find((t) => t.id === route.typeId);
+  const editingType = route.isEditingType
+    ? cat.beadTypes.find((t) => t.id === route.typeId)
+    : null;
+  const editingSub =
+    route.isEditingSub && route.subId
+      ? cat.subBeadTypes.find((s) => s.id === route.subId)
+      : null;
+
   const subTypesForType = useMemo(
     () =>
       cat.subBeadTypes
-        .filter((s) => s.beadTypeId === selectedTypeId)
+        .filter((s) => s.beadTypeId === route.typeId)
         .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
-    [cat.subBeadTypes, selectedTypeId],
+    [cat.subBeadTypes, route.typeId],
   );
 
   const filteredBeadTypes = useMemo(
@@ -69,74 +99,68 @@ export function BeadTypesAdminPage() {
     [subTypesForType, subStatusFilter],
   );
 
-  const typeList = useAdminList(filteredBeadTypes, (t, q) => t.name.toLowerCase().includes(q));
-  const subList = useAdminList(filteredSubTypes, (s, q) => s.name.toLowerCase().includes(q));
+  const typeList = useAdminListQuery(filteredBeadTypes, (t, q) => t.name.toLowerCase().includes(q));
+  const subList = useAdminListQuery(filteredSubTypes, (s, q) => s.name.toLowerCase().includes(q));
 
-  const activeModal = typeModal ?? subModal;
-  useAdminEditorScroll(scrollRef, activeModal, [view, selectedTypeId]);
+  const showTypeForm = route.isCreatingType || Boolean(editingType);
+  const showSubForm = (route.isCreatingSub || Boolean(editingSub)) && Boolean(selectedType || editingType);
+  const formType = selectedType ?? editingType;
+  const activeModal = showTypeForm || showSubForm;
 
-  const openSubTypes = (typeId: string) => {
-    setSelectedTypeId(typeId);
-    setView("subtypes");
-    setTypeModal(null);
-    setSubModal(null);
-  };
+  useAdminEditorScroll(
+    scrollRef,
+    activeModal ? { type: "edit" as const, entry: { id: route.subId ?? route.typeId ?? "new" } } : null,
+    [route.isSubTypesView, route.typeId],
+  );
 
   const goToBeads = (subTypeId: string) => {
-    setSearchParams({ section: "beads", subBeadTypeId: subTypeId }, { replace: false });
+    navigate(`${adminResourcePath("beads")}?${ADMIN_QUERY.subBeadTypeId}=${encodeURIComponent(subTypeId)}`);
   };
 
-  const toolbarTitle = typeModal
-    ? typeModal.type === "add"
+  const toolbarTitle = showTypeForm
+    ? route.isCreatingType
       ? "New bead type"
       : "Edit bead type"
-    : subModal
-      ? subModal.type === "add"
+    : showSubForm
+      ? route.isCreatingSub
         ? "New sub-type"
         : "Edit sub-type"
-      : view === "subtypes" && selectedType
+      : route.isSubTypesView && selectedType
         ? `${selectedType.name} · Sub-types`
         : "Bead types";
-
-  const showTypeForm = Boolean(typeModal);
-  const showSubForm = Boolean(subModal && selectedType);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <AdminToolbar
-        hideSearch={!!activeModal}
-        search={view === "types" ? typeList.search : subList.search}
-        onSearchChange={view === "types" ? typeList.setSearch : subList.setSearch}
-        searchPlaceholder={view === "types" ? "Search bead types…" : "Search sub-types…"}
+        hideSearch={activeModal}
+        search={route.isSubTypesView ? subList.search : typeList.search}
+        onSearchChange={route.isSubTypesView ? subList.setSearch : typeList.setSearch}
+        searchPlaceholder={route.isSubTypesView ? "Search sub-types…" : "Search bead types…"}
         onAdd={
           activeModal
             ? undefined
-            : view === "types"
-              ? () => setTypeModal({ type: "add" })
-              : selectedType
-                ? () => setSubModal({ type: "add" })
+            : route.isSubTypesView
+              ? route.typeId
+                ? () => route.openCreateSub(route.typeId!)
                 : undefined
+              : route.openCreateType
         }
-        addLabel={view === "types" ? "Add type" : "Add sub-type"}
+        addLabel={route.isSubTypesView ? "Add sub-type" : "Add type"}
         onBack={
           activeModal
-            ? () => {
-                setTypeModal(null);
-                setSubModal(null);
-              }
-            : view === "subtypes"
-              ? () => {
-                  setView("types");
-                  setSelectedTypeId("");
-                }
+            ? showSubForm
+              ? route.closeSubEditor
+              : route.closeTypeEditor
+            : route.isSubTypesView
+              ? route.openTypesList
               : undefined
         }
         title={toolbarTitle}
         trailing={
-          activeModal ? undefined : view === "types" ? (
-            <AdminTaxonomyStatusFilter value={typeStatusFilter} onChange={setTypeStatusFilter} />
-          ) : (
+          activeModal ? undefined : route.isSubTypesView ? (
             <AdminTaxonomyStatusFilter value={subStatusFilter} onChange={setSubStatusFilter} />
+          ) : (
+            <AdminTaxonomyStatusFilter value={typeStatusFilter} onChange={setTypeStatusFilter} />
           )
         }
       />
@@ -144,65 +168,69 @@ export function BeadTypesAdminPage() {
       <AdminPage
         scrollRef={scrollRef}
         footer={
-          view === "types"
-            ? `${cat.beadTypes.length} type(s)`
-            : `${subTypesForType.length} sub-type(s)`
+          route.isSubTypesView
+            ? `${subTypesForType.length} sub-type(s)`
+            : `${cat.beadTypes.length} type(s)`
         }
       >
         {showTypeForm ? (
           <BeadTypeForm
-            key={typeModal!.type === "add" ? "new-type" : typeModal!.entry.id}
-            initial={typeModal!.type === "edit" ? typeModal!.entry : undefined}
-            onCancel={() => setTypeModal(null)}
+            key={route.isCreatingType ? "new-type" : editingType!.id}
+            initial={editingType ?? undefined}
+            onCancel={route.closeTypeEditor}
             onSave={async (entry) => {
-              const mode = typeModal!.type;
               try {
-                const saved =
-                  mode === "add"
-                    ? await cat.addBeadType({
-                        name: entry.name,
-                        description: entry.description,
-                        displayOrder: entry.displayOrder,
-                        isActive: entry.isActive,
-                        enableSubTypes: entry.enableSubTypes,
-                        metadata: entry.metadata,
-                      })
-                    : await cat.updateBeadType(entry);
-                applyAdminSaveModalState(mode, saved, setTypeModal, { createdLabel: "Bead type" });
+                if (route.isCreatingType) {
+                  const saved = await cat.addBeadType({
+                    name: entry.name,
+                    description: entry.description,
+                    displayOrder: entry.displayOrder,
+                    isActive: entry.isActive,
+                    enableSubTypes: entry.enableSubTypes,
+                    metadata: entry.metadata,
+                  });
+                  notifyAdminCreated("Bead type");
+                  route.openEditType(saved.id);
+                } else {
+                  await cat.updateBeadType(entry);
+                  notifyAdminSavedEdit();
+                }
               } catch (err) {
                 notifyAdminSaveFailed(err);
                 throw err;
               }
             }}
           />
-        ) : showSubForm && selectedType ? (
+        ) : showSubForm && formType ? (
           <SubBeadTypeForm
-            key={subModal!.type === "add" ? "new-sub" : subModal!.entry.id}
-            beadType={selectedType}
-            initial={subModal!.type === "edit" ? subModal!.entry : undefined}
-            onCancel={() => setSubModal(null)}
+            key={route.isCreatingSub ? "new-sub" : editingSub!.id}
+            beadType={formType}
+            initial={editingSub ?? undefined}
+            onCancel={route.closeSubEditor}
             onSave={async (entry) => {
-              const mode = subModal!.type;
               try {
-                const saved =
-                  mode === "add"
-                    ? await cat.addSubBeadType({
-                        beadTypeId: selectedType.id,
-                        name: entry.name,
-                        description: entry.description,
-                        displayOrder: entry.displayOrder,
-                        isActive: entry.isActive,
-                        metadata: entry.metadata,
-                      })
-                    : await cat.updateSubBeadType(entry);
-                applyAdminSaveModalState(mode, saved, setSubModal, { createdLabel: "Sub bead type" });
+                if (route.isCreatingSub) {
+                  const saved = await cat.addSubBeadType({
+                    beadTypeId: formType.id,
+                    name: entry.name,
+                    description: entry.description,
+                    displayOrder: entry.displayOrder,
+                    isActive: entry.isActive,
+                    metadata: entry.metadata,
+                  });
+                  notifyAdminCreated("Sub bead type");
+                  route.openEditSub(formType.id, saved.id);
+                } else {
+                  await cat.updateSubBeadType(entry);
+                  notifyAdminSavedEdit();
+                }
               } catch (err) {
                 notifyAdminSaveFailed(err);
                 throw err;
               }
             }}
           />
-        ) : view === "types" ? (
+        ) : !route.isSubTypesView ? (
           typeList.items.length === 0 ? (
             <AdminEmptyState
               icon={Settings2}
@@ -217,7 +245,7 @@ export function BeadTypesAdminPage() {
                   return (
                     <AdminListRow
                       key={t.id}
-                      onClick={() => openSubTypes(t.id)}
+                      onClick={() => route.openSubTypes(t.id)}
                       actions={
                         <>
                           <Button
@@ -226,7 +254,7 @@ export function BeadTypesAdminPage() {
                             className="h-8 text-xs"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setTypeModal({ type: "edit", entry: t });
+                              route.openEditType(t.id);
                             }}
                           >
                             Edit
@@ -300,7 +328,7 @@ export function BeadTypesAdminPage() {
                 return (
                   <AdminListRow
                     key={s.id}
-                    onClick={() => setSubModal({ type: "edit", entry: s })}
+                    onClick={() => route.typeId && route.openEditSub(route.typeId, s.id)}
                     actions={
                       <>
                         <Tooltip>

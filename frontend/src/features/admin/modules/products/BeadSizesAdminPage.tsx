@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { NormalizedRegenProgressPanel } from "@/features/admin/components/NormalizedRegenProgressPanel";
 import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import {
+  notifyAdminCreated,
+  notifyAdminSavedEdit,
   applyAdminSaveModalState,
   notifyAdminDeleteFailed,
   notifyAdminDeleted,
@@ -12,6 +14,7 @@ import {
   type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
+import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
 import {
   runRefreshBeadAssetsJob,
   type NormalizedRegenJobProgress,

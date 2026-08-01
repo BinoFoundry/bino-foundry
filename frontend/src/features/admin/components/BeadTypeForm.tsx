@@ -5,9 +5,11 @@ import type { BeadTypeEntry } from "@/types/beads";
 import {
   beadLibraryInheritsTypeStrandDefaults,
   DEFAULT_STRAND_RENDER_PROFILE,
-  mergeStrandRenderProfile,
   parseStrandRenderProfile,
+  pruneStrandRenderOverride,
   resolveStrandRenderConfig,
+  strandRenderOverrideIsEmpty,
+  type StrandRenderProfile,
 } from "@bino-foundry/shared/types";
 import { strandRenderMigrationApi } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
@@ -27,12 +29,38 @@ function typePartialFromForm(form: BeadTypeEntry) {
   return parseStrandRenderProfile(meta?.strandRender);
 }
 
-function updateTypeStrandRender(form: BeadTypeEntry, patch: Record<string, unknown>): BeadTypeEntry {
-  const current = mergeStrandRenderProfile(typePartialFromForm(form), patch);
-  return {
-    ...form,
-    metadata: { ...(form.metadata ?? {}), strandRender: current },
-  };
+function systemProfile(strandRenderDefaults: StrandRenderProfile | null): StrandRenderProfile {
+  return strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE;
+}
+
+/**
+ * Store only type-tier diffs vs system.
+ * Baking a full DEFAULT profile into every type made all types look identical in the Builder
+ * when editors only changed ignored fields (contact width / layout scale).
+ */
+function updateTypeStrandRender(
+  form: BeadTypeEntry,
+  patch: Partial<StrandRenderProfile>,
+  strandRenderDefaults: StrandRenderProfile | null,
+): BeadTypeEntry {
+  const system = systemProfile(strandRenderDefaults);
+  const current = typePartialFromForm(form) ?? {};
+  const resolved = { ...system, ...current, ...patch };
+  const pruned = pruneStrandRenderOverride(resolved, system);
+  const metadata = { ...(form.metadata ?? {}) } as Record<string, unknown>;
+  if (strandRenderOverrideIsEmpty(pruned)) {
+    delete metadata.strandRender;
+  } else {
+    metadata.strandRender = pruned;
+  }
+  return { ...form, metadata };
+}
+
+function normalizeTypeStrandMetadata(
+  form: BeadTypeEntry,
+  strandRenderDefaults: StrandRenderProfile | null,
+): BeadTypeEntry {
+  return updateTypeStrandRender(form, {}, strandRenderDefaults);
 }
 
 export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
@@ -50,6 +78,7 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [resetBeadsOnSave, setResetBeadsOnSave] = useState(true);
 
   // Same System → Type resolve the Builder uses for beads that inherit this type.
   const effective = useMemo(() => {
@@ -73,18 +102,31 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
     [typeLibraryBeads],
   );
 
-  const previewImageUrl = useMemo(() => {
+  const previewSampleBead = useMemo(() => {
     const inheriting = typeLibraryBeads.find((b) => beadLibraryInheritsTypeStrandDefaults(b.metadata));
-    const sample = inheriting ?? typeLibraryBeads[0];
-    return sample?.processedImage?.trim() || sample?.image?.trim() || null;
+    return inheriting ?? typeLibraryBeads[0] ?? null;
   }, [typeLibraryBeads]);
+
+  const previewImageUrl = useMemo(() => {
+    const sample = previewSampleBead;
+    return sample?.processedImage?.trim() || sample?.image?.trim() || null;
+  }, [previewSampleBead]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving || !form.name.trim()) return;
     setSaving(true);
+    setBulkMessage(null);
     try {
-      await onSave(form);
+      const normalized = normalizeTypeStrandMetadata(form, strandRenderDefaults);
+      await onSave(normalized);
+      if (initial?.id && resetBeadsOnSave && overriddenBeadCount > 0) {
+        const result = await strandRenderMigrationApi.applyTypeToLibraries(initial.id);
+        await refreshFromApi();
+        setBulkMessage(
+          `Saved. Reset ${result.updated} bead(s) to inherit this type so the Builder picks up the new defaults.`,
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -147,27 +189,51 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
         provenance={effective.provenance}
         showAdvanced={showAdvanced}
         previewImageUrl={previewImageUrl}
-        onChange={(patch) => setForm((f) => updateTypeStrandRender(f, patch))}
+        previewSampleBead={previewSampleBead}
+        onChange={(patch) =>
+          setForm((f) => updateTypeStrandRender(f, patch, strandRenderDefaults))
+        }
         onResetToSystem={() =>
-          setForm((f) => ({
-            ...f,
-            metadata: {
-              ...(f.metadata ?? {}),
-              strandRender: strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE,
-            },
-          }))
+          setForm((f) => {
+            const metadata = { ...(f.metadata ?? {}) } as Record<string, unknown>;
+            delete metadata.strandRender;
+            return { ...f, metadata };
+          })
         }
       />
 
       {initial?.id ? (
         <div className="space-y-2 rounded-lg border border-border bg-muted/10 p-3">
+          {overriddenBeadCount > 0 ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              {overriddenBeadCount} bead(s) of this type have individual overrides. The Bracelet
+              Builder will keep those old values until beads inherit this type again.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              All beads of this type inherit these defaults in the Bracelet Builder.
+            </p>
+          )}
+          <label className="flex items-start gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={resetBeadsOnSave}
+              onChange={(e) => setResetBeadsOnSave(e.target.checked)}
+              disabled={overriddenBeadCount === 0}
+            />
+            <span>
+              On save, reset beads of this type to inherit these defaults
+              {overriddenBeadCount > 0 ? ` (${overriddenBeadCount} overridden)` : ""}. Required for
+              Builder to match Admin when beads were customized.
+            </span>
+          </label>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs text-muted-foreground">Bulk actions for beads of this type:</p>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              disabled={bulkBusy != null}
+              disabled={bulkBusy != null || overriddenBeadCount === 0}
               onClick={async () => {
                 setBulkBusy("apply");
                 setBulkMessage(null);
@@ -182,15 +248,9 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
                 }
               }}
             >
-              {bulkBusy === "apply" ? "Applying…" : "Apply type defaults to existing beads"}
+              {bulkBusy === "apply" ? "Applying…" : "Apply type defaults now"}
             </Button>
           </div>
-          {overriddenBeadCount > 0 ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              {overriddenBeadCount} bead(s) have individual overrides and will not pick up type
-              changes until you apply type defaults (or clear each bead override).
-            </p>
-          ) : null}
         </div>
       ) : null}
       {bulkMessage ? <p className="text-xs text-muted-foreground">{bulkMessage}</p> : null}

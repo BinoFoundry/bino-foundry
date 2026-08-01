@@ -214,4 +214,176 @@ describe("strand render profile", () => {
     expect(profile.verticalOffset).toBeCloseTo(-0.1);
     expect(profile.provenance.visualScale).toBe("beadType");
   });
+
+  it("resolves different visualScale for three inheriting types", () => {
+    const catalogue = {
+      ...TEST_STRAND_RENDER_CATALOGUE,
+      beadTypes: [
+        {
+          id: "type-a",
+          slug: "type-a",
+          name: "A",
+          description: "",
+          metadata: { strandRender: { visualScale: 0.6, hangOffset: 0 } },
+        },
+        {
+          id: "type-b",
+          slug: "type-b",
+          name: "B",
+          description: "",
+          metadata: { strandRender: { visualScale: 1.2, hangOffset: 0.3 } },
+        },
+        {
+          id: "type-c",
+          slug: "type-c",
+          name: "C",
+          description: "",
+          metadata: { strandRender: { visualScale: 1.8, hangOffset: -0.2 } },
+        },
+      ],
+    };
+
+    const scales = (["type-a", "type-b", "type-c"] as const).map((typeId, i) =>
+      resolveStrandRenderConfigForBead(
+        {
+          id: `bead-${i}`,
+          name: `Bead ${i}`,
+          image: "",
+          beadTypeId: typeId,
+          beadTypeSlug: typeId,
+          description: "",
+          metadata: { useTypeStrandDefaults: true },
+        },
+        catalogue,
+      ),
+    );
+
+    expect(scales[0]!.visualScale).toBe(0.6);
+    expect(scales[1]!.visualScale).toBe(1.2);
+    expect(scales[2]!.visualScale).toBe(1.8);
+    expect(scales[0]!.hangOffset).toBe(0);
+    expect(scales[1]!.hangOffset).toBe(0.3);
+    expect(scales[2]!.hangOffset).toBe(-0.2);
+    expect(scales.map((s) => s.provenance.visualScale)).toEqual([
+      "beadType",
+      "beadType",
+      "beadType",
+    ]);
+  });
+
+  it("keeps identical look across types when beads have freezing overrides", () => {
+    const catalogue = {
+      ...TEST_STRAND_RENDER_CATALOGUE,
+      beadTypes: [
+        {
+          id: "type-a",
+          slug: "type-a",
+          name: "A",
+          description: "",
+          metadata: { strandRender: { visualScale: 0.5 } },
+        },
+        {
+          id: "type-b",
+          slug: "type-b",
+          name: "B",
+          description: "",
+          metadata: { strandRender: { visualScale: 2 } },
+        },
+      ],
+    };
+    const frozen = { useTypeStrandDefaults: false, strandRenderOverride: { visualScale: 1 } };
+    const a = resolveStrandRenderConfigForBead(
+      {
+        id: "a",
+        name: "A",
+        image: "",
+        beadTypeId: "type-a",
+        beadTypeSlug: "type-a",
+        description: "",
+        metadata: frozen,
+      },
+      catalogue,
+    );
+    const b = resolveStrandRenderConfigForBead(
+      {
+        id: "b",
+        name: "B",
+        image: "",
+        beadTypeId: "type-b",
+        beadTypeSlug: "type-b",
+        description: "",
+        metadata: frozen,
+      },
+      catalogue,
+    );
+    expect(a.visualScale).toBe(1);
+    expect(b.visualScale).toBe(1);
+    expect(a.provenance.visualScale).toBe("beadOverride");
+  });
+
+  it("lets type settings override general (system) defaults", () => {
+    const resolved = resolveStrandRenderConfigForBead(
+      {
+        id: "bead-1",
+        name: "Bead",
+        image: "",
+        beadTypeId: "type-charm",
+        beadTypeSlug: "charm",
+        description: "",
+        metadata: { useTypeStrandDefaults: true },
+      },
+      {
+        strandRenderDefaults: {
+          visualScale: 1,
+          hangOffset: 0,
+          balanceSpacing: true,
+          orientationMode: "outward",
+          layoutScale: 1,
+          attachmentStyle: "inline",
+          strandOccupancy: 1,
+          contactWidth: 1,
+          layoutMode: "inline",
+          contactOffset: 0,
+          spacingAdjustment: 0,
+          leadingOverlap: 0,
+          trailingOverlap: 0,
+          anchorPreset: "center",
+          anchorX: 0.5,
+          anchorY: 0.5,
+          verticalOffset: 0,
+          rotationMode: "tangent",
+          rotationOffsetDeg: 0,
+          zPriority: 0,
+          collisionPadding: 0,
+          stringOcclusion: 1,
+          forceRoundFootprint: true,
+          preferStrandImageUrl: false,
+        },
+        beadTypes: [
+          {
+            id: "type-charm",
+            slug: "charm",
+            name: "Charm",
+            description: "",
+            metadata: {
+              strandRender: {
+                visualScale: 1.35,
+                hangOffset: 0.4,
+                balanceSpacing: false,
+                orientationMode: "inward",
+              },
+            },
+          },
+        ],
+      },
+    );
+    expect(resolved.visualScale).toBe(1.35);
+    expect(resolved.hangOffset).toBe(0.4);
+    expect(resolved.balanceSpacing).toBe(false);
+    expect(resolved.orientationMode).toBe("inward");
+    expect(resolved.provenance.visualScale).toBe("beadType");
+    expect(resolved.provenance.hangOffset).toBe("beadType");
+    expect(resolved.provenance.balanceSpacing).toBe("beadType");
+    expect(resolved.provenance.orientationMode).toBe("beadType");
+  });
 });

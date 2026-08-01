@@ -33,9 +33,9 @@ export const PRIMARY_NAV: NavLinkItem[] = [
 ];
 
 export const ADMIN_MENU: NavLinkItem[] = [
-  { id: "dashboard", label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { id: "users", label: "Users", href: "/admin?section=users", icon: Users },
-  { id: "products", label: "Products", href: "/admin?section=frames", icon: Gem },
+  { id: "dashboard", label: "Dashboard", href: "/admin", icon: LayoutDashboard, matchPrefix: "/admin" },
+  { id: "users", label: "Users", href: "/admin/users", icon: Users, matchPrefix: "/admin/users" },
+  { id: "products", label: "Products", href: "/admin/frames", icon: Gem, matchPrefix: "/admin/frames" },
 ];
 
 export const ACCOUNT_MENU: NavLinkItem[] = [
@@ -46,20 +46,15 @@ export const ACCOUNT_MENU: NavLinkItem[] = [
 ];
 
 export function isNavLinkActive(item: NavLinkItem, pathname: string, search = ""): boolean {
-  if (item.href.includes("?section=")) {
-    const section = new URLSearchParams(item.href.split("?")[1] ?? "").get("section");
-    const current = new URLSearchParams(search).get("section") ?? "dashboard";
-    return pathname === "/admin" && section === current;
-  }
+  void search;
   if (item.id === "dashboard" && item.href === "/admin") {
-    const current = new URLSearchParams(search).get("section") ?? "dashboard";
-    return pathname === "/admin" && current === "dashboard";
+    return pathname === "/admin" || pathname === "/admin/";
+  }
+  if (item.id === "portal" && item.matchPrefix === "/account") {
+    return pathname === "/account" || pathname === "/account/";
   }
   if (item.matchPrefix) {
-    if (item.matchPrefix === "/account" && item.id === "portal") {
-      return pathname === "/account";
-    }
-    return pathname.startsWith(item.matchPrefix);
+    return pathname === item.matchPrefix || pathname.startsWith(`${item.matchPrefix}/`);
   }
   return pathname === item.href;
 }

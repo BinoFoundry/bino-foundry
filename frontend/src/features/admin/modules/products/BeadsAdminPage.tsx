@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Gem, Trash2 } from "lucide-react";
 
@@ -8,13 +8,16 @@ import { formatLibraryPriceRange } from "@/features/bracelet/library-sizes";
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { BeadSavePerf } from "@/features/admin/lib/bead-save-pipeline";
 import {
-  applyAdminSaveModalState,
+  notifyAdminCreated,
   notifyAdminDeleteFailed,
   notifyAdminDeleted,
   notifyAdminSaveFailed,
-  type AdminEditorModalState,
+  notifyAdminSavedEdit,
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
+import { useAdminListQuery } from "@/features/admin/hooks/useAdminListQuery";
+import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
+import { ADMIN_QUERY } from "@/features/admin/routing";
 import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import { useCatalogue } from "@/state/catalogue";
@@ -28,7 +31,6 @@ import { AdminPage } from "../../components/AdminPage";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { AdminListPagination } from "../../components/AdminListPagination";
 import { beadMatchesLibrarySearch } from "@/lib/bead-library-search";
-import { useAdminList } from "../../hooks/useAdminList";
 
 type DeleteState = {
   beadId: string;
@@ -39,17 +41,40 @@ type DeleteState = {
 export function BeadsAdminPage() {
   const { currencyCode } = useFormatCurrency();
   const cat = useCatalogue();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const initialSubFilter = searchParams.get("subBeadTypeId") ?? "all";
-  const initialTypeFilter = useMemo(() => {
-    if (initialSubFilter === "all") return "all";
-    const sub = cat.subBeadTypes.find((s) => s.id === initialSubFilter);
-    return sub?.beadTypeId ?? "all";
-  }, [cat.subBeadTypes, initialSubFilter]);
-  const [typeFilter, setTypeFilter] = useState<string>(initialTypeFilter);
-  const [subTypeFilter, setSubTypeFilter] = useState<string>(initialSubFilter);
-  const [modal, setModal] = useState<AdminEditorModalState<BeadLibraryEntry>>(null);
+  const editor = useAdminResourceEditor("beads");
+
+  const typeFilter = searchParams.get(ADMIN_QUERY.typeId) ?? "all";
+  const subTypeFilter = searchParams.get(ADMIN_QUERY.subBeadTypeId) ?? "all";
+
+  const setTypeFilter = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (value === "all") params.delete(ADMIN_QUERY.typeId);
+        else params.set(ADMIN_QUERY.typeId, value);
+        params.delete(ADMIN_QUERY.subBeadTypeId);
+        params.delete(ADMIN_QUERY.page);
+        return params;
+      },
+      { replace: true },
+    );
+  };
+
+  const setSubTypeFilter = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (value === "all") params.delete(ADMIN_QUERY.subBeadTypeId);
+        else params.set(ADMIN_QUERY.subBeadTypeId, value);
+        params.delete(ADMIN_QUERY.page);
+        return params;
+      },
+      { replace: true },
+    );
+  };
+
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -74,9 +99,25 @@ export function BeadsAdminPage() {
     [cat.subBeadTypes, typeFilter],
   );
 
-  const list = useAdminList(filtered, (b, q) => beadMatchesLibrarySearch(b, q));
+  const list = useAdminListQuery(filtered, (b, q) => beadMatchesLibrarySearch(b, q));
 
-  useAdminEditorScroll(scrollRef, modal, [typeFilter, subTypeFilter]);
+  const editingEntry = useMemo(() => {
+    if (!editor.itemId) return null;
+    return cat.beadLibraries.find((b) => b.id === editor.itemId) ?? null;
+  }, [cat.beadLibraries, editor.itemId]);
+
+  // Invalid deep link → return to list
+  useEffect(() => {
+    if (editor.isEditing && !editingEntry && cat.beadLibraries.length > 0) {
+      editor.close();
+    }
+  }, [editor, editingEntry, cat.beadLibraries.length]);
+
+  const modalOpen = editor.isOpen;
+  useAdminEditorScroll(scrollRef, modalOpen ? { type: "edit" as const, entry: editingEntry ?? { id: "new" } } : null, [
+    typeFilter,
+    subTypeFilter,
+  ]);
 
   const typeName = (beadTypeId: string) => cat.beadTypes.find((t) => t.id === beadTypeId)?.name ?? "—";
   const subTypeName = (subBeadTypeId: string) =>
@@ -103,9 +144,7 @@ export function BeadsAdminPage() {
     setDeleteLoading(true);
     try {
       await cat.deleteBeadLibrary(deleteState.beadId, { force: true });
-      if (modal?.type === "edit" && modal.entry.id === deleteState.beadId) {
-        setModal(null);
-      }
+      if (editor.itemId === deleteState.beadId) editor.close();
       setDeleteState(null);
       notifyAdminDeleted("Bead");
     } catch (err) {
@@ -118,23 +157,26 @@ export function BeadsAdminPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <AdminToolbar
-        hideSearch={!!modal}
+        hideSearch={modalOpen}
         search={list.search}
         onSearchChange={list.setSearch}
         searchPlaceholder="Search beads…"
-        onAdd={modal ? undefined : () => setModal({ type: "add" })}
+        onAdd={modalOpen ? undefined : editor.openCreate}
         addLabel="Add bead"
-        onBack={modal ? () => setModal(null) : undefined}
-        title={modal ? (modal.type === "add" ? "New bead" : "Edit bead") : "Bead library"}
+        onBack={modalOpen ? editor.close : undefined}
+        title={
+          modalOpen
+            ? editor.isCreating
+              ? "New bead"
+              : "Edit bead"
+            : "Bead library"
+        }
         trailing={
-          !modal ? (
+          !modalOpen ? (
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={typeFilter}
-                onChange={(e) => {
-                  setTypeFilter(e.target.value);
-                  setSubTypeFilter("all");
-                }}
+                onChange={(e) => setTypeFilter(e.target.value)}
                 className="rounded-md border border-border bg-background px-2 py-1 text-xs"
               >
                 <option value="all">All types</option>
@@ -162,22 +204,24 @@ export function BeadsAdminPage() {
       />
 
       <AdminPage scrollRef={scrollRef} footer={`${filtered.length} bead(s)`}>
-        {modal ? (
+        {editor.isCreating || (editor.isEditing && editingEntry) ? (
           <BeadForm
-            key={modal.type === "add" ? "new" : modal.entry.id}
-            initial={modal.type === "edit" ? modal.entry : undefined}
+            key={editor.isCreating ? "new" : editingEntry!.id}
+            initial={editor.isEditing ? editingEntry! : undefined}
             defaultBeadTypeId={defaultTypeId}
             defaultSubBeadTypeId={defaultSubTypeId}
-            onCancel={() => setModal(null)}
+            onCancel={editor.close}
             onSave={async (entry, sizes: BeadLibrarySizeInput[]) => {
               const perf = new BeadSavePerf();
-              const mode = modal.type;
+              const mode = editor.isCreating ? "add" : "edit";
               try {
                 let saved: BeadLibraryEntry;
                 if (mode === "add") {
                   saved = await perf.measure("create", () => cat.addBeadLibrary(entry, sizes));
+                  notifyAdminCreated("Bead");
+                  editor.openEdit(saved.id);
                 } else {
-                  const initialSizes = sizesForLibrary(cat.beadLibrarySizes, modal.entry.id).map(
+                  const initialSizes = sizesForLibrary(cat.beadLibrarySizes, editingEntry!.id).map(
                     (offer) => ({
                       sizeMm: offer.sizeMm,
                       unitPrice: offer.unitPrice,
@@ -186,13 +230,14 @@ export function BeadsAdminPage() {
                   );
                   saved = await perf.measure("save", () =>
                     cat.saveBeadLibraryEntry(entry, sizes, {
-                      initial: modal.entry,
+                      initial: editingEntry!,
                       initialSizes,
                     }),
                   );
+                  notifyAdminSavedEdit();
+                  void saved;
                 }
                 perf.finish(mode === "add" ? "Bead create" : "Bead save");
-                applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Bead" });
               } catch (err) {
                 notifyAdminSaveFailed(err);
                 throw err;
@@ -204,68 +249,68 @@ export function BeadsAdminPage() {
         ) : (
           <>
             <ul className="space-y-1">
-            {list.items.map((b) => (
-              <AdminListRow
-                key={b.id}
-                onClick={() => setModal({ type: "edit", entry: b })}
-                actions={
-                  deleteState?.beadId === b.id ? (
-                    <AdminDeleteConfirm
-                      label="Force delete this bead?"
-                      confirmLabel={deleteLoading ? "Deleting…" : "Force Delete"}
-                      message={
-                        deleteState.designCount > 0
-                          ? `This bead is currently used in ${deleteState.designCount} saved design${deleteState.designCount === 1 ? "" : "s"}. Force deleting it will remove it from the catalogue. Users opening those designs will be prompted to replace the missing bead.`
-                          : "This will permanently delete the bead and all associated assets."
-                      }
-                      onCancel={() => setDeleteState(null)}
-                      onConfirm={confirmDelete}
+              {list.items.map((b) => (
+                <AdminListRow
+                  key={b.id}
+                  onClick={() => editor.openEdit(b.id)}
+                  actions={
+                    deleteState?.beadId === b.id ? (
+                      <AdminDeleteConfirm
+                        label="Force delete this bead?"
+                        confirmLabel={deleteLoading ? "Deleting…" : "Force Delete"}
+                        message={
+                          deleteState.designCount > 0
+                            ? `This bead is currently used in ${deleteState.designCount} saved design${deleteState.designCount === 1 ? "" : "s"}. Force deleting it will remove it from the catalogue. Users opening those designs will be prompted to replace the missing bead.`
+                            : "This will permanently delete the bead and all associated assets."
+                        }
+                        onCancel={() => setDeleteState(null)}
+                        onConfirm={confirmDelete}
+                      />
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void requestDelete(b.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )
+                  }
+                >
+                  {b.image ? (
+                    <img
+                      src={b.image}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded-full border border-border/50 object-cover"
                     />
                   ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void requestDelete(b.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )
-                }
-              >
-                {b.image ? (
-                  <img
-                    src={b.image}
-                    alt=""
-                    className="h-8 w-8 shrink-0 rounded-full border border-border/50 object-cover"
-                  />
-                ) : (
-                  <div className="h-8 w-8 shrink-0 rounded-full bg-muted" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{b.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {typeName(b.beadTypeId)} · {subTypeName(b.subBeadTypeId ?? "")} ·{" "}
-                    {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)}
-                    {b.cropStatus === "ready" ? " · Ready" : " · Draft"}
-                  </p>
-                </div>
-                {(b.availabilityStatusCode ?? "ACTIVE") !== "ACTIVE" ? (
-                  <AdminStatusBadge label={availabilityLabel(b)} variant="danger" />
-                ) : null}
-              </AdminListRow>
-            ))}
-          </ul>
-          <AdminListPagination
-            page={list.page}
-            totalPages={list.totalPages}
-            totalItems={list.totalItems}
-            pageSize={list.pageSize}
-            onPageChange={list.setPage}
-          />
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-muted" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{b.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {typeName(b.beadTypeId)} · {subTypeName(b.subBeadTypeId ?? "")} ·{" "}
+                      {formatLibraryPriceRange(cat.beadLibrarySizes, b.id, currencyCode)}
+                      {b.cropStatus === "ready" ? " · Ready" : " · Draft"}
+                    </p>
+                  </div>
+                  {(b.availabilityStatusCode ?? "ACTIVE") !== "ACTIVE" ? (
+                    <AdminStatusBadge label={availabilityLabel(b)} variant="danger" />
+                  ) : null}
+                </AdminListRow>
+              ))}
+            </ul>
+            <AdminListPagination
+              page={list.page}
+              totalPages={list.totalPages}
+              totalItems={list.totalItems}
+              pageSize={list.pageSize}
+              onPageChange={list.setPage}
+            />
           </>
         )}
       </AdminPage>

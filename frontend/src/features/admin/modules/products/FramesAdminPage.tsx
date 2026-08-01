@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Copy, Glasses, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -7,13 +8,16 @@ import { useFormatCurrency } from "@/hooks/use-format-currency";
 import type { FrameEntry } from "@/data/glasses";
 import { useCatalogue } from "@/state/catalogue";
 import {
-  applyAdminSaveModalState,
+  notifyAdminCreated,
   notifyAdminDeleteFailed,
   notifyAdminDeleted,
   notifyAdminSaveFailed,
+  notifyAdminSavedEdit,
 } from "@/features/admin/lib/admin-save-feedback";
 import { buildFrameDuplicateSeed } from "@/features/admin/lib/frame-duplicate";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
+import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
+import { ADMIN_QUERY, adminResourcePath, withAdminSearch } from "@/features/admin/routing";
 
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
@@ -29,11 +33,6 @@ import { FrameForm } from "../../forms";
 import { AdminListPagination } from "../../components/AdminListPagination";
 import { useAdminList } from "../../hooks/useAdminList";
 
-type ModalState =
-  | { type: "add"; seed?: FrameEntry }
-  | { type: "edit"; entry: FrameEntry }
-  | null;
-
 type DeleteState = {
   frameId: string;
   designCount: number;
@@ -43,11 +42,27 @@ type DeleteState = {
 export function FramesAdminPage() {
   const cat = useCatalogue();
   const { format } = useFormatCurrency();
+  const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [modal, setModal] = useState<ModalState>(null);
+  const editor = useAdminResourceEditor("frames");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [familyFilter, setFamilyFilter] = useState<string>("all");
+  const familyFilter = searchParams.get(ADMIN_QUERY.family) ?? "all";
+  const dupFromId = searchParams.get("dup");
+
+  const setFamilyFilter = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (value === "all") params.delete(ADMIN_QUERY.family);
+        else params.set(ADMIN_QUERY.family, value);
+        params.delete(ADMIN_QUERY.page);
+        return params;
+      },
+      { replace: true },
+    );
+  };
 
   const statusLabelByCode = useMemo(
     () => new Map(cat.catalogAvailabilityStatuses.map((s) => [s.code, s.label])),
@@ -75,17 +90,37 @@ export function FramesAdminPage() {
     );
   });
 
-  useAdminEditorScroll(scrollRef, modal);
+  const editingEntry = useMemo(() => {
+    if (!editor.itemId) return null;
+    return frames.find((f) => f.id === editor.itemId) ?? null;
+  }, [frames, editor.itemId]);
+
+  const duplicateSeed = useMemo(() => {
+    if (!editor.isCreating || !dupFromId) return undefined;
+    const source = frames.find((f) => f.id === dupFromId);
+    return source ? buildFrameDuplicateSeed(source) : undefined;
+  }, [editor.isCreating, dupFromId, frames]);
+
+  useEffect(() => {
+    if (editor.isEditing && !editingEntry && frames.length > 0) editor.close();
+  }, [editor, editingEntry, frames.length]);
+
+  const modalOpen = editor.isOpen;
+  useAdminEditorScroll(
+    scrollRef,
+    modalOpen ? { type: "edit" as const, entry: editingEntry ?? { id: "new" } } : null,
+  );
 
   const modalTitle = useMemo(() => {
-    if (!modal) return "Frames";
-    if (modal.type === "edit") return "Edit frame";
-    return modal.seed ? "Duplicate frame" : "New frame";
-  }, [modal]);
+    if (!modalOpen) return "Frames";
+    if (editor.isEditing) return "Edit frame";
+    return duplicateSeed ? "Duplicate frame" : "New frame";
+  }, [modalOpen, editor.isEditing, duplicateSeed]);
 
   const openDuplicate = (frame: FrameEntry) => {
-    const seed = buildFrameDuplicateSeed(frame);
-    setModal({ type: "add", seed });
+    const params = new URLSearchParams(searchParams);
+    params.set("dup", frame.id);
+    navigate(withAdminSearch(adminResourcePath("frames", "new"), params.toString()));
     toast.message(`Duplicated “${frame.name}”. Review and save to create the new SKU.`);
   };
 
@@ -108,9 +143,7 @@ export function FramesAdminPage() {
     setDeleteLoading(true);
     try {
       await cat.deleteFrame(deleteState.frameId, { force: true });
-      if (modal?.type === "edit" && modal.entry.id === deleteState.frameId) {
-        setModal(null);
-      }
+      if (editor.itemId === deleteState.frameId) editor.close();
       setDeleteState(null);
       notifyAdminDeleted("Frame");
     } catch (err) {
@@ -120,20 +153,32 @@ export function FramesAdminPage() {
     }
   };
 
+  const closeEditor = () => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        params.delete("dup");
+        return params;
+      },
+      { replace: true },
+    );
+    editor.close();
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <AdminToolbar
-        hideSearch={!!modal}
+        hideSearch={modalOpen}
         search={list.search}
         onSearchChange={list.setSearch}
         searchPlaceholder="Search frames or family…"
-        onAdd={modal ? undefined : () => setModal({ type: "add" })}
+        onAdd={modalOpen ? undefined : editor.openCreate}
         addLabel="Add frame"
-        onBack={modal ? () => setModal(null) : undefined}
+        onBack={modalOpen ? closeEditor : undefined}
         title={modalTitle}
       />
 
-      {!modal && familyOptions.length > 0 ? (
+      {!modalOpen && familyOptions.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 sm:px-6">
           <label className="text-xs text-muted-foreground" htmlFor="frame-family-filter">
             Family
@@ -164,24 +209,36 @@ export function FramesAdminPage() {
           </span>
         }
       >
-        {modal ? (
+        {editor.isCreating || (editor.isEditing && editingEntry) ? (
           <div className="mx-auto w-full max-w-4xl">
             <FrameForm
               key={
-                modal.type === "edit"
-                  ? modal.entry.id
-                  : modal.seed
-                    ? `dup-${modal.seed.name}`
+                editor.isEditing
+                  ? editingEntry!.id
+                  : duplicateSeed
+                    ? `dup-${duplicateSeed.name}`
                     : "new"
               }
-              initial={modal.type === "edit" ? modal.entry : modal.seed}
-              onCancel={() => setModal(null)}
+              initial={editor.isEditing ? editingEntry! : duplicateSeed}
+              onCancel={closeEditor}
               onSave={async (entry) => {
-                const mode = modal.type;
                 try {
-                  const saved =
-                    mode === "add" ? await cat.addFrame(entry) : await cat.updateFrame(entry);
-                  applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Frame" });
+                  if (editor.isCreating) {
+                    const saved = await cat.addFrame(entry);
+                    notifyAdminCreated("Frame");
+                    setSearchParams(
+                      (prev) => {
+                        const params = new URLSearchParams(prev);
+                        params.delete("dup");
+                        return params;
+                      },
+                      { replace: true },
+                    );
+                    editor.openEdit(saved.id);
+                  } else {
+                    await cat.updateFrame(entry);
+                    notifyAdminSavedEdit();
+                  }
                 } catch (err) {
                   notifyAdminSaveFailed(err);
                   throw err;
@@ -207,7 +264,7 @@ export function FramesAdminPage() {
                 return (
                   <AdminListRow
                     key={f.id}
-                    onClick={() => setModal({ type: "edit", entry: f })}
+                    onClick={() => editor.openEdit(f.id)}
                     actions={
                       deleteState?.frameId === f.id ? (
                         <AdminDeleteConfirm

@@ -2,11 +2,27 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STRAND_RENDER_PROFILE, mergeStrandRenderProfile } from "@bino-foundry/shared/types";
 
+import {
+  calculateBeadRenderTransform,
+  beadShellCssTransform,
+} from "@/features/bracelet/strand-bead-render-transform";
+import {
+  computeBeadShellPosition,
+  strandLayoutShellDimensions,
+  strandRotationDeg,
+} from "@/features/bracelet/strand-path";
+import { calculateBeadCount } from "@/lib/luxe-data";
+import type { BeadLibraryEntry } from "@/types/beads";
+
 import { AdminDeferredNumberInput } from "./AdminDeferredNumberInput";
 import {
-  buildCurvedPreview,
+  buildPreviewPlacedBeads,
+  pickPreviewSizeOffer,
+  previewBeadCount,
+  previewPlacedBeadFromSample,
   StrandRenderLivePreview,
-  STRAND_RENDER_PREVIEW_ANGLE_STEP,
+  STRAND_RENDER_PREVIEW_BEAD_MM,
+  STRAND_RENDER_PREVIEW_WRIST_CM,
 } from "./StrandRenderLivePreview";
 
 describe("AdminDeferredNumberInput", () => {
@@ -15,40 +31,73 @@ describe("AdminDeferredNumberInput", () => {
   });
 });
 
-describe("StrandRenderLivePreview curved section", () => {
-  it("exports the lightweight preview component", () => {
+describe("shared bead render transform", () => {
+  it("matches lower-level Builder shell + rotation helpers", () => {
+    const profile = mergeStrandRenderProfile(DEFAULT_STRAND_RENDER_PROFILE, {
+      visualScale: 1.15,
+      hangOffset: 0.25,
+      verticalOffset: 0,
+      orientationMode: "outward",
+      rotationOffsetDeg: 12,
+      anchorX: 0.5,
+      anchorY: 0.15,
+    });
+    const slotDim = { width: 40, height: 40 };
+    const ringX = 120;
+    const ringY = 80;
+    const angleRad = -Math.PI / 2;
+
+    const shared = calculateBeadRenderTransform({
+      ringX,
+      ringY,
+      angleRad,
+      slotDim,
+      profile,
+    });
+    const shell = computeBeadShellPosition(ringX, ringY, angleRad, slotDim, profile);
+    const renderDim = strandLayoutShellDimensions(slotDim, profile);
+    const rotationDeg = strandRotationDeg(angleRad, profile);
+
+    expect(shared.shellLeft).toBeCloseTo(shell.left, 8);
+    expect(shared.shellTop).toBeCloseTo(shell.top, 8);
+    expect(shared.transformOriginX).toBeCloseTo(shell.transformOriginX, 8);
+    expect(shared.transformOriginY).toBeCloseTo(shell.transformOriginY, 8);
+    expect(shared.renderDim.width).toBeCloseTo(renderDim.width, 8);
+    expect(shared.rotationDeg).toBeCloseTo(rotationDeg, 8);
+    expect(shared.cssTransform).toBe(beadShellCssTransform(rotationDeg));
+  });
+});
+
+describe("Admin Live Preview Builder strand parity", () => {
+  it("exports the preview that embeds the Builder strand stage", () => {
     expect(typeof StrandRenderLivePreview).toBe("function");
   });
 
-  it("preserves negative vertical offsets in merge", () => {
-    const merged = mergeStrandRenderProfile(DEFAULT_STRAND_RENDER_PROFILE, {
-      verticalOffset: -0.2,
-      hangOffset: -0.15,
+  it("wraps sample beads as PlacedBead for Builder sizing", () => {
+    const sample = { id: "bead-1", name: "Charm" } as BeadLibraryEntry;
+    const placed = previewPlacedBeadFromSample(sample, {
+      sizeMm: 12,
+      label: "12mm",
+      unitPrice: 10,
+      offerKey: "bead-1:12",
     });
-    expect(merged.verticalOffset).toBeCloseTo(-0.2);
-    expect(merged.hangOffset).toBeCloseTo(-0.15);
+    expect(placed.bead).toBe(sample);
+    expect(placed.size.sizeMm).toBe(12);
+    expect(pickPreviewSizeOffer(sample, [], 8).sizeMm).toBe(8);
   });
 
-  it("clamps vertical offset after commit range", () => {
-    const low = mergeStrandRenderProfile(DEFAULT_STRAND_RENDER_PROFILE, { verticalOffset: -2 });
-    const high = mergeStrandRenderProfile(DEFAULT_STRAND_RENDER_PROFILE, { verticalOffset: 2 });
-    expect(low.verticalOffset).toBe(-1);
-    expect(high.verticalOffset).toBe(1);
-  });
+  it("seeds a partial-fill strand like typical Builder use", () => {
+    const sample = { id: "bead-1", name: "Charm" } as BeadLibraryEntry;
+    const full = calculateBeadCount(STRAND_RENDER_PREVIEW_WRIST_CM, STRAND_RENDER_PREVIEW_BEAD_MM);
+    const partial = previewBeadCount(STRAND_RENDER_PREVIEW_WRIST_CM, STRAND_RENDER_PREVIEW_BEAD_MM);
+    expect(partial).toBeLessThanOrEqual(full);
+    expect(partial).toBeGreaterThanOrEqual(8);
 
-  it("keeps fixed angular spacing regardless of contactWidth (Builder parity)", () => {
-    const narrow = buildCurvedPreview({ ...DEFAULT_STRAND_RENDER_PROFILE, contactWidth: 0.2 });
-    const wide = buildCurvedPreview({ ...DEFAULT_STRAND_RENDER_PROFILE, contactWidth: 1.8 });
-    expect(narrow.beads).toHaveLength(5);
-    expect(wide.beads).toHaveLength(5);
-    expect(narrow.beads[0]!.left).toBeCloseTo(wide.beads[0]!.left, 5);
-    expect(narrow.beads[4]!.left).toBeCloseTo(wide.beads[4]!.left, 5);
-    expect(STRAND_RENDER_PREVIEW_ANGLE_STEP).toBeGreaterThan(0);
-  });
-
-  it("applies visualScale to preview shell size like the Builder", () => {
-    const base = buildCurvedPreview(DEFAULT_STRAND_RENDER_PROFILE);
-    const scaled = buildCurvedPreview({ ...DEFAULT_STRAND_RENDER_PROFILE, visualScale: 1.25 });
-    expect(scaled.beads[2]!.width / base.beads[2]!.width).toBeCloseTo(1.25, 5);
+    const beads = buildPreviewPlacedBeads(
+      sample,
+      { sizeMm: STRAND_RENDER_PREVIEW_BEAD_MM, label: "8mm", unitPrice: 0, offerKey: "bead-1:8" },
+      STRAND_RENDER_PREVIEW_WRIST_CM,
+    );
+    expect(beads).toHaveLength(partial);
   });
 });

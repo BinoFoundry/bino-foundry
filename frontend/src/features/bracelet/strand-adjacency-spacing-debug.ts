@@ -138,8 +138,12 @@ export function logStrandSpacingDataFlow(params: {
   console.log("beadTypeSlug", bead?.beadTypeSlug ?? "(missing)");
   console.log("catalogue.beadType strandRender", typeValues);
   console.log("library.strandRenderOverride", libraryOverride ?? null);
+  console.log("library.useTypeStrandDefaults", (bead?.metadata as { useTypeStrandDefaults?: boolean } | undefined)?.useTypeStrandDefaults);
   console.log("resolved.contactWidth", resolved.contactWidth, "source", resolved.provenance.contactWidth);
   console.log("resolved.contactOffset", resolved.contactOffset, "source", resolved.provenance.contactOffset);
+  console.log("resolved.visualScale", resolved.visualScale, "source", resolved.provenance.visualScale);
+  console.log("resolved.hangOffset", resolved.hangOffset, "source", resolved.provenance.hangOffset);
+  console.log("resolved.orientationMode", resolved.orientationMode, "source", resolved.provenance.orientationMode);
   console.log("resolved spanMultiplier", effectiveStrandContactWidth(resolved));
   console.groupEnd();
 }

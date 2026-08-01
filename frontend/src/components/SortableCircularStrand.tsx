@@ -17,6 +17,9 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable";
+import type { StrandRenderProfile } from "@bino-foundry/shared/types";
+import { resolveStrandRenderConfig } from "@bino-foundry/shared/types";
+
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { isUnavailablePlacedBead, unavailableIssueForPlaced } from "@/features/bracelet/unavailable-bead";
@@ -50,9 +53,6 @@ import {
 import { resolveBeadIndexUnderPointer } from "@/features/bracelet/strand-reorder-hit-test";
 import { wristCircumferenceMm } from "@/features/bracelet/capacity";
 import {
-  beadOccupancyArcPx,
-} from "@/features/bracelet/strand-ring-geometry";
-import {
   computeStrandAdjacencySpacingDebug,
   applyStrandSpacingForceOverrides,
   isStrandSpacingDebugEnabled,
@@ -62,14 +62,17 @@ import {
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
 import { BEAD_LIBRARY_DRAG_TYPE, isLibraryDragEvent } from "@/features/bracelet/interaction";
 import {
-  computeBeadShellPosition,
-  computeBalancedRadialStrandPathLayout,
   pointerAngleOnCanvas,
-  strandRotationDeg,
   STRAND_PATH_START_ANGLE,
   strandLayoutShellDimensions,
   type StrandDropTarget,
 } from "@/features/bracelet/strand-layout";
+import {
+  layoutStrandBeadShells,
+} from "@/features/bracelet/layout-strand-bead-shells";
+import {
+  beadShellCssTransform,
+} from "@/features/bracelet/strand-bead-render-transform";
 import {
   computeStrandContentBounds,
   shiftStrandLayoutToCanvasCenter,
@@ -123,6 +126,13 @@ interface SortableCircularStrandProps {
   pathStartAngle?: number;
   size?: number;
   layoutKey?: string | number;
+  /**
+   * Admin Live Preview — force every bead to use this profile instead of catalogue resolve.
+   * Ensures draft Type/Sub edits match Builder transform/sizing without saving first.
+   */
+  forceStrandRenderProfile?: StrandRenderProfile | null;
+  /** Disable drag/drop (Admin read-only preview). */
+  readOnly?: boolean;
 }
 
 /** Outward radial offset from ring center, expressed in bead-local pixels (pre-rotation). */
@@ -152,10 +162,7 @@ function beadShellTransform(
   rotationDeg: number,
   options?: { dragOverlay?: boolean },
 ): string {
-  const parts: string[] = [];
-  if (options?.dragOverlay) parts.push("scale(1.02)");
-  parts.push(`rotate(${rotationDeg}deg)`);
-  return parts.join(" ");
+  return beadShellCssTransform(rotationDeg, options);
 }
 
 interface SortableBeadProps {
@@ -432,6 +439,8 @@ const SortableCircularStrand = ({
   wristSizeBounds,
   size = 320,
   layoutKey = 0,
+  forceStrandRenderProfile = null,
+  readOnly = false,
 }: SortableCircularStrandProps) => {
   const isMobile = useIsMobile();
   const {
@@ -524,8 +533,10 @@ const SortableCircularStrand = ({
   const canvasSize = size;
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: readOnly ? 1_000_000 : 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: readOnly ? 1_000_000 : 180, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -546,12 +557,25 @@ const SortableCircularStrand = ({
 
   // Live catalogue libraries are the source of truth for inherit flags + overrides.
   // Placed snapshots alone can stay stale after Admin Type/Sub/Bead saves.
-  const { getForBead } = useStrandRenderConfigCache({
+  const catalogueRender = useStrandRenderConfigCache({
     beadTypes,
     subBeadTypes,
     beadLibraries,
     strandRenderDefaults,
   });
+  const forcedResolved = useMemo(() => {
+    if (!forceStrandRenderProfile) return null;
+    return resolveStrandRenderConfig({
+      beadOverride: forceStrandRenderProfile,
+      inheritBeadFromSubBeadType: false,
+    });
+  }, [forceStrandRenderProfile]);
+  const getForBead = useMemo(() => {
+    if (forcedResolved) {
+      return () => forcedResolved;
+    }
+    return catalogueRender.getForBead;
+  }, [forcedResolved, catalogueRender.getForBead]);
   const compositionMm = strandCircumferenceMm(normalized, guideSizeMm);
   const placedCount = normalized.length;
   const isStrandEmpty = placedCount === 0;
@@ -651,65 +675,61 @@ const SortableCircularStrand = ({
       let insertionAngles: number[] = [];
 
       if (!isStrandEmpty) {
-        const ringCircumferencePx = 2 * Math.PI * wristRadius;
         const wristMm = wristCircumferenceMm(wristSize);
         const occupancyMm = normalized.map((placed) => placedBeadSizeMm(placed));
-        const occupancy = beadOccupancyArcPx(occupancyMm, wristMm, ringCircumferencePx);
-        const renderDims = prelimDims.map((slotDim, i) =>
-          strandLayoutShellDimensions(slotDim, renderProfiles[i]!),
-        );
         // Spacing uses mm occupancy only — hierarchical render calibration is visual-only.
-        const layoutScale = strandRenderDefaults?.layoutScale ?? 1;
-        const balanceSpacing = strandRenderDefaults?.balanceSpacing ?? true;
+        // Strand-wide flags still follow hierarchy: Type/Sub/Bead override General.
+        const layoutScale =
+          renderProfiles[0]?.layoutScale ?? strandRenderDefaults?.layoutScale ?? 1;
+        const balanceSpacing =
+          renderProfiles[0]?.balanceSpacing ?? strandRenderDefaults?.balanceSpacing ?? true;
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
 
-        // Top → Bottom → Right → Left, then remaining beads fill largest arcs.
-        // Balance Spacing equalises leftover empty gaps without changing neighbour order.
-        const sequential = computeBalancedRadialStrandPathLayout({
-          beads: normalized.map((_, i) => ({
-            index: i,
-            occupancyPx: occupancy.contactArcPx[i]!,
-            visualRadiusPx: occupancy.contactArcPx[i]! / 2,
-            contactAdjustmentPx: 0,
-          })),
+        // Same pipeline as Admin Live Preview — occupancy → balanced path → shell transforms.
+        const shellLayout = layoutStrandBeadShells({
           centerX: center,
           centerY: center,
-          radius: wristRadius,
+          radiusPx: wristRadius,
+          wristCircumferenceMm: wristMm,
           startAngle: pathStartAngle,
           balanceSpacing,
-          placement: "largest-gap",
+          beads: normalized.map((_, i) => ({
+            occupancyMm: occupancyMm[i]!,
+            slotDim: prelimDims[i]!,
+            profile: renderProfiles[i]!,
+          })),
         });
-        radius = sequential.resolvedRadiusPx ?? wristRadius;
-        const pathLayout = sequential.beads;
-        insertionAngles = sequential.insertionAngles;
+        radius = shellLayout.radiusPx;
+        insertionAngles = shellLayout.insertionAngles;
 
-        layoutSectors = pathLayout.map((path) => ({
-          index: path.index,
-          angle: path.angle,
-          arcSpan: path.arcSpan,
+        layoutSectors = shellLayout.beads.map((shell) => ({
+          index: shell.index,
+          angle: shell.angleRad,
+          arcSpan: shell.arcSpan,
         }));
 
         if (isStrandSpacingDebugEnabled()) {
           const targetLength = wristMm;
           const renderedCircumferencePx = 2 * Math.PI * radius;
           const pxToMm = targetLength / Math.max(renderedCircumferencePx, 1e-6);
-          const renderedOccupiedMm = sequential.occupiedArcPx * pxToMm;
+          const renderedOccupiedMm = shellLayout.occupiedArcPx * pxToMm;
           const totalAngularLength =
-            (sequential.occupiedArcPx / renderedCircumferencePx) * 2 * Math.PI;
+            (shellLayout.occupiedArcPx / renderedCircumferencePx) * 2 * Math.PI;
           const beadCount = occupancyMm.length;
           const averageSpacingMm = beadCount ? renderedOccupiedMm / beadCount : 0;
           let accumMm = 0;
           for (let i = 0; i < occupancyMm.length; i++) {
-            const effectiveDiameterMm = occupancy.contactArcPx[i]! * pxToMm;
+            const shell = shellLayout.beads[i]!;
+            const effectiveDiameterMm = shellLayout.contactArcPx[i]! * pxToMm;
             accumMm += occupancyMm[i]!;
-            const angleDeg = ((pathLayout[i]!.angle * 180) / Math.PI + 360) % 360;
+            const angleDeg = ((shell.angleRad * 180) / Math.PI + 360) % 360;
             console.log(
               [
                 `[strand-occupancy] bead ${i}`,
                 `type=${normalized[i]!.bead?.beadTypeSlug ?? "?"}`,
                 `effectiveDiameter=${effectiveDiameterMm.toFixed(2)}mm`,
                 `renderScale=${renderProfiles[i]!.resolvedRenderScale.toFixed(3)}`,
-                `arcSpan=${((pathLayout[i]!.arcSpan * 180) / Math.PI).toFixed(2)}deg`,
+                `arcSpan=${((shell.arcSpan * 180) / Math.PI).toFixed(2)}deg`,
                 `accumUsed=${accumMm.toFixed(2)}mm`,
                 `angleDeg=${angleDeg.toFixed(1)}`,
               ].join(" | "),
@@ -727,19 +747,22 @@ const SortableCircularStrand = ({
               `averageBeadSpacing=${averageSpacingMm.toFixed(2)}mm`,
               `totalRenderedArc=${((totalAngularLength * 180) / Math.PI).toFixed(1)}deg`,
               `fillRatio=${Math.min(renderedOccupiedMm / targetLength, 1).toFixed(3)}`,
-              `overCapacity=${sequential.isOverCapacity}`,
+              `overCapacity=${shellLayout.isOverCapacity}`,
             ].join(" | "),
           );
           logStrandAdjacencySpacing(
             computeStrandAdjacencySpacingDebug({
               sizingResults,
               profiles: renderProfiles,
-              contactArcPx: occupancy.contactArcPx,
-              leadingOverlapPx: occupancy.leadingOverlapPx,
-              trailingOverlapPx: occupancy.trailingOverlapPx,
-              angles: pathLayout.map((path) => path.angle),
+              contactArcPx: shellLayout.contactArcPx,
+              leadingOverlapPx: shellLayout.leadingOverlapPx,
+              trailingOverlapPx: shellLayout.trailingOverlapPx,
+              angles: shellLayout.beads.map((shell) => shell.angleRad),
               radiusPx: radius,
-              beadPositions: pathLayout.map((path) => ({ x: path.x, y: path.y })),
+              beadPositions: shellLayout.beads.map((shell) => ({
+                x: shell.ringX,
+                y: shell.ringY,
+              })),
             }),
           );
         }
@@ -747,25 +770,22 @@ const SortableCircularStrand = ({
         slotsWithPosition = normalized.map((placed, i) => {
           const beadSize = placedBeadSizeMm(placed);
           const slotDim = prelimDims[i]!;
-          const profile = renderProfiles[i]!;
-          const renderDim = renderDims[i]!;
-          const path = pathLayout[i]!;
-          const shellPos = computeBeadShellPosition(path.x, path.y, path.angle, slotDim, profile);
+          const shell = shellLayout.beads[i]!;
           return {
             index: i,
-            angle: path.angle,
-            arcSpan: path.arcSpan,
-            rotationDeg: strandRotationDeg(path.angle, profile),
-            x: path.x,
-            y: path.y,
-            shellLeft: shellPos.left,
-            shellTop: shellPos.top,
-            transformOriginX: shellPos.transformOriginX,
-            transformOriginY: shellPos.transformOriginY,
+            angle: shell.angleRad,
+            arcSpan: shell.arcSpan,
+            rotationDeg: shell.rotationDeg,
+            x: shell.ringX,
+            y: shell.ringY,
+            shellLeft: shell.shellLeft,
+            shellTop: shell.shellTop,
+            transformOriginX: shell.transformOriginX,
+            transformOriginY: shell.transformOriginY,
             placed,
             beadSize,
             slotDim,
-            renderDim,
+            renderDim: shell.renderDim,
             // DOM/stacking order follows the sequence exactly; type-level zPriority must
             // never make an earlier charm paint above a later crystal.
             zIndex: 20 + i,
@@ -826,7 +846,7 @@ const SortableCircularStrand = ({
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
     };
-  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing, processedMetricsEpoch]);
+  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing, processedMetricsEpoch, forceStrandRenderProfile]);
 
   const renderCanvasSize = canvasSize;
   const ringStrokeWidth = computeStrandRingStrokePx(scaleFactor);
@@ -1185,7 +1205,7 @@ const SortableCircularStrand = ({
                 isSwapTarget={
                   reorderSwapTargetIndex === slot.index && draggingFromIndex !== slot.index
                 }
-                libraryDragActive={externalDrag}
+                libraryDragActive={externalDrag || readOnly}
                 ringCenterX={center}
                 ringCenterY={center}
                 scaleFactor={scaleFactor}
@@ -1197,6 +1217,7 @@ const SortableCircularStrand = ({
 
         </div>
 
+        {readOnly ? null : (
         <div
           className="max-w-full px-1 text-center font-body text-[10px] leading-snug text-muted-foreground sm:text-[11px]"
           style={{ width: renderCanvasSize, maxWidth: "100%" }}
@@ -1229,6 +1250,7 @@ const SortableCircularStrand = ({
             </p>
           )}
         </div>
+        )}
       </div>
     </DndContext>
   );
