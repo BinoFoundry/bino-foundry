@@ -1,11 +1,16 @@
 import { useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import {
   CopyFrameConfigDialog,
   CopyFrameConfigTrigger,
 } from "@/features/admin/components/CopyFrameConfigDialog";
-import { FrameRenderViewsSection, type FrameRenderViewsSectionHandle } from "@/features/admin/components/FrameRenderViewsSection";
+import {
+  FrameRenderViewsSection,
+  parseFrameExpandedEditor,
+  type FrameRenderViewsSectionHandle,
+} from "@/features/admin/components/FrameRenderViewsSection";
 import {
   describeFrameSaveBlockers,
   isFrameViewSaveReady,
@@ -50,6 +55,7 @@ function normalizeViews(views?: FrameRenderView[]): FrameRenderView[] {
 }
 
 export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const cat = useCatalogue();
   const sunglassesCatalog = useSunglassesCatalog();
   const defaultPresetId =
@@ -117,6 +123,28 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
   );
   const isDirty = formDirty || viewsDraftDirty;
   const { confirmLeave } = useUnsavedChangesGuard(isDirty, `frame-form:${initial?.id ?? "new"}`);
+
+  const expandedEditor = useMemo(
+    () => parseFrameExpandedEditor(searchParams.get("axis"), searchParams.get("panel")),
+    [searchParams],
+  );
+
+  const setExpandedEditor = (next: { axis: string; panel: string } | null) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (!next) {
+          params.delete("axis");
+          params.delete("panel");
+        } else {
+          params.set("axis", next.axis);
+          params.set("panel", next.panel);
+        }
+        return params;
+      },
+      { replace: true },
+    );
+  };
 
   const frontView = useMemo(
     () => renderViews.find((v) => v.view === "front"),
@@ -297,6 +325,8 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
             setViewsDraftDirty(false);
           }}
           onDraftTouch={() => setViewsDraftDirty(true)}
+          expandedEditor={expandedEditor}
+          onExpandedEditorChange={setExpandedEditor}
           modelFamily={form.modelFamily ?? null}
           lensRenderPresetId={form.lensRenderPresetId ?? null}
           useLensRenderPreset={form.useLensRenderPreset !== false}

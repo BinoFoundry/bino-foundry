@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Ruler, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,9 @@ import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import {
   notifyAdminCreated,
   notifyAdminSavedEdit,
-  applyAdminSaveModalState,
   notifyAdminDeleteFailed,
   notifyAdminDeleted,
   notifyAdminSaveFailed,
-  type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
@@ -170,13 +168,24 @@ function SizeForm({
 export function BeadSizesAdminPage() {
   const cat = useCatalogue();
   const developerMode = useAdminDeveloperMode();
+  const editor = useAdminResourceEditor("bead-sizes");
   const { confirmLeave } = useAdminUnsavedChangesContext();
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const [modal, setModal] = useState<AdminEditorModalState<BeadSizeEntry>>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState<NormalizedRegenJobProgress>(IDLE_PROGRESS);
   const list = useAdminList(cat.beadSizes, (s, q) => s.label.toLowerCase().includes(q));
+
+  const editingEntry = useMemo(() => {
+    if (!editor.itemId) return null;
+    return cat.beadSizes.find((s) => s.id === editor.itemId) ?? null;
+  }, [cat.beadSizes, editor.itemId]);
+
+  useEffect(() => {
+    if (editor.isEditing && !editingEntry && cat.beadSizes.length > 0 && !cat.isHydrating) {
+      editor.close();
+    }
+  }, [editor, editingEntry, cat.beadSizes.length, cat.isHydrating]);
 
   const jobRunning = progress.status === "preparing" || progress.status === "running";
   const regenCtx = {
@@ -188,7 +197,10 @@ export function BeadSizesAdminPage() {
     refreshBeadLibrarySizes: cat.refreshBeadLibrarySizes,
   };
 
-  useAdminEditorScroll(scrollRef, modal);
+  useAdminEditorScroll(
+    scrollRef,
+    editor.isOpen ? { type: "edit" as const, entry: editingEntry ?? { id: "new" } } : null,
+  );
 
   const cancelJob = () => {
     abortRef.current?.abort();
@@ -197,16 +209,22 @@ export function BeadSizesAdminPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <AdminToolbar
-        hideSearch={!!modal}
+        hideSearch={editor.isOpen}
         search={list.search}
         onSearchChange={list.setSearch}
         searchPlaceholder="Search sizes…"
-        onAdd={modal ? undefined : () => setModal({ type: "add" })}
+        onAdd={editor.isOpen ? undefined : editor.openCreate}
         addLabel="Add size"
-        onBack={modal ? () => confirmLeave(() => setModal(null)) : undefined}
-        title={modal ? (modal.type === "add" ? "New bead size" : "Edit bead size") : "Bead sizes"}
+        onBack={editor.isOpen ? () => confirmLeave(editor.close) : undefined}
+        title={
+          editor.isOpen
+            ? editor.isCreating
+              ? "New bead size"
+              : "Edit bead size"
+            : "Bead sizes"
+        }
         trailing={
-          !modal ? (
+          !editor.isOpen ? (
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
@@ -257,38 +275,43 @@ export function BeadSizesAdminPage() {
       />
 
       <AdminPage scrollRef={scrollRef} footer={`${cat.beadSizes.length} size option(s)`}>
-        {!modal && progress.status !== "idle" ? (
+        {!editor.isOpen && progress.status !== "idle" ? (
           <div className="mb-4">
             <NormalizedRegenProgressPanel progress={progress} />
           </div>
         ) : null}
 
-        {!modal ? (
+        {!editor.isOpen ? (
           <p className="mb-4 text-xs text-muted-foreground">
             After changing crops or bead sizes, use <span className="font-medium">Refresh bead assets</span> to
             update optimized images across the catalogue.
           </p>
         ) : null}
 
-        {modal ? (
+        {editor.isCreating || (editor.isEditing && editingEntry) ? (
           <SizeForm
-            key={modal.type === "add" ? "new" : modal.entry.id}
-            initial={modal.type === "edit" ? modal.entry : undefined}
-            onCancel={() => setModal(null)}
+            key={editor.isCreating ? "new" : editingEntry!.id}
+            initial={editingEntry ?? undefined}
+            onCancel={editor.close}
             onSave={async (entry) => {
-              const mode = modal.type;
               try {
-                const saved =
-                  mode === "add"
-                    ? await cat.addBeadSize(entry)
-                    : await cat.updateBeadSize({ ...modal.entry, ...entry });
-                const sizeMmChanged = mode === "edit" && modal.entry.sizeMm !== entry.sizeMm;
-                if (mode === "add" || sizeMmChanged) {
+                if (editor.isCreating) {
+                  const saved = await cat.addBeadSize(entry);
+                  notifyAdminCreated("Bead size");
                   void cat.recalculateMmGroupReferences().catch((err) => {
                     notifyAdminSaveFailed(err, "Saved, but reference recalculation failed.");
                   });
+                  editor.openEdit(saved.id);
+                } else {
+                  const sizeMmChanged = editingEntry!.sizeMm !== entry.sizeMm;
+                  await cat.updateBeadSize({ ...editingEntry!, ...entry });
+                  notifyAdminSavedEdit();
+                  if (sizeMmChanged) {
+                    void cat.recalculateMmGroupReferences().catch((err) => {
+                      notifyAdminSaveFailed(err, "Saved, but reference recalculation failed.");
+                    });
+                  }
                 }
-                applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Bead size" });
               } catch (err) {
                 notifyAdminSaveFailed(err);
                 throw err;
@@ -306,7 +329,7 @@ export function BeadSizesAdminPage() {
             {list.items.map((s) => (
               <AdminListRow
                 key={s.id}
-                onClick={() => setModal({ type: "edit", entry: s })}
+                onClick={() => editor.openEdit(s.id)}
                 actions={
                   list.isDeleting(s.id) ? (
                     <AdminDeleteConfirm
@@ -315,9 +338,7 @@ export function BeadSizesAdminPage() {
                         try {
                           await cat.deleteBeadSize(s.id);
                           list.cancelDelete();
-                          if (modal?.type === "edit" && modal.entry.id === s.id) {
-                            setModal(null);
-                          }
+                          if (editor.itemId === s.id) editor.close();
                           notifyAdminDeleted("Bead size");
                         } catch (err) {
                           notifyAdminDeleteFailed(err);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,16 +21,12 @@ import { AdminPage } from "../../components/AdminPage";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { useAdminSectionRefresh } from "../../context/AdminSectionRefreshContext";
+import { useAdminResourceEditor } from "../../hooks/useAdminResourceEditor";
+import { adminResourcePath } from "../../routing";
 import { useAdminUnsavedChangesContext } from "../../unsaved-changes";
 import { formatDesignDisplayTitle } from "@/features/designs/display-title";
 import { UserForm, type UserFormValues } from "./UserForm";
 import { ASSIGNABLE_ROLE_OPTIONS, STATUS_LABELS, displayRoleLabel, formatAdminDate } from "./user-labels";
-
-type ViewState =
-  | { mode: "list" }
-  | { mode: "create" }
-  | { mode: "edit"; user: AdminUserDetail }
-  | { mode: "view"; user: AdminUserDetail };
 
 function statusVariant(status: AccountStatus): "success" | "muted" | "danger" {
   if (status === "active") return "success";
@@ -39,7 +36,13 @@ function statusVariant(status: AccountStatus): "success" | "muted" | "danger" {
 
 export function UsersAdminPage() {
   const { confirmLeave } = useAdminUnsavedChangesContext();
-  const [view, setView] = useState<ViewState>({ mode: "list" });
+  const editor = useAdminResourceEditor("users");
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get("mode") === "view";
+
+  const [detailUser, setDetailUser] = useState<AdminUserDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [items, setItems] = useState<AdminUserSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -77,20 +80,43 @@ export function UsersAdminPage() {
   }, [page, pageSize, search, roleFilter, statusFilter, sort, sortDir]);
 
   useEffect(() => {
-    if (view.mode === "list") {
+    if (!editor.isOpen) {
       void loadUsers();
     }
-  }, [view.mode, loadUsers]);
+  }, [editor.isOpen, loadUsers]);
 
   useAdminSectionRefresh("Refresh users", loadUsers);
 
-  const openUser = async (id: string, mode: "view" | "edit") => {
-    try {
-      const user = await usersApi.get(id);
-      setView({ mode, user });
-    } catch (err) {
-      toast.error(isApiError(err) ? err.message : "Could not load user");
+  useEffect(() => {
+    if (!editor.itemId) {
+      setDetailUser(null);
+      setDetailLoading(false);
+      return;
     }
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailUser(null);
+    void usersApi
+      .get(editor.itemId)
+      .then((user) => {
+        if (!cancelled) setDetailUser(user);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        toast.error(isApiError(err) ? err.message : "Could not load user");
+        editor.close();
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editor.itemId, editor.close]);
+
+  const openUser = (id: string, mode: "view" | "edit") => {
+    const path = adminResourcePath("users", id);
+    navigate(mode === "view" ? `${path}?mode=view` : path);
   };
 
   const handleCreate = async (values: UserFormValues) => {
@@ -104,7 +130,7 @@ export function UsersAdminPage() {
         accountStatus: values.accountStatus,
       });
       toast.success("User created");
-      setView({ mode: "list" });
+      editor.close();
       setPage(1);
     } catch (err) {
       toast.error(isApiError(err) ? err.message : "Create failed");
@@ -122,7 +148,7 @@ export function UsersAdminPage() {
         accountStatus: values.accountStatus,
       });
       toast.success("User updated");
-      setView({ mode: "list" });
+      editor.close();
     } catch (err) {
       toast.error(isApiError(err) ? err.message : "Update failed");
       throw err;
@@ -165,18 +191,18 @@ export function UsersAdminPage() {
     setPage(1);
   };
 
-  if (view.mode === "create") {
+  if (editor.isCreating) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <AdminToolbar
           title="New user"
-          onBack={() => confirmLeave(() => setView({ mode: "list" }))}
+          onBack={() => confirmLeave(editor.close)}
           hideSearch
         />
         <AdminPage>
           <UserForm
             mode="create"
-            onCancel={() => setView({ mode: "list" })}
+            onCancel={editor.close}
             onSave={handleCreate}
           />
         </AdminPage>
@@ -184,94 +210,110 @@ export function UsersAdminPage() {
     );
   }
 
-  if (view.mode === "edit") {
+  if (editor.isEditing) {
+    if (detailLoading || !detailUser) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <AdminToolbar
+            title={isViewMode ? "User" : "Edit user"}
+            onBack={() => confirmLeave(editor.close)}
+            hideSearch
+          />
+          <AdminPage>
+            <p className="p-6 text-sm text-muted-foreground">Loading user…</p>
+          </AdminPage>
+        </div>
+      );
+    }
+
+    if (isViewMode) {
+      const user = detailUser;
+      return (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <AdminToolbar
+            title={user.displayName ?? user.email ?? "User"}
+            onBack={editor.close}
+            hideSearch
+            trailing={
+              <Button type="button" size="sm" variant="secondary" onClick={() => openUser(user.id, "edit")}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Edit
+              </Button>
+            }
+          />
+          <AdminPage>
+            <div className="space-y-8 p-4 sm:p-6">
+              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <DetailField label="Email" value={user.email ?? "—"} />
+                <DetailField label="Phone" value={user.phone ?? "—"} />
+                <DetailField label="Role" value={displayRoleLabel(user.role)} />
+                <DetailField label="Status" value={STATUS_LABELS[user.accountStatus]} />
+                <DetailField label="Designs" value={String(user.savedDesignsCount)} />
+                <DetailField label="Orders" value={String(user.ordersCount)} />
+                <DetailField label="Created" value={formatAdminDate(user.createdAt)} />
+                <DetailField label="Last login" value={formatAdminDate(user.lastLoginAt)} />
+              </section>
+
+              <section>
+                <h3 className="type-label mb-3 text-muted-foreground">Recent designs</h3>
+                {user.recentDesigns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No saved designs.</p>
+                ) : (
+                  <ul className="divide-y divide-border rounded-lg border border-border">
+                    {user.recentDesigns.map((d) => (
+                      <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                        <span>
+                          <span className="font-medium">{formatDesignDisplayTitle(d)}</span>
+                          <span className="ml-2 text-muted-foreground capitalize">{d.productType}</span>
+                        </span>
+                        <AdminStatusBadge label={d.status} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section>
+                <h3 className="type-label mb-3 text-muted-foreground">Recent orders</h3>
+                {user.recentOrders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No orders.</p>
+                ) : (
+                  <ul className="divide-y divide-border rounded-lg border border-border">
+                    {user.recentOrders.map((o) => (
+                      <li key={o.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                        <span>
+                          <span className="font-medium">{o.id}</span>
+                          {o.designTitle ? (
+                            <span className="ml-2 text-muted-foreground">{o.designTitle}</span>
+                          ) : null}
+                        </span>
+                        <AdminStatusBadge label={o.status} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </AdminPage>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <AdminToolbar
-          title={`Edit · ${view.user.displayName ?? view.user.email ?? "User"}`}
-          onBack={() => confirmLeave(() => setView({ mode: "list" }))}
+          title={`Edit · ${detailUser.displayName ?? detailUser.email ?? "User"}`}
+          onBack={() => confirmLeave(editor.close)}
           hideSearch
         />
         <AdminPage>
           <UserForm
+            key={detailUser.id}
             mode="edit"
-            initial={view.user}
-            onCancel={() => setView({ mode: "list" })}
-            onSave={(values) => handleUpdate(view.user.id, values)}
+            initial={detailUser}
+            onCancel={editor.close}
+            onSave={(values) => handleUpdate(detailUser.id, values)}
           />
-        </AdminPage>
-      </div>
-    );
-  }
-
-  if (view.mode === "view") {
-    const user = view.user;
-    return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <AdminToolbar
-          title={user.displayName ?? user.email ?? "User"}
-          onBack={() => setView({ mode: "list" })}
-          hideSearch
-          trailing={
-            <Button type="button" size="sm" variant="secondary" onClick={() => setView({ mode: "edit", user })}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-              Edit
-            </Button>
-          }
-        />
-        <AdminPage>
-          <div className="space-y-8 p-4 sm:p-6">
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <DetailField label="Email" value={user.email ?? "—"} />
-              <DetailField label="Phone" value={user.phone ?? "—"} />
-              <DetailField label="Role" value={displayRoleLabel(user.role)} />
-              <DetailField label="Status" value={STATUS_LABELS[user.accountStatus]} />
-              <DetailField label="Designs" value={String(user.savedDesignsCount)} />
-              <DetailField label="Orders" value={String(user.ordersCount)} />
-              <DetailField label="Created" value={formatAdminDate(user.createdAt)} />
-              <DetailField label="Last login" value={formatAdminDate(user.lastLoginAt)} />
-            </section>
-
-            <section>
-              <h3 className="type-label mb-3 text-muted-foreground">Recent designs</h3>
-              {user.recentDesigns.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No saved designs.</p>
-              ) : (
-                <ul className="divide-y divide-border rounded-lg border border-border">
-                  {user.recentDesigns.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                      <span>
-                        <span className="font-medium">{formatDesignDisplayTitle(d)}</span>
-                        <span className="ml-2 text-muted-foreground capitalize">{d.productType}</span>
-                      </span>
-                      <AdminStatusBadge label={d.status} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section>
-              <h3 className="type-label mb-3 text-muted-foreground">Recent orders</h3>
-              {user.recentOrders.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No orders.</p>
-              ) : (
-                <ul className="divide-y divide-border rounded-lg border border-border">
-                  {user.recentOrders.map((o) => (
-                    <li key={o.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                      <span>
-                        <span className="font-medium">{o.id}</span>
-                        {o.designTitle ? (
-                          <span className="ml-2 text-muted-foreground">{o.designTitle}</span>
-                        ) : null}
-                      </span>
-                      <AdminStatusBadge label={o.status} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
         </AdminPage>
       </div>
     );
@@ -286,7 +328,7 @@ export function UsersAdminPage() {
           setPage(1);
         }}
         searchPlaceholder="Search name or email…"
-        onAdd={() => setView({ mode: "create" })}
+        onAdd={editor.openCreate}
         addLabel="Create user"
         title="Users"
         trailing={
@@ -373,10 +415,10 @@ export function UsersAdminPage() {
                       <td className="px-4 py-3 text-muted-foreground">{formatAdminDate(user.lastLoginAt)}</td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
-                          <Button type="button" size="icon" variant="ghost" aria-label="View" onClick={() => void openUser(user.id, "view")}>
+                          <Button type="button" size="icon" variant="ghost" aria-label="View" onClick={() => openUser(user.id, "view")}>
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button type="button" size="icon" variant="ghost" aria-label="Edit" onClick={() => void openUser(user.id, "edit")}>
+                          <Button type="button" size="icon" variant="ghost" aria-label="Edit" onClick={() => openUser(user.id, "edit")}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button

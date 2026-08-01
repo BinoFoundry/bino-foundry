@@ -5,6 +5,7 @@ import {
   adminResourcePath,
   adminSectionPath,
   adminSubTypePath,
+  adminSunglassesConfigPath,
   isAdminSection,
   parseAdminSection,
   withAdminSearch,
@@ -23,6 +24,13 @@ describe("admin routing", () => {
     expect(adminBeadTypePath("t1")).toBe("/admin/bead-types/t1");
     expect(adminSubTypePath("t1")).toBe("/admin/bead-types/t1/sub-types");
     expect(adminSubTypePath("t1", "s2")).toBe("/admin/bead-types/t1/sub-types/s2");
+  });
+
+  it("builds sunglasses-config nested paths", () => {
+    expect(adminSunglassesConfigPath()).toBe("/admin/sunglasses-config");
+    expect(adminSunglassesConfigPath("tints")).toBe("/admin/sunglasses-config/tints");
+    expect(adminSunglassesConfigPath("tints", "new")).toBe("/admin/sunglasses-config/tints/new");
+    expect(adminSunglassesConfigPath("options", "abc")).toBe("/admin/sunglasses-config/options/abc");
   });
 
   it("parses sections and preserves query", () => {

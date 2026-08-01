@@ -73,6 +73,18 @@ type ExpandedPanel = "frame" | "left" | "right" | "exclusions";
 
 type ExpandedEditor = { axis: FrameViewAxis; panel: ExpandedPanel };
 
+const EXPANDED_PANELS = new Set<ExpandedPanel>(["frame", "left", "right", "exclusions"]);
+
+export function parseFrameExpandedEditor(
+  axisRaw: string | null,
+  panelRaw: string | null,
+): ExpandedEditor | null {
+  if (!axisRaw || !panelRaw) return null;
+  if (!FRAME_VIEW_AXES.includes(axisRaw as FrameViewAxis)) return null;
+  if (!EXPANDED_PANELS.has(panelRaw as ExpandedPanel)) return null;
+  return { axis: axisRaw as FrameViewAxis, panel: panelRaw as ExpandedPanel };
+}
+
 function emptyView(view: FrameViewAxis): FrameRenderView {
   return {
     view,
@@ -157,6 +169,9 @@ interface FrameRenderViewsSectionProps {
   }) => void;
   /** Fired when live editor drafts change (mask/crop) before they are committed to `views`. */
   onDraftTouch?: () => void;
+  /** Controlled expanded crop/lens/details panel (URL deep link). */
+  expandedEditor?: ExpandedEditor | null;
+  onExpandedEditorChange?: (next: ExpandedEditor | null) => void;
 }
 
 export type FrameRenderViewsSectionHandle = {
@@ -181,12 +196,20 @@ export const FrameRenderViewsSection = forwardRef<
     lensRenderSystemDefaults,
     onLensRenderAssignmentChange,
     onDraftTouch,
+    expandedEditor: expandedEditorProp,
+    onExpandedEditorChange,
   },
   ref,
 ) {
+  const expandedControlled = onExpandedEditorChange != null;
+  const [expandedEditorState, setExpandedEditorState] = useState<ExpandedEditor | null>(null);
+  const expandedEditor = expandedControlled ? (expandedEditorProp ?? null) : expandedEditorState;
+  const setExpandedEditor = (next: ExpandedEditor | null) => {
+    if (expandedControlled) onExpandedEditorChange?.(next);
+    else setExpandedEditorState(next);
+  };
   const [uploading, setUploading] = useState<FrameViewAxis | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
-  const [expandedEditor, setExpandedEditor] = useState<ExpandedEditor | null>(null);
   const [editSession, setEditSession] = useState<Partial<Record<string, number>>>({});
   const [notice, setNotice] = useState<Partial<Record<FrameViewAxis, string>>>({});
   const [noticeVariant, setNoticeVariant] = useState<Partial<Record<FrameViewAxis, "success" | "warning">>>({});
@@ -196,6 +219,8 @@ export const FrameRenderViewsSection = forwardRef<
   const draftRef = useRef<Partial<Record<FrameViewAxis, MaskConfig | null>>>({});
   const lensSnapshotRef = useRef<Partial<Record<FrameViewAxis, MaskConfig | null>>>({});
   const draftPlateUrlsRef = useRef<Partial<Record<FrameViewAxis, string>>>({});
+  /** First mask change after opening an editor is hydration, not a user edit. */
+  const editorHydratingRef = useRef(false);
   const exclusionSavedTimersRef =
     useRef<Partial<Record<FrameViewAxis, ReturnType<typeof setTimeout>>>>({});
   const frameCropEditorRef = useRef<FramePlateCropEditorHandle>(null);
@@ -446,6 +471,11 @@ export const FrameRenderViewsSection = forwardRef<
   };
 
   const openEditor = (axis: FrameViewAxis, panel: ExpandedPanel) => {
+    if (expandedControlled) {
+      setExpandedEditor({ axis, panel });
+      return;
+    }
+    editorHydratingRef.current = true;
     setFramePathReady(false);
     if (panel === "left" || panel === "right" || panel === "exclusions") {
       const view = getView(axis);
@@ -469,6 +499,35 @@ export const FrameRenderViewsSection = forwardRef<
       setFramePathReady(Boolean(view.plateCropConfig && isBeadCropConfigValid(view.plateCropConfig)));
     }
   };
+
+  // Restore editor session when deep-linked / URL-controlled via ?axis=&panel=
+  useEffect(() => {
+    if (!expandedControlled || !expandedEditor) return;
+    const { axis, panel } = expandedEditor;
+    editorHydratingRef.current = true;
+    setFramePathReady(false);
+    if (panel === "left" || panel === "right" || panel === "exclusions") {
+      const view = getView(axis);
+      const restored = resolveEditorMask(
+        view,
+        previewMasks[axis] ?? draftRef.current[axis] ?? null,
+      );
+      lensSnapshotRef.current[axis] = restored ? structuredClone(restored) : null;
+      if (restored) {
+        draftRef.current[axis] = restored;
+        if (hasAnyLensMask(restored)) {
+          setPreviewMasks((prev) => ({ ...prev, [axis]: restored }));
+        }
+      }
+      const sessionKey = `${axis}-${panel}`;
+      setEditSession((s) => ({ ...s, [sessionKey]: (s[sessionKey] ?? 0) + 1 }));
+    }
+    if (panel === "frame") {
+      const view = getView(axis);
+      setFramePathReady(Boolean(view.plateCropConfig && isBeadCropConfigValid(view.plateCropConfig)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-hydrate when panel identity changes
+  }, [expandedControlled, expandedEditor?.axis, expandedEditor?.panel]);
 
   const resolvePreviewMask = (axis: FrameViewAxis, view: FrameRenderView): MaskConfig | null => {
     return resolveEditorMask(
@@ -754,6 +813,11 @@ export const FrameRenderViewsSection = forwardRef<
     // Live edits stay in draft only — avoid mask→clip conversion and parent form
     // re-renders on every pointer frame. Commit via Save / flushPendingEdits.
     draftRef.current[axis] = mask;
+    // Skip the hydration callback that fires when an editor panel first opens.
+    if (editorHydratingRef.current) {
+      editorHydratingRef.current = false;
+      return;
+    }
     onDraftTouch?.();
   }, [onDraftTouch]);
 

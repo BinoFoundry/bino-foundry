@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { DEFAULT_LENS_TINT_RENDER } from "@bino-foundry/shared/types";
 
@@ -13,7 +14,12 @@ import {
 } from "@/features/admin/lib/adminHex";
 import { formatCurrencySurcharge } from "@bino-foundry/shared/currency";
 import {
+  adminSunglassesConfigPath,
+  type SunglassesConfigSection,
+} from "@/features/admin/routing";
+import {
   ADMIN_UNSAVED_COPY,
+  useAdminUnsavedChangesContext,
   useDirtySnapshot,
   useUnsavedChangesGuard,
 } from "@/features/admin/unsaved-changes";
@@ -28,8 +34,6 @@ import { TintEditorLivePreview } from "@/features/admin/components/tint-editor/T
 import { isApiError } from "@/services/api";
 import { useSunglassesCatalog } from "@/state/sunglasses-catalog";
 import type { BuilderOptionEntry, LensTintEntry } from "@/types/sunglasses-catalog";
-
-type Section = "tints" | "options";
 
 function blankLensTint(): LensTintEntry {
   return {
@@ -50,17 +54,90 @@ function blankLensTint(): LensTintEntry {
   };
 }
 
+function blankBuilderOption(): BuilderOptionEntry {
+  return {
+    id: "",
+    code: "",
+    label: "",
+    description: "",
+    priceSurcharge: 0,
+    requiresManualFollowUp: false,
+    tooltipText: null,
+    displayOrder: 0,
+    isActive: true,
+  };
+}
+
+function parseCatalogSection(raw: string | undefined): SunglassesConfigSection {
+  return raw === "options" ? "options" : "tints";
+}
+
 export function SunglassesCatalogAdmin() {
   const { currencyCode } = useFormatCurrency();
   const catalog = useSunglassesCatalog();
-  const [section, setSection] = useState<Section>("tints");
-  const [editingTint, setEditingTint] = useState<LensTintEntry | null>(null);
-  const [editingOption, setEditingOption] = useState<BuilderOptionEntry | null>(null);
+  const navigate = useNavigate();
+  const { confirmLeave } = useAdminUnsavedChangesContext();
+  const params = useParams<{ catalogSection?: string; itemId?: string }>();
+  const section = parseCatalogSection(params.catalogSection);
+  const rawItemId = params.itemId;
+  const isCreating = rawItemId === "new";
+  const itemId = rawItemId && rawItemId !== "new" ? rawItemId : null;
+  const isEditing = Boolean(itemId);
+
   const [confirmDeleteTintId, setConfirmDeleteTintId] = useState<string | null>(null);
   const [confirmDeleteOptionId, setConfirmDeleteOptionId] = useState<string | null>(null);
+
   useEffect(() => {
     void catalog.refreshAdminFromApi();
   }, [catalog.refreshAdminFromApi]);
+
+  // Normalize bare /admin/sunglasses-config → /admin/sunglasses-config/tints
+  useEffect(() => {
+    if (!params.catalogSection) {
+      navigate(adminSunglassesConfigPath("tints"), { replace: true });
+    }
+  }, [params.catalogSection, navigate]);
+
+  const editingTint = useMemo(() => {
+    if (section !== "tints") return null;
+    if (isCreating) return blankLensTint();
+    if (!itemId) return null;
+    return catalog.lensTints.find((t) => t.id === itemId) ?? null;
+  }, [section, isCreating, itemId, catalog.lensTints]);
+
+  const editingOption = useMemo(() => {
+    if (section !== "options") return null;
+    if (isCreating) return blankBuilderOption();
+    if (!itemId) return null;
+    return catalog.builderOptions.find((o) => o.id === itemId) ?? null;
+  }, [section, isCreating, itemId, catalog.builderOptions]);
+
+  // Invalid deep link → section list (after hydrate).
+  useEffect(() => {
+    if (catalog.isHydrating) return;
+    if (section === "tints" && isEditing && !editingTint && catalog.lensTints.length > 0) {
+      navigate(adminSunglassesConfigPath("tints"), { replace: true });
+    }
+    if (section === "options" && isEditing && !editingOption && catalog.builderOptions.length > 0) {
+      navigate(adminSunglassesConfigPath("options"), { replace: true });
+    }
+  }, [
+    catalog.isHydrating,
+    catalog.lensTints.length,
+    catalog.builderOptions.length,
+    section,
+    isEditing,
+    editingTint,
+    editingOption,
+    navigate,
+  ]);
+
+  const closeEditor = () => navigate(adminSunglassesConfigPath(section));
+  const openCreate = () => navigate(adminSunglassesConfigPath(section, "new"));
+  const openEdit = (id: string) => navigate(adminSunglassesConfigPath(section, id));
+  const openSection = (next: SunglassesConfigSection) => {
+    confirmLeave(() => navigate(adminSunglassesConfigPath(next)));
+  };
 
   if (catalog.isHydrating && catalog.lensTints.length === 0) {
     return <LoadingState label="Loading sunglasses catalog…" className="h-64" />;
@@ -89,7 +166,7 @@ export function SunglassesCatalogAdmin() {
             key={id}
             size="sm"
             variant={section === id ? "default" : "outline"}
-            onClick={() => setSection(id)}
+            onClick={() => openSection(id)}
           >
             {label}
           </Button>
@@ -98,15 +175,12 @@ export function SunglassesCatalogAdmin() {
 
       <div className="admin-scroll-pane p-4 sm:p-6">
         {section === "tints" && (
-          <CatalogSection
-            title="Lens tints"
-            onAdd={() => setEditingTint(blankLensTint())}
-          >
-            {editingTint && !editingTint.id ? (
+          <CatalogSection title="Lens tints" onAdd={openCreate}>
+            {isCreating && editingTint ? (
               <TintEditor
                 key="new-tint"
                 entry={editingTint}
-                onCancel={() => setEditingTint(null)}
+                onCancel={closeEditor}
                 onSave={async (entry) => {
                   await catalog.createLensTint({
                     code: entry.code,
@@ -123,7 +197,7 @@ export function SunglassesCatalogAdmin() {
                     displayOrder: entry.displayOrder,
                     isActive: entry.isActive,
                   });
-                  setEditingTint(null);
+                  closeEditor();
                 }}
               />
             ) : null}
@@ -133,30 +207,30 @@ export function SunglassesCatalogAdmin() {
                   title={tint.name}
                   subtitle={`${tint.category} · ${tint.code} · ${formatCurrencySurcharge(tint.priceSurcharge, currencyCode)}`}
                   active={tint.isActive}
-                  selected={editingTint?.id === tint.id}
+                  selected={itemId === tint.id}
                   swatchStyle={tintPreviewStyle(tint)}
-                  onEdit={() => setEditingTint(tint)}
+                  onEdit={() => openEdit(tint.id)}
                   onDelete={() => setConfirmDeleteTintId(tint.id)}
                   confirmDelete={confirmDeleteTintId === tint.id}
                   onConfirmDelete={async () => {
                     try {
                       await catalog.deleteLensTint(tint.id);
                       setConfirmDeleteTintId(null);
-                      if (editingTint?.id === tint.id) setEditingTint(null);
+                      if (itemId === tint.id) closeEditor();
                     } catch (err) {
                       alert(isApiError(err) ? err.message : "Delete failed");
                     }
                   }}
                   onCancelDelete={() => setConfirmDeleteTintId(null)}
                 />
-                {editingTint?.id === tint.id ? (
+                {editingTint && editingTint.id === tint.id ? (
                   <TintEditor
                     key={tint.id}
                     entry={editingTint}
-                    onCancel={() => setEditingTint(null)}
+                    onCancel={closeEditor}
                     onSave={async (entry) => {
                       await catalog.updateLensTint(entry);
-                      setEditingTint(null);
+                      closeEditor();
                     }}
                   />
                 ) : null}
@@ -166,27 +240,12 @@ export function SunglassesCatalogAdmin() {
         )}
 
         {section === "options" && (
-          <CatalogSection
-            title="Builder options"
-            onAdd={() =>
-              setEditingOption({
-                id: "",
-                code: "",
-                label: "",
-                description: "",
-                priceSurcharge: 0,
-                requiresManualFollowUp: false,
-                tooltipText: null,
-                displayOrder: 0,
-                isActive: true,
-              })
-            }
-          >
-            {editingOption && !editingOption.id ? (
+          <CatalogSection title="Builder options" onAdd={openCreate}>
+            {isCreating && editingOption ? (
               <OptionEditor
                 key="new-option"
                 entry={editingOption}
-                onCancel={() => setEditingOption(null)}
+                onCancel={closeEditor}
                 onSave={async (entry) => {
                   await catalog.createBuilderOption({
                     code: entry.code,
@@ -198,7 +257,7 @@ export function SunglassesCatalogAdmin() {
                     displayOrder: entry.displayOrder,
                     isActive: entry.isActive,
                   });
-                  setEditingOption(null);
+                  closeEditor();
                 }}
               />
             ) : null}
@@ -208,29 +267,29 @@ export function SunglassesCatalogAdmin() {
                   title={option.label}
                   subtitle={`${option.code} · ${formatCurrencySurcharge(option.priceSurcharge, currencyCode)}`}
                   active={option.isActive}
-                  selected={editingOption?.id === option.id}
-                  onEdit={() => setEditingOption(option)}
+                  selected={itemId === option.id}
+                  onEdit={() => openEdit(option.id)}
                   onDelete={() => setConfirmDeleteOptionId(option.id)}
                   confirmDelete={confirmDeleteOptionId === option.id}
                   onConfirmDelete={async () => {
                     try {
                       await catalog.deleteBuilderOption(option.id);
                       setConfirmDeleteOptionId(null);
-                      if (editingOption?.id === option.id) setEditingOption(null);
+                      if (itemId === option.id) closeEditor();
                     } catch (err) {
                       alert(isApiError(err) ? err.message : "Delete failed");
                     }
                   }}
                   onCancelDelete={() => setConfirmDeleteOptionId(null)}
                 />
-                {editingOption?.id === option.id ? (
+                {editingOption && editingOption.id === option.id ? (
                   <OptionEditor
                     key={option.id}
                     entry={editingOption}
-                    onCancel={() => setEditingOption(null)}
+                    onCancel={closeEditor}
                     onSave={async (entry) => {
                       await catalog.updateBuilderOption(entry);
-                      setEditingOption(null);
+                      closeEditor();
                     }}
                   />
                 ) : null}

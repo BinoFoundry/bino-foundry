@@ -102,8 +102,10 @@ export function FramesAdminPage() {
   }, [editor.isCreating, dupFromId, frames]);
 
   useEffect(() => {
-    if (editor.isEditing && !editingEntry && frames.length > 0) editor.close();
-  }, [editor, editingEntry, frames.length]);
+    if (editor.isEditing && !editingEntry && frames.length > 0 && !cat.isHydrating) {
+      editor.close();
+    }
+  }, [editor, editingEntry, frames.length, cat.isHydrating]);
 
   const modalOpen = editor.isOpen;
   useAdminEditorScroll(

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronRight, Settings2, Trash2 } from "lucide-react";
 
@@ -81,6 +81,19 @@ export function BeadTypesAdminPage() {
     route.isEditingSub && route.subId
       ? cat.subBeadTypes.find((s) => s.id === route.subId)
       : null;
+
+  // Invalid deep link → return to list (wait until catalogue has loaded).
+  useEffect(() => {
+    if (route.isEditingType && !editingType && cat.beadTypes.length > 0 && !cat.isHydrating) {
+      route.closeTypeEditor();
+    }
+  }, [route, editingType, cat.beadTypes.length, cat.isHydrating]);
+
+  useEffect(() => {
+    if (route.isEditingSub && !editingSub && cat.subBeadTypes.length > 0 && !cat.isHydrating) {
+      route.closeSubEditor();
+    }
+  }, [route, editingSub, cat.subBeadTypes.length, cat.isHydrating]);
 
   const subTypesForType = useMemo(
     () =>

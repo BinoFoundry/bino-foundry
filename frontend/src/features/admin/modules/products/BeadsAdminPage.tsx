@@ -106,12 +106,12 @@ export function BeadsAdminPage() {
     return cat.beadLibraries.find((b) => b.id === editor.itemId) ?? null;
   }, [cat.beadLibraries, editor.itemId]);
 
-  // Invalid deep link → return to list
+  // Invalid deep link → return to list (wait until catalogue has loaded).
   useEffect(() => {
-    if (editor.isEditing && !editingEntry && cat.beadLibraries.length > 0) {
+    if (editor.isEditing && !editingEntry && cat.beadLibraries.length > 0 && !cat.isHydrating) {
       editor.close();
     }
-  }, [editor, editingEntry, cat.beadLibraries.length]);
+  }, [editor, editingEntry, cat.beadLibraries.length, cat.isHydrating]);
 
   const modalOpen = editor.isOpen;
   useAdminEditorScroll(scrollRef, modalOpen ? { type: "edit" as const, entry: editingEntry ?? { id: "new" } } : null, [

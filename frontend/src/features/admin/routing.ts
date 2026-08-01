@@ -51,6 +51,19 @@ export function adminSubTypePath(typeId: string, subId?: string | null): string 
   return `${base}/${encodeURIComponent(subId)}`;
 }
 
+export type SunglassesConfigSection = "tints" | "options";
+
+/** Sunglasses config list / create / edit paths. */
+export function adminSunglassesConfigPath(
+  section?: SunglassesConfigSection | null,
+  itemId?: string | null,
+): string {
+  if (!section) return "/admin/sunglasses-config";
+  const base = `/admin/sunglasses-config/${section}`;
+  if (!itemId) return base;
+  return `${base}/${encodeURIComponent(itemId)}`;
+}
+
 /** Preserve list query string when opening/closing an editor. */
 export function withAdminSearch(path: string, search: string): string {
   const q = search.startsWith("?") ? search.slice(1) : search;

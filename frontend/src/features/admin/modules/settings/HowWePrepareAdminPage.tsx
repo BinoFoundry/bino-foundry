@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Package, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,7 @@ import type { HowWePrepareOption, HowWePreparePriceType, HowWePrepareStatus } fr
 import {
   notifyAdminCreated,
   notifyAdminSavedEdit,
-  applyAdminSaveModalState,
   notifyAdminSaveFailed,
-  type AdminEditorModalState,
 } from "@/features/admin/lib/admin-save-feedback";
 import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScroll";
 import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
@@ -407,41 +405,63 @@ export function HowWePrepareAdminPage() {
   const cat = useCatalogue();
   const currency = useFormatCurrency();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [modal, setModal] = useState<AdminEditorModalState<HowWePrepareOption>>(null);
+  const editor = useAdminResourceEditor("how-we-prepare");
   const { confirmLeave } = useAdminUnsavedChangesContext();
   const list = useAdminList(cat.howWePrepareOptions, (item, q) =>
     `${item.name} ${item.slug} ${item.shortDescription}`.toLowerCase().includes(q),
   );
 
-  useAdminEditorScroll(scrollRef, modal);
+  const editingEntry = useMemo(() => {
+    if (!editor.itemId) return null;
+    return cat.howWePrepareOptions.find((item) => item.id === editor.itemId) ?? null;
+  }, [cat.howWePrepareOptions, editor.itemId]);
+
+  useEffect(() => {
+    if (editor.isEditing && !editingEntry && cat.howWePrepareOptions.length > 0 && !cat.isHydrating) {
+      editor.close();
+    }
+  }, [editor, editingEntry, cat.howWePrepareOptions.length, cat.isHydrating]);
+
+  useAdminEditorScroll(
+    scrollRef,
+    editor.isOpen ? { type: "edit" as const, entry: editingEntry ?? { id: "new" } } : null,
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <AdminToolbar
-        hideSearch={!!modal}
+        hideSearch={editor.isOpen}
         search={list.search}
         onSearchChange={list.setSearch}
         searchPlaceholder="Search preparation options…"
-        onAdd={modal ? undefined : () => setModal({ type: "add" })}
+        onAdd={editor.isOpen ? undefined : editor.openCreate}
         addLabel="Add option"
-        onBack={modal ? () => confirmLeave(() => setModal(null)) : undefined}
-        title={modal ? (modal.type === "add" ? "New preparation option" : "Edit preparation option") : "How We Prepare"}
+        onBack={editor.isOpen ? () => confirmLeave(editor.close) : undefined}
+        title={
+          editor.isOpen
+            ? editor.isCreating
+              ? "New preparation option"
+              : "Edit preparation option"
+            : "How We Prepare"
+        }
       />
 
       <AdminPage scrollRef={scrollRef} footer={`${cat.howWePrepareOptions.length} preparation option(s)`}>
-        {modal ? (
+        {editor.isCreating || (editor.isEditing && editingEntry) ? (
           <HowWePrepareForm
-            key={modal.type === "add" ? "new" : modal.entry.id}
-            initial={modal.type === "edit" ? modal.entry : undefined}
-            onCancel={() => setModal(null)}
+            key={editor.isCreating ? "new" : editingEntry!.id}
+            initial={editingEntry ?? undefined}
+            onCancel={editor.close}
             onSave={async (entry) => {
-              const mode = modal.type;
               try {
-                const saved =
-                  mode === "add"
-                    ? await cat.addHowWePrepareOption(entry)
-                    : await cat.updateHowWePrepareOption({ ...modal.entry, ...entry });
-                applyAdminSaveModalState(mode, saved, setModal, { createdLabel: "Preparation option" });
+                if (editor.isCreating) {
+                  const saved = await cat.addHowWePrepareOption(entry);
+                  notifyAdminCreated("Preparation option");
+                  editor.openEdit(saved.id);
+                } else {
+                  await cat.updateHowWePrepareOption({ ...editingEntry!, ...entry });
+                  notifyAdminSavedEdit();
+                }
               } catch (err) {
                 notifyAdminSaveFailed(err);
                 throw err;
@@ -459,7 +479,7 @@ export function HowWePrepareAdminPage() {
             {list.items.map((item) => (
               <AdminListRow
                 key={item.id}
-                onClick={() => setModal({ type: "edit", entry: item })}
+                onClick={() => editor.openEdit(item.id)}
                 actions={
                   list.isDeleting(item.id) ? (
                     <AdminDeleteConfirm
@@ -467,6 +487,7 @@ export function HowWePrepareAdminPage() {
                       onConfirm={async () => {
                         await cat.deleteHowWePrepareOption(item.id);
                         list.cancelDelete();
+                        if (editor.itemId === item.id) editor.close();
                       }}
                     />
                   ) : (

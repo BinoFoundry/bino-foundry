@@ -12,6 +12,7 @@ import { LensRenderPresetLivePreview } from "@/features/admin/components/LensRen
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/common";
 import { ErrorState } from "@/components/common";
+import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
 import {
   ADMIN_UNSAVED_COPY,
   useDirtySnapshot,
@@ -28,13 +29,13 @@ import {
 
 export function LensRenderingPresetsAdminPage() {
   const catalog = useSunglassesCatalog();
+  const editor = useAdminResourceEditor("lens-render-presets");
   const [presets, setPresets] = useState<LensRenderingPreset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<
     (Partial<LensRenderingPreset> & { settings: LensClipRenderSettings }) | null
   >(null);
-  const [editingSystemDefault, setEditingSystemDefault] = useState(false);
   const [systemDefaults, setSystemDefaults] = useState<LensClipRenderSettings>({
     ...LENS_RENDER_SYSTEM_DEFAULTS,
   });
@@ -43,6 +44,10 @@ export function LensRenderingPresetsAdminPage() {
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   /** Permanent glass sheet URL from the last loaded/saved draft (for replace/delete cleanup). */
   const savedSheetUrlRef = useRef<string | null>(null);
+  const previousRouteKeyRef = useRef<string | null>(null);
+
+  const editingSystemDefault = editor.itemId === "system";
+  const routeKey = editor.isCreating ? "new" : editor.itemId;
 
   const dirtySnapshot = useMemo(() => {
     if (!editing) return null;
@@ -105,6 +110,58 @@ export function LensRenderingPresetsAdminPage() {
     [presets],
   );
 
+  // Sync editor draft from URL once presets/defaults are available.
+  useEffect(() => {
+    if (loading) return;
+
+    if (!routeKey) {
+      if (previousRouteKeyRef.current) {
+        discardDraftSheet(editing?.settings);
+        setEditing(null);
+        setSaveFeedback(null);
+        previousRouteKeyRef.current = null;
+      }
+      return;
+    }
+
+    if (routeKey === "new") {
+      // Create is not supported for lens render presets.
+      editor.close();
+      return;
+    }
+
+    if (previousRouteKeyRef.current === routeKey && editing) return;
+
+    discardDraftSheet(editing?.settings);
+    setSaveFeedback(null);
+    previousRouteKeyRef.current = routeKey;
+
+    if (routeKey === "system") {
+      const settings = { ...systemDefaults };
+      savedSheetUrlRef.current = settings.glassSheetUrl?.trim() || null;
+      setEditing({ name: "System Default", settings });
+      return;
+    }
+
+    const preset = presets.find((p) => p.id === routeKey);
+    if (!preset) {
+      editor.close();
+      return;
+    }
+
+    const settings = {
+      ...systemDefaults,
+      ...pickLensRenderPresetSettings(preset.settings),
+    };
+    savedSheetUrlRef.current = settings.glassSheetUrl?.trim() || null;
+    setEditing({
+      ...preset,
+      settings,
+    });
+    // Intentionally omit `editing` — we only re-sync when the route key or loaded data changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- route-driven hydrate
+  }, [routeKey, loading, presets, systemDefaults, editor.close]);
+
   const draftSettings = useMemo(() => {
     if (!editing) return { ...DEFAULT_LENS_CLIP_RENDER, ...systemDefaults };
     return {
@@ -115,34 +172,19 @@ export function LensRenderingPresetsAdminPage() {
   }, [editing, systemDefaults]);
 
   const openEdit = (preset: LensRenderingPreset) => {
-    discardDraftSheet(editing?.settings);
-    setSaveFeedback(null);
-    setEditingSystemDefault(false);
-    const settings = {
-      ...systemDefaults,
-      ...pickLensRenderPresetSettings(preset.settings),
-    };
-    savedSheetUrlRef.current = settings.glassSheetUrl?.trim() || null;
-    setEditing({
-      ...preset,
-      settings,
-    });
+    editor.openEdit(preset.id);
   };
 
   const openSystemDefault = () => {
-    discardDraftSheet(editing?.settings);
-    setEditingSystemDefault(true);
-    const settings = { ...systemDefaults };
-    savedSheetUrlRef.current = settings.glassSheetUrl?.trim() || null;
-    setEditing({ name: "System Default", settings });
-    setSaveFeedback(null);
+    editor.openEdit("system");
   };
 
   const closeEditor = () => {
     discardDraftSheet(editing?.settings);
     setEditing(null);
-    setEditingSystemDefault(false);
     setSaveFeedback(null);
+    previousRouteKeyRef.current = null;
+    editor.close();
   };
 
   const handleSave = async () => {

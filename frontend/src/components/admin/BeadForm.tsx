@@ -13,7 +13,7 @@ import { useAdminDeveloperMode } from "@/features/admin/lib/developer-mode";
 import { formatUploadErrorMessage, validateUploadFile } from "@/features/admin/lib/upload-pipeline";
 import {
   ADMIN_UNSAVED_COPY,
-  snapshotsEqual,
+  stableSerialize,
   useDirtySnapshot,
   useUnsavedChangesGuard,
 } from "@/features/admin/unsaved-changes";
@@ -152,6 +152,9 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
     buildSizeRows(globalSizes, initial?.id, initial?.id ? sizesForLibrary(cat.beadLibrarySizes, initial.id) : []),
   );
   const [cropDraftDirty, setCropDraftDirty] = useState(false);
+  /** First crop draft callback is editor hydration — treat as baseline, not a user edit. */
+  const cropHydratingRef = useRef(true);
+  const cropBaselineRef = useRef(stableSerialize(initial?.cropConfig ?? null));
 
   const dirtySnapshot = useMemo(
     () => ({ form, tagNames, sizeRows }),
@@ -221,11 +224,18 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
 
   const handleCropDraft = (config: BeadCropConfig | null, _valid: boolean) => {
     draftCropRef.current = config;
-    setCropDraftDirty(!snapshotsEqual(config, form.cropConfig ?? null));
+    if (cropHydratingRef.current) {
+      cropHydratingRef.current = false;
+      cropBaselineRef.current = stableSerialize(config);
+      setCropDraftDirty(false);
+      return;
+    }
+    setCropDraftDirty(stableSerialize(config) !== cropBaselineRef.current);
   };
 
   const handleSaveCrop = (config: BeadCropConfig) => {
     draftCropRef.current = config;
+    cropBaselineRef.current = stableSerialize(config);
     setCropDraftDirty(false);
     setForm((f) => ({
       ...f,
@@ -237,6 +247,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
 
   const handleProcessed = (processedUrl: string, config: BeadCropConfig) => {
     draftCropRef.current = config;
+    cropBaselineRef.current = stableSerialize(config);
     setCropDraftDirty(false);
     setForm((f) => ({
       ...f,
@@ -249,6 +260,9 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
 
   const openCropEditor = () => {
     draftCropRef.current = form.cropConfig ?? draftCropRef.current;
+    cropHydratingRef.current = true;
+    cropBaselineRef.current = stableSerialize(form.cropConfig ?? null);
+    setCropDraftDirty(false);
     setCropEditSession((s) => s + 1);
     setEditingCrop(true);
   };

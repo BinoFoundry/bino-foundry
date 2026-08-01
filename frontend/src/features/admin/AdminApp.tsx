@@ -22,6 +22,7 @@ function useActiveAdminSection(): AdminSection {
   const { pathname } = useLocation();
   if (pathname === "/admin" || pathname === "/admin/") return "dashboard";
   if (pathname.startsWith("/admin/bead-types")) return "bead-types";
+  if (pathname.startsWith("/admin/sunglasses-config")) return "sunglasses-config";
   const maybe = pathname.split("/")[2];
   return parseAdminSection(maybe ?? null);
 }
@@ -94,6 +95,8 @@ export function AdminApp() {
         <Route path="how-we-prepare/:itemId" element={<HowWePrepareAdminPage />} />
         <Route path="general-settings" element={<GeneralSettingsPage />} />
         <Route path="sunglasses-config" element={<SunglassesConfigPage />} />
+        <Route path="sunglasses-config/:catalogSection" element={<SunglassesConfigPage />} />
+        <Route path="sunglasses-config/:catalogSection/:itemId" element={<SunglassesConfigPage />} />
         <Route path="lens-render-presets" element={<LensRenderingPresetsAdminPage />} />
         <Route path="lens-render-presets/new" element={<LensRenderingPresetsAdminPage />} />
         <Route path="lens-render-presets/:itemId" element={<LensRenderingPresetsAdminPage />} />
