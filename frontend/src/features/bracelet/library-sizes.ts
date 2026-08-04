@@ -20,6 +20,24 @@ export function defaultSizeForLibrary(
   return list.find((o) => o.isDefault) ?? list[0];
 }
 
+/**
+ * Keep an explicit size selection when valid for the bead; otherwise fall back to default.
+ * Used so mobile size-filter picks are not overwritten by the default offer.
+ */
+export function resolveSelectedSizeOfferKey(
+  offers: BeadLibrarySizeOffer[],
+  beadLibraryId: string,
+  selectedSizeOfferKey: string | null,
+): string | undefined {
+  const forBead = sizesForLibrary(offers, beadLibraryId);
+  const current =
+    selectedSizeOfferKey != null
+      ? forBead.find((o) => o.offerKey === selectedSizeOfferKey || o.id === selectedSizeOfferKey)
+      : undefined;
+  if (current) return current.offerKey;
+  return defaultSizeForLibrary(offers, beadLibraryId)?.offerKey;
+}
+
 export function findSizeOffer(
   offers: BeadLibrarySizeOffer[],
   libraryId: string,

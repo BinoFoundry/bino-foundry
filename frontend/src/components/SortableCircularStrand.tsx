@@ -1096,7 +1096,7 @@ const SortableCircularStrand = ({
     >
       <div className="flex flex-col items-center gap-1 sm:gap-1.5">
         {label ? (
-          <span className="text-xs font-body uppercase tracking-widest text-muted-foreground">
+          <span className="text-xs font-medium tracking-wide text-muted-foreground">
             {label}
           </span>
         ) : null}

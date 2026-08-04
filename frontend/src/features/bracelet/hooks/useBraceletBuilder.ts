@@ -7,7 +7,6 @@ import {
   resolvePreparationSelection,
 } from "@bino-foundry/shared/how-we-prepare";
 
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 import { useCatalogue } from "@/state/catalogue";
@@ -35,6 +34,7 @@ import {
   defaultSizeForLibrary,
   findSizeOffer,
   findSizeOfferByKey,
+  resolveSelectedSizeOfferKey,
 } from "../library-sizes";
 import { buildBraceletPricing } from "../pricing";
 import { swapPlacedBeads, logBraceletReorderSwap } from "../sequence-reorder";
@@ -78,7 +78,6 @@ export interface UseBraceletBuilderOptions {
 
 export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const { onPriceChange } = options;
-  const isMobile = useIsMobile();
   const { beadTypes, beadLibrarySizes, beadLibraries, beadAvailabilityStatuses, wristSizes, howWePrepareOptions } =
     useCatalogue();
   const { data: siteSettings } = useSiteGeneralSettings();
@@ -141,8 +140,12 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
 
   useEffect(() => {
     if (!selectedBead || selectedStrandBead) return;
-    const def = defaultSizeForLibrary(beadLibrarySizes, selectedBead.id);
-    if (def && def.offerKey !== selectedSizeOfferKey) setSelectedSizeOfferKey(def.offerKey);
+    const nextKey = resolveSelectedSizeOfferKey(
+      beadLibrarySizes,
+      selectedBead.id,
+      selectedSizeOfferKey,
+    );
+    if (nextKey && nextKey !== selectedSizeOfferKey) setSelectedSizeOfferKey(nextKey);
   }, [selectedBead, selectedStrandBead, beadLibrarySizes, selectedSizeOfferKey]);
 
   useEffect(() => {
@@ -344,7 +347,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
       const newItem = buildPlacedBead(bead, size, position);
       setPlaced(insertBeadAt(placed, position, newItem));
+      setSelectedBead(null);
       setSelectedStrandBead(null);
+      setSelectedSizeOfferKey(null);
       setCapacityNotice(null);
       bumpLayout();
       return true;
@@ -518,15 +523,26 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   }, [twinning, bumpLayout]);
 
   const autoPlaceItem = useCallback(
-    (bead: BeadLibraryEntry, size: BeadLibrarySizeOffer) => {
-      const target = resolveAutoPlacementStrand({
-        twinning,
-        wristSizeA,
-        wristSizeB,
-        placedA: placedBeadsA,
-        placedB: placedBeadsB,
-        beadSizeMm: size.sizeMm,
-      });
+    (
+      bead: BeadLibraryEntry,
+      size: BeadLibrarySizeOffer,
+      preferredStrand?: "A" | "B",
+    ) => {
+      const preferB = preferredStrand === "B" && twinning;
+      const target = preferB
+        ? canPlaceBeadSize(wristSizeB, placedBeadsB, size.sizeMm)
+          ? ("B" as const)
+          : canPlaceBeadSize(wristSizeA, placedBeadsA, size.sizeMm)
+            ? ("A" as const)
+            : null
+        : resolveAutoPlacementStrand({
+            twinning,
+            wristSizeA,
+            wristSizeB,
+            placedA: placedBeadsA,
+            placedB: placedBeadsB,
+            beadSizeMm: size.sizeMm,
+          });
 
       if (!target) {
         const aFull = !canPlaceBeadSize(wristSizeA, placedBeadsA, size.sizeMm);
@@ -555,7 +571,11 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   );
 
   const handleSelectBead = useCallback(
-    (bead: BeadLibraryEntry, size?: BeadLibrarySizeOffer) => {
+    (
+      bead: BeadLibraryEntry,
+      size?: BeadLibrarySizeOffer,
+      preferredStrand?: "A" | "B",
+    ) => {
       const s = size ?? defaultSizeForLibrary(beadLibrarySizes, bead.id);
       if (!s) return;
 
@@ -569,8 +589,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         }
       }
 
-      if (!isMobile && wristSizeConfirmed) {
-        if (!autoPlaceItem(bead, s)) return;
+      if (wristSizeConfirmed) {
+        if (!autoPlaceItem(bead, s, preferredStrand)) return;
         setSelectedBead(null);
         setSelectedStrandBead(null);
         setSelectedSizeOfferKey(null);
@@ -580,38 +600,15 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       setSelectedBead(bead);
       setSelectedStrandBead(null);
       setSelectedSizeOfferKey(s.offerKey);
-      if (wristSizeConfirmed) {
-        const target = resolveAutoPlacementStrand({
-          twinning,
-          wristSizeA,
-          wristSizeB,
-          placedA: placedBeadsA,
-          placedB: placedBeadsB,
-          beadSizeMm: s.sizeMm,
-        });
-        if (!target) {
-          publishCapacityNotice(
-            isStrandFull(wristSizeA, placedBeadsA) && (!twinning || isStrandFull(wristSizeB, placedBeadsB))
-              ? BRACELET_COPY.capacityFull
-              : BRACELET_COPY.capacityBlocked(s.sizeMm),
-            "full",
-          );
-        }
-      }
     },
     [
       beadLibrarySizes,
-      isMobile,
       wristSizeConfirmed,
       autoPlaceItem,
       selectedStrandBead,
       placedBeadsA,
       placedBeadsB,
-      twinning,
-      wristSizeA,
-      wristSizeB,
       applySizeOffer,
-      publishCapacityNotice,
     ],
   );
 

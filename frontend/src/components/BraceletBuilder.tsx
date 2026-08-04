@@ -1,10 +1,11 @@
 import { useRef, useState, useEffect, useMemo, useCallback, type RefObject } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Trash2 } from "lucide-react";
+import { Settings2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { BuilderPreviewFitScope } from "@/features/builder/components/BuilderPreviewFitScope";
 import { Button } from "@/components/ui/button";
+import BeadLibrary, { type LibraryDragPayload } from "@/components/BeadLibrary";
 import SortableCircularStrand, { type StrandDropHover } from "@/components/SortableCircularStrand";
 import {
   BraceletSummaryPanel,
@@ -18,10 +19,16 @@ import {
   CapacityAlertBanner,
   WristSizeStep,
 } from "@/features/bracelet";
+import { MATCHING_PAIR_CHROME_HEIGHT_PX } from "@/features/bracelet/strand-camera";
 import { BraceletConfigPanel } from "@/features/bracelet/components/BraceletConfigPanel";
 import { BraceletDragOnboardingHint } from "@/features/bracelet/components/BraceletDragOnboardingHint";
 import { BraceletNameField } from "@/features/bracelet/components/BraceletNameField";
-import { BraceletMobileConfigBar } from "@/features/bracelet/components/BraceletMobileConfigBar";
+import { BraceletMobileOptionsDrawer } from "@/features/bracelet/components/BraceletMobileOptionsDrawer";
+import { BraceletMobileStatusCard } from "@/features/bracelet/components/BraceletMobileStatusCard";
+import {
+  BraceletMobileStrandSwitcher,
+  type BraceletMobileViewMode,
+} from "@/features/bracelet/components/BraceletMobileStrandSwitcher";
 import { useBraceletDragOnboarding } from "@/features/bracelet/hooks/useBraceletDragOnboarding";
 import { resolveBraceletSaveTitle, formatDesignDisplayTitle } from "@/features/designs/display-title";
 import {
@@ -37,7 +44,7 @@ import {
 } from "@/features/designs/recovering-save-design";
 import { BraceletBuilderLayout } from "@/layouts/BraceletBuilderLayout";
 import { CUSTOMER_COPY } from "@/lib/customer-copy";
-import { getBeadDisplayImageUrl, getStrandBeadImageStyle } from "@/render/bead-crop";
+import { getBeadDisplayImageUrl, getBeadLibraryThumbnailStyle } from "@/render/bead-crop";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { setPendingDesignListener } from "@/features/designs/pending-design";
 import { captureBraceletThumbnail } from "@/features/designs/capture-thumbnail";
@@ -46,8 +53,6 @@ import { designsApi } from "@/services/api/designs";
 import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
-import type { LibraryDragPayload } from "@/components/BeadLibrary";
-
 interface BraceletBuilderProps {
   onPriceChange: (price: number) => void;
 }
@@ -108,7 +113,8 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const designIdFromUrl = searchParams.get("design");
   const { user, saveDesign, openAuth } = useAuth();
   const catalogue = useCatalogue();
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [mobileViewMode, setMobileViewMode] = useState<BraceletMobileViewMode>("A");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [savingDesign, setSavingDesign] = useState(false);
   const [savedDesignId, setSavedDesignId] = useState<string | null>(designIdFromUrl);
@@ -124,6 +130,27 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [braceletName, setBraceletName] = useState("");
 
   const builder = useBraceletBuilder({ onPriceChange });
+
+  const showMatchingPairPreview =
+    builder.twinning && (!isMobile || mobileViewMode === "mirror");
+  const showStrandA = !isMobile || mobileViewMode !== "B";
+  const showStrandB = builder.twinning && (!isMobile || mobileViewMode !== "A");
+
+  useEffect(() => {
+    if (!builder.twinning && mobileViewMode !== "A") {
+      setMobileViewMode("A");
+    }
+  }, [builder.twinning, mobileViewMode]);
+
+  const handleMobileViewModeChange = useCallback(
+    (mode: BraceletMobileViewMode) => {
+      if ((mode === "B" || mode === "mirror") && !builder.twinning) {
+        builder.handleToggleTwinning();
+      }
+      setMobileViewMode(mode);
+    },
+    [builder.twinning, builder.handleToggleTwinning],
+  );
 
   const dragOnboarding = useBraceletDragOnboarding({
     enabled: builder.wristSizeConfirmed && hydrationDone,
@@ -230,9 +257,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       viewportWidthPx: containerSize.width,
       viewportHeightPx: containerSize.height,
       layoutCanvasSize,
-      twinning: builder.twinning,
+      twinning: showMatchingPairPreview,
     }),
-    [containerSize.width, containerSize.height, layoutCanvasSize, builder.twinning],
+    [containerSize.width, containerSize.height, layoutCanvasSize, showMatchingPairPreview],
   );
 
   const layoutReady =
@@ -422,7 +449,11 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
   const builderActions = {
     twinning: builder.twinning,
-    onToggleTwinning: builder.handleToggleTwinning,
+    onToggleTwinning: () => {
+      const enabling = !builder.twinning;
+      builder.handleToggleTwinning();
+      if (isMobile && enabling) setMobileViewMode("mirror");
+    },
     onMatchBracelets: builder.handleMatchBracelets,
     onUnmatchBracelets: builder.handleUnmatchBracelets,
     matchDisabled: !builder.canMatchBracelets,
@@ -572,66 +603,70 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     );
   }
 
+  const activeStrandSummary =
+    mobileViewMode === "B" && builder.summary.strands[1]
+      ? builder.summary.strands[1]!
+      : builder.summary.strands[0];
+
   const canvasPanel = (
     <div
       ref={containerRef}
       className="surface-canvas relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
       {isMobile ? (
-        <BraceletMobileConfigBar
-          wristSizeCm={builder.wristSizeA}
-          wristSizeCmB={builder.twinning ? builder.wristSizeB : undefined}
-          twinning={builder.twinning}
-          braceletBMatched={builder.braceletBMatched}
-          wristSizes={builder.wristSizes}
-          wristSizeIdA={builder.wristSizeIdA}
-          wristSizeIdB={builder.wristSizeIdB}
-          onSelectWristA={builder.setWristA}
-          onSelectWristB={builder.setWristB}
-          onOpenLibrary={() => setLibraryOpen(true)}
-          builderActions={builderActions}
-        />
+        <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2">
+          <BraceletMobileStrandSwitcher
+            className="min-w-0 flex-1"
+            mode={mobileViewMode}
+            onChange={handleMobileViewModeChange}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-xl border border-border/50"
+            aria-label={BRACELET_COPY.mobileOpenOptions}
+            onClick={() => setOptionsOpen(true)}
+          >
+            <Settings2 className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-xl border border-border/50"
+            aria-label="Starters"
+            onClick={() => toast.message(BRACELET_COPY.dragOnboardingInitial)}
+          >
+            <Sparkles className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-xl border border-border/50 hover:bg-destructive/10 hover:text-destructive"
+            title={BRACELET_COPY.clearStrand}
+            aria-label={BRACELET_COPY.clearStrand}
+            disabled={builder.pricing.placedCount === 0}
+            onClick={builder.handleReset}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       ) : null}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-0.5 sm:p-1">
-      {isMobile && libraryOpen ? (
-        <BraceletConfigPanel
-          embedded={false}
-          libraryOpen={libraryOpen}
-          onCloseLibrary={() => setLibraryOpen(false)}
-          wristSizeCm={builder.wristSizeA}
-          wristSizeCmB={builder.twinning ? builder.wristSizeB : undefined}
-          twinning={builder.twinning}
-          braceletBMatched={builder.braceletBMatched}
-          wristSizes={builder.wristSizes}
-          wristSizeIdA={builder.wristSizeIdA}
-          wristSizeIdB={builder.wristSizeIdB}
-          onSelectWristA={builder.setWristA}
-          onSelectWristB={builder.setWristB}
-          onSelectBead={(bead, variant) => {
-            builder.handleSelectBead(bead, variant);
-            setLibraryOpen(false);
-          }}
-          onLibraryDragActiveChange={setLibraryDragActive}
-            onLibraryDragChange={(active, payload) => {
-              setLibraryDragActive(active);
-              setLibraryDragPreview(active ? (payload ?? null) : null);
-            }}
-            builderActions={builderActions}
-            braceletName={braceletName}
-            onBraceletNameChange={setBraceletName}
-          />
-      ) : null}
-
       {builder.selectedBead && isMobile ? (
         <div className="absolute left-3 right-3 top-12 z-30 flex items-center gap-2 rounded-lg border border-border/50 bg-background/90 px-3 py-2 backdrop-blur-sm">
           {getBeadDisplayImageUrl(builder.selectedBead) ? (
-            <img
-              src={getBeadDisplayImageUrl(builder.selectedBead)!}
-              alt=""
-              className="h-8 w-8 shrink-0 object-contain"
-              style={getStrandBeadImageStyle(builder.selectedBead)}
-            />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden">
+              <img
+                src={getBeadDisplayImageUrl(builder.selectedBead)!}
+                alt=""
+                className="max-h-full max-w-full object-contain"
+                style={getBeadLibraryThumbnailStyle(builder.selectedBead)}
+              />
+            </div>
           ) : null}
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-medium">{builder.selectedBead.name}</p>
@@ -646,7 +681,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       ) : null}
 
       <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex flex-col items-center gap-1 px-3 sm:top-3">
-        {builder.twinning ? (
+        {showMatchingPairPreview ? (
           <span className="rounded-full border border-primary/25 bg-background/90 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-foreground shadow-sm backdrop-blur-sm">
             {BRACELET_COPY.matchingPairTitle} · {BRACELET_COPY.matchingPairPreviewHint}
           </span>
@@ -695,18 +730,24 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         onDismiss={dragOnboarding.dismissHint}
       />
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="absolute bottom-3 right-3 z-30 h-10 w-10 border border-border/50 bg-background/85 backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive sm:bottom-4 sm:right-4 sm:h-9 sm:w-9"
-        title={BRACELET_COPY.clearStrand}
-        aria-label={BRACELET_COPY.clearStrand}
-        disabled={builder.pricing.placedCount === 0}
-        onClick={builder.handleReset}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {isMobile ? (
+        <p className="pointer-events-none absolute bottom-3 right-3 z-30 text-[11px] tabular-nums text-muted-foreground sm:bottom-4 sm:right-4">
+          {BRACELET_COPY.mobilePieces(builder.pricing.placedCount)}
+        </p>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute bottom-3 right-3 z-30 h-10 w-10 border border-border/50 bg-background/85 backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive sm:bottom-4 sm:right-4 sm:h-9 sm:w-9"
+          title={BRACELET_COPY.clearStrand}
+          aria-label={BRACELET_COPY.clearStrand}
+          disabled={builder.pricing.placedCount === 0}
+          onClick={builder.handleReset}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      )}
 
       <div
         ref={canvasZoomRef}
@@ -721,22 +762,34 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           isPanning={isPanning}
           viewScale={viewScale}
           panMode={panMode}
-          twinning={builder.twinning}
+          twinning={showMatchingPairPreview}
           matchingPairLayout={matchingPairLayout}
           onPointerDown={onPanPointerDown}
           onPointerMove={onPanPointerMove}
           onPointerUp={onPanPointerUp}
           onPointerCancel={onPanPointerCancel}
         >
-          <StrandStage className="shrink-0" style={{ width: strandSize, height: strandSize, minWidth: strandSize, minHeight: strandSize }}>
+          {showStrandA ? (
+          <StrandStage
+            className="shrink-0"
+            style={{
+              width: strandSize,
+              height: builder.twinning
+                ? strandSize + MATCHING_PAIR_CHROME_HEIGHT_PX
+                : strandSize,
+              minWidth: strandSize,
+              minHeight: builder.twinning
+                ? strandSize + MATCHING_PAIR_CHROME_HEIGHT_PX
+                : strandSize,
+            }}
+          >
             <SortableCircularStrand
               key={`a-${layoutKey}`}
               layoutKey={layoutKey}
               placedBeads={builder.placedBeadsA}
               onBeadsReorder={(from, to) => builder.handleBeadsReorder("A", from, to)}
               onSlotClick={(pos) => {
-                const result = builder.handleSlotClick("A", pos);
-                if (result?.openLibrary) setLibraryOpen(true);
+                builder.handleSlotClick("A", pos);
               }}
               onBeadDrop={(target, data) => builder.handleBeadDrop("A", target, data)}
               onBeadRemove={(pos) => builder.handleRemoveBead("A", pos)}
@@ -756,17 +809,25 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               size={layoutCanvasSize}
             />
           </StrandStage>
+          ) : null}
 
-          {builder.twinning ? (
-            <StrandStage className="shrink-0" style={{ width: strandSize, height: strandSize, minWidth: strandSize, minHeight: strandSize }}>
+          {showStrandB ? (
+            <StrandStage
+              className="shrink-0"
+              style={{
+                width: strandSize,
+                height: strandSize + MATCHING_PAIR_CHROME_HEIGHT_PX,
+                minWidth: strandSize,
+                minHeight: strandSize + MATCHING_PAIR_CHROME_HEIGHT_PX,
+              }}
+            >
               <SortableCircularStrand
                 key={`b-${layoutKey}`}
                 layoutKey={layoutKey}
                 placedBeads={builder.placedBeadsB}
                 onBeadsReorder={(from, to) => builder.handleBeadsReorder("B", from, to)}
                 onSlotClick={(pos) => {
-                  const result = builder.handleSlotClick("B", pos);
-                  if (result?.openLibrary) setLibraryOpen(true);
+                  builder.handleSlotClick("B", pos);
                 }}
                 onBeadDrop={(target, data) => builder.handleBeadDrop("B", target, data)}
                 onBeadRemove={(pos) => builder.handleRemoveBead("B", pos)}
@@ -826,9 +887,76 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         ) : undefined
       }
       centerPanel={canvasPanel}
-      rightPanel={<BraceletSummaryPanel {...summaryPanelProps} embedded />}
-      mobileFooter={<BraceletSummaryPanel {...summaryPanelProps} collapsible />}
+      rightPanel={!isMobile ? <BraceletSummaryPanel {...summaryPanelProps} embedded /> : undefined}
+      mobileFooter={
+        isMobile ? (
+          <div className="flex shrink-0 flex-col gap-2 bg-background/95 px-3 pt-2 pb-[env(safe-area-inset-bottom)]">
+            {activeStrandSummary ? (
+              <BraceletMobileStatusCard
+                strand={activeStrandSummary}
+                totalPrice={builder.pricing.total}
+                currencyCode={builder.pricing.currencyCode}
+                twinning={builder.twinning}
+                strandIndex={mobileViewMode === "B" ? 2 : 1}
+                onAddToCart={() => void handleAddToCart()}
+                addDisabled={saveDisabled}
+              />
+            ) : null}
+            <BeadLibrary
+              variant="mobile-rail"
+              open
+              onClose={() => {}}
+              onSelectBead={(bead, size) =>
+                builder.handleSelectBead(
+                  bead,
+                  size,
+                  mobileViewMode === "B" ? "B" : "A",
+                )
+              }
+              onLibraryDragActiveChange={setLibraryDragActive}
+              onLibraryDragChange={(active, payload) => {
+                setLibraryDragActive(active);
+                setLibraryDragPreview(active ? (payload ?? null) : null);
+              }}
+            />
+            <p className="px-0.5 pb-1 text-center text-[10px] leading-relaxed text-muted-foreground">
+              {BRACELET_COPY.mobileLibraryHint}
+              <button
+                type="button"
+                className="text-foreground/80 underline-offset-2 hover:underline"
+                onClick={() => setOptionsOpen(true)}
+              >
+                {BRACELET_COPY.mobileLibraryHintOptions}
+              </button>
+            </p>
+          </div>
+        ) : undefined
+      }
     />
+    {isMobile ? (
+      <BraceletMobileOptionsDrawer
+        open={optionsOpen}
+        onOpenChange={setOptionsOpen}
+        braceletName={braceletName}
+        onBraceletNameChange={setBraceletName}
+        wristSizes={builder.wristSizes}
+        wristSizeIdA={builder.wristSizeIdA}
+        wristSizeIdB={builder.wristSizeIdB}
+        twinning={builder.twinning}
+        braceletBMatched={builder.braceletBMatched}
+        onSelectWristA={builder.setWristA}
+        onSelectWristB={builder.setWristB}
+        onMeasureWrist={() =>
+          toast.message(BRACELET_COPY.wristStepSubtitle)
+        }
+        onLoadDesignCode={(code) => {
+          setSearchParams({ design: code }, { replace: true });
+          setOptionsOpen(false);
+          toast.message(`Loading design ${code}…`);
+        }}
+        builderActions={builderActions}
+      />
+    ) : null}
     <CheckoutDialog
       open={checkoutOpen}
       onOpenChange={setCheckoutOpen}
