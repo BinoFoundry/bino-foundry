@@ -1,4 +1,4 @@
-import { CircleDot, Gem, Glasses, Ruler, Settings, Settings2, Sun, Users } from "lucide-react";
+import { CircleDot, ClipboardList, Gem, Glasses, Ruler, Settings, Settings2, Sun, Users } from "lucide-react";
 
 import { checkPermission } from "@/lib/permissions";
 import { useAuth } from "@/state/auth/AuthProvider";
@@ -35,6 +35,16 @@ export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
   const quickLinksFiltered = [
     ...(checkPermission(permissions, "customers.manage")
       ? [{ section: "users" as const, label: "Users", description: "Accounts, roles, and access", icon: Users }]
+      : []),
+    ...(checkPermission(permissions, "orders.manage")
+      ? [
+          {
+            section: "orders" as const,
+            label: "Orders",
+            description: "Review and fulfil customer orders",
+            icon: ClipboardList,
+          },
+        ]
       : []),
     ...quickLinks,
   ];

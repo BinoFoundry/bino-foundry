@@ -57,6 +57,53 @@ function dragPayload(bead: BeadLibraryEntry, size: BeadLibrarySizeOffer) {
   return JSON.stringify({ bead, sizeOfferKey: size.offerKey, beadSizeMm: size.sizeMm });
 }
 
+/** Bead-only HTML5 drag ghost (card remains the hit target). */
+const LIBRARY_DRAG_PREVIEW_PX = 44;
+
+function applyLibraryDragPreview(e: React.DragEvent, imageUrl: string | null) {
+  const size = LIBRARY_DRAG_PREVIEW_PX;
+  const ghost = document.createElement("div");
+  ghost.setAttribute("aria-hidden", "true");
+  ghost.style.cssText = [
+    "position:fixed",
+    "top:-1000px",
+    "left:0",
+    `width:${size}px`,
+    `height:${size}px`,
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "pointer-events:none",
+    "background:transparent",
+    "border:none",
+    "box-shadow:none",
+    "overflow:visible",
+    "z-index:99999",
+  ].join(";");
+
+  if (imageUrl) {
+    const img = document.createElement("img");
+    img.src = imageUrl;
+    img.alt = "";
+    img.draggable = false;
+    img.style.cssText = [
+      "width:100%",
+      "height:100%",
+      "object-fit:contain",
+      "display:block",
+      "pointer-events:none",
+      "background:transparent",
+      "border:none",
+      "box-shadow:none",
+    ].join(";");
+    ghost.appendChild(img);
+  }
+
+  document.body.appendChild(ghost);
+  e.dataTransfer.setDragImage(ghost, size / 2, size / 2);
+  window.setTimeout(() => ghost.remove(), 0);
+}
+
 function startLibraryDrag(
   e: React.DragEvent,
   bead: BeadLibraryEntry,
@@ -99,19 +146,49 @@ const BeadLibraryCard = memo(function BeadLibraryCard({
   onDragEnd,
 }: BeadLibraryCardProps) {
   const img = getBeadLibraryImageUrl(bead);
+  const canDrag = !isMobile && !!activeSize;
+  const [isDragging, setIsDragging] = useState(false);
 
   return (
-    <div className="relative flex flex-col overflow-visible rounded-lg border border-border/60 bg-muted/20">
+    <div
+      className={cn(
+        "relative flex flex-col overflow-visible rounded-lg border border-border/60 bg-muted/20",
+        isDragging && "opacity-70",
+      )}
+    >
       <BeadInfoButton bead={bead} />
-      <button
-        type="button"
+      {/*
+        Use a div (not button): browsers often only start HTML5 drag from images
+        inside buttons, which makes the card feel like two different drag sources.
+      */}
+      <div
         data-bead-library-item
-        draggable={!isMobile && !!activeSize}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
+        data-bead-library-drag
+        role="button"
+        tabIndex={0}
+        draggable={canDrag}
         onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        onDragStart={(e) => {
+          e.stopPropagation();
+          applyLibraryDragPreview(e, img);
+          setIsDragging(true);
+          onDragStart(e);
+        }}
+        onDragEnd={(e) => {
+          e.stopPropagation();
+          setIsDragging(false);
+          onDragEnd();
+        }}
         className={cn(
-          "flex w-full flex-col items-center overflow-hidden rounded-t-lg text-center transition hover:bg-accent hover:text-accent-foreground",
+          "flex w-full flex-col items-center overflow-hidden rounded-t-lg text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+          !isDragging && "hover:bg-accent hover:text-accent-foreground",
+          canDrag && "cursor-grab active:cursor-grabbing",
           compact ? "gap-1 p-1.5" : "gap-1.5 p-2",
         )}
       >
@@ -127,23 +204,25 @@ const BeadLibraryCard = memo(function BeadLibraryCard({
               alt=""
               loading="lazy"
               decoding="async"
+              draggable={false}
+              className="pointer-events-none select-none"
               style={getBeadLibraryThumbnailStyle(bead)}
             />
           ) : (
-            <Gem className="h-5 w-5 text-muted-foreground" />
+            <Gem className="pointer-events-none h-5 w-5 text-muted-foreground" />
           )}
         </div>
         <div className="min-w-0 w-full">
           <p
             className={cn(
-              "font-medium text-foreground",
+              "pointer-events-none font-medium text-foreground",
               compact ? "line-clamp-2 text-[10px] leading-tight" : "truncate text-xs",
             )}
           >
             {bead.name}
           </p>
         </div>
-      </button>
+      </div>
       {activeSize && sizes.length > 0 ? (
         <div className="overflow-hidden rounded-b-lg border-t border-border/50 px-1.5 py-1.5">
           <Select value={selectValue} onValueChange={onSelectSize}>

@@ -321,7 +321,9 @@ export function DesignsPage() {
         currencyCode={checkoutDesign?.currencyCode ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode}
         defaultEmail={user?.email}
         defaultName={user?.displayName}
-        onOrdered={() => void designsQuery.refetch()}
+        onOrdered={() => {
+          void designsQuery.refetch();
+        }}
       />
     </>
   );

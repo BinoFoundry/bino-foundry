@@ -1,13 +1,12 @@
 /**
- * Balanced insertion order around the bracelet ring.
+ * Balanced insertion order around the bracelet ring (legacy helpers / docs).
  *
- * Insertion order (unchanged): fill the largest arc gap
+ * Theoretical largest-gap fractions: fill the largest arc gap
  *   top → bottom → right → left → bisect remaining gaps …
  *
- * This module retains the theoretical slot helpers used by legacy callers and tests.
- * Live Bracelet Builder placement uses Top → Bottom → Right → Left largest-gap insertion
- * in `computeBalancedRadialStrandPathLayout`, then optional Balance Spacing equalises
- * empty neighbour gaps without changing insertion order or rotating bead 0.
+ * Live Bracelet Builder uses sequential physical-contact packing in
+ * `layoutStrandBeadShells` / `computeBalancedRadialStrandPathLayout` so the
+ * stored bead array order matches clockwise neighbours on the ring.
  */
 
 /** Theoretical largest-gap bisection points (sorted). Used only to decide insert slots. */

@@ -4,6 +4,7 @@ import type { AdminSection } from "./types";
 export const ADMIN_SECTIONS = [
   "dashboard",
   "users",
+  "orders",
   "frames",
   "beads",
   "bead-types",

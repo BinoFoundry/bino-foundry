@@ -7,9 +7,87 @@ export type SavedDesignStatus = "draft" | "saved" | "ordered" | "archived";
 export type CustomerOrderStatus =
   | "pending"
   | "confirmed"
+  | "paid"
   | "processing"
   | "shipped"
+  | "delivered"
   | "cancelled";
+
+export const CUSTOMER_ORDER_STATUSES: readonly CustomerOrderStatus[] = [
+  "pending",
+  "confirmed",
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+] as const;
+
+/** Status timeline shown to customers (excludes cancelled). */
+export const CUSTOMER_ORDER_STATUS_FLOW: readonly CustomerOrderStatus[] = [
+  "pending",
+  "confirmed",
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+] as const;
+
+export interface OrderSnapshotBeadItem {
+  strandIndex: 0 | 1;
+  slotPosition: number;
+  beadLibraryId: string;
+  beadName: string;
+  beadTypeSlug?: string;
+  beadSizeMm: number;
+  sizeLabel: string;
+  unitPrice: number;
+}
+
+export interface OrderSnapshotPreparation {
+  optionId: string;
+  optionSlug: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  priceType: string;
+}
+
+export interface OrderSnapshotBracelet {
+  twinning: boolean;
+  wristSizeCmA: number;
+  wristSizeCmB: number;
+  items: OrderSnapshotBeadItem[];
+  preparation: OrderSnapshotPreparation | null;
+  beadSubtotal: number;
+  preparationSubtotal: number;
+}
+
+export interface OrderSnapshotSunglasses {
+  frameId: string;
+  frameName: string;
+  lensTintId: string;
+  lensTintName: string;
+  selectedOptions: Record<string, boolean>;
+  subtotal: number;
+}
+
+/** Immutable order BOM frozen at checkout. */
+export interface OrderSnapshot {
+  version: 1;
+  productType: DesignProductType;
+  designId: string;
+  designTitle: string | null;
+  previewThumbnailUrl: string | null;
+  currencyCode: string;
+  beadSubtotal: number;
+  preparationSubtotal: number;
+  totalAmount: number;
+  customerNotes: string | null;
+  bracelet?: OrderSnapshotBracelet;
+  sunglasses?: OrderSnapshotSunglasses;
+}
 
 export interface SavedDesignSummary {
   id: string;
@@ -86,6 +164,36 @@ export interface CustomerOrderSummary {
   createdAt: string;
 }
 
+export interface CustomerOrderDetail extends CustomerOrderSummary {
+  customerDetails: CustomerCheckoutDetails & { notes?: string | null };
+  snapshot: OrderSnapshot | null;
+  updatedAt: string;
+  statusUpdatedAt?: string;
+}
+
+export interface AdminOrderSummary {
+  id: string;
+  status: CustomerOrderStatus;
+  totalAmount: number;
+  currencyCode: string;
+  designId: string | null;
+  designTitle: string | null;
+  productType: DesignProductType | null;
+  customerName: string | null;
+  customerEmail: string | null;
+  userId: string;
+  createdAt: string;
+  statusUpdatedAt: string;
+}
+
+export interface AdminOrderDetail extends AdminOrderSummary {
+  customerDetails: CustomerCheckoutDetails & { notes?: string | null };
+  snapshot: OrderSnapshot | null;
+  previewThumbnailUrl: string | null;
+  internalNotes: string | null;
+  updatedAt: string;
+}
+
 export interface CustomerCheckoutDetails {
   fullName: string;
   email: string;
@@ -102,4 +210,9 @@ export interface CreateOrderRequest {
   designId: string;
   customerDetails: CustomerCheckoutDetails;
   notes?: string;
+  /** How We Prepare selection at checkout (bracelet only). */
+  preparation?: {
+    optionSlug: string;
+    quantity: number;
+  };
 }

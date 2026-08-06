@@ -57,7 +57,7 @@ export interface StrandBeadShellLayout {
  *
  * Steps (identical to SortableCircularStrand):
  * 1. mm occupancy → contact arcs (contactWidth / contactOffset / layoutScale)
- * 2. balanced radial path (Top→Bottom→Right→Left + balance spacing)
+ * 2. sequential physical-contact path (array order on the ring + optional balance)
  * 3. per-bead {@link calculateBeadRenderTransform}
  *
  * Capacity panel still charges catalogue sizeMm; these profile fields only tune
@@ -125,7 +125,9 @@ export function layoutStrandBeadShells(
     radius: requestedRadius,
     startAngle,
     balanceSpacing,
-    placement: "largest-gap",
+    // Array order is the bracelet sequence. Never use largest-gap — it parks beads at
+    // Top/Bottom/Right/Left anchors and reshuffles angular neighbours on every add.
+    placement: "physical-contact",
   });
 
   const radiusPx = sequential.resolvedRadiusPx ?? requestedRadius;

@@ -32,6 +32,11 @@ export function getDefaultSectionRefresh(
         label: "Refresh users",
         action: async () => {},
       };
+    case "orders":
+      return {
+        label: "Refresh orders",
+        action: async () => {},
+      };
     case "frames":
       return {
         label: "Refresh frames",

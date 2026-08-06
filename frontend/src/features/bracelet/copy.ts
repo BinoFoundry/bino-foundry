@@ -38,7 +38,7 @@ export const BRACELET_COPY = {
   costBreakdown: "Cost breakdown",
   addOnsTitle: "Add-ons",
   subtotal: "Subtotal",
-  addToCart: "Add to cart",
+  addToCart: "Submit order",
   wristTwinA: "First Bracelet",
   wristTwinB: "Second Bracelet",
   library: "Collection",
@@ -84,7 +84,7 @@ export const BRACELET_COPY = {
   estimatedTotal: "Estimated total",
   howWePrepareTitle: "How should we prepare it?",
   preparationQuantity: "Quantity",
-  priceNote: (currency: string) => `Prices in ${currency} · Confirmed at checkout`,
+  priceNote: (currency: string) => `Prices in ${currency} · Confirmed when your order is reviewed`,
   saveBlockedOverCapacity: "Adjust capacity before saving",
 
   strandGuideTitle: "Your strand",

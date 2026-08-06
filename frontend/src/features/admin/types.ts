@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 export type AdminSection =
   | "dashboard"
   | "users"
+  | "orders"
   | "frames"
   | "beads"
   | "bead-types"

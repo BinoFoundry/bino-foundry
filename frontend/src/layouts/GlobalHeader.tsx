@@ -80,16 +80,31 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
             </Button>
           )}
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted-foreground"
-            onClick={() => toast.message(BUILDER_COPY.cartComingSoon)}
-          >
-            <ShoppingBag className="h-4 w-4" />
-            <span className="hidden sm:inline">{BUILDER_COPY.cart}</span>
-          </Button>
+          {user ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground"
+              asChild
+            >
+              <Link to="/account/orders">
+                <ShoppingBag className="h-4 w-4" />
+                <span className="hidden sm:inline">Orders</span>
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground"
+              onClick={() => toast.message(BUILDER_COPY.cartComingSoon)}
+            >
+              <ShoppingBag className="h-4 w-4" />
+              <span className="hidden sm:inline">{BUILDER_COPY.cart}</span>
+            </Button>
+          )}
 
           <button
             type="button"

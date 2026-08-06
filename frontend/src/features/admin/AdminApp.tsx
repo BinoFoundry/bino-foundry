@@ -14,6 +14,7 @@ import { WristSizesAdminPage } from "./modules/products/WristSizesAdminPage";
 import { BeadTypesAdminPage } from "./modules/products/BeadTypesAdminPage";
 import { FramesAdminPage } from "./modules/products/FramesAdminPage";
 import { UsersAdminPage } from "./modules/users/UsersAdminPage";
+import { OrdersAdminPage } from "./modules/orders/OrdersAdminPage";
 import { LensRenderingPresetsAdminPage } from "./modules/sunglasses/LensRenderingPresetsAdminPage";
 import { adminSectionPath, isAdminSection, parseAdminSection } from "./routing";
 import type { AdminSection } from "./types";
@@ -76,6 +77,8 @@ export function AdminApp() {
         <Route path="users" element={<UsersAdminPage />} />
         <Route path="users/new" element={<UsersAdminPage />} />
         <Route path="users/:itemId" element={<UsersAdminPage />} />
+        <Route path="orders" element={<OrdersAdminPage />} />
+        <Route path="orders/:itemId" element={<OrdersAdminPage />} />
         <Route path="frames" element={<FramesAdminPage />} />
         <Route path="frames/new" element={<FramesAdminPage />} />
         <Route path="frames/:itemId" element={<FramesAdminPage />} />

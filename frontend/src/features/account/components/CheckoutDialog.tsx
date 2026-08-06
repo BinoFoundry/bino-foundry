@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,11 +15,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@bino-foundry/shared/currency";
 import { CUSTOMER_NAME_REQUIRED_MESSAGE } from "@bino-foundry/shared/constants";
+import type {
+  BraceletPreparationSelection,
+  CustomerCheckoutDetails,
+} from "@bino-foundry/shared/types";
 
 import { getCustomerNameValidationError } from "@/lib/customer-name";
 import { ordersApi } from "@/services/api/orders";
 import { isApiError } from "@/services/api/errors";
-import type { CustomerCheckoutDetails } from "@bino-foundry/shared/types";
 
 export interface CheckoutDialogProps {
   open: boolean;
@@ -29,7 +33,9 @@ export interface CheckoutDialogProps {
   currencyCode: string;
   defaultEmail?: string | null;
   defaultName?: string | null;
-  onOrdered?: () => void;
+  /** Bracelet How We Prepare selection frozen onto the order snapshot. */
+  preparation?: BraceletPreparationSelection | null;
+  onOrdered?: (orderId: string) => void;
 }
 
 export function CheckoutDialog({
@@ -41,8 +47,10 @@ export function CheckoutDialog({
   currencyCode,
   defaultEmail,
   defaultName,
+  preparation,
   onOrdered,
 }: CheckoutDialogProps) {
+  const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<CustomerCheckoutDetails>({
     fullName: "",
@@ -74,7 +82,7 @@ export function CheckoutDialog({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!designId) {
-      toast.error("Save your design before checkout.");
+      toast.error("Save your design before placing an order.");
       return;
     }
 
@@ -91,12 +99,14 @@ export function CheckoutDialog({
         designId,
         customerDetails: { ...form, fullName: form.fullName.trim() },
         notes: notes.trim() || undefined,
+        preparation: preparation ?? undefined,
       });
-      toast.success(`Order ${order.id} placed. We'll be in touch shortly.`);
+      toast.success(`Order ${order.id} submitted. We will review it shortly.`);
       onOpenChange(false);
-      onOrdered?.();
+      onOrdered?.(order.id);
+      navigate(`/account/orders/${encodeURIComponent(order.id)}?placed=1`);
     } catch (err) {
-      toast.error(isApiError(err) ? err.message : "Checkout failed.");
+      toast.error(isApiError(err) ? err.message : "Could not submit order.");
     } finally {
       setSubmitting(false);
     }
@@ -106,9 +116,10 @@ export function CheckoutDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Complete your order</DialogTitle>
+          <DialogTitle>Submit your order</DialogTitle>
           <DialogDescription>
-            {productLabel} · {formatCurrency(totalAmount, currencyCode)}
+            {productLabel} · {formatCurrency(totalAmount, currencyCode)}. We will review your order
+            and contact you about payment and fulfilment — no payment is taken online yet.
           </DialogDescription>
         </DialogHeader>
 
@@ -213,7 +224,7 @@ export function CheckoutDialog({
           </div>
 
           <Button type="submit" className="w-full" size="lg" disabled={submitting || !designId}>
-            {submitting ? "Placing order…" : "Place order"}
+            {submitting ? "Submitting order…" : "Submit order"}
           </Button>
         </form>
       </DialogContent>

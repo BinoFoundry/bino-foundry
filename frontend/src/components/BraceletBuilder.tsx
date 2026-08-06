@@ -970,6 +970,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       currencyCode={builder.currencyCode}
       defaultEmail={user?.email}
       defaultName={user?.displayName}
+      preparation={builder.preparationSelection}
     />
     {leaveGuard}
     <BuilderDraftRecoveryDialog

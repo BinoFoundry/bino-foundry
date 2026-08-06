@@ -1,21 +1,39 @@
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 
+import { ensurePlacementInstanceIds } from "./placement-instance";
+
 /** Guide ring slot count when the strand is empty (display only). */
 export const EMPTY_GUIDE_SLOT_COUNT = 8;
 
 /**
  * Dense sequence order — array order is the source of truth; `position` mirrors index.
- * When loading sparse slot data, call `normalizeFromSlots` once first.
  */
 export function normalizeSequence(placed: PlacedBead[]): PlacedBead[] {
   return placed.map((b, i) => (b.position === i ? b : { ...b, position: i }));
 }
 
-/** One-time migration from sparse slot indices to dense sequence order. */
+/** True when `position` values are legacy sparse slots (gaps or duplicates). */
+export function needsSparseSlotMigration(placed: PlacedBead[]): boolean {
+  if (placed.length === 0) return false;
+  const maxPos = Math.max(...placed.map((b) => b.position));
+  if (maxPos >= placed.length) return true;
+  const seen = new Set<number>();
+  for (const b of placed) {
+    if (seen.has(b.position)) return true;
+    seen.add(b.position);
+  }
+  return false;
+}
+
+/**
+ * Dense strand sequence for rendering and mutations.
+ * Array order is authoritative; only legacy sparse data is sorted by `position` once.
+ */
 export function normalizeFromSlots(placed: PlacedBead[]): PlacedBead[] {
-  return [...placed]
-    .sort((a, b) => a.position - b.position)
-    .map((b, i) => ({ ...b, position: i }));
+  const ordered = needsSparseSlotMigration(placed)
+    ? [...placed].sort((a, b) => a.position - b.position)
+    : [...placed];
+  return ensurePlacementInstanceIds(normalizeSequence(ordered));
 }
 
 export function getBeadAtIndex(placed: PlacedBead[], index: number): PlacedBead | undefined {

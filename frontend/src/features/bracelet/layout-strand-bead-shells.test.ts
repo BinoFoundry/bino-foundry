@@ -128,27 +128,41 @@ describe("layoutStrandBeadShells", () => {
     expect(loose.occupiedArcPx).toBeGreaterThan(neutral.occupiedArcPx + 1);
   });
 
-  it("contactOffset (Contact adjustment) shifts neighbour spacing", () => {
+  it("keeps clockwise neighbour order equal to array order when a bead is added", () => {
+    const profile = DEFAULT_STRAND_RENDER_PROFILE;
+    const slotDim = { width: 28, height: 28 };
     const params = {
       centerX: 120,
       centerY: 120,
       radiusPx: 70,
       wristCircumferenceMm: 160,
+      balanceSpacing: true as const,
     };
-    const bead = (contactOffset: number) => ({
-      occupancyMm: 8,
-      slotDim: { width: 28, height: 28 },
-      profile: mergeStrandRenderProfile({ contactOffset }),
-    });
-    const pulled = layoutStrandBeadShells({
+    const bead = () => ({ occupancyMm: 8, slotDim, profile });
+
+    const two = layoutStrandBeadShells({
       ...params,
-      beads: Array.from({ length: 8 }, () => bead(-0.12)),
+      beads: [bead(), bead()],
     });
-    const pushed = layoutStrandBeadShells({
+    const three = layoutStrandBeadShells({
       ...params,
-      beads: Array.from({ length: 8 }, () => bead(0.12)),
+      beads: [bead(), bead(), bead()],
     });
-    expect(pulled.contactArcPx[0]!).toBeLessThan(pushed.contactArcPx[0]! - 1);
-    expect(pulled.occupiedArcPx).toBeLessThan(pushed.occupiedArcPx - 1);
+
+    const clockwiseOrder = (layout: typeof two) => {
+      const start = layout.beads[0]!.angleRad;
+      return [...layout.beads]
+        .sort((a, b) => {
+          const da = ((a.angleRad - start) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+          const db = ((b.angleRad - start) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+          return da - db;
+        })
+        .map((b) => b.index);
+    };
+
+    expect(clockwiseOrder(two)).toEqual([0, 1]);
+    expect(clockwiseOrder(three)).toEqual([0, 1, 2]);
+    // First bead stays anchored; we never jump to Top/Bottom/Right largest-gap anchors.
+    expect(three.beads[0]!.angleRad).toBeCloseTo(two.beads[0]!.angleRad, 5);
   });
 });

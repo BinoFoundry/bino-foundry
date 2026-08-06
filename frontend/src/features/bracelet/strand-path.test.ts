@@ -573,7 +573,7 @@ describe("computeBalancedRadialStrandPathLayout", () => {
     expect(Math.max(...centreSteps) - Math.min(...centreSteps)).toBeGreaterThan(1e-3);
   });
 
-  it("defaults to largest-gap placement with Balance Spacing ON", () => {
+  it("defaults to physical-contact placement with Balance Spacing ON", () => {
     const widths = [10, 22, 14, 28, 12];
     const beads = widths.map((occupancyPx, index) => ({
       index,
@@ -588,7 +588,11 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       beads,
     });
     const on = computeBalancedRadialStrandPathLayout({
-      ...base,
+      centerX: base.centerX,
+      centerY: base.centerY,
+      radius: base.radius,
+      startAngle: base.startAngle,
+      placement: "physical-contact",
       balanceSpacing: true,
       beads,
     });
@@ -596,6 +600,13 @@ describe("computeBalancedRadialStrandPathLayout", () => {
       expect(bead.angle).toBeCloseTo(on.beads[index]!.angle, 8);
     });
     expect(defaults.beads[0]!.angle).toBeCloseTo(base.startAngle, 6);
+
+    const clockwiseFromStart = [...defaults.beads].sort((a, b) => {
+      const da = clockwiseAngle(base.startAngle, a.angle);
+      const db = clockwiseAngle(base.startAngle, b.angle);
+      return da - db;
+    });
+    expect(clockwiseFromStart.map((b) => b.index)).toEqual([0, 1, 2, 3, 4]);
   });
 
   it("keeps Top bead fixed when wrist radius grows with Balance Spacing", () => {
@@ -629,6 +640,8 @@ describe("computeBalancedRadialStrandPathLayout physical-contact", () => {
     radius: 100,
     startAngle: -Math.PI / 2,
     placement: "physical-contact" as const,
+    /** Edge-to-edge packing tests leave leftover in the closure arc. */
+    balanceSpacing: false as const,
   };
   const circumference = 2 * Math.PI * base.radius;
 
@@ -706,7 +719,7 @@ describe("computeBalancedRadialStrandPathLayout physical-contact", () => {
     );
   });
 
-  it("ignores Balance Spacing for physical-contact (no even gap stretch)", () => {
+  it("equalises empty gaps with Balance Spacing while keeping array neighbour order", () => {
     const beads = equalBeads(6, 12);
     const off = computeBalancedRadialStrandPathLayout({
       ...base,
@@ -718,10 +731,17 @@ describe("computeBalancedRadialStrandPathLayout physical-contact", () => {
       balanceSpacing: true,
       beads,
     });
-    off.beads.forEach((bead, index) => {
-      expect(bead.angle).toBeCloseTo(on.beads[index]!.angle, 8);
+
+    // Unbalanced packs toward the start; balance spreads leftover evenly.
+    expect(on.beads[0]!.angle).toBeCloseTo(off.beads[0]!.angle, 5);
+    expect(on.beads[3]!.angle).not.toBeCloseTo(off.beads[3]!.angle, 2);
+
+    const ordered = [...on.beads].sort((a, b) => {
+      const da = clockwiseAngle(base.startAngle, a.angle);
+      const db = clockwiseAngle(base.startAngle, b.angle);
+      return da - db;
     });
-    expect(circumference).toBeGreaterThan(0);
+    expect(ordered.map((b) => b.index)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 });
 

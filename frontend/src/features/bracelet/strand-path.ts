@@ -439,12 +439,13 @@ function balanceEmptyNeighbourGapsPx(params: {
 /**
  * Occupancy-aware strand placement with fixed orientation.
  *
- * Default `placement: "largest-gap"`:
- *   Top → Bottom → Right → Left, then remaining beads fill the largest empty arcs.
- * Optional Balance Spacing equalises leftover empty gaps without changing occupancy,
- * neighbour order, or absolute rotation (bead 0 stays put).
+ * Default `placement: "physical-contact"`:
+ *   Walk the bead array in order along the ring (bead 0 anchored at startAngle).
+ *   Optional Balance Spacing equalises leftover empty gaps without changing occupancy
+ *   or neighbour order (bead 0 stays put).
  *
- * Opt-in `placement: "physical-contact"` packs edge-to-edge (leftover = one unfinished arc).
+ * Opt-in `placement: "largest-gap"` (legacy): Top → Bottom → Right → Left anchors.
+ * Prefer physical-contact for the live Builder — largest-gap breaks sequence stability.
  */
 export function computeBalancedRadialStrandPathLayout(params: {
   beads: SequentialStrandBeadInput[];
@@ -455,13 +456,13 @@ export function computeBalancedRadialStrandPathLayout(params: {
   /** Minimum clearance between neighbouring beads along the strand (px). Default 0. */
   minGapPx?: number;
   /**
-   * When true (default) with `"largest-gap"`, equalise empty neighbour gaps after
-   * physical placement. Pins bead 0; does not reshuffle insertion order.
+   * When true (default), equalise empty neighbour gaps after placement.
+   * Pins bead 0; does not reshuffle insertion / neighbour order.
    */
   balanceSpacing?: boolean;
   /**
-   * `"largest-gap"` (default): Top → Bottom → Right → Left, then fill largest arcs.
-   * `"physical-contact"`: edge-to-edge packing (opt-in).
+   * `"physical-contact"` (default): pack in array order along the ring.
+   * `"largest-gap"`: legacy Top → Bottom → Right → Left anchors (unstable on insert).
    */
   placement?: "physical-contact" | "largest-gap";
   /**
@@ -481,7 +482,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
     startAngle = STRAND_PATH_START_ANGLE,
     minGapPx = 0,
     balanceSpacing = true,
-    placement = "largest-gap",
+    placement = "physical-contact",
   } = params;
   const circumferencePx = 2 * Math.PI * Math.max(radius, 1e-6);
   const gapPx = Math.max(0, minGapPx);
@@ -512,7 +513,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
       gapPx,
     });
   } else {
-    // Stable visual anchors: top, bottom, right, left.
+    // Legacy largest-gap anchors (kept for tests / opt-in callers only).
     const anchorFractions = [0, 0.5, 0.25, 0.75] as const;
     for (let index = 0; index < Math.min(beads.length, anchorFractions.length); index++) {
       positionsPx[index] = anchorFractions[index]! * circumferencePx;
@@ -603,15 +604,15 @@ export function computeBalancedRadialStrandPathLayout(params: {
         );
       });
     }
+  }
 
-    if (balanceSpacing) {
-      positionsPx = balanceEmptyNeighbourGapsPx({
-        positionsPx,
-        widthsPx,
-        circumferencePx,
-        gapPx,
-      });
-    }
+  if (balanceSpacing) {
+    positionsPx = balanceEmptyNeighbourGapsPx({
+      positionsPx,
+      widthsPx,
+      circumferencePx,
+      gapPx,
+    });
   }
 
   const layouts = beads.map((bead, i) => {
@@ -661,7 +662,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
   };
 }
 
-/** Edge-to-edge packing along the ring (opt-in physical-contact placement). */
+/** Edge-to-edge packing along the ring in array order (bead 0 centered at arc origin). */
 function packPhysicalContactPositionsPx(params: {
   widthsPx: number[];
   circumferencePx: number;
@@ -669,11 +670,12 @@ function packPhysicalContactPositionsPx(params: {
 }): number[] {
   const { widthsPx, gapPx } = params;
   const positionsPx = new Array<number>(widthsPx.length).fill(0);
-  let cursorPx = 0;
-  for (let i = 0; i < widthsPx.length; i++) {
-    const width = widthsPx[i]!;
-    positionsPx[i] = cursorPx + width / 2;
-    cursorPx += width + gapPx;
+  if (widthsPx.length === 0) return positionsPx;
+  // Center of bead 0 stays at 0 so angle === startAngle (top anchor).
+  positionsPx[0] = 0;
+  for (let i = 1; i < widthsPx.length; i++) {
+    positionsPx[i] =
+      positionsPx[i - 1]! + widthsPx[i - 1]! / 2 + gapPx + widthsPx[i]! / 2;
   }
   return positionsPx;
 }

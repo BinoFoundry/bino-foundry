@@ -1,5 +1,6 @@
 import {
   CircleDot,
+  ClipboardList,
   Gem,
   Glasses,
   LayoutDashboard,
@@ -28,6 +29,14 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     icon: Users,
     group: "platform",
     permission: "customers.manage",
+  },
+  {
+    id: "orders",
+    label: "Orders",
+    description: "Customer orders, fulfilment, and status",
+    icon: ClipboardList,
+    group: "platform",
+    permission: "orders.manage",
   },
   {
     id: "frames",
