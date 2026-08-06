@@ -13,6 +13,11 @@ export interface BeadTypeEntry {
   displayOrder?: number;
   isActive?: boolean;
   enableSubTypes?: boolean;
+  /**
+   * How library drops interact with occupied strand slots.
+   * From bead_types.placement_mode — never inferred from name/slug.
+   */
+  placementMode?: "replace" | "insert_between";
   metadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;

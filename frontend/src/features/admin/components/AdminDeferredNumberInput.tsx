@@ -1,5 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 
+import { parseLocaleNumber } from "@/lib/bead-size-format";
+
 import { adminFieldClass } from "./admin-styles";
 
 function formatCommitted(value: number, decimals: number): string {
@@ -61,7 +63,7 @@ export function AdminDeferredNumberInput({
       setDraft(null);
       return;
     }
-    const parsed = Number(trimmed);
+    const parsed = parseLocaleNumber(trimmed);
     if (!Number.isFinite(parsed)) {
       setDraft(null);
       return;

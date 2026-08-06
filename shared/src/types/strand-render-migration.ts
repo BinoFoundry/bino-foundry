@@ -131,6 +131,8 @@ export function pruneStrandRenderOverride(
   if (!override) return {};
   const pruned: Partial<StrandRenderProfile> = {};
   for (const key of STRAND_RENDER_PROFILE_KEYS) {
+    // Owned by bead_types.placement_mode column — never bake into JSON overrides.
+    if (key === "placementMode") continue;
     const value = override[key];
     if (value === undefined) continue;
     if (value !== inherited[key]) {
@@ -144,7 +146,9 @@ export function strandRenderOverrideIsEmpty(
   override: Partial<StrandRenderProfile> | null | undefined,
 ): boolean {
   if (!override) return true;
-  return STRAND_RENDER_PROFILE_KEYS.every((key) => override[key] === undefined);
+  return STRAND_RENDER_PROFILE_KEYS.every(
+    (key) => key === "placementMode" || override[key] === undefined,
+  );
 }
 
 export interface BeadLibraryStrandMetadata {
@@ -159,17 +163,24 @@ export function normalizeBeadLibraryStrandMetadata(
 ): Record<string, unknown> {
   const base = { ...(metadata ?? {}) } as Record<string, unknown>;
   const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
-  const pruned = pruneStrandRenderOverride(rawOverride, inherited);
   const explicitOptOut = base.useTypeStrandDefaults === false;
 
+  // Custom mode: keep authored override fields (including values that match parent)
+  // so unticking "Use Parent Calibration" persists after save/reload.
+  if (explicitOptOut) {
+    if (rawOverride && !strandRenderOverrideIsEmpty(rawOverride)) {
+      base.strandRenderOverride = rawOverride;
+    } else {
+      delete base.strandRenderOverride;
+    }
+    base.useTypeStrandDefaults = false;
+    return base;
+  }
+
+  const pruned = pruneStrandRenderOverride(rawOverride, inherited);
   if (strandRenderOverrideIsEmpty(pruned)) {
     delete base.strandRenderOverride;
-    // Keep an explicit "do not inherit" flag; only default to inherit when unset.
-    if (!explicitOptOut) {
-      base.useTypeStrandDefaults = true;
-    } else {
-      base.useTypeStrandDefaults = false;
-    }
+    base.useTypeStrandDefaults = true;
     return base;
   }
 

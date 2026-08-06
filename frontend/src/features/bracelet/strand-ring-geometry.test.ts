@@ -176,8 +176,10 @@ describe("mixed bead sizes on 16cm wrist", () => {
     for (let i = 1; i < widths.length; i++) {
       expect(widths[i]).toBeGreaterThan(widths[i - 1]);
     }
-    expect(widths[0]).toBeGreaterThan(2);
+    expect(widths[0]).toBeGreaterThan(1);
     expect(widths[widths.length - 1]!).toBeLessThanOrEqual(36);
+    // Proportional physical sizes: 8mm is exactly 4/3 of 6mm.
+    expect(widths[4]! / widths[3]!).toBeCloseTo(8 / 6, 5);
   });
 
   it("does not overlap 6/8/10/12mm crystals", () => {

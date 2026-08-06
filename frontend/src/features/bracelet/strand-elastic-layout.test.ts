@@ -4,8 +4,10 @@ import {
   adjacentArcSectorsOverlap,
   adjacentIndexAngleDeltaRad,
   computeElasticBeadLayout,
+  isSameBeadType,
   midpointAngleRad,
   resolveDropTargetFromLayout,
+  resolveLibraryDropTarget,
   resolveLibraryInsertTarget,
 } from "./strand-elastic-layout";
 
@@ -148,5 +150,91 @@ describe("resolveDropTargetFromLayout", () => {
       elastic.insertionAngles,
     );
     expect(atGap.mode).toBe("insert");
+  });
+});
+
+describe("resolveLibraryDropTarget", () => {
+  const crystal = { beadTypeId: "type-crystal", beadTypeSlug: "crystal" };
+  const charm = { beadTypeId: "type-charm", beadTypeSlug: "charm" };
+
+  function layoutOf(sizes: number[]) {
+    const elastic = computeElasticBeadLayout(sizes, 160);
+    const sectors = elastic.angles.map((angle, index) => ({
+      index,
+      angle,
+      arcSpan: elastic.arcSpans[index]!,
+    }));
+    return { elastic, sectors };
+  }
+
+  it("replaces when insert_between drag hovers same Type", () => {
+    const { elastic, sectors } = layoutOf([8, 8, 10, 8]);
+    const placed = [crystal, crystal, charm, crystal];
+    const atCharm = resolveLibraryDropTarget({
+      pointerAngle: elastic.angles[2]!,
+      sectors,
+      insertionAngles: elastic.insertionAngles,
+      placementMode: "insert_between",
+      dragged: charm,
+      placedTypeRefs: placed,
+    });
+    expect(atCharm).toEqual({ mode: "replace", index: 2 });
+  });
+
+  it("inserts when insert_between drag is not over same Type", () => {
+    const { elastic, sectors } = layoutOf([8, 8, 10, 8]);
+    const placed = [crystal, crystal, charm, crystal];
+    const atCrystal = resolveLibraryDropTarget({
+      pointerAngle: elastic.angles[0]!,
+      sectors,
+      insertionAngles: elastic.insertionAngles,
+      placementMode: "insert_between",
+      dragged: charm,
+      placedTypeRefs: placed,
+    });
+    expect(atCrystal.mode).toBe("insert");
+
+    const atGap = resolveLibraryDropTarget({
+      pointerAngle: elastic.insertionAngles[2]!,
+      sectors,
+      insertionAngles: elastic.insertionAngles,
+      placementMode: "insert_between",
+      dragged: charm,
+      placedTypeRefs: placed,
+    });
+    expect(atGap.mode).toBe("insert");
+  });
+
+  it("does not replace across different Types in replace mode", () => {
+    const { elastic, sectors } = layoutOf([8, 10, 8]);
+    const placed = [crystal, charm, crystal];
+    const atCharm = resolveLibraryDropTarget({
+      pointerAngle: elastic.angles[1]!,
+      sectors,
+      insertionAngles: elastic.insertionAngles,
+      placementMode: "replace",
+      dragged: crystal,
+      placedTypeRefs: placed,
+    });
+    expect(atCharm.mode).toBe("insert");
+  });
+
+  it("replaces same Type in replace mode", () => {
+    const { elastic, sectors } = layoutOf([8, 8, 8]);
+    const placed = [crystal, crystal, crystal];
+    const atBead = resolveLibraryDropTarget({
+      pointerAngle: elastic.angles[1]!,
+      sectors,
+      insertionAngles: elastic.insertionAngles,
+      placementMode: "replace",
+      dragged: crystal,
+      placedTypeRefs: placed,
+    });
+    expect(atBead).toEqual({ mode: "replace", index: 1 });
+  });
+
+  it("matches Type by id only (Sub-Type ignored)", () => {
+    expect(isSameBeadType({ beadTypeId: "type-charm" }, { beadTypeId: "type-charm" })).toBe(true);
+    expect(isSameBeadType({ beadTypeId: "type-charm" }, { beadTypeId: "type-crystal" })).toBe(false);
   });
 });

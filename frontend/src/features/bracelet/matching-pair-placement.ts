@@ -20,6 +20,8 @@ export interface ResolveAutoPlacementInput {
   beadSizeMm: number;
   /** `sequential` fills A then B; `mirror` places on both (future). */
   mirrorMode?: MatchingPairMirrorMode;
+  /** When set, prefer this strand if it has capacity (independent matching-pair editing). */
+  preferredStrand?: StrandId;
 }
 
 /**
@@ -35,7 +37,20 @@ export function resolveAutoPlacementStrand(input: ResolveAutoPlacementInput): St
     placedB,
     beadSizeMm,
     mirrorMode = "sequential",
+    preferredStrand,
   } = input;
+
+  if (preferredStrand === "B" && twinning) {
+    if (canPlaceBeadSize(wristSizeB, placedB, beadSizeMm)) return "B";
+    if (canPlaceBeadSize(wristSizeA, placedA, beadSizeMm)) return "A";
+    return null;
+  }
+
+  if (preferredStrand === "A") {
+    if (canPlaceBeadSize(wristSizeA, placedA, beadSizeMm)) return "A";
+    if (twinning && canPlaceBeadSize(wristSizeB, placedB, beadSizeMm)) return "B";
+    return null;
+  }
 
   if (mirrorMode === "mirror" && twinning) {
     const fitsA = canPlaceBeadSize(wristSizeA, placedA, beadSizeMm);

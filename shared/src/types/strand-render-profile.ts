@@ -17,6 +17,19 @@ export type StrandAttachmentStyle = "inline" | "betweenItems";
 /** Whether spacing uses full slot width (inline) or attachment point only (dangling). */
 export type StrandLayoutMode = "inline" | "dangling";
 
+/** How a library drag interacts with existing strand beads. */
+export type BeadPlacementMode = "replace" | "insert_between";
+
+export const BEAD_PLACEMENT_MODES = ["replace", "insert_between"] as const satisfies readonly BeadPlacementMode[];
+
+export const DEFAULT_BEAD_PLACEMENT_MODE: BeadPlacementMode = "replace";
+
+/** Parse/validate placement mode; invalid or missing → replace. */
+export function parseBeadPlacementMode(raw: unknown): BeadPlacementMode {
+  if (raw === "insert_between" || raw === "replace") return raw;
+  return DEFAULT_BEAD_PLACEMENT_MODE;
+}
+
 /**
  * Data-driven strand rendering behaviour for a bead type or library override.
  * The renderer reads these values only — never asset category slugs.
@@ -88,6 +101,11 @@ export interface StrandRenderProfile {
   forceRoundFootprint: boolean;
   /** Prefer metadata.strandImageUrl over processed delivery URL. */
   preferStrandImageUrl: boolean;
+  /**
+   * How library placement interacts with occupied strand slots.
+   * Sourced from bead_types.placement_mode — never inferred from category names.
+   */
+  placementMode: BeadPlacementMode;
 }
 
 /** Symmetrical stored range for contact width + adjustment (-max … +max). */
@@ -136,6 +154,7 @@ export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
   stringOcclusion: 1,
   forceRoundFootprint: true,
   preferStrandImageUrl: false,
+  placementMode: DEFAULT_BEAD_PLACEMENT_MODE,
 };
 
 /** @deprecated Migration seed reference only — runtime uses DB hierarchy (system → type → bead). */
@@ -146,6 +165,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     anchorPreset: "center",
     orientationMode: "outward",
     forceRoundFootprint: true,
+    placementMode: "replace",
   },
   gemstone: {
     strandOccupancy: 1,
@@ -153,6 +173,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     anchorPreset: "center",
     orientationMode: "outward",
     forceRoundFootprint: true,
+    placementMode: "replace",
   },
   accent: {
     strandOccupancy: 1,
@@ -160,6 +181,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     anchorPreset: "center",
     orientationMode: "outward",
     forceRoundFootprint: true,
+    placementMode: "replace",
   },
   "round-bead": {
     strandOccupancy: 1,
@@ -167,6 +189,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     anchorPreset: "center",
     orientationMode: "outward",
     forceRoundFootprint: true,
+    placementMode: "replace",
   },
   charm: {
     strandOccupancy: 1,
@@ -186,6 +209,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     orientationMode: "outward",
     zPriority: 10,
     forceRoundFootprint: false,
+    placementMode: "insert_between",
   },
   spacer: {
     strandOccupancy: 1,
@@ -194,6 +218,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     leadingOverlap: 0.02,
     trailingOverlap: 0.02,
     anchorPreset: "center",
+    placementMode: "replace",
     orientationMode: "outward",
     forceRoundFootprint: false,
     visualScale: 1,
@@ -208,6 +233,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     orientationMode: "outward",
     forceRoundFootprint: false,
     preferStrandImageUrl: true,
+    placementMode: "insert_between",
   },
   connector: {
     strandOccupancy: 0.45,
@@ -218,6 +244,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     orientationMode: "outward",
     forceRoundFootprint: false,
     preferStrandImageUrl: true,
+    placementMode: "insert_between",
   },
 };
 
@@ -293,6 +320,7 @@ export function mergeStrandRenderProfile(
   merged.verticalOffset = Math.max(-1, Math.min(1, merged.verticalOffset));
   merged.visualScale = Math.max(0.25, Math.min(3, merged.visualScale));
   merged.stringOcclusion = Math.max(0, Math.min(1, merged.stringOcclusion));
+  merged.placementMode = parseBeadPlacementMode(merged.placementMode);
   return merged;
 }
 
@@ -330,5 +358,8 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   if (typeof o.stringOcclusion === "number") partial.stringOcclusion = o.stringOcclusion;
   if (typeof o.forceRoundFootprint === "boolean") partial.forceRoundFootprint = o.forceRoundFootprint;
   if (typeof o.preferStrandImageUrl === "boolean") partial.preferStrandImageUrl = o.preferStrandImageUrl;
+  if (o.placementMode === "replace" || o.placementMode === "insert_between") {
+    partial.placementMode = o.placementMode;
+  }
   return partial;
 }

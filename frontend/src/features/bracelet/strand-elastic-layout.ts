@@ -319,6 +319,46 @@ export function angularDistanceRad(a: number, b: number): number {
 
 export type StrandInsertTarget = { mode: "insert"; index: number };
 
+/** Minimal type identity for drop rules — never use hardcoded category names. */
+export type BeadTypeRef = {
+  beadTypeId?: string | null;
+  beadTypeSlug?: string | null;
+};
+
+/** True when both sides resolve to the same bead type (id preferred, slug fallback). */
+export function isSameBeadType(
+  a: BeadTypeRef | null | undefined,
+  b: BeadTypeRef | null | undefined,
+): boolean {
+  if (!a || !b) return false;
+  const aId = typeof a.beadTypeId === "string" ? a.beadTypeId.trim() : "";
+  const bId = typeof b.beadTypeId === "string" ? b.beadTypeId.trim() : "";
+  if (aId && bId) return aId === bId;
+  const aSlug = typeof a.beadTypeSlug === "string" ? a.beadTypeSlug.trim() : "";
+  const bSlug = typeof b.beadTypeSlug === "string" ? b.beadTypeSlug.trim() : "";
+  if (aSlug && bSlug) return aSlug === bSlug;
+  return false;
+}
+
+/** Whether the pointer is closer to a bead centre than to an insertion gap. */
+export function isPointerOverBeadSlot(
+  pointerAngle: number,
+  sectors: LayoutAngleSector[],
+  insertionAngles: number[],
+): { over: true; index: number } | { over: false } {
+  if (!sectors.length) return { over: false };
+  const beadIdx = beadIndexFromLayoutSectors(pointerAngle, sectors);
+  const insertIdx = insertionIndexFromLayoutGaps(pointerAngle, insertionAngles);
+  const beadAngle = sectors.find((s) => s.index === beadIdx)?.angle ?? pointerAngle;
+  const gapAngle = insertionAngles[insertIdx] ?? pointerAngle;
+  const toBead = angularDistanceRad(pointerAngle, beadAngle);
+  const toGap = angularDistanceRad(pointerAngle, gapAngle);
+  if (toBead <= toGap * 0.9) {
+    return { over: true, index: beadIdx };
+  }
+  return { over: false };
+}
+
 /** Nearest gap insertion index only (no bead replacement). */
 export function resolveLibraryInsertTarget(
   pointerAngle: number,
@@ -337,17 +377,48 @@ export function resolveDropTargetFromLayout(
 ): { mode: "insert" | "replace"; index: number } {
   if (!sectors.length) return { mode: "insert", index: 0 };
 
-  const beadIdx = beadIndexFromLayoutSectors(pointerAngle, sectors);
-  const insertIdx = insertionIndexFromLayoutGaps(pointerAngle, insertionAngles);
-  const beadAngle = sectors.find((s) => s.index === beadIdx)?.angle ?? pointerAngle;
-  const gapAngle = insertionAngles[insertIdx] ?? pointerAngle;
-  const toBead = angularDistanceRad(pointerAngle, beadAngle);
-  const toGap = angularDistanceRad(pointerAngle, gapAngle);
-
-  if (toBead <= toGap * 0.9) {
-    return { mode: "replace", index: beadIdx };
+  const hover = isPointerOverBeadSlot(pointerAngle, sectors, insertionAngles);
+  if (hover.over) {
+    return { mode: "replace", index: hover.index };
   }
-  return { mode: "insert", index: insertIdx };
+  return {
+    mode: "insert",
+    index: insertionIndexFromLayoutGaps(pointerAngle, insertionAngles),
+  };
+}
+
+/**
+ * Library drop resolution:
+ * 1. Hovering an existing bead of the same Type → replace that bead.
+ * 2. Otherwise follow placement_mode (replace vs insert_between).
+ * Cross-type replacement is never allowed.
+ */
+export function resolveLibraryDropTarget(args: {
+  pointerAngle: number;
+  sectors: LayoutAngleSector[];
+  insertionAngles: number[];
+  placementMode: string | undefined;
+  dragged: BeadTypeRef;
+  /** Placed beads in the same index order as layout sectors. */
+  placedTypeRefs: Array<BeadTypeRef | null | undefined>;
+}): { mode: "insert" | "replace"; index: number } {
+  const { pointerAngle, sectors, insertionAngles, placementMode, dragged, placedTypeRefs } = args;
+  if (!sectors.length) return { mode: "insert", index: 0 };
+
+  const hover = isPointerOverBeadSlot(pointerAngle, sectors, insertionAngles);
+  if (hover.over && isSameBeadType(dragged, placedTypeRefs[hover.index])) {
+    return { mode: "replace", index: hover.index };
+  }
+
+  if (placementMode === "insert_between") {
+    return resolveLibraryInsertTarget(pointerAngle, insertionAngles);
+  }
+
+  const target = resolveDropTargetFromLayout(pointerAngle, sectors, insertionAngles);
+  if (target.mode === "replace" && !isSameBeadType(dragged, placedTypeRefs[target.index])) {
+    return resolveLibraryInsertTarget(pointerAngle, insertionAngles);
+  }
+  return target;
 }
 
 /** Convert rendered pixel extent to equivalent arc mm on the wrist circumference. */

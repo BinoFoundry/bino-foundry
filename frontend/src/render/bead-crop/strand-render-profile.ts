@@ -4,6 +4,7 @@ import {
   beadLibraryInheritsTypeStrandDefaults,
   DEFAULT_STRAND_RENDER_PROFILE,
   mergeStrandRenderProfile,
+  parseBeadPlacementMode,
   parseStrandRenderProfile,
   resolveStrandRenderConfig,
   subBeadTypeInheritsBeadTypeStrandDefaults,
@@ -76,7 +77,10 @@ function subBeadTypeFor(
 function typeDefaultsFromEntry(type: BeadTypeEntry | null): Partial<StrandRenderProfile> | null {
   if (!type) return null;
   const meta = type.metadata as { strandRender?: unknown } | undefined;
-  return parseStrandRenderProfile(meta?.strandRender);
+  const fromMeta = parseStrandRenderProfile(meta?.strandRender);
+  // Column is canonical — never infer from category names / slug.
+  const placementMode = parseBeadPlacementMode(type.placementMode);
+  return { ...(fromMeta ?? {}), placementMode };
 }
 
 function subTypeOverrideFromEntry(

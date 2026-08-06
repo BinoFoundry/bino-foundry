@@ -48,4 +48,6 @@ export const strandRenderDefaultsDto = z.object({
   stringOcclusion: z.number().min(0).max(1),
   forceRoundFootprint: z.boolean(),
   preferStrandImageUrl: z.boolean(),
+  /** Baseline only — bead types own the real placement_mode column. */
+  placementMode: z.enum(["replace", "insert_between"]).default("replace"),
 });

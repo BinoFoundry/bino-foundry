@@ -30,7 +30,7 @@ import {
   SUB_BEAD_TYPE_ALL,
   type SubBeadTypeTabValue,
 } from "@/lib/bead-library-search";
-import { getBeadLibraryImageUrl, getBeadLibraryThumbnailStyle } from "@/render/bead-crop";
+import { getBeadLibraryImageUrl, getBeadLibraryThumbnailStyle, loadProcessedStrandMetrics, resolveStrandDeliveryUrl } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
 import { useBuilderCatalogue } from "@/state/catalogue/useBuilderCatalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -114,6 +114,9 @@ function startLibraryDrag(
   e.dataTransfer.setData(BEAD_LIBRARY_DRAG_TYPE, dragPayload(bead, size));
   e.dataTransfer.setData("application/json", dragPayload(bead, size));
   e.dataTransfer.effectAllowed = "copy";
+  // Resolve alpha metrics before drop so the strand never paints a temporary underscale.
+  const url = resolveStrandDeliveryUrl(bead);
+  if (url) void loadProcessedStrandMetrics(url);
   onLibraryDragActiveChange?.(true);
   onLibraryDragChange?.(true, { bead, size });
 }
@@ -148,6 +151,11 @@ const BeadLibraryCard = memo(function BeadLibraryCard({
   const img = getBeadLibraryImageUrl(bead);
   const canDrag = !isMobile && !!activeSize;
   const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    const url = resolveStrandDeliveryUrl(bead);
+    if (url) void loadProcessedStrandMetrics(url);
+  }, [bead]);
 
   return (
     <div
@@ -308,6 +316,8 @@ const BeadLibrary = ({
     (bead: BeadLibraryEntry, size: BeadLibrarySizeOffer | undefined) => {
       if (suppressClickAfterDragRef.current) return;
       if (!size) return;
+      const url = resolveStrandDeliveryUrl(bead);
+      if (url) void loadProcessedStrandMetrics(url);
       onSelectBead(bead, size);
     },
     [onSelectBead],

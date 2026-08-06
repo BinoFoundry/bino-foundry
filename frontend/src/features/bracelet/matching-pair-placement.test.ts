@@ -55,6 +55,20 @@ describe("resolveAutoPlacementStrand", () => {
     ).toBe("B");
   });
 
+  it("prefers the active placement strand when it has capacity", () => {
+    expect(
+      resolveAutoPlacementStrand({
+        twinning: true,
+        wristSizeA: 16,
+        wristSizeB: 16,
+        placedA: [],
+        placedB: [],
+        beadSizeMm: 8,
+        preferredStrand: "B",
+      }),
+    ).toBe("B");
+  });
+
   it("returns null when both strands are full", () => {
     const wrist = 16;
     const full = fillStrand(wrist, 8);

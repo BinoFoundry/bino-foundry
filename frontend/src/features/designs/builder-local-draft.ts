@@ -80,17 +80,40 @@ export async function clearBuilderLocalDraft(key: string): Promise<void> {
   }
 }
 
-/** True when a stored draft differs from the current baseline (worth offering restore). */
+/** True when a stored draft has enough content to be worth restoring. */
+export function draftHasRecoverableContent(draft: BuilderLocalDraft): boolean {
+  const braceletItems = draft.request.bracelet?.items;
+  if (Array.isArray(braceletItems) && braceletItems.length > 0) return true;
+  if (draft.request.sunglasses?.frameId) return true;
+  return false;
+}
+
+/** True when a stored draft differs from the last saved / currently loaded baseline. */
 export function isRecoverableDraft(
   draft: BuilderLocalDraft | null | undefined,
   currentBaselineFingerprint: string | null,
 ): draft is BuilderLocalDraft {
-  if (!draft) return false;
-  if (!draft.fingerprint) return false;
-  // Same as what's already loaded / last saved — nothing to recover.
-  if (currentBaselineFingerprint && draft.fingerprint === currentBaselineFingerprint) {
+  if (!draft?.fingerprint) return false;
+  if (!draftHasRecoverableContent(draft)) return false;
+
+  // Draft was written with no real delta vs its own baseline — nothing useful to restore.
+  if (
+    draft.baselineFingerprint != null &&
+    draft.fingerprint === draft.baselineFingerprint
+  ) {
     return false;
   }
+
+  // Wait until the loaded design baseline is known so we do not prompt on plain page open.
+  if (currentBaselineFingerprint == null) {
+    return false;
+  }
+
+  // Already matches what's loaded — nothing to recover.
+  if (draft.fingerprint === currentBaselineFingerprint) {
+    return false;
+  }
+
   return true;
 }
 

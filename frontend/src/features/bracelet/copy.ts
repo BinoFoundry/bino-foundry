@@ -4,8 +4,9 @@ export const BRACELET_COPY = {
   wristOnboardingTitle: "Create Your Bracelet",
   wristStepTitle: "Choose Your Wrist Size",
   dropReplaceHint: "Release to replace this bead",
-  dropInsertHint: "Release to add here",
-  dropCharmInsertHint: "Release to attach charm to the strand",
+  dropInsertHint: "Release to insert between beads",
+  /** @deprecated Prefer dropInsertHint — placement is no longer charm-specific. */
+  dropCharmInsertHint: "Release to insert between beads",
   dropReorderHint: "Release to swap positions",
   wristStepSubtitle:
     "Select your wrist measurement. Your bracelet is crafted to fit — the studio adapts to your size.",

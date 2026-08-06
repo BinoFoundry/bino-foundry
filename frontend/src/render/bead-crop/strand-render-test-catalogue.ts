@@ -8,6 +8,7 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     slug: "crystal",
     name: "Crystal",
     description: "",
+    placementMode: "replace",
     metadata: {
       strandRender: {
         strandOccupancy: 1,
@@ -35,6 +36,7 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     slug: "charm",
     name: "Charm",
     description: "",
+    placementMode: "insert_between",
     metadata: {
       strandRender: {
         layoutMode: "dangling",
@@ -64,6 +66,7 @@ export const TEST_STRAND_BEAD_TYPES: BeadTypeEntry[] = [
     slug: "spacer",
     name: "Spacer",
     description: "",
+    placementMode: "replace",
     metadata: {
       strandRender: {
         layoutMode: "inline",

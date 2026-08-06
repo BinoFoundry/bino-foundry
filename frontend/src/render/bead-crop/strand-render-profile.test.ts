@@ -15,6 +15,31 @@ describe("strand render profile", () => {
     expect(profile.provenance.orientationMode).toBe("beadType");
   });
 
+  it("resolves placementMode from bead type column (not category name)", () => {
+    expect(resolveStrandRenderConfigForType("crystal", TEST_STRAND_RENDER_CATALOGUE).placementMode).toBe(
+      "replace",
+    );
+    expect(resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE).placementMode).toBe(
+      "insert_between",
+    );
+    expect(resolveStrandRenderConfigForType("spacer", TEST_STRAND_RENDER_CATALOGUE).placementMode).toBe(
+      "replace",
+    );
+    // Missing column → replace
+    expect(
+      resolveStrandRenderConfigForType("crystal", {
+        beadTypes: [
+          {
+            id: "type-crystal",
+            slug: "crystal",
+            name: "Crystal",
+            description: "",
+          },
+        ],
+      }).placementMode,
+    ).toBe("replace");
+  });
+
   it("applies spacer contact width from bead type defaults", () => {
     const profile = resolveStrandRenderConfigForType("spacer", TEST_STRAND_RENDER_CATALOGUE);
     expect(profile.contactWidth).toBeCloseTo(1, 2);

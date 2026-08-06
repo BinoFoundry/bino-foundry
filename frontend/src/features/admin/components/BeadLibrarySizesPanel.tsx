@@ -1,4 +1,5 @@
 import type { BeadSizeDraftRow } from "@/types/bead-library-sizes";
+import { formatBeadSizeMm } from "@/lib/bead-size-format";
 
 interface BeadLibrarySizesPanelProps {
   rows: BeadSizeDraftRow[];
@@ -44,7 +45,7 @@ export function BeadLibrarySizesPanel({ rows, onRowsChange }: BeadLibrarySizesPa
                 checked={r.enabled}
                 onChange={(e) => toggle(r.sizeMm, e.target.checked)}
               />
-              <span className="font-medium tabular-nums">{r.label}</span>
+              <span className="font-medium tabular-nums">{formatBeadSizeMm(r.sizeMm)}</span>
             </label>
             <span className="text-muted-foreground">→</span>
             <div className="flex items-center gap-1">

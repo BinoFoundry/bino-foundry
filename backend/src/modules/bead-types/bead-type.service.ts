@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import { parseBeadPlacementMode } from "@bino-foundry/shared/types";
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import { ConflictError, NotFoundError } from "../../lib/errors.js";
@@ -17,6 +18,7 @@ function mapBeadTypeRow(row: Record<string, unknown>): Record<string, unknown> {
     displayOrder: row.display_order,
     isActive: row.is_active !== false,
     enableSubTypes: row.enable_sub_types,
+    placementMode: parseBeadPlacementMode(row.placement_mode),
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -80,6 +82,7 @@ export class BeadTypeService {
       display_order: payload.displayOrder ?? 0,
       is_active: payload.isActive ?? true,
       enable_sub_types: payload.enableSubTypes ?? false,
+      placement_mode: parseBeadPlacementMode(payload.placementMode),
       metadata,
     };
 
@@ -110,6 +113,9 @@ export class BeadTypeService {
     if (payload.displayOrder !== undefined) updates.display_order = payload.displayOrder;
     if (payload.isActive !== undefined) updates.is_active = payload.isActive;
     if (payload.enableSubTypes !== undefined) updates.enable_sub_types = payload.enableSubTypes;
+    if (payload.placementMode !== undefined) {
+      updates.placement_mode = parseBeadPlacementMode(payload.placementMode);
+    }
     if (payload.metadata !== undefined) updates.metadata = payload.metadata;
 
     const { data, error } = await supabase.from("bead_types").update(updates).eq("id", recordId).select("*").single();

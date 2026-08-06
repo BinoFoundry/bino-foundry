@@ -21,6 +21,7 @@ import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 import { resolveStrandRenderConfig } from "@bino-foundry/shared/types";
 
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
+import { displayBeadSizeLabel } from "@/lib/bead-size-format";
 import { BRACELET_COPY } from "@/features/bracelet/copy";
 import { isUnavailablePlacedBead, unavailableIssueForPlaced } from "@/features/bracelet/unavailable-bead";
 import {
@@ -38,6 +39,8 @@ import {
   loadProcessedStrandMetrics,
   resolveStrandDeliveryUrl,
   subscribeProcessedStrandMetrics,
+  peekProcessedStrandMetrics,
+  usesProcessedStrandAsset,
   type BeadSlotDimensions,
 } from "@/render/bead-crop";
 import { normalizeFromSlots, strandCircumferenceMm } from "@/features/bracelet/composition";
@@ -47,7 +50,7 @@ import {
   type WristSizeBounds,
 } from "@/features/bracelet/strand-ring";
 import {
-  resolveDropTargetFromLayout,
+  resolveLibraryDropTarget,
   type LayoutAngleSector,
 } from "@/features/bracelet/strand-elastic-layout";
 import { resolveBeadIndexUnderPointer } from "@/features/bracelet/strand-reorder-hit-test";
@@ -226,9 +229,16 @@ function SortableBeadInner({
   const unavailableIssue = bead ? unavailableIssueForPlaced(bead) : null;
 
   const imgSrc = unavailable ? "" : getBeadImageUrl(bead, sizingCatalogue);
-  const hasImage = !!imgSrc;
+  const deliveryUrl = bead && !unavailable ? resolveStrandDeliveryUrl(bead.bead) : null;
+  const needsProcessedMetrics =
+    Boolean(deliveryUrl) && Boolean(bead && usesProcessedStrandAsset(bead.bead));
+  const processedReady =
+    !needsProcessedMetrics || peekProcessedStrandMetrics(deliveryUrl) != null;
+  const hasAsset = !!imgSrc;
+  const showImage = hasAsset && processedReady;
+
   const mm = bead ? placedBeadSizeMm(bead) : 0;
-  const shell = hasImage
+  const shell = hasAsset
     ? getPlacedBeadShellStyle(renderDim, true)
     : getPlacedBeadShellStyle(renderDim, false);
 
@@ -240,15 +250,18 @@ function SortableBeadInner({
     width: renderDim.width,
     height: renderDim.height,
     opacity: isDragging ? 0.4 : bead ? 1 : emptyGuideMode === "prominent" ? 1 : 0.78,
+    // Never animate size/position on library insert — that reads as a scale flicker.
     transition:
       isDragActive || libraryDragActive
         ? undefined
-        : "left 0.25s cubic-bezier(0.33, 1, 0.68, 1), top 0.25s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.15s, transform 0.15s",
+        : "opacity 0.15s ease-out",
     zIndex: isEmptySlot && libraryDragActive ? 35 : zIndex,
     pointerEvents: isDragging ? "none" : bead && libraryDragActive ? "none" : "auto",
     transformOrigin: `${transformOriginX}px ${transformOriginY}px`,
     transform: beadShellTransform(rotationDeg, { dragOverlay: isDragging }),
     boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.12)" : shell.boxShadow,
+    // Clip to the mm shell so raster overflow cannot make beads look larger than configured.
+    overflow: "hidden",
   };
 
   const slotExtent = Math.max(renderDim.width, renderDim.height);
@@ -261,7 +274,7 @@ function SortableBeadInner({
   const title = unavailable
     ? `${BRACELET_COPY.unavailableBeadName} · ${BRACELET_COPY.unavailableBeadPrompt}`
     : bead
-      ? `${label} · ${bead.size.label} — ${BRACELET_COPY.dragToReorder}`
+      ? `${label} · ${displayBeadSizeLabel(bead.size.sizeMm, bead.size.label)} — ${BRACELET_COPY.dragToReorder}`
       : BRACELET_COPY.emptySlotHint;
 
   const handleEmptySlotKeyDown = (e: KeyboardEvent) => {
@@ -301,8 +314,6 @@ function SortableBeadInner({
               unavailable
                 ? "cursor-pointer border-2 border-dashed border-destructive/50 bg-destructive/5"
                 : "cursor-grab bg-transparent active:cursor-grabbing",
-              !unavailable && "transition-transform duration-200 ease-out",
-              !unavailable && "hover:scale-[1.02]",
               isDragging && "cursor-grabbing",
               isSelected && "ring-2 ring-inset ring-primary/45",
               isSwapTarget && "ring-2 ring-inset ring-primary/60",
@@ -313,16 +324,16 @@ function SortableBeadInner({
       title={title}
       aria-label={isEmptySlot ? BRACELET_COPY.emptySlotHint : title}
     >
-      {hasImage && bead ? (
+      {showImage && bead ? (
         <div
-          className="relative h-full w-full overflow-visible"
+          className="relative h-full w-full"
           style={{ width: renderDim.width, height: renderDim.height }}
         >
           <img
             src={imgSrc}
             alt=""
             draggable={false}
-            loading="lazy"
+            loading="eager"
             decoding="async"
             {...getStrandBeadRasterSize(renderSizing?.imageDimensions ?? renderDim)}
             className="pointer-events-none select-none"
@@ -542,7 +553,7 @@ const SortableCircularStrand = ({
 
   const normalized = useMemo(() => normalizeFromSlots(placedBeads), [placedBeads]);
 
-  /** Bumps when processed-PNG alpha metrics land — corrects padded-mask underscaling. */
+  /** Bumps when processed-PNG alpha metrics land — image fit only, not shell layout. */
   const [processedMetricsEpoch, setProcessedMetricsEpoch] = useState(0);
   useEffect(() => {
     const unsub = subscribeProcessedStrandMetrics(() => {
@@ -847,7 +858,6 @@ const SortableCircularStrand = ({
       effectiveCanvasSize,
     };
   }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing, processedMetricsEpoch, forceStrandRenderProfile]);
-
   const renderCanvasSize = canvasSize;
   const ringStrokeWidth = computeStrandRingStrokePx(scaleFactor);
 
@@ -884,7 +894,14 @@ const SortableCircularStrand = ({
   );
 
   const resolveLibraryDropFromClient = useCallback(
-    (clientX: number, clientY: number): StrandDropTarget => {
+    (
+      clientX: number,
+      clientY: number,
+      options?: {
+        placementMode?: string;
+        dragged?: { beadTypeId?: string; beadTypeSlug?: string };
+      },
+    ): StrandDropTarget => {
       const angle = pointerAngleFromClient(clientX, clientY);
       if (placedCount === 0) {
         return {
@@ -894,9 +911,26 @@ const SortableCircularStrand = ({
         };
       }
       if (angle === null) return { mode: "insert", index: 0 };
-      return resolveDropTargetFromLayout(angle, layoutSectors, insertionAngles);
+      return resolveLibraryDropTarget({
+        pointerAngle: angle,
+        sectors: layoutSectors,
+        insertionAngles,
+        placementMode: options?.placementMode,
+        dragged: options?.dragged ?? {},
+        placedTypeRefs: normalized.map((placed) => ({
+          beadTypeId: placed.bead.beadTypeId,
+          beadTypeSlug: placed.bead.beadTypeSlug,
+        })),
+      });
     },
-    [placedCount, pointerAngleFromClient, layoutSectors, insertionAngles, pathStartAngle],
+    [
+      placedCount,
+      pointerAngleFromClient,
+      layoutSectors,
+      insertionAngles,
+      pathStartAngle,
+      normalized,
+    ],
   );
 
   const isClientOverCanvas = useCallback((clientX: number, clientY: number) => {
@@ -922,16 +956,30 @@ const SortableCircularStrand = ({
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
       setIsLibraryDragOver(true);
-      publishHoverTarget(resolveLibraryDropFromClient(e.clientX, e.clientY));
+      publishHoverTarget(
+        resolveLibraryDropFromClient(e.clientX, e.clientY, {
+          placementMode: libraryDragPreview?.bead
+            ? getForBead(libraryDragPreview.bead).placementMode
+            : undefined,
+          dragged: libraryDragPreview?.bead
+            ? {
+                beadTypeId: libraryDragPreview.bead.beadTypeId,
+                beadTypeSlug: libraryDragPreview.bead.beadTypeSlug,
+              }
+            : undefined,
+        }),
+      );
     };
 
     document.addEventListener("dragover", onDocumentDragOver);
     return () => document.removeEventListener("dragover", onDocumentDragOver);
   }, [
     libraryDragActive,
+    libraryDragPreview,
     isClientOverCanvas,
     resolveLibraryDropFromClient,
     publishHoverTarget,
+    getForBead,
   ]);
 
   const handleCanvasLibraryDragEnter = (e: React.DragEvent) => {
@@ -944,7 +992,19 @@ const SortableCircularStrand = ({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "copy";
-    publishHoverTarget(resolveLibraryDropFromClient(e.clientX, e.clientY));
+    publishHoverTarget(
+      resolveLibraryDropFromClient(e.clientX, e.clientY, {
+        placementMode: libraryDragPreview?.bead
+          ? getForBead(libraryDragPreview.bead).placementMode
+          : undefined,
+        dragged: libraryDragPreview?.bead
+          ? {
+              beadTypeId: libraryDragPreview.bead.beadTypeId,
+              beadTypeSlug: libraryDragPreview.bead.beadTypeSlug,
+            }
+          : undefined,
+      }),
+    );
   };
 
   const handleCanvasLibraryDragLeave = (e: React.DragEvent) => {
@@ -965,7 +1025,16 @@ const SortableCircularStrand = ({
       e.dataTransfer.getData("application/json");
     const data = parseLibraryPayload(raw);
     if (!data?.bead) return;
-    onBeadDrop(resolveLibraryDropFromClient(e.clientX, e.clientY), data);
+    onBeadDrop(
+      resolveLibraryDropFromClient(e.clientX, e.clientY, {
+        placementMode: getForBead(data.bead).placementMode,
+        dragged: {
+          beadTypeId: data.bead.beadTypeId,
+          beadTypeSlug: data.bead.beadTypeSlug,
+        },
+      }),
+      data,
+    );
   };
 
   const readClientPoint = (event: Event | null | undefined): { x: number; y: number } | null => {
@@ -1228,9 +1297,7 @@ const SortableCircularStrand = ({
             <p className="text-muted-foreground">
               {libraryDropHover.mode === "replace"
                 ? BRACELET_COPY.dropReplaceHint
-                : libraryDragPreview?.bead?.beadTypeSlug === "charm"
-                  ? BRACELET_COPY.dropCharmInsertHint
-                  : BRACELET_COPY.dropInsertHint}
+                : BRACELET_COPY.dropInsertHint}
             </p>
           ) : reorderHintVisible && placedCount >= 2 ? (
             <div className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-full border border-border/50 bg-muted/20 px-3 py-1">

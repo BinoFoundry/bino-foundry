@@ -76,7 +76,9 @@ export {
 } from "./strand-ring";
 export {
   computeElasticBeadLayout,
+  isSameBeadType,
   resolveDropTargetFromLayout,
+  resolveLibraryDropTarget,
   resolveLibraryInsertTarget,
   visualArcMmFromExtent,
 } from "./strand-elastic-layout";

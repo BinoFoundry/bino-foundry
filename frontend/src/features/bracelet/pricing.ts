@@ -6,6 +6,7 @@ import type {
 } from "@bino-foundry/shared/types";
 
 import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
+import { displayBeadSizeLabel } from "@/lib/bead-size-format";
 import type { BeadTypeEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
@@ -19,7 +20,7 @@ type PricingLineItemLabel = Pick<
 
 /** Customer-facing label: bead name, size, and optional quantity. */
 export function formatPricingLineItemLabel(item: PricingLineItemLabel): string {
-  const size = item.sizeLabel?.trim() || `${item.beadSizeMm} mm`;
+  const size = displayBeadSizeLabel(item.beadSizeMm);
   const descriptor = `${item.beadName} (${size})`;
   return item.quantity > 1 ? `${descriptor} × ${item.quantity}` : descriptor;
 }
@@ -66,7 +67,7 @@ export function buildBraceletPricing(
       beadSizeMm: placedBeadSizeMm(placed) as BraceletBeadSizeMm,
       offerKey: placed.size.offerKey,
       beadName: placed.bead.name,
-      sizeLabel: placed.size.label,
+      sizeLabel: displayBeadSizeLabel(placed.size.sizeMm, placed.size.label),
       beadTypeSlug: placed.bead.beadTypeSlug ?? "crystal",
       quantity: 1,
       unitPrice: unit,

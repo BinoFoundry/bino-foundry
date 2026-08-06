@@ -28,10 +28,11 @@ import { isApiError, uploadApi, beadLibrarySizesApi } from "@/services/api";
 import {
   DEFAULT_STRAND_RENDER_PROFILE,
   isBeadCropConfigValid,
-  mergeLazyStrandRenderOverride,
   parseStrandRenderProfile,
   pruneStrandRenderOverride,
   strandRenderOverrideIsEmpty,
+  beadLibraryInheritsTypeStrandDefaults,
+  normalizeBeadLibraryStrandMetadata,
   type BeadCropConfig,
   type StrandRenderProfile,
 } from "@bino-foundry/shared/types";
@@ -66,13 +67,15 @@ function buildSizeRows(
 function updateStrandOverride(
   form: BeadLibraryEntry,
   patch: Record<string, unknown>,
-  inherited: StrandRenderProfile,
+  _inherited: StrandRenderProfile,
 ): BeadLibraryEntry {
-  const meta = form.metadata as { strandRenderOverride?: unknown } | undefined;
+  const meta = form.metadata as { strandRenderOverride?: unknown; useTypeStrandDefaults?: boolean } | undefined;
   const current = parseStrandRenderProfile(meta?.strandRenderOverride) ?? {};
-  const next = mergeLazyStrandRenderOverride(current, patch, inherited);
+  // In custom mode keep authored values (including equals-to-parent) so sliders persist.
+  const next = { ...current, ...patch } as Partial<StrandRenderProfile>;
   if (strandRenderOverrideIsEmpty(next)) {
-    return setInheritTypeDefaults(form, true);
+    const keepOptOut = meta?.useTypeStrandDefaults === false;
+    return setInheritTypeDefaults(form, !keepOptOut);
   }
   return {
     ...form,
@@ -84,15 +87,40 @@ function updateStrandOverride(
   };
 }
 
-function setInheritTypeDefaults(form: BeadLibraryEntry, inherit: boolean): BeadLibraryEntry {
+function setInheritTypeDefaults(
+  form: BeadLibraryEntry,
+  inherit: boolean,
+  seedOverride?: Partial<StrandRenderProfile> | null,
+): BeadLibraryEntry {
   const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
   if (inherit) {
     delete meta.strandRenderOverride;
     meta.useTypeStrandDefaults = true;
   } else {
     meta.useTypeStrandDefaults = false;
+    if (seedOverride && !strandRenderOverrideIsEmpty(seedOverride)) {
+      meta.strandRenderOverride = seedOverride;
+    }
   }
   return { ...form, metadata: meta };
+}
+
+/** Durable custom-mode snapshot for the fields admins tune most often. */
+function seedBeadStrandOverride(
+  resolved: StrandRenderProfile,
+  inherited: StrandRenderProfile,
+): Partial<StrandRenderProfile> {
+  const pruned = pruneStrandRenderOverride(resolved, inherited) ?? {};
+  return {
+    ...pruned,
+    layoutScale: resolved.layoutScale,
+    contactWidth: resolved.contactWidth,
+    contactOffset: resolved.contactOffset,
+    spacingAdjustment: resolved.spacingAdjustment,
+    visualScale: resolved.visualScale,
+    verticalOffset: resolved.verticalOffset,
+    hangOffset: resolved.hangOffset,
+  };
 }
 
 export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onSave, onCancel }: BeadFormProps) {
@@ -330,6 +358,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
           cropStatus:
             cropConfig && isBeadCropConfigValid(cropConfig) ? "ready" : form.cropStatus ?? "draft",
           tags: tagNames.map((name) => ({ id: "", name, slug: name.toLowerCase().replace(/\s+/g, "-") })),
+          metadata: normalizeBeadLibraryStrandMetadata(form.metadata, inheritedSubTypeStrand),
         },
         sizes,
       );
@@ -339,11 +368,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
   };
 
   const cropReady = Boolean(form.cropConfig && isBeadCropConfigValid(form.cropConfig));
-  const inheritTypeDefaults = Boolean(
-    (form.metadata as { useTypeStrandDefaults?: boolean; strandRenderOverride?: unknown } | undefined)
-      ?.useTypeStrandDefaults !== false &&
-      (form.metadata as { strandRenderOverride?: unknown } | undefined)?.strandRenderOverride == null,
-  );
+  const inheritTypeDefaults = beadLibraryInheritsTypeStrandDefaults(form.metadata);
   const subTypesForSelectedType = useMemo(
     () =>
       cat.subBeadTypes
@@ -577,24 +602,27 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         showAdvanced={showStrandAdvanced}
         previewImageUrl={form.processedImage?.trim() || form.image?.trim() || originalUrl || null}
         previewSampleBead={form.id ? form : null}
-        onInheritTypeDefaultsChange={(inherit) => setForm((f) => setInheritTypeDefaults(f, inherit))}
+        onInheritTypeDefaultsChange={(inherit) =>
+          setForm((f) => {
+            if (inherit) return setInheritTypeDefaults(f, true);
+            const resolved = resolveStrandRenderConfigForBead(f, renderCatalogue);
+            return setInheritTypeDefaults(
+              f,
+              false,
+              seedBeadStrandOverride(resolved, inheritedSubTypeStrand),
+            );
+          })
+        }
         onChange={(patch) => setForm((f) => updateStrandOverride(f, patch, inheritedSubTypeStrand))}
         onResetToType={() => setForm((f) => setInheritTypeDefaults(f, true))}
         onResetToSystem={() =>
           setForm((f) => {
             const system = cat.strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE;
-            const override = pruneStrandRenderOverride(system, inheritedSubTypeStrand);
-            if (strandRenderOverrideIsEmpty(override)) {
-              return setInheritTypeDefaults(f, true);
-            }
-            return {
-              ...f,
-              metadata: {
-                ...(f.metadata ?? {}),
-                useTypeStrandDefaults: false,
-                strandRenderOverride: override,
-              },
-            };
+            return setInheritTypeDefaults(
+              f,
+              false,
+              seedBeadStrandOverride(system, inheritedSubTypeStrand),
+            );
           })
         }
       />

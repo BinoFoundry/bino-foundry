@@ -42,8 +42,8 @@ describe("layoutStrandBeadShells", () => {
         ringX: bead.ringX,
         ringY: bead.ringY,
         angleRad: bead.angleRad,
-        slotDim,
-        profile,
+        slotDim: bead.renderDim,
+        profile: { ...profile, layoutScale: 1, visualScale: 1 },
       });
       expect(bead.shellLeft).toBeCloseTo(direct.shellLeft, 8);
       expect(bead.shellTop).toBeCloseTo(direct.shellTop, 8);
@@ -96,7 +96,7 @@ describe("layoutStrandBeadShells", () => {
     expect(meanShellSize(larger)).toBeGreaterThan(meanShellSize(base) + 1);
   });
 
-  it("contactWidth packs beads tighter when below 1 and looser when above 1", () => {
+  it("contactWidth scales contactArcPx; packing floors at visual shell width", () => {
     const params = {
       centerX: 120,
       centerY: 120,
@@ -104,28 +104,28 @@ describe("layoutStrandBeadShells", () => {
       wristCircumferenceMm: 160,
       balanceSpacing: false as const,
     };
+    // Small slot so capacity contact arc (not visual shell) dominates packing when width ≥ 1.
     const bead = (contactWidth: number) => ({
       occupancyMm: 8,
-      slotDim: { width: 28, height: 28 },
-      profile: mergeStrandRenderProfile({ contactWidth }),
+      slotDim: { width: 16, height: 16 },
+      profile: mergeStrandRenderProfile({ contactWidth, visualScale: 1, layoutScale: 1 }),
     });
-    // Contiguous packing makes contact width change neighbour centre distance directly.
     const layout = (contactWidth: number) =>
       layoutStrandBeadShells({
         ...params,
         beads: Array.from({ length: 8 }, () => bead(contactWidth)),
       });
 
-    // Force physical-contact path by packing under capacity with balance off — use
-    // occupied arc + per-bead contactArc which both flow from contactWidth.
     const tight = layout(0.85);
     const neutral = layout(1);
     const loose = layout(1.15);
 
     expect(tight.contactArcPx[0]!).toBeLessThan(neutral.contactArcPx[0]! - 0.5);
     expect(loose.contactArcPx[0]!).toBeGreaterThan(neutral.contactArcPx[0]! + 0.5);
-    expect(tight.occupiedArcPx).toBeLessThan(neutral.occupiedArcPx - 1);
+    // Packing uses max(contactArc, visualShell) — looser contact still expands occupied arc.
     expect(loose.occupiedArcPx).toBeGreaterThan(neutral.occupiedArcPx + 1);
+    // Tighter contact cannot shrink below the visual shell floor (prevents silhouette overlap).
+    expect(tight.occupiedArcPx).toBeLessThanOrEqual(neutral.occupiedArcPx + 1e-6);
   });
 
   it("keeps clockwise neighbour order equal to array order when a bead is added", () => {

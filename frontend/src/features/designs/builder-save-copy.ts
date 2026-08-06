@@ -30,10 +30,10 @@ export const LEAVE_PAGE_WARNING =
   "You have unsaved changes. If you leave now, your recent edits will be lost.";
 
 export const BUILDER_DRAFT_RECOVERY_COPY = {
-  title: "Unsaved draft found",
-  description: "Would you like to restore your previous editing session?",
-  restore: "Restore Draft",
-  discard: "Discard Draft",
+  title: "Restore your previous edits?",
+  description: "You have unsaved changes from a previous session. Continue where you left off?",
+  restore: "Restore",
+  discard: "Discard",
 } as const;
 
 export const BUILDER_UNSAVED_LEAVE_COPY = {

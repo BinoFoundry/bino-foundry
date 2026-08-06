@@ -124,6 +124,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const [selectedBead, setSelectedBead] = useState<BeadLibraryEntry | null>(null);
   const [selectedSizeOfferKey, setSelectedSizeOfferKey] = useState<string | null>(null);
   const [selectedStrandBead, setSelectedStrandBead] = useState<SelectedStrandBead | null>(null);
+  /** Strand that receives library click inserts when matching pair is on. */
+  const [activePlacementStrand, setActivePlacementStrand] = useState<"A" | "B">("A");
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [hoverSlot, setHoverSlot] = useState<{ bracelet: "A" | "B"; position: number } | null>(null);
   const [preparationSelection, setPreparationSelection] = useState<BraceletPreparationSelection | null>(null);
@@ -388,6 +390,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
 
   const handleSlotClick = useCallback(
     (bracelet: "A" | "B", position: number) => {
+      setActivePlacementStrand(bracelet);
       const placed = bracelet === "A" ? placedBeadsA : placedBeadsB;
       const sorted = normalizeFromSlots(placed);
       const existing = getBeadAtIndex(placed, position);
@@ -435,6 +438,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       target: { mode: "insert" | "replace"; index: number; anchorAngleRad?: number },
       data: { bead?: BeadLibraryEntry; variantId?: string; sizeOfferKey?: string; beadSizeMm?: number },
     ) => {
+      setActivePlacementStrand(bracelet);
       const bead = data?.bead;
       if (!bead) return;
       const size =
@@ -528,21 +532,16 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       size: BeadLibrarySizeOffer,
       preferredStrand?: "A" | "B",
     ) => {
-      const preferB = preferredStrand === "B" && twinning;
-      const target = preferB
-        ? canPlaceBeadSize(wristSizeB, placedBeadsB, size.sizeMm)
-          ? ("B" as const)
-          : canPlaceBeadSize(wristSizeA, placedBeadsA, size.sizeMm)
-            ? ("A" as const)
-            : null
-        : resolveAutoPlacementStrand({
-            twinning,
-            wristSizeA,
-            wristSizeB,
-            placedA: placedBeadsA,
-            placedB: placedBeadsB,
-            beadSizeMm: size.sizeMm,
-          });
+      const preferred = preferredStrand ?? (twinning ? activePlacementStrand : "A");
+      const target = resolveAutoPlacementStrand({
+        twinning,
+        wristSizeA,
+        wristSizeB,
+        placedA: placedBeadsA,
+        placedB: placedBeadsB,
+        beadSizeMm: size.sizeMm,
+        preferredStrand: preferred,
+      });
 
       if (!target) {
         const aFull = !canPlaceBeadSize(wristSizeA, placedBeadsA, size.sizeMm);
@@ -563,11 +562,21 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       } else {
         setPlacedBeadsB((prev) => insertBeadWithAutoLayout(prev, item));
       }
+      setActivePlacementStrand(target);
       setCapacityNotice(null);
       bumpLayout();
       return true;
     },
-    [bumpLayout, twinning, wristSizeA, wristSizeB, placedBeadsA, placedBeadsB, publishCapacityNotice],
+    [
+      bumpLayout,
+      twinning,
+      wristSizeA,
+      wristSizeB,
+      placedBeadsA,
+      placedBeadsB,
+      activePlacementStrand,
+      publishCapacityNotice,
+    ],
   );
 
   const handleSelectBead = useCallback(
@@ -787,6 +796,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     activeSizeOffer,
     selectedStrandBead,
     setSelectedStrandBead,
+    activePlacementStrand,
+    setActivePlacementStrand,
     placedBeadsA,
     placedBeadsB,
     strandAnchorAngleA,

@@ -148,8 +148,11 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         builder.handleToggleTwinning();
       }
       setMobileViewMode(mode);
+      if (mode === "A" || mode === "B") {
+        builder.setActivePlacementStrand(mode);
+      }
     },
-    [builder.twinning, builder.handleToggleTwinning],
+    [builder.twinning, builder.handleToggleTwinning, builder.setActivePlacementStrand],
   );
 
   const dragOnboarding = useBraceletDragOnboarding({
@@ -179,6 +182,19 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     builder.wristSizeB,
     builder.pricing,
   ]);
+
+  /** Snapshot for draft recovery — available as soon as the builder initializes (even empty). */
+  const recoveryBraceletSnapshot = useMemo(
+    () => builder.toSavedPayload("draft"),
+    [
+      builder.placedBeadsA,
+      builder.placedBeadsB,
+      builder.twinning,
+      builder.wristSizeA,
+      builder.wristSizeB,
+      builder.pricing,
+    ],
+  );
 
   const getBraceletFingerprint = useCallback(() => {
     if (!braceletPayload) return null;
@@ -317,10 +333,11 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     interactionHold: autoSaveInteractionHold,
   });
 
-  const recoveryBaselineFp =
-    hydrationDone && braceletPayload
-      ? fingerprintBraceletPayload(braceletPayload, braceletName)
-      : null;
+  // Fingerprint the initialized builder immediately (empty strand is fine).
+  // Do not gate on canConfigureSave / first bead — that delayed the restore dialog.
+  const recoveryBaselineFp = hydrationDone
+    ? fingerprintBraceletPayload(recoveryBraceletSnapshot, braceletName)
+    : null;
 
   const { recoveryOpen, takeDraftForRestore, discardDraft } = useBuilderDraftRecovery({
     productType: "bracelet",
@@ -876,7 +893,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             wristSizeIdB={builder.wristSizeIdB}
             onSelectWristA={builder.setWristA}
             onSelectWristB={builder.setWristB}
-            onSelectBead={builder.handleSelectBead}
+            onSelectBead={(bead, size) =>
+              builder.handleSelectBead(bead, size, builder.activePlacementStrand)
+            }
             onLibraryDragActiveChange={setLibraryDragActive}
             onLibraryDragChange={(active, payload) => {
               setLibraryDragActive(active);

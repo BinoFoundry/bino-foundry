@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import type { BeadTypeEntry } from "@/types/beads";
 import {
   beadLibraryInheritsTypeStrandDefaults,
+  DEFAULT_BEAD_PLACEMENT_MODE,
   DEFAULT_STRAND_RENDER_PROFILE,
+  parseBeadPlacementMode,
   parseStrandRenderProfile,
   pruneStrandRenderOverride,
   resolveStrandRenderConfig,
@@ -77,8 +79,13 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
     description: "",
     displayOrder: 0,
     isActive: true,
+    placementMode: DEFAULT_BEAD_PLACEMENT_MODE,
   };
-  const [form, setForm] = useState<BeadTypeEntry>(initial ?? blank);
+  const [form, setForm] = useState<BeadTypeEntry>(() =>
+    initial
+      ? { ...initial, placementMode: parseBeadPlacementMode(initial.placementMode) }
+      : blank,
+  );
   const [saving, setSaving] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
@@ -96,7 +103,10 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
   const effective = useMemo(() => {
     return resolveStrandRenderConfig({
       systemDefaults: strandRenderDefaults,
-      beadTypeDefaults: typePartialFromForm(form),
+      beadTypeDefaults: {
+        ...(typePartialFromForm(form) ?? {}),
+        placementMode: parseBeadPlacementMode(form.placementMode),
+      },
     });
   }, [form, strandRenderDefaults]);
 
@@ -177,6 +187,25 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
               value={form.displayOrder ?? 0}
               onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })}
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Placement</label>
+            <select
+              className={adminFieldClass()}
+              value={parseBeadPlacementMode(form.placementMode)}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  placementMode: parseBeadPlacementMode(e.target.value),
+                })
+              }
+            >
+              <option value="replace">Replace Bead</option>
+              <option value="insert_between">Insert Between Beads</option>
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Controls how items of this type land on the bracelet strand.
+            </p>
           </div>
           <AdminActiveInactiveStatusField
             value={form.isActive}

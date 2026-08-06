@@ -201,6 +201,8 @@ interface UniformStrandImageLayout {
   visibleContentDiameterPx: number;
   actualVisibleDiameterPx: number;
   exportFillRatio: number | null;
+  /** When dangling scale expands the shell beyond the mm square. */
+  shellDimensions?: BeadSlotDimensions;
 }
 
 /**
@@ -235,6 +237,11 @@ function resolveUniformStrandImageLayout(
   options: {
     preferProcessedCanvas: boolean;
     scaleReferenceDiameterPx?: number | null;
+    /**
+     * When true (dangling / non-round charms), match catalogue mm to content WIDTH
+     * so tall dangles extend naturally instead of shrinking the charm body.
+     */
+    scaleToContentWidth?: boolean;
   },
 ): UniformStrandImageLayout {
   const config = entry ? resolveBeadCropConfig(entry) : null;
@@ -267,35 +274,63 @@ function resolveUniformStrandImageLayout(
 
   const metrics = renderResolution.metrics;
   const visibleDiameter = resolveBeadVisibleDiameterPx(metrics);
-  const scaleDenom =
-    options.scaleReferenceDiameterPx && options.scaleReferenceDiameterPx > 0
+  const contentWidthPx =
+    metrics.visibleWidthPx > 0 ? metrics.visibleWidthPx : visibleDiameter;
+  const scaleDenom = options.scaleToContentWidth
+    ? contentWidthPx > 0
+      ? contentWidthPx
+      : visibleDiameter
+    : options.scaleReferenceDiameterPx && options.scaleReferenceDiameterPx > 0
       ? options.scaleReferenceDiameterPx
       : visibleDiameter;
   const uniformScale = scaleDenom > 0 ? wrapperDiameter / scaleDenom : 1;
 
   const imageFootprint = resolveBeadRenderFootprintPx(renderResolution, {
-    targetDiameterPx: wrapperDiameter,
+    targetDiameterPx: options.scaleToContentWidth ? wrapperDiameter : wrapperDiameter,
     preferProcessedCanvas: options.preferProcessedCanvas,
-    scaleReferenceDiameterPx: options.scaleReferenceDiameterPx ?? undefined,
+    scaleReferenceDiameterPx: options.scaleToContentWidth
+      ? contentWidthPx > 0
+        ? contentWidthPx
+        : undefined
+      : options.scaleReferenceDiameterPx ?? undefined,
   });
   if (!imageFootprint) return fallback;
 
   const visibleFootprint = resolveBeadRenderFootprintPx(renderResolution, {
     targetDiameterPx: wrapperDiameter,
     preferProcessedCanvas: false,
-    scaleReferenceDiameterPx: options.scaleReferenceDiameterPx ?? undefined,
+    scaleReferenceDiameterPx: options.scaleToContentWidth
+      ? contentWidthPx > 0
+        ? contentWidthPx
+        : undefined
+      : options.scaleReferenceDiameterPx ?? undefined,
   });
 
-  const imageDimensions = imageFootprint;
+  let imageDimensions = imageFootprint;
+  // Dangling: expand shell height so the dangle is not clipped after width-matched scale.
+  if (options.scaleToContentWidth && imageDimensions.height > dimensions.height) {
+    imageDimensions = {
+      width: Math.max(dimensions.width, imageDimensions.width),
+      height: imageDimensions.height,
+    };
+  }
+
+  const shellWidth = options.scaleToContentWidth
+    ? Math.max(dimensions.width, imageDimensions.width)
+    : dimensions.width;
+  const shellHeight = options.scaleToContentWidth
+    ? Math.max(dimensions.height, imageDimensions.height)
+    : dimensions.height;
+
   const imageOffsetPx = {
-    left: (dimensions.width - imageDimensions.width) / 2,
-    top: (dimensions.height - imageDimensions.height) / 2,
+    left: (shellWidth - imageFootprint.width) / 2,
+    top: (shellHeight - imageFootprint.height) / 2,
   };
-  const visibleW = visibleFootprint?.width ?? imageDimensions.width;
-  const visibleH = visibleFootprint?.height ?? imageDimensions.height;
+  const visibleW = visibleFootprint?.width ?? imageFootprint.width;
+  const visibleH = visibleFootprint?.height ?? imageFootprint.height;
 
   return {
-    imageDimensions,
+    imageDimensions: imageFootprint,
     imageOffsetPx,
     imageRenderScale: uniformScale,
     assetVisibleDiameterPx: visibleDiameter > 0 ? visibleDiameter : null,
@@ -305,6 +340,10 @@ function resolveUniformStrandImageLayout(
     visibleContentDiameterPx: Math.max(visibleW, visibleH),
     actualVisibleDiameterPx: Math.max(visibleW, visibleH),
     exportFillRatio: beadExportSilhouetteFillRatio(metrics),
+    // Optional shell expansion for callers (dangling).
+    shellDimensions: options.scaleToContentWidth
+      ? { width: shellWidth, height: shellHeight }
+      : undefined,
   };
 }
 
@@ -322,12 +361,15 @@ function buildStrandSlotSizingResult(
   },
 ): BeadSlotSizingResult {
   const baseTargetDiameterPx = baseTargetDiameterPxForMm(beadSize, scaleFactor);
-  const dimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry, catalogue);
-  const wrapperDiameterPx = Math.max(dimensions.width, dimensions.height);
-
-  const imageLayout = resolveUniformStrandImageLayout(dimensions, entry, {
+  const baseDimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry, catalogue);
+  const profile = resolveStrandRenderProfile(entry ?? null, catalogue);
+  const scaleToContentWidth = profile.layoutMode === "dangling";
+  const imageLayout = resolveUniformStrandImageLayout(baseDimensions, entry, {
     preferProcessedCanvas: options.preferProcessedCanvas,
+    scaleToContentWidth,
   });
+  const dimensions = imageLayout.shellDimensions ?? baseDimensions;
+  const wrapperDiameterPx = Math.max(dimensions.width, dimensions.height);
 
   const config = entry ? resolveBeadCropConfig(entry) : null;
   const cropGeometry = resolveBeadCropGeometryDebug(

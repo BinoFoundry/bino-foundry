@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronRight, Settings2, Trash2 } from "lucide-react";
 
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BeadTypeForm } from "../../components/BeadTypeForm";
 import { SubBeadTypeForm } from "../../components/SubBeadTypeForm";
-import { AdminStatusBadge } from "../../components/AdminStatusBadge";
+import { AdminActiveStatusToggle } from "../../components/AdminActiveStatusToggle";
 import { AdminTaxonomyStatusFilter } from "../../components/AdminTaxonomyStatusFilter";
 import { useCatalogue } from "@/state/catalogue";
 import {
@@ -45,6 +45,7 @@ export function BeadTypesAdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const scrollRef = useRef<HTMLDivElement>(null);
   const route = useAdminBeadTypesRoute();
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const typeStatusFilter = (searchParams.get("typeStatus") as TaxonomyStatusFilter) || "all";
   const subStatusFilter = (searchParams.get("subStatus") as TaxonomyStatusFilter) || "all";
@@ -307,11 +308,27 @@ export function BeadTypesAdminPage() {
                         <p className="text-xs text-muted-foreground">
                           {subCount} sub-type{subCount === 1 ? "" : "s"}
                         </p>
-                        {t.isActive === false ? (
-                          <AdminStatusBadge label="Inactive" variant="danger" />
-                        ) : (
-                          <AdminStatusBadge label="Active" variant="success" />
-                        )}
+                        <AdminActiveStatusToggle
+                          isActive={t.isActive !== false}
+                          entityLabel={t.name}
+                          disabled={statusBusyId === t.id}
+                          onConfirm={async (nextActive) => {
+                            setStatusBusyId(t.id);
+                            try {
+                              await cat.updateBeadType({ ...t, isActive: nextActive });
+                              notifyAdminSavedEdit(
+                                nextActive
+                                  ? `${t.name} is now Active.`
+                                  : `${t.name} is now Inactive.`,
+                              );
+                            } catch (err) {
+                              notifyAdminSaveFailed(err, "Unable to update status.");
+                              throw err;
+                            } finally {
+                              setStatusBusyId(null);
+                            }
+                          }}
+                        />
                       </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     </AdminListRow>
@@ -396,11 +413,27 @@ export function BeadTypesAdminPage() {
                       <p className="text-xs text-muted-foreground">
                         {beadCount} bead{beadCount === 1 ? "" : "s"}
                       </p>
-                      {s.isActive === false ? (
-                        <AdminStatusBadge label="Inactive" variant="danger" />
-                      ) : (
-                        <AdminStatusBadge label="Active" variant="success" />
-                      )}
+                      <AdminActiveStatusToggle
+                        isActive={s.isActive !== false}
+                        entityLabel={s.name}
+                        disabled={statusBusyId === s.id}
+                        onConfirm={async (nextActive) => {
+                          setStatusBusyId(s.id);
+                          try {
+                            await cat.updateSubBeadType({ ...s, isActive: nextActive });
+                            notifyAdminSavedEdit(
+                              nextActive
+                                ? `${s.name} is now Active.`
+                                : `${s.name} is now Inactive.`,
+                            );
+                          } catch (err) {
+                            notifyAdminSaveFailed(err, "Unable to update status.");
+                            throw err;
+                          } finally {
+                            setStatusBusyId(null);
+                          }
+                        }}
+                      />
                     </div>
                   </AdminListRow>
                 );

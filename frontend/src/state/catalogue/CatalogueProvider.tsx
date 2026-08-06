@@ -83,6 +83,7 @@ export interface CatalogueActions {
       displayOrder?: number;
       isActive?: boolean;
       enableSubTypes?: boolean;
+      placementMode?: BeadTypeEntry["placementMode"];
       metadata?: BeadTypeEntry["metadata"];
     },
   ) => Promise<BeadTypeEntry>;
@@ -391,6 +392,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         displayOrder?: number;
         isActive?: boolean;
         enableSubTypes?: boolean;
+        placementMode?: BeadTypeEntry["placementMode"];
         metadata?: BeadTypeEntry["metadata"];
       },
     ) => {

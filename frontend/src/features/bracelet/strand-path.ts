@@ -632,24 +632,38 @@ export function computeBalancedRadialStrandPathLayout(params: {
     };
   });
 
-  const angularOrder = Array.from({ length: beads.length }, (_, index) => index).sort(
-    (a, b) => positionsPx[a]! - positionsPx[b]!,
-  );
-  const insertionAngles = angularOrder.map((leftIndex, slot) => {
-    const rightIndex = angularOrder[(slot + 1) % angularOrder.length]!;
-    const midpointPx = normalizeArcDistancePx(
-      positionsPx[leftIndex]! +
-        clockwiseArcDistancePx(
-          positionsPx[leftIndex]!,
-          positionsPx[rightIndex]!,
-          circumferencePx,
-        ) /
-          2,
+  /**
+   * Gap angles indexed for {@link insertBeadAt}:
+   * `insertionAngles[i]` is the gap where a new bead becomes index `i`.
+   * For n beads that is: closure, then gaps before beads 1…n-1, then closure again.
+   * Do not key gaps off angular-order slot alone — that is off-by-one vs array insert.
+   */
+  const gapAngleBetween = (leftIndex: number, rightIndex: number): number => {
+    const leftTrailingPx = positionsPx[leftIndex]! + widthsPx[leftIndex]! / 2;
+    const travelPx = clockwiseArcDistancePx(
+      leftTrailingPx,
+      positionsPx[rightIndex]! - widthsPx[rightIndex]! / 2,
       circumferencePx,
     );
+    const midpointPx = normalizeArcDistancePx(leftTrailingPx + travelPx / 2, circumferencePx);
     return normalizePathAngle(startAngle + (midpointPx / circumferencePx) * 2 * Math.PI);
-  });
-  insertionAngles.push(insertionAngles[0] ?? startAngle);
+  };
+
+  const insertionAngles: number[] = [];
+  if (beads.length === 1) {
+    const beadAngle = layouts[0]!.angle;
+    const span = layouts[0]!.arcSpan;
+    const halfEmpty = (2 * Math.PI - span) / 2;
+    insertionAngles.push(normalizePathAngle(beadAngle - span / 2 - halfEmpty / 2));
+    insertionAngles.push(normalizePathAngle(beadAngle + span / 2 + halfEmpty / 2));
+  } else {
+    const closureAngle = gapAngleBetween(beads.length - 1, 0);
+    insertionAngles.push(closureAngle);
+    for (let i = 1; i < beads.length; i++) {
+      insertionAngles.push(gapAngleBetween(i - 1, i));
+    }
+    insertionAngles.push(closureAngle);
+  }
 
   const occupiedArcPx = widthsPx.reduce((sum, width) => sum + width, 0);
 
@@ -806,7 +820,10 @@ export function strandLayoutShellDimensions(
   return visualSlotDimensions(dim, profile);
 }
 
-/** Visual slot size after layoutScale × visualScale — does not affect capacity mm. */
+/**
+ * Visual slot size after layoutScale × visualScale — does not affect capacity mm.
+ * layoutScale here matches contact-arc calibration so shells stay aligned with packing.
+ */
 export function visualSlotDimensions(
   dim: BeadSlotDimensions,
   profile: Pick<StrandRenderProfile, "visualScale" | "layoutScale">,

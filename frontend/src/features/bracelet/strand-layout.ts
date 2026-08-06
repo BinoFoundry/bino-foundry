@@ -128,8 +128,12 @@ export function computeWeightedSlotAngles(
 
 export {
   computeElasticBeadLayout,
+  isSameBeadType,
   resolveDropTargetFromLayout,
+  resolveLibraryDropTarget,
+  resolveLibraryInsertTarget,
   visualArcMmFromExtent,
   type ElasticBeadLayout,
   type LayoutAngleSector,
+  type BeadTypeRef,
 } from "./strand-elastic-layout";

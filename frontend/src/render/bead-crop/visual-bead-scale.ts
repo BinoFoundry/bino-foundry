@@ -2,46 +2,36 @@
  * Continuous mm → px mapping for bracelet strand rendering.
  *
  * Wrist fit, capacity, and pricing always use true database mm values.
- * This formula only affects the visual footprint on the canvas.
+ * Visual footprint is strictly proportional to catalogue mm — no fixed pixel offset.
  */
-
-/** Baseline offset so sub-millimetre beads remain visible and strictly ordered. */
-export const VISUAL_BEAD_BASE_PX = 2;
 
 /** Soft ceiling for very large catalog sizes (px at scale factor 1). */
 export const VISUAL_BEAD_MAX_PX = 55;
 
 /**
- * Pixels per millimetre at layout scale factor 1 for the linear reference curve.
- * Used to anchor the sub-linear calibration at {@link VISUAL_SIZE_CURVE_ANCHOR_MM}.
+ * Pixels per millimetre at layout scale factor 1.
+ * Anchored so 8 mm ≈ 27 px before site calibration (matches prior 8 mm feel without +2 px bias).
  */
 export const VISUAL_PX_PER_MM = 3.375;
 
-/** Anchor size (mm) — curve matches the legacy linear baseline here (8 mm ≈ 29 px). */
+/** @deprecated Kept for tests/migration notes — no longer added to diameters. */
+export const VISUAL_BEAD_BASE_PX = 0;
+
+/** Reference size (mm) for ratio helpers. */
 export const VISUAL_SIZE_CURVE_ANCHOR_MM = 8;
 
 /**
- * Sub-linear exponent (< 1 compresses visual jumps as beads grow larger).
- * Fully continuous — works for any positive database mm without breakpoints.
+ * @deprecated Linear mapping no longer uses a power curve. Kept for import compatibility.
  */
-export const VISUAL_SIZE_CURVE_EXPONENT = 0.84;
-
-function visualCurveScaleK(): number {
-  const anchorPx = VISUAL_BEAD_BASE_PX + VISUAL_PX_PER_MM * VISUAL_SIZE_CURVE_ANCHOR_MM;
-  const span = anchorPx - VISUAL_BEAD_BASE_PX;
-  return span / Math.pow(VISUAL_SIZE_CURVE_ANCHOR_MM, VISUAL_SIZE_CURVE_EXPONENT);
-}
+export const VISUAL_SIZE_CURVE_EXPONENT = 1;
 
 /**
  * Map physical bead diameter (mm) to visual pixel diameter.
- *
- * Sub-linear power curve: px = BASE + K × mm^EXPONENT (capped at MAX).
- * Larger sizes grow more slowly than a linear mm mapping while preserving strict ordering.
+ * Proportional: px = VISUAL_PX_PER_MM × mm (capped at MAX).
  */
 export function calibratedVisualDiameterPx(sizeMm: number): number {
   const mm = sizeMm > 0 ? sizeMm : 0.01;
-  const curved = VISUAL_BEAD_BASE_PX + visualCurveScaleK() * Math.pow(mm, VISUAL_SIZE_CURVE_EXPONENT);
-  return Math.min(VISUAL_BEAD_MAX_PX, curved);
+  return Math.min(VISUAL_BEAD_MAX_PX, VISUAL_PX_PER_MM * mm);
 }
 
 /**

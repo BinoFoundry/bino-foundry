@@ -243,7 +243,7 @@ export function getPlacedBeadShellStyle(
     border: hasImage ? "none" : "1px solid hsl(var(--border) / 0.5)",
     borderRadius: hasImage ? 0 : 4,
     boxShadow: "none",
-    overflow: "visible",
+    overflow: "hidden",
     padding: 0,
     margin: 0,
   };

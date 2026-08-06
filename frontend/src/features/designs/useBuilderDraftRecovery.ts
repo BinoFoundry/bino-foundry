@@ -19,7 +19,9 @@ export type UseBuilderDraftRecoveryOptions = {
 };
 
 /**
- * After hydration, offer to restore a local draft that differs from the loaded baseline.
+ * After builder hydration, offer to restore a local draft that differs from the loaded baseline.
+ * Callers must pass a baseline fingerprint as soon as the initial builder state is known
+ * (including an empty strand) — do not wait for the first user edit or saveable payload.
  */
 export function useBuilderDraftRecovery({
   productType,
@@ -33,9 +35,11 @@ export function useBuilderDraftRecovery({
 
   useEffect(() => {
     if (!hydrationDone) return;
+    // Baseline must represent the initialized builder (empty or loaded design).
+    if (baselineFingerprint == null) return;
+
     const key = builderDraftKey(productType, designId);
     if (checkedRef.current === key) return;
-    checkedRef.current = key;
 
     let cancelled = false;
     void (async () => {
@@ -45,11 +49,15 @@ export function useBuilderDraftRecovery({
         const stored = await getBuilderLocalDraft(k);
         if (cancelled) return;
         if (isRecoverableDraft(stored, baselineFingerprint)) {
+          // Mark checked only after a successful decision so cancelled runs can retry
+          // when the initial baseline fingerprint settles (e.g. wrist catalog ready).
+          checkedRef.current = key;
           setDraft(stored);
           setPromptOpen(true);
           return;
         }
       }
+      if (!cancelled) checkedRef.current = key;
     })();
 
     return () => {

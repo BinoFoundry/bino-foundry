@@ -47,6 +47,7 @@ export const STRAND_RENDER_PROFILE_KEYS = [
   "stringOcclusion",
   "forceRoundFootprint",
   "preferStrandImageUrl",
+  "placementMode",
 ] as const satisfies readonly StrandRenderProfileKey[];
 
 export interface StrandRenderConfigLayers {

@@ -125,13 +125,14 @@ export function StrandRenderConfigPanel({
       </div>
 
       {(mode === "bead" || mode === "subBeadType") && onInheritTypeDefaultsChange ? (
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-0.5 py-2 text-sm leading-snug">
           <input
             type="checkbox"
+            className="h-5 w-5 shrink-0 rounded border border-border accent-foreground"
             checked={inheritTypeDefaults}
             onChange={(e) => onInheritTypeDefaultsChange(e.target.checked)}
           />
-          Use Parent Calibration
+          <span className="select-none">Use Parent Calibration</span>
         </label>
       ) : null}
 

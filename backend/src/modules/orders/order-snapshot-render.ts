@@ -1,6 +1,7 @@
 import {
   beadLibraryInheritsTypeStrandDefaults,
   mergeStrandRenderProfile,
+  parseBeadPlacementMode,
   parseStrandRenderProfile,
   resolveStrandRenderConfig,
   subBeadTypeInheritsBeadTypeStrandDefaults,
@@ -25,7 +26,12 @@ type LibraryRow = {
   processed_image_url: string | null;
   crop_config: BeadCropConfig | null;
   metadata: Record<string, unknown> | null;
-  bead_types: { id: string; slug: string; metadata: Record<string, unknown> | null } | null;
+  bead_types: {
+    id: string;
+    slug: string;
+    placement_mode?: string | null;
+    metadata: Record<string, unknown> | null;
+  } | null;
   sub_bead_types: {
     id: string;
     slug: string;
@@ -84,7 +90,10 @@ function resolveProfileForLibrary(
 
   const resolved = resolveStrandRenderConfig({
     systemDefaults,
-    beadTypeDefaults: parseStrandRenderProfile(typeMeta?.strandRender),
+    beadTypeDefaults: {
+      ...(parseStrandRenderProfile(typeMeta?.strandRender) ?? {}),
+      placementMode: parseBeadPlacementMode(lib.bead_types?.placement_mode),
+    },
     subBeadTypeOverride: parseStrandRenderProfile(subMeta?.strandRenderOverride),
     inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subMeta),
     beadOverride: parseStrandRenderProfile(libMeta?.strandRenderOverride),
@@ -116,7 +125,7 @@ export async function enrichOrderSnapshotItemsWithRender(
   const { data: libs, error: libErr } = await supabase
     .from("bead_libraries")
     .select(
-      "id, public_id, name, bead_type_id, sub_bead_type_id, original_image_url, processed_image_url, crop_config, metadata, bead_types(id, slug, metadata), sub_bead_types(id, slug, metadata)",
+      "id, public_id, name, bead_type_id, sub_bead_type_id, original_image_url, processed_image_url, crop_config, metadata, bead_types(id, slug, placement_mode, metadata), sub_bead_types(id, slug, metadata)",
     )
     .in("public_id", libraryIds);
   assertNoDbError(libErr);

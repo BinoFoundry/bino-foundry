@@ -23,6 +23,7 @@ import {
   useDirtySnapshot,
   useUnsavedChangesGuard,
 } from "@/features/admin/unsaved-changes";
+import { formatBeadSizeMm } from "@/lib/bead-size-format";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { formatApiErrorMessage } from "@/services/api";
 import { useCatalogue } from "@/state/catalogue";
@@ -93,7 +94,7 @@ function SizeForm({
       clearDirtySync();
       await onSave({
         sizeMm,
-        label: label.trim(),
+        label: formatBeadSizeMm(sizeMm),
         displayOrder: order,
         isActive: active,
         isDefault,
@@ -113,7 +114,9 @@ function SizeForm({
           step="any"
           value={sizeMm}
           onChange={(e) => {
-            setSizeMm(Number(e.target.value));
+            const next = Number(e.target.value);
+            setSizeMm(next);
+            setLabel(formatBeadSizeMm(next));
             setSizeError(null);
           }}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
