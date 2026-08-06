@@ -180,6 +180,7 @@ function normalizeHolePolygon(polygon, index = 0) {
     id: rawId || `hole-${index + 1}`,
     label: polygon.label || "Hole",
     points,
+    notes: typeof polygon.notes === "string" ? polygon.notes : "",
     ...(shapePreset ? { shapePreset } : {}),
     ...(shapeBaseline?.length ? { shapeBaseline } : {}),
   };

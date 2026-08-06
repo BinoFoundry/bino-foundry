@@ -1,24 +1,29 @@
 import { anchorPx, segmentControls } from "@/render/mask/bezier-path";
-import { migrateAnchors, type LensPolygon } from "@/render/mask/mask-types";
+import { migrateAnchors, type LensPolygon, type PathAnchor } from "@/render/mask/mask-types";
+import { smartCutoutExtraRings } from "@/render/mask/smart-cutout-detect";
 import type { LensClipShape, LensExclusionShape } from "@bino-foundry/shared/types";
 
 function fmt(n: number): string {
   return Number.isFinite(n) ? n.toFixed(3).replace(/\.?0+$/, "") : "0";
 }
 
-/** Build closed SVG path `d` from polygon editor lenses (pixel coordinates). */
-export function lensPolygonToPathD(lens: LensPolygon, imageWidth: number, imageHeight: number): string {
-  const points = migrateAnchors(lens.points);
-  if (points.length < 3) return "";
+/** Build closed SVG path `d` from polygon anchors (pixel coordinates). */
+export function anchorsToPathD(
+  points: PathAnchor[],
+  imageWidth: number,
+  imageHeight: number,
+): string {
+  const migrated = migrateAnchors(points);
+  if (migrated.length < 3) return "";
 
   const w = imageWidth;
   const h = imageHeight;
-  const p0 = anchorPx(points[0], w, h);
+  const p0 = anchorPx(migrated[0], w, h);
   const parts: string[] = [`M ${fmt(p0.x)} ${fmt(p0.y)}`];
 
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
+  for (let i = 0; i < migrated.length; i++) {
+    const a = migrated[i];
+    const b = migrated[(i + 1) % migrated.length];
     const seg = segmentControls(a, b, w, h);
     if (seg.straight) {
       parts.push(`L ${fmt(seg.p3.x)} ${fmt(seg.p3.y)}`);
@@ -30,6 +35,18 @@ export function lensPolygonToPathD(lens: LensPolygon, imageWidth: number, imageH
   }
   parts.push("Z");
   return parts.join(" ");
+}
+
+/** Build closed SVG path `d` from polygon editor lenses (pixel coordinates). */
+export function lensPolygonToPathD(lens: LensPolygon, imageWidth: number, imageHeight: number): string {
+  const primary = anchorsToPathD(lens.points ?? [], imageWidth, imageHeight);
+  const extras = smartCutoutExtraRings(lens)
+    .map((ring) => anchorsToPathD(ring, imageWidth, imageHeight))
+    .filter(Boolean);
+  if (!primary) return extras.join(" ");
+  if (!extras.length) return primary;
+  // Multiple islands as subpaths — evenodd fill keeps each island solid.
+  return [primary, ...extras].join(" ");
 }
 
 export function lensesToClipShapes(

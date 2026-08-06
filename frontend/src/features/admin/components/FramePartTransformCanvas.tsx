@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Hand, MousePointer2, RotateCcw, Search, ScanSearch } from "lucide-react";
+import { Hand, MousePointer2, RotateCcw, Search, ScanSearch, ZoomIn, ZoomOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ import { loadImage } from "@/render/engine/canvas/lens-compositor";
 import { drawLensPath, hitTestPathEdge, traceLensPath } from "@/render/mask/bezier-path";
 import {
   SmoothCursorZoom,
+  applyCursorCenteredZoom,
   applyPanOffset,
   fitViewportToScreen,
   formatZoomPercent,
@@ -188,6 +189,28 @@ export function FramePartTransformCanvas({
     viewRef.current = { ...next, imgW, imgH };
     syncZoomLabel(true);
   }, [syncZoomLabel]);
+
+  const nudgeZoom = useCallback(
+    (direction: 1 | -1) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      smoothZoomRef.current?.cancel();
+      const rect = canvas.getBoundingClientRect();
+      const factor = direction > 0 ? 1.25 : 1 / 1.25;
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const next = applyCursorCenteredZoom(
+        viewRef.current,
+        viewRef.current.scale * factor,
+        cx,
+        cy,
+      );
+      viewRef.current = { ...viewRef.current, ...next };
+      syncZoomLabel(true);
+      scheduleDraw();
+    },
+    [scheduleDraw, syncZoomLabel],
+  );
 
   const clientToImage = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -818,6 +841,28 @@ export function FramePartTransformCanvas({
         >
           <Search className="h-3.5 w-3.5" />
           Zoom
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="px-2"
+          onClick={() => nudgeZoom(-1)}
+          title="Zoom out"
+          aria-label="Zoom out"
+        >
+          <ZoomOut className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="px-2"
+          onClick={() => nudgeZoom(1)}
+          title="Zoom in"
+          aria-label="Zoom in"
+        >
+          <ZoomIn className="h-3.5 w-3.5" />
         </Button>
         <span
           className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[10px] tabular-nums text-muted-foreground"

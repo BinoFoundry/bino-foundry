@@ -57,11 +57,25 @@ import {
   type ManualDetailsSnapshot,
 } from "@/features/admin/lib/manual-details-history";
 import { FramePartTransformCanvas } from "@/features/admin/components/FramePartTransformCanvas";
+import { CutoutDetectSettingsFields } from "@/features/admin/components/CutoutDetectSettingsFields";
+import { SmartCutoutCanvas } from "@/features/admin/components/SmartCutoutCanvas";
+import {
+  applySmartResultToPolygon,
+  clampCutoutDetectSettings,
+  createSmartCutoutFramePart,
+  createSmartCutoutHole,
+  DEFAULT_CUTOUT_DETECT_SETTINGS,
+  getCutoutDetectSettings,
+  patchCutoutDetectSettings,
+  type CutoutDetectSettings,
+  type SmartCutoutResult,
+} from "@/render/mask/smart-cutout-detect";
 
 /** Internal mode id kept for persistence wiring; UI copy says Manual Details. */
 export type LensEditorMode = "polygon" | "exclusions";
 
-type PartEditPhase = "transform" | "vertex";
+type PartEditPhase = "transform" | "vertex" | "smart";
+type SmartCutoutApplyMode = "detail" | "hole";
 
 interface FrameMaskEditorProps {
   plateUrl: string;
@@ -123,6 +137,12 @@ export function FrameMaskEditor({
   const [activeSubpath, setActiveSubpath] = useState<FramePartSubpath>("outer");
   const [partRevision, setPartRevision] = useState(0);
   const [editPhase, setEditPhase] = useState<PartEditPhase>("transform");
+  const [smartApplyMode, setSmartApplyMode] = useState<SmartCutoutApplyMode>("detail");
+  const [smartEditTarget, setSmartEditTarget] = useState<"new" | "active">("new");
+  /** Draft settings for a not-yet-applied new cutout — never shared with existing cutouts. */
+  const [draftDetectSettings, setDraftDetectSettings] = useState<CutoutDetectSettings>(() => ({
+    ...DEFAULT_CUTOUT_DETECT_SETTINGS,
+  }));
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [insetPx, setInsetPx] = useState(2);
   const [showInsetForm, setShowInsetForm] = useState(false);
@@ -376,6 +396,52 @@ export function FrameMaskEditor({
       holes: [],
     });
   const activeHoles = activePart.holes ?? [];
+  const activePathPolygon =
+    activeSubpath === "outer"
+      ? activePart
+      : activeHoles[typeof activeSubpath === "number" ? activeSubpath : -1] ?? null;
+
+  /** Settings for the selected path — or an isolated draft when creating a new cutout. */
+  const activeDetectSettings: CutoutDetectSettings =
+    smartEditTarget === "new" && editPhase === "smart"
+      ? draftDetectSettings
+      : getCutoutDetectSettings(activePathPolygon);
+
+  const patchActiveDetectSettings = useCallback(
+    (next: CutoutDetectSettings) => {
+      const clamped = clampCutoutDetectSettings(next);
+      // New-cutout draft: keep settings local until Apply.
+      if (smartEditTarget === "new" && editPhaseRef.current === "smart") {
+        setDraftDetectSettings(clamped);
+        return;
+      }
+      const part = partListRef.current[activePartIndexRef.current];
+      if (!part) return;
+      const sub = activeSubpathRef.current;
+      if (sub === "outer") {
+        const updated = patchCutoutDetectSettings(part, clamped);
+        const list = partListRef.current.map((item, i) =>
+          i === activePartIndexRef.current ? updated : item,
+        );
+        commitList(list, { coalesce: true });
+        return;
+      }
+      const hole = part.holes?.[sub];
+      if (!hole) return;
+      const updatedHole = patchCutoutDetectSettings(hole, clamped);
+      const holes = (part.holes ?? []).map((h, i) => (i === sub ? updatedHole : h));
+      const list = partListRef.current.map((item, i) =>
+        i === activePartIndexRef.current ? { ...item, holes } : item,
+      );
+      commitList(list, { coalesce: true });
+    },
+    [commitList, smartEditTarget],
+  );
+
+  const beginNewSmartDraft = useCallback(() => {
+    setDraftDetectSettings({ ...DEFAULT_CUTOUT_DETECT_SETTINGS });
+    setSmartEditTarget("new");
+  }, []);
 
   const selectPart = (index: number, subpath: FramePartSubpath = "outer") => {
     setActivePartIndex(index);
@@ -459,7 +525,7 @@ export function FrameMaskEditor({
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingInFormField(e.target)) return;
 
-      if (e.key === "Escape" && editPhaseRef.current === "vertex") {
+      if (e.key === "Escape" && (editPhaseRef.current === "vertex" || editPhaseRef.current === "smart")) {
         e.preventDefault();
         setEditPhase("transform");
         return;
@@ -586,6 +652,77 @@ export function FrameMaskEditor({
     commitList(next, { bumpRevision: true });
   };
 
+  const applySmartCutout = useCallback(
+    (result: SmartCutoutResult) => {
+      // Update the currently selected outer/hole when editing an existing cutout.
+      if (smartEditTarget === "active" && partListRef.current.length) {
+        const part = partListRef.current[activePartIndexRef.current];
+        const sub = activeSubpathRef.current;
+        if (part) {
+          if (sub === "outer") {
+            const updated = applySmartResultToPolygon(part, result);
+            const next = partListRef.current.map((item, i) =>
+              i === activePartIndexRef.current ? updated : item,
+            );
+            setEditPhase("transform");
+            commitList(next, { bumpRevision: true });
+            return;
+          }
+          const hole = part.holes?.[sub];
+          if (hole) {
+            const updatedHole = applySmartResultToPolygon(hole, result);
+            const holes = (part.holes ?? []).map((h, i) => (i === sub ? updatedHole : h));
+            const next = partListRef.current.map((item, i) =>
+              i === activePartIndexRef.current ? { ...item, holes } : item,
+            );
+            setEditPhase("transform");
+            commitList(next, { bumpRevision: true });
+            return;
+          }
+        }
+      }
+
+      if (smartApplyMode === "hole") {
+        const part = partListRef.current[activePartIndexRef.current];
+        if (part) {
+          const label = `Cutout ${(part.holes?.length ?? 0) + 1}`;
+          const hole = createSmartCutoutHole(result, label);
+          const holes = [...(part.holes ?? []), hole];
+          const next = partListRef.current.map((item, i) =>
+            i === activePartIndexRef.current ? { ...item, holes } : item,
+          );
+          setActiveSubpath(holes.length - 1);
+          setEditPhase("transform");
+          commitList(next, { bumpRevision: true });
+          return;
+        }
+      }
+      const n =
+        partListRef.current.filter((p) =>
+          (p.label || "").toLowerCase().includes("smart cutout"),
+        ).length + 1;
+      const part = createSmartCutoutFramePart(result, `Smart Cutout ${n}`, {
+        depth: partListRef.current.length,
+        layerOrder: "front",
+      });
+      const next = [...partListRef.current, part];
+      setActiveSubpath("outer");
+      setEditPhase("transform");
+      commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
+    },
+    [commitList, smartApplyMode, smartEditTarget],
+  );
+
+  const switchSmartToManual = useCallback(
+    (result: SmartCutoutResult) => {
+      // Commit geometry first, then open Manual Polygon on the same cutout.
+      applySmartCutout(result);
+      setSmartEditTarget("active");
+      setEditPhase("vertex");
+    },
+    [applySmartCutout],
+  );
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -609,9 +746,11 @@ export function FrameMaskEditor({
     return (
       <div className={cn("space-y-3", className)}>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Manual Details sit above the glass (rivets, screws, logos, inner lips). Start with Circle
-          or Rectangle, then use Edit Shape when you need custom vertices. Cutouts stay fully
-          editable.
+          Manual Details sit above the glass (rivets, screws, logos, inner lips). Prefer{" "}
+          <span className="font-medium text-foreground">Smart Auto Detect</span> to click or brush a
+          detail, then switch to{" "}
+          <span className="font-medium text-foreground">Manual Polygon</span> for pixel-perfect
+          tweaks.
         </p>
 
         <div className="rounded-md border border-border/70 bg-muted/10">
@@ -647,6 +786,22 @@ export function FrameMaskEditor({
                     </button>
                   ))}
                   <div className="my-1 border-t border-border/60" />
+                  <button
+                    type="button"
+                    className="flex w-full flex-col rounded px-2 py-1.5 text-left text-[11px] hover:bg-muted/60"
+                    onClick={() => {
+                      setShowAddMenu(false);
+                      setSmartApplyMode("detail");
+                      beginNewSmartDraft();
+                      setEditPhase("smart");
+                    }}
+                  >
+                    <span className="font-medium text-foreground">Smart Auto Detect</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      Click or brush a rivet / screw / logo — auto boundary
+                    </span>
+                  </button>
+                  <div className="my-1 border-t border-border/60" />
                   <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     From lens clip
                   </p>
@@ -678,9 +833,24 @@ export function FrameMaskEditor({
           </div>
 
           {partList.length === 0 ? (
-            <p className="px-2.5 py-2 text-[11px] text-muted-foreground">
-              No manual details yet — add a shape or duplicate from a lens clip.
-            </p>
+            <div className="space-y-2 px-2.5 py-2">
+              <p className="text-[11px] text-muted-foreground">
+                No manual details yet — add a shape, use Smart Auto Detect, or duplicate from a lens clip.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-7"
+                onClick={() => {
+                  setSmartApplyMode("detail");
+                  beginNewSmartDraft();
+                  setEditPhase("smart");
+                }}
+              >
+                Open Smart Auto Detect
+              </Button>
+            </div>
           ) : (
             <DndContext
               sensors={sensors}
@@ -784,6 +954,34 @@ export function FrameMaskEditor({
             <div className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Detection settings
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {activeSubpath === "outer"
+                    ? activePart.label || `Part ${activePartIndex + 1}`
+                    : activePathPolygon?.label || `Cutout ${Number(activeSubpath) + 1}`}
+                  {" · this path only"}
+                </p>
+              </div>
+              <CutoutDetectSettingsFields
+                settings={
+                  editPhase === "smart" && smartEditTarget === "new"
+                    ? draftDetectSettings
+                    : getCutoutDetectSettings(activePathPolygon)
+                }
+                onChange={(next) => {
+                  if (editPhase === "smart" && smartEditTarget === "new") {
+                    setDraftDetectSettings(clampCutoutDetectSettings(next));
+                    return;
+                  }
+                  patchActiveDetectSettings(next);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Compound shape
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -849,27 +1047,9 @@ export function FrameMaskEditor({
                   size="sm"
                   variant="outline"
                   className="h-7"
-                  onClick={() => addCutout("ellipse")}
-                >
-                  Add Circle Cutout
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7"
-                  onClick={() => addCutout("rectangle")}
-                >
-                  Add Rectangle Cutout
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7"
                   onClick={() => addCutout("free")}
                 >
-                  Add Cutout
+                  Create Cutout
                 </Button>
                 <Button
                   type="button"
@@ -959,10 +1139,22 @@ export function FrameMaskEditor({
               <Button
                 type="button"
                 size="sm"
+                variant={editPhase === "smart" ? "default" : "outline"}
+                onClick={() => {
+                  setSmartEditTarget("active");
+                  setSmartApplyMode(activeSubpath === "outer" ? "detail" : "hole");
+                  setEditPhase("smart");
+                }}
+              >
+                Smart Auto Detect
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 variant={editPhase === "vertex" ? "default" : "outline"}
                 onClick={() => setEditPhase("vertex")}
               >
-                Edit Shape
+                Manual Polygon
               </Button>
               {(() => {
                 const target =
@@ -987,7 +1179,79 @@ export function FrameMaskEditor({
               })()}
             </div>
 
-            {editPhase === "transform" ? (
+            {editPhase === "smart" ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Smart Auto Detect — click a detail, refine with Expand / Tolerance, use Add Area
+                    for more pieces in this cutout. Switch to Manual Polygon anytime.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditPhase("transform")}
+                  >
+                    Done
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-3 rounded-md border border-border/60 bg-muted/10 px-2.5 py-2 text-[11px]">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="smart-edit-target"
+                      className="accent-foreground"
+                      checked={smartEditTarget === "active"}
+                      onChange={() => setSmartEditTarget("active")}
+                    />
+                    <span>Update selected path</span>
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="smart-edit-target"
+                      className="accent-foreground"
+                      checked={smartEditTarget === "new" && smartApplyMode === "detail"}
+                      onChange={() => {
+                        beginNewSmartDraft();
+                        setSmartApplyMode("detail");
+                        setEditPhase("smart");
+                      }}
+                    />
+                    <span>New Manual Detail</span>
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="smart-edit-target"
+                      className="accent-foreground"
+                      checked={smartEditTarget === "new" && smartApplyMode === "hole"}
+                      disabled={partList.length === 0}
+                      onChange={() => {
+                        beginNewSmartDraft();
+                        setSmartApplyMode("hole");
+                        setEditPhase("smart");
+                      }}
+                    />
+                    <span>New hole on selected detail</span>
+                  </label>
+                </div>
+                <SmartCutoutCanvas
+                  key={`smart-${partRevision}-${lensRevision}-${activePart.id}-${String(activeSubpath)}-${smartEditTarget}`}
+                  imageUrl={plateUrl}
+                  initialPolygon={
+                    smartEditTarget === "active"
+                      ? activePathPolygon
+                      : null
+                  }
+                  detectSettings={activeDetectSettings}
+                  onDetectSettingsChange={patchActiveDetectSettings}
+                  showDetectSettings={false}
+                  onConfirm={applySmartCutout}
+                  onSwitchToManual={switchSmartToManual}
+                />
+              </div>
+            ) : editPhase === "transform" ? (
               <FramePartTransformCanvas
                 key={`transform-${partRevision}-${lensRevision}`}
                 imageUrl={plateUrl}
@@ -1010,7 +1274,7 @@ export function FrameMaskEditor({
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground">
-                    Edit Shape — add / move / delete points on the selected Outer or Cutout · Esc
+                    Manual Polygon — add / move / delete points on the selected Outer or Cutout · Esc
                     returns to Transform.
                   </p>
                   <Button
@@ -1064,6 +1328,37 @@ export function FrameMaskEditor({
                 />
               </div>
             )}
+          </div>
+        ) : editPhase === "smart" ? (
+          <div className="min-w-0 space-y-3 rounded-md border border-border/70 bg-background/50 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Smart Auto Detect
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Click or brush a frame detail to create a Manual Detail without tracing polygons.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditPhase("transform")}
+              >
+                Cancel
+              </Button>
+            </div>
+            <SmartCutoutCanvas
+              key={`smart-empty-${lensRevision}`}
+              imageUrl={plateUrl}
+              detectSettings={draftDetectSettings}
+              onDetectSettingsChange={(next) =>
+                setDraftDetectSettings(clampCutoutDetectSettings(next))
+              }
+              onConfirm={applySmartCutout}
+              onSwitchToManual={switchSmartToManual}
+            />
           </div>
         ) : null}
       </div>

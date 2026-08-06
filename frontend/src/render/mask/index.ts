@@ -23,6 +23,25 @@ export {
 export { pathsToMaskCanvas } from "./bezier-path";
 export { buildLayersFromSource, detectLensMask, detectLensMaskBitmap, floodFromBorderThroughOpen, splitMergedLensBridge } from "./auto-lens-mask";
 export {
+  detectSmartCutout,
+  createSmartCutoutFramePart,
+  createSmartCutoutHole,
+  applySmartResultToPolygon,
+  parseSmartCutoutNotes,
+  getCutoutDetectSettings,
+  patchCutoutDetectSettings,
+  clampCutoutDetectSettings,
+  smartCutoutExtraRings,
+  finalizeSmartMask,
+  removeAreaAtPoint,
+  DEFAULT_SMART_CUTOUT_PARAMS,
+  DEFAULT_CUTOUT_DETECT_SETTINGS,
+  type SmartCutoutParams,
+  type CutoutDetectSettings,
+  type SmartCutoutResult,
+  type SmartCutoutMeta,
+} from "./smart-cutout-detect";
+export {
   detectFrameLensMaskFromSource,
   detectFrameLensMaskFromUrl,
   detectFrameLensSideFromSource,

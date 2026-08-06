@@ -48,7 +48,7 @@ export const FRAME_CONFIG_COPY_SECTION_LABELS: Record<FrameConfigCopySection, st
   crop: "Crop",
   lensPolygon: "Lens Polygon",
   glassSheet: "Glass Sheet Configuration",
-  manualDetails: "Manual Details",
+  manualDetails: "Manual Details / Smart Cutouts",
   lensRendering: "Lens Rendering Configuration",
   glassMaterial: "Glass Material Configuration",
   allRendering: "All Rendering Settings",

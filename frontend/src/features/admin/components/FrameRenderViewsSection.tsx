@@ -1273,7 +1273,7 @@ export const FrameRenderViewsSection = forwardRef<
                   <div className={INLINE_SECTION_ACTIVE_CLASS}>
                     <InlineEditorPanel
                       title="Manual Details"
-                      description="Place rivets, screws, and logos above the glass. Save stamps for this model family to reuse on other sizes."
+                      description="Place rivets, screws, and logos above the glass. Smart Auto Detect finds boundaries from a click or brush; Manual Polygon is always available. Save stamps for this model family to reuse on other sizes."
                       onSave={() => saveExclusionsEditor(axis)}
                       onCancel={() => cancelEditor(axis)}
                       saveFeedback={
