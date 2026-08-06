@@ -50,6 +50,13 @@ export function useStrandRenderConfigCache(params: {
       if (!bead) {
         return resolveStrandRenderConfigForBead(null, context);
       }
+      // Order-snapshot beads carry a frozen profile — never use the live catalogue cache.
+      if (
+        (bead.metadata as { frozenStrandRenderProfile?: unknown } | undefined)
+          ?.frozenStrandRenderProfile
+      ) {
+        return resolveStrandRenderConfigForBead(bead, context);
+      }
       return cache.get(bead.id) ?? resolveStrandRenderConfigForBead(bead, context);
     },
     [cache, context],

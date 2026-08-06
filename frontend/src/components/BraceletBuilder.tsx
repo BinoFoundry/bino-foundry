@@ -968,8 +968,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       }
       totalAmount={builder.pricing.total}
       currencyCode={builder.currencyCode}
-      defaultEmail={user?.email}
-      defaultName={user?.displayName}
       preparation={builder.preparationSelection}
     />
     {leaveGuard}

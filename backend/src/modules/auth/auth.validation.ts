@@ -45,7 +45,7 @@ export const billingDetailsDto = z.object({
   city: z.string().trim().max(120).optional(),
   state: z.string().trim().max(120).optional(),
   postalCode: z.string().trim().max(32).optional(),
-  country: z.string().trim().length(2).optional(),
+  country: z.string().trim().min(1).max(100).optional(),
 });
 
 export const updateProfileDto = z.object({

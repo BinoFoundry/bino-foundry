@@ -22,6 +22,7 @@ import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { useAdminSectionRefresh } from "../../context/AdminSectionRefreshContext";
 import { adminResourcePath } from "../../routing";
+import { OrderBraceletDesignViewer } from "./OrderBraceletDesignViewer";
 
 function formatDate(value: string) {
   try {
@@ -46,24 +47,58 @@ function statusLabel(status: string) {
 }
 
 function OrderSnapshotPanels({ order }: { order: AdminOrderDetail }) {
+  const [viewerOpen, setViewerOpen] = useState(false);
   const snapshot = order.snapshot;
   if (!snapshot) {
     return <p className="text-sm text-muted-foreground">No design snapshot on this order.</p>;
   }
 
+  const canViewBracelet =
+    snapshot.productType === "bracelet" && Boolean(snapshot.bracelet?.items?.length);
+  const thumbnailUrl = snapshot.previewThumbnailUrl;
+
   return (
     <div className="space-y-4">
-      {snapshot.previewThumbnailUrl ? (
-        <img
-          src={snapshot.previewThumbnailUrl}
-          alt=""
-          className="h-40 w-40 rounded-lg border border-border/60 object-contain bg-muted/20"
-        />
-      ) : (
-        <div className="flex h-40 w-40 items-center justify-center rounded-lg border border-border/60 bg-muted/20">
-          <Package className="h-8 w-8 text-muted-foreground" />
-        </div>
-      )}
+      <div className="flex flex-wrap items-end gap-3">
+        {thumbnailUrl ? (
+          <button
+            type="button"
+            className="group relative block h-40 w-40 overflow-hidden rounded-lg border border-border/60 bg-muted/20 text-left transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default"
+            onClick={() => {
+              if (canViewBracelet) setViewerOpen(true);
+            }}
+            disabled={!canViewBracelet}
+            aria-label={canViewBracelet ? "View design in bracelet preview" : "Design snapshot"}
+          >
+            <img
+              src={thumbnailUrl}
+              alt=""
+              className="h-full w-full object-contain transition group-hover:opacity-90"
+            />
+            {canViewBracelet ? (
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/80 px-2 py-1 text-center text-[11px] text-muted-foreground opacity-0 transition group-hover:opacity-100">
+                View design
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          <div className="flex h-40 w-40 items-center justify-center rounded-lg border border-border/60 bg-muted/20">
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
+        )}
+
+        {canViewBracelet ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => setViewerOpen(true)}>
+            View design
+          </Button>
+        ) : null}
+      </div>
+
+      <OrderBraceletDesignViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        snapshot={snapshot}
+      />
 
       {snapshot.bracelet ? (
         <>

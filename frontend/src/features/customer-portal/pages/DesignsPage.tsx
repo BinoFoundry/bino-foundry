@@ -13,7 +13,6 @@ import { clearPendingDesign, loadPendingDesign } from "@/features/designs/pendin
 import { Button } from "@/components/ui/button";
 import { designsApi } from "@/services/api/designs";
 import { isApiError } from "@/services/api/errors";
-import { useAuth } from "@/state/auth/AuthProvider";
 
 import { DesignCard } from "../components/DesignCard";
 import { DesignDeleteConfirmDialog } from "../components/DesignDeleteConfirmDialog";
@@ -32,7 +31,6 @@ export function DesignsPage() {
     if (location.pathname.endsWith("/sunglasses")) return "sunglasses";
     return "all";
   }, [location.pathname]);
-  const { user } = useAuth();
 
   const [checkoutDesign, setCheckoutDesign] = useState<SavedDesignSummary | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
@@ -319,8 +317,6 @@ export function DesignsPage() {
         productLabel={checkoutDesign ? formatDesignDisplayTitle(checkoutDesign) : "Design"}
         totalAmount={checkoutDesign?.subtotal ?? 0}
         currencyCode={checkoutDesign?.currencyCode ?? DEFAULT_SITE_GENERAL_SETTINGS.currencyCode}
-        defaultEmail={user?.email}
-        defaultName={user?.displayName}
         onOrdered={() => {
           void designsQuery.refetch();
         }}

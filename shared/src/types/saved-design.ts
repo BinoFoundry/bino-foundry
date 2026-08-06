@@ -1,5 +1,8 @@
 /** Unified saved design types across all Bino Foundry builders. */
 
+import type { BeadCropConfig, BeadDeliveryUrls } from "./bead-crop.js";
+import type { StrandRenderProfile } from "./strand-render-profile.js";
+
 export type DesignProductType = "bracelet" | "sunglasses";
 
 export type SavedDesignStatus = "draft" | "saved" | "ordered" | "archived";
@@ -33,6 +36,32 @@ export const CUSTOMER_ORDER_STATUS_FLOW: readonly CustomerOrderStatus[] = [
   "delivered",
 ] as const;
 
+/**
+ * Visual + strand-render freeze for one bead at checkout.
+ * Lets admin replay the strand without depending on later catalogue edits.
+ */
+export interface OrderSnapshotBeadRender {
+  offerKey?: string;
+  image?: string;
+  originalImage?: string;
+  processedImage?: string;
+  beadTypeId?: string;
+  beadTypeSlug?: string;
+  subBeadTypeId?: string;
+  subBeadTypeSlug?: string;
+  cropConfig?: BeadCropConfig | null;
+  /** Library metadata relevant to rendering (crop tokens, strand image urls, etc.). */
+  metadata?: Record<string, unknown>;
+  normalizationFactor?: number;
+  assetVisibleDiameterPx?: number | null;
+  groupReferenceDiameterPx?: number | null;
+  normalizedProcessedImageUrl?: string;
+  normalizedDeliveryUrls?: BeadDeliveryUrls | null;
+  normalizedVisibleDiameterPx?: number | null;
+  /** Fully resolved strand profile at order time. */
+  strandRenderProfile?: StrandRenderProfile;
+}
+
 export interface OrderSnapshotBeadItem {
   strandIndex: 0 | 1;
   slotPosition: number;
@@ -42,6 +71,9 @@ export interface OrderSnapshotBeadItem {
   beadSizeMm: number;
   sizeLabel: string;
   unitPrice: number;
+  offerKey?: string;
+  /** Present on orders created after render freeze was added. */
+  render?: OrderSnapshotBeadRender;
 }
 
 export interface OrderSnapshotPreparation {
@@ -62,6 +94,8 @@ export interface OrderSnapshotBracelet {
   preparation: OrderSnapshotPreparation | null;
   beadSubtotal: number;
   preparationSubtotal: number;
+  /** System strand defaults frozen at checkout (optional). */
+  strandRenderDefaults?: StrandRenderProfile | null;
 }
 
 export interface OrderSnapshotSunglasses {
@@ -73,9 +107,10 @@ export interface OrderSnapshotSunglasses {
   subtotal: number;
 }
 
-/** Immutable order BOM frozen at checkout. */
+/** Immutable order BOM (+ optional render freeze) captured at checkout. */
 export interface OrderSnapshot {
-  version: 1;
+  /** 1 = BOM; 2 = BOM + per-bead render freeze when available. */
+  version: 1 | 2;
   productType: DesignProductType;
   designId: string;
   designTitle: string | null;
@@ -162,6 +197,8 @@ export interface CustomerOrderSummary {
   productType: DesignProductType | null;
   previewThumbnailUrl: string | null;
   createdAt: string;
+  /** Present on list/detail payloads for checkout prefills. */
+  customerDetails?: CustomerCheckoutDetails & { notes?: string | null };
 }
 
 export interface CustomerOrderDetail extends CustomerOrderSummary {
@@ -197,7 +234,7 @@ export interface AdminOrderDetail extends AdminOrderSummary {
 export interface CustomerCheckoutDetails {
   fullName: string;
   email: string;
-  phone?: string;
+  phone: string;
   addressLine1: string;
   addressLine2?: string;
   city: string;

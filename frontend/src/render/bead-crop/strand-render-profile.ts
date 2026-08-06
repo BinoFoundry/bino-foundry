@@ -2,12 +2,17 @@ import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/
 import {
   beadLibrariesStrandRenderStamp,
   beadLibraryInheritsTypeStrandDefaults,
+  DEFAULT_STRAND_RENDER_PROFILE,
+  mergeStrandRenderProfile,
   parseStrandRenderProfile,
   resolveStrandRenderConfig,
   subBeadTypeInheritsBeadTypeStrandDefaults,
   subBeadTypesStrandRenderStamp,
   type ResolvedStrandRenderConfig,
   type StrandRenderProfile,
+  type StrandRenderConfigSource,
+  type StrandRenderProfileKey,
+  STRAND_RENDER_PROFILE_KEYS,
 } from "@bino-foundry/shared/types";
 
 export type { ResolvedStrandRenderConfig, StrandRenderProfile };
@@ -27,12 +32,16 @@ export interface StrandRenderCatalogueContext {
 /**
  * Prefer live catalogue metadata (type/sub ids + strand overrides) over a placed snapshot.
  * Visual assets on the placed bead are left unchanged.
+ * Skipped when the bead carries a frozen order-time strand profile.
  */
 export function hydrateBeadLibraryForStrandRender(
   bead: BeadLibraryEntry | null | undefined,
   catalogue?: StrandRenderCatalogueContext,
 ): BeadLibraryEntry | null | undefined {
   if (!bead?.id || !catalogue?.beadLibraries?.length) return bead;
+  if ((bead.metadata as { frozenStrandRenderProfile?: unknown } | undefined)?.frozenStrandRenderProfile) {
+    return bead;
+  }
   const live = catalogue.beadLibraries.find((entry) => entry.id === bead.id);
   if (!live) return bead;
   return {
@@ -98,6 +107,19 @@ export function resolveStrandRenderConfigForBead(
   bead: BeadLibraryEntry | null | undefined,
   catalogue?: StrandRenderCatalogueContext,
 ): ResolvedStrandRenderConfig {
+  const frozenRaw = (bead?.metadata as { frozenStrandRenderProfile?: unknown } | undefined)
+    ?.frozenStrandRenderProfile;
+  if (frozenRaw && typeof frozenRaw === "object") {
+    const profile = mergeStrandRenderProfile(
+      DEFAULT_STRAND_RENDER_PROFILE,
+      frozenRaw as Partial<StrandRenderProfile>,
+    );
+    const provenance = Object.fromEntries(
+      STRAND_RENDER_PROFILE_KEYS.map((key) => [key, "beadOverride" as StrandRenderConfigSource]),
+    ) as Record<StrandRenderProfileKey, StrandRenderConfigSource>;
+    return { ...profile, provenance, resolvedRenderScale: profile.visualScale };
+  }
+
   const hydrated = hydrateBeadLibraryForStrandRender(bead, catalogue);
   const typeEntry = beadTypeFor(hydrated, catalogue);
   const subTypeEntry = subBeadTypeFor(hydrated, catalogue);

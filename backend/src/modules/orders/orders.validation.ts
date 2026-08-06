@@ -18,13 +18,13 @@ export const customerDetailsDto = z.object({
     .min(1, CUSTOMER_NAME_REQUIRED_MESSAGE)
     .max(CUSTOMER_NAME_MAX_LENGTH),
   email: z.string().trim().email().max(320),
-  phone: z.string().trim().max(40).optional(),
+  phone: z.string().trim().min(1, "Phone is required").max(40),
   addressLine1: z.string().trim().min(1).max(200),
   addressLine2: z.string().trim().max(200).optional(),
   city: z.string().trim().min(1).max(120),
   state: z.string().trim().max(120).optional(),
   postalCode: z.string().trim().min(1).max(32),
-  country: z.string().trim().length(2).default("US"),
+  country: z.string().trim().min(1, "Country is required").max(100),
 });
 
 export const preparationSelectionDto = z.object({

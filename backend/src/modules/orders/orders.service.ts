@@ -22,6 +22,7 @@ import type {
   UpdateOrderNotesDTO,
   UpdateOrderStatusDTO,
 } from "./orders.validation.js";
+import { enrichOrderSnapshotItemsWithRender } from "./order-snapshot-render.js";
 
 function newOrderPublicId(): string {
   return `ord_${randomBytes(8).toString("hex")}`;
@@ -280,14 +281,17 @@ export class OrdersService {
         beadSizeMm: Number(item.beadSizeMm),
         sizeLabel: String(item.sizeLabel ?? `${item.beadSizeMm} mm`),
         unitPrice: Number(item.unitPrice),
+        offerKey: item.offerKey ? String(item.offerKey) : undefined,
       }));
 
       const prepOption = prepPricing.preparationLineItem
         ? options.find((o) => o.slug === prepPricing.preparationLineItem!.slug)
         : null;
 
+      const enriched = await enrichOrderSnapshotItemsWithRender(items);
+
       return {
-        version: 1,
+        version: enriched.hasRenderFreeze ? 2 : 1,
         productType: "bracelet",
         designId: design.id,
         designTitle: design.title,
@@ -301,7 +305,7 @@ export class OrdersService {
           twinning: Boolean(config.twinning),
           wristSizeCmA: Number(config.wristSizeCmA),
           wristSizeCmB: Number(config.wristSizeCmB),
-          items,
+          items: enriched.items,
           preparation: prepPricing.preparationLineItem
             ? {
                 optionId: prepOption?.id ?? "",
@@ -315,6 +319,7 @@ export class OrdersService {
             : null,
           beadSubtotal: Number(config.subtotal),
           preparationSubtotal: prepPricing.preparationSubtotal,
+          strandRenderDefaults: enriched.strandRenderDefaults,
         },
       };
     }

@@ -161,9 +161,10 @@ export function SettingsPage() {
             <Label htmlFor="billing-country">Country</Label>
             <Input
               id="billing-country"
-              maxLength={2}
+              autoComplete="country-name"
+              placeholder="e.g. Singapore"
               value={billing.country ?? ""}
-              onChange={(e) => updateBilling("country", e.target.value.toUpperCase())}
+              onChange={(e) => updateBilling("country", e.target.value)}
             />
           </div>
         </div>

@@ -493,8 +493,6 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
       productLabel={`${state.frameSku.name} sunglasses`}
       totalAmount={state.totalPrice}
       currencyCode={currencyCode}
-      defaultEmail={user?.email}
-      defaultName={user?.displayName}
     />
     {leaveGuard}
     <BuilderDraftRecoveryDialog
