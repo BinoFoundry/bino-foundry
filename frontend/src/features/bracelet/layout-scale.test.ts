@@ -13,8 +13,13 @@ describe("effectiveLayoutDiameterPx", () => {
     expect(measured).toBe(6);
   });
 
-  it("clamps unsafe global calibration values", () => {
-    expect(effectiveLayoutDiameterPx(10, 2)).toBe(11);
-    expect(effectiveLayoutDiameterPx(10, 0)).toBe(9);
+  it("applies layout scale 1:1 without hidden clamping", () => {
+    expect(effectiveLayoutDiameterPx(10, 2)).toBe(20);
+    expect(effectiveLayoutDiameterPx(10, 0.5)).toBe(5);
+  });
+
+  it("falls back to 1 for non-finite or non-positive scale", () => {
+    expect(effectiveLayoutDiameterPx(10, 0)).toBe(10);
+    expect(effectiveLayoutDiameterPx(10, Number.NaN)).toBe(10);
   });
 });

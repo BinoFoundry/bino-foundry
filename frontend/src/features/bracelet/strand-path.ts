@@ -4,6 +4,7 @@
  * Stage 2: anchor / offset / rotation applied in the renderer (see strand-render-profile).
  */
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
+import { verticalOffsetHeightFraction } from "@bino-foundry/shared/types";
 
 import { resolveStrandRenderProfileBySlug } from "@/render/bead-crop/strand-render-profile";
 
@@ -795,7 +796,9 @@ export function computeBeadShellPosition(
 ): BeadShellPlacement {
   const renderDim = strandLayoutShellDimensions(dim, profile);
   const hang =
-    profile.hangOffset !== 0 ? profile.hangOffset : profile.verticalOffset;
+    profile.hangOffset !== 0
+      ? profile.hangOffset
+      : verticalOffsetHeightFraction(profile.verticalOffset);
   const radial = hang * renderDim.height;
   const anchorX = ringX + radial * Math.cos(angle);
   const anchorY = ringY + radial * Math.sin(angle);
@@ -844,7 +847,7 @@ export function beadRingAlignOffsetPx(
 ): number {
   const profile = resolveStrandRenderProfileBySlug(beadTypeSlug);
   if (profile.verticalOffset === 0 && profile.anchorPreset === "center") return 0;
-  return profile.verticalOffset * dim.height;
+  return verticalOffsetHeightFraction(profile.verticalOffset) * dim.height;
 }
 
 export function applyRingAlignOffset(

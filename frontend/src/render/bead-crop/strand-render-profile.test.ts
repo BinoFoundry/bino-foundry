@@ -236,7 +236,8 @@ describe("strand render profile", () => {
       },
     );
     expect(profile.visualScale).toBe(0.72);
-    expect(profile.verticalOffset).toBeCloseTo(-0.1);
+    // Legacy fraction −0.1 is coerced to −10% on parse.
+    expect(profile.verticalOffset).toBeCloseTo(-10);
     expect(profile.provenance.visualScale).toBe("beadType");
   });
 

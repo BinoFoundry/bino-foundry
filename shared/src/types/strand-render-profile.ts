@@ -36,8 +36,9 @@ export function parseBeadPlacementMode(raw: unknown): BeadPlacementMode {
  */
 export interface StrandRenderProfile {
   /**
-   * Contact-layout calibration (typically 0.9–1.1). Scales positioning arcs and the
-   * matching shell size together. Does not change capacity mm. 1 = 100%.
+   * Contact-layout calibration multiplier. Scales positioning arcs and the matching
+   * shell size together. Does not change capacity mm. 1 = measured size.
+   * Allowed range: {@link STRAND_LAYOUT_SCALE_MIN}…{@link STRAND_LAYOUT_SCALE_MAX}.
    */
   layoutScale: number;
   /**
@@ -81,11 +82,15 @@ export interface StrandRenderProfile {
   /** Normalised anchor Y in slot (0–1). Derived from preset unless overridden. */
   anchorY: number;
   /**
-   * Radial offset as a fraction of slot height.
+   * Radial offset as a percent of slot height (−100…100).
    * Negative moves toward ring centre (pulls hanging assets onto the cord).
+   * Stored 1:1 with the admin input (no fraction/percentage UI mapping).
    */
   verticalOffset: number;
-  /** Visual render calibration multiplier (1 = same as mm slot). Independent from strand occupancy. */
+  /**
+   * Visual render calibration multiplier (1 = same as mm slot). Independent from strand occupancy.
+   * Allowed range: {@link STRAND_VISUAL_SCALE_MIN}…{@link STRAND_VISUAL_SCALE_MAX}.
+   */
   visualScale: number;
   /** Resolved facing — outward (away from centre) or inward (toward centre). */
   orientationMode: StrandOrientationMode;
@@ -108,9 +113,15 @@ export interface StrandRenderProfile {
   placementMode: BeadPlacementMode;
 }
 
+/** Layout scale — stored and edited 1:1. */
+export const STRAND_LAYOUT_SCALE_MIN = 0.1;
+export const STRAND_LAYOUT_SCALE_MAX = 5;
+export const STRAND_LAYOUT_SCALE_STEP = 0.01;
+
 /** Symmetrical stored range for contact width + adjustment (-max … +max). */
-export const STRAND_CONTACT_SPACING_MAX = 2;
+export const STRAND_CONTACT_SPACING_MAX = 20;
 export const STRAND_CONTACT_SPACING_MIN = -STRAND_CONTACT_SPACING_MAX;
+export const STRAND_CONTACT_SPACING_STEP = 0.1;
 
 /** @deprecated Use STRAND_CONTACT_SPACING_MIN / STRAND_CONTACT_SPACING_MAX */
 export const STRAND_CONTACT_WIDTH_MIN = STRAND_CONTACT_SPACING_MIN;
@@ -121,9 +132,52 @@ export const STRAND_CONTACT_ADJUSTMENT_MIN = STRAND_CONTACT_SPACING_MIN;
 /** @deprecated Use STRAND_CONTACT_SPACING_MIN / STRAND_CONTACT_SPACING_MAX */
 export const STRAND_CONTACT_ADJUSTMENT_MAX = STRAND_CONTACT_SPACING_MAX;
 
+/** Render calibration (visualScale) — stored and edited 1:1. */
+export const STRAND_VISUAL_SCALE_MIN = 0.1;
+export const STRAND_VISUAL_SCALE_MAX = 5;
+export const STRAND_VISUAL_SCALE_STEP = 0.01;
+
+/**
+ * Vertical offset as percent of bead height (−100…100).
+ * Stored 1:1 with the admin field; layout math divides by 100.
+ */
+export const STRAND_VERTICAL_OFFSET_MIN = -100;
+export const STRAND_VERTICAL_OFFSET_MAX = 100;
+export const STRAND_VERTICAL_OFFSET_STEP = 0.1;
+
+/** Persist marker — distinguishes percent storage from legacy fraction (−1…1). */
+export const STRAND_VERTICAL_OFFSET_UNIT_PERCENT = "percent" as const;
+
 /** Minimum allowed value when maximum is `absMax` (always `-absMax`). */
 export function strandContactSpacingMin(absMax = STRAND_CONTACT_SPACING_MAX): number {
   return -absMax;
+}
+
+/**
+ * Convert stored vertical offset (percent of height) to a height fraction for layout math.
+ */
+export function verticalOffsetHeightFraction(verticalOffset: number): number {
+  if (!Number.isFinite(verticalOffset)) return 0;
+  return verticalOffset / 100;
+}
+
+/**
+ * Coerce a persisted verticalOffset into percent units.
+ * Legacy fraction values (−1…1 without a percent unit marker) are scaled ×100 once.
+ */
+export function coerceVerticalOffsetPercent(
+  value: number,
+  unit?: unknown,
+): number {
+  if (!Number.isFinite(value)) return 0;
+  if (unit === STRAND_VERTICAL_OFFSET_UNIT_PERCENT) return value;
+  // Legacy fraction storage (pre-percent migration).
+  if (value !== 0 && Math.abs(value) <= 1) return value * 100;
+  return value;
+}
+
+function clampToRange(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 /** Renderer floor — legacy constant; effective contact width may reach 0 at layout time. */
@@ -249,10 +303,7 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
 };
 
 function clampContactSpacingStored(value: number): number {
-  return Math.max(
-    STRAND_CONTACT_SPACING_MIN,
-    Math.min(STRAND_CONTACT_SPACING_MAX, value),
-  );
+  return clampToRange(value, STRAND_CONTACT_SPACING_MIN, STRAND_CONTACT_SPACING_MAX);
 }
 
 /**
@@ -262,6 +313,7 @@ function clampContactSpacingStored(value: number): number {
  */
 export function contactWidthStoredToTuningDelta(stored: number): number {
   if (Math.abs(stored - 1) < 0.001) return 0;
+  // Legacy fractional occupancy in (0, 2] was stored as absolute span, not a delta.
   if (stored > 0 && stored <= 2) return stored - 1;
   return stored;
 }
@@ -269,6 +321,7 @@ export function contactWidthStoredToTuningDelta(stored: number): number {
 /**
  * Span multiplier applied to visible tangent contact (natural touch at 1.0).
  * Order: natural touch → contact width tuning → contact adjustment → spacing adjustment.
+ * Floored at 0 so spacing cannot invert; upper bound matches the stored contact range.
  */
 export function effectiveStrandContactWidth(
   profile: Pick<StrandRenderProfile, "contactWidth" | "contactOffset" | "spacingAdjustment">,
@@ -293,6 +346,10 @@ export function anchorCoordsForPreset(preset: StrandAnchorPreset): { anchorX: nu
   }
 }
 
+/**
+ * Merge profile layers. Calibration fields are clamped only to their explicit allowed
+ * ranges (safety for corrupt data) — never remapped or percent-scaled.
+ */
 export function mergeStrandRenderProfile(
   ...partials: (Partial<StrandRenderProfile> | null | undefined)[]
 ): StrandRenderProfile {
@@ -306,7 +363,11 @@ export function mergeStrandRenderProfile(
     merged.anchorX = coords.anchorX;
     merged.anchorY = coords.anchorY;
   }
-  merged.layoutScale = Math.max(0.9, Math.min(1.1, merged.layoutScale));
+  merged.layoutScale = clampToRange(
+    merged.layoutScale,
+    STRAND_LAYOUT_SCALE_MIN,
+    STRAND_LAYOUT_SCALE_MAX,
+  );
   merged.strandOccupancy = Math.max(0.05, Math.min(2, merged.strandOccupancy));
   merged.contactWidth = clampContactSpacingStored(merged.contactWidth);
   merged.contactOffset = clampContactSpacingStored(merged.contactOffset);
@@ -317,11 +378,27 @@ export function mergeStrandRenderProfile(
   merged.leadingOverlap = Math.max(0, Math.min(0.5, merged.leadingOverlap));
   merged.trailingOverlap = Math.max(0, Math.min(0.5, merged.trailingOverlap));
   merged.hangOffset = Math.max(-1, Math.min(1, merged.hangOffset));
-  merged.verticalOffset = Math.max(-1, Math.min(1, merged.verticalOffset));
-  merged.visualScale = Math.max(0.25, Math.min(3, merged.visualScale));
+  merged.verticalOffset = clampToRange(
+    merged.verticalOffset,
+    STRAND_VERTICAL_OFFSET_MIN,
+    STRAND_VERTICAL_OFFSET_MAX,
+  );
+  merged.visualScale = clampToRange(
+    merged.visualScale,
+    STRAND_VISUAL_SCALE_MIN,
+    STRAND_VISUAL_SCALE_MAX,
+  );
   merged.stringOcclusion = Math.max(0, Math.min(1, merged.stringOcclusion));
   merged.placementMode = parseBeadPlacementMode(merged.placementMode);
   return merged;
+}
+
+/**
+ * Attach persistence markers so reloads keep 1:1 numeric units (no legacy remapping).
+ * Spread onto JSON written to config_kv / bead metadata.
+ */
+export function strandRenderStorageMeta(): { verticalOffsetUnit: typeof STRAND_VERTICAL_OFFSET_UNIT_PERCENT } {
+  return { verticalOffsetUnit: STRAND_VERTICAL_OFFSET_UNIT_PERCENT };
 }
 
 export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProfile> | null {
@@ -346,7 +423,9 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   if (typeof o.anchorPreset === "string") partial.anchorPreset = o.anchorPreset as StrandAnchorPreset;
   if (typeof o.anchorX === "number") partial.anchorX = o.anchorX;
   if (typeof o.anchorY === "number") partial.anchorY = o.anchorY;
-  if (typeof o.verticalOffset === "number") partial.verticalOffset = o.verticalOffset;
+  if (typeof o.verticalOffset === "number") {
+    partial.verticalOffset = coerceVerticalOffsetPercent(o.verticalOffset, o.verticalOffsetUnit);
+  }
   if (typeof o.visualScale === "number") partial.visualScale = o.visualScale;
   if (o.orientationMode === "outward" || o.orientationMode === "inward") {
     partial.orientationMode = o.orientationMode;

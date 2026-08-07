@@ -2,7 +2,9 @@ import {
   clampBeadRenderCalibrationFactor,
   DEFAULT_SITE_GENERAL_SETTINGS,
   DEFAULT_STRAND_RENDER_PROFILE,
+  mergeStrandRenderProfile,
   parseStrandRenderProfile,
+  strandRenderStorageMeta,
   STRAND_RENDER_SYSTEM_DEFAULTS_KEY,
   type SiteGeneralSettings,
   type StrandRenderProfile,
@@ -35,7 +37,14 @@ function parseSiteSettings(value: unknown): SiteGeneralSettings {
 
 function parseStrandRenderDefaults(value: unknown): StrandRenderProfile {
   const partial = parseStrandRenderProfile(value);
-  return { ...DEFAULT_STRAND_RENDER_PROFILE, ...partial };
+  return mergeStrandRenderProfile(DEFAULT_STRAND_RENDER_PROFILE, partial);
+}
+
+function serializeStrandRenderDefaults(profile: StrandRenderProfile): Record<string, unknown> {
+  return {
+    ...mergeStrandRenderProfile(profile),
+    ...strandRenderStorageMeta(),
+  };
 }
 
 export class SettingsService {
@@ -94,7 +103,7 @@ export class SettingsService {
 
   async updateStrandRenderDefaults(payload: StrandRenderProfile): Promise<StrandRenderProfile> {
     const supabase = getSupabaseServiceRole();
-    const value = parseStrandRenderDefaults(payload);
+    const value = serializeStrandRenderDefaults(payload);
 
     const { data, error } = await supabase
       .from("config_kv")

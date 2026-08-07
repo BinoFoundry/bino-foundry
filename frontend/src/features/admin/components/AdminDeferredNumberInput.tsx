@@ -16,18 +16,25 @@ export interface AdminDeferredNumberInputProps {
   min?: number;
   max?: number;
   step?: number;
-  /** Multiply stored value for display (e.g. 100 for percent). */
+  /** Multiply stored value for display (e.g. 100 for percent). Prefer 1 for 1:1 fields. */
   displayScale?: number;
   decimals?: number;
   disabled?: boolean;
   className?: string;
   id?: string;
   "aria-label"?: string;
+  /**
+   * When true (default), out-of-range values are clamped on commit.
+   * When false, the draft is kept and onRangeError is called — value is not changed silently.
+   */
+  clampOnCommit?: boolean;
+  onRangeError?: (message: string) => void;
+  onClearError?: () => void;
 }
 
 /**
  * Numeric field with temporary draft state.
- * Empty / partial input is allowed while focused; validate + clamp on blur or Enter.
+ * Empty / partial input is allowed while focused; validate on blur or Enter.
  */
 export function AdminDeferredNumberInput({
   value,
@@ -41,6 +48,9 @@ export function AdminDeferredNumberInput({
   className,
   id,
   "aria-label": ariaLabel,
+  clampOnCommit = true,
+  onRangeError,
+  onClearError,
 }: AdminDeferredNumberInputProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const scaled = value * displayScale;
@@ -61,17 +71,32 @@ export function AdminDeferredNumberInput({
       trimmed === "+"
     ) {
       setDraft(null);
+      onClearError?.();
       return;
     }
     const parsed = parseLocaleNumber(trimmed);
     if (!Number.isFinite(parsed)) {
       setDraft(null);
+      onClearError?.();
       return;
     }
     const stored = parsed / displayScale;
-    const clamped = Math.min(max, Math.max(min, stored));
+    if (stored < min || stored > max) {
+      if (!clampOnCommit) {
+        const minLabel = Number.isFinite(min) ? String(min) : "−∞";
+        const maxLabel = Number.isFinite(max) ? String(max) : "∞";
+        onRangeError?.(`Must be between ${minLabel} and ${maxLabel}.`);
+        return;
+      }
+      const clamped = Math.min(max, Math.max(min, stored));
+      setDraft(null);
+      onClearError?.();
+      if (Math.abs(clamped - value) > 1e-9) onCommit(clamped);
+      return;
+    }
     setDraft(null);
-    if (Math.abs(clamped - value) > 1e-9) onCommit(clamped);
+    onClearError?.();
+    if (Math.abs(stored - value) > 1e-9) onCommit(stored);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -81,6 +106,7 @@ export function AdminDeferredNumberInput({
     } else if (e.key === "Escape") {
       e.preventDefault();
       setDraft(null);
+      onClearError?.();
       (e.target as HTMLInputElement).blur();
     }
   };
@@ -97,7 +123,10 @@ export function AdminDeferredNumberInput({
       className={className ?? adminFieldClass()}
       value={shown}
       step={step}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onClearError?.();
+      }}
       onBlur={commit}
       onKeyDown={onKeyDown}
     />
@@ -138,6 +167,7 @@ export function AdminNumberWithSlider({
         disabled={disabled}
         className={className}
         aria-label={ariaLabel}
+        clampOnCommit
       />
       <input
         type="range"

@@ -116,7 +116,7 @@ export function resolveStrandRenderConfigForBead(
   if (frozenRaw && typeof frozenRaw === "object") {
     const profile = mergeStrandRenderProfile(
       DEFAULT_STRAND_RENDER_PROFILE,
-      frozenRaw as Partial<StrandRenderProfile>,
+      parseStrandRenderProfile(frozenRaw),
     );
     const provenance = Object.fromEntries(
       STRAND_RENDER_PROFILE_KEYS.map((key) => [key, "beadOverride" as StrandRenderConfigSource]),

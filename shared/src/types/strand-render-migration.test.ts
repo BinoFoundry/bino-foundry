@@ -60,11 +60,11 @@ describe("strand render migration helpers", () => {
       null,
     );
     const pruned = pruneStrandRenderOverride(
-      { visualScale: 1, verticalOffset: 0.05 },
+      { visualScale: 1, verticalOffset: 5 },
       inherited,
     );
     expect(pruned.visualScale).toBeUndefined();
-    expect(pruned.verticalOffset).toBe(0.05);
+    expect(pruned.verticalOffset).toBe(5);
   });
 
   it("merges lazy overrides and drops redundant keys", () => {

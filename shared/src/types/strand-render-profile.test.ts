@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  coerceVerticalOffsetPercent,
   effectiveStrandContactWidth,
   contactWidthStoredToTuningDelta,
   mergeStrandRenderProfile,
+  parseStrandRenderProfile,
   STRAND_CONTACT_SPACING_MAX,
   STRAND_CONTACT_SPACING_MIN,
+  STRAND_LAYOUT_SCALE_MAX,
+  STRAND_VERTICAL_OFFSET_UNIT_PERCENT,
+  STRAND_VISUAL_SCALE_MAX,
   strandContactSpacingMin,
+  verticalOffsetHeightFraction,
 } from "./strand-render-profile.js";
 
 describe("strandContactSpacingMin", () => {
@@ -107,21 +113,31 @@ describe("effectiveStrandContactWidth", () => {
     expect(
       effectiveStrandContactWidth({
         contactWidth: 2,
-        contactOffset: 1,
-        spacingAdjustment: 1,
+        contactOffset: 10,
+        spacingAdjustment: 10,
       }),
     ).toBe(STRAND_CONTACT_SPACING_MAX);
   });
 });
 
-describe("mergeStrandRenderProfile contact clamps", () => {
+describe("mergeStrandRenderProfile calibration ranges", () => {
+  it("preserves layout scale values inside the explicit range (no 1.1 remapping)", () => {
+    const merged = mergeStrandRenderProfile({ layoutScale: 2 });
+    expect(merged.layoutScale).toBe(2);
+  });
+
+  it("clamps layout scale only to the explicit allowed bounds", () => {
+    expect(mergeStrandRenderProfile({ layoutScale: 9 }).layoutScale).toBe(STRAND_LAYOUT_SCALE_MAX);
+    expect(mergeStrandRenderProfile({ layoutScale: 0.01 }).layoutScale).toBe(0.1);
+  });
+
   it("accepts negative contact width within symmetrical range", () => {
     const merged = mergeStrandRenderProfile({ contactWidth: -1.2 });
     expect(merged.contactWidth).toBeCloseTo(-1.2, 5);
   });
 
   it("clamps contact width to configured symmetrical bounds", () => {
-    const merged = mergeStrandRenderProfile({ contactWidth: -2.5 });
+    const merged = mergeStrandRenderProfile({ contactWidth: -25 });
     expect(merged.contactWidth).toBe(STRAND_CONTACT_SPACING_MIN);
   });
 
@@ -132,5 +148,45 @@ describe("mergeStrandRenderProfile contact clamps", () => {
     });
     expect(merged.contactOffset).toBe(STRAND_CONTACT_SPACING_MAX);
     expect(merged.spacingAdjustment).toBe(STRAND_CONTACT_SPACING_MIN);
+  });
+
+  it("preserves render calibration and vertical offset 1:1 inside range", () => {
+    const merged = mergeStrandRenderProfile({ visualScale: 2, verticalOffset: -5 });
+    expect(merged.visualScale).toBe(2);
+    expect(merged.verticalOffset).toBe(-5);
+  });
+
+  it("clamps visual scale only to explicit bounds", () => {
+    expect(mergeStrandRenderProfile({ visualScale: 9 }).visualScale).toBe(STRAND_VISUAL_SCALE_MAX);
+  });
+});
+
+describe("verticalOffset percent units", () => {
+  it("converts height fraction for layout math", () => {
+    expect(verticalOffsetHeightFraction(-5)).toBeCloseTo(-0.05, 5);
+    expect(verticalOffsetHeightFraction(0)).toBe(0);
+  });
+
+  it("coerces legacy fraction storage to percent once", () => {
+    expect(coerceVerticalOffsetPercent(-0.1)).toBeCloseTo(-10, 5);
+    expect(coerceVerticalOffsetPercent(0.05)).toBeCloseTo(5, 5);
+  });
+
+  it("keeps percent values when unit marker is present", () => {
+    expect(coerceVerticalOffsetPercent(0.5, STRAND_VERTICAL_OFFSET_UNIT_PERCENT)).toBe(0.5);
+    expect(coerceVerticalOffsetPercent(-5, STRAND_VERTICAL_OFFSET_UNIT_PERCENT)).toBe(-5);
+  });
+
+  it("parses legacy verticalOffset fractions into percent", () => {
+    const parsed = parseStrandRenderProfile({ verticalOffset: -0.1 });
+    expect(parsed?.verticalOffset).toBeCloseTo(-10, 5);
+  });
+
+  it("parses marked percent verticalOffset 1:1", () => {
+    const parsed = parseStrandRenderProfile({
+      verticalOffset: 0.5,
+      verticalOffsetUnit: STRAND_VERTICAL_OFFSET_UNIT_PERCENT,
+    });
+    expect(parsed?.verticalOffset).toBe(0.5);
   });
 });

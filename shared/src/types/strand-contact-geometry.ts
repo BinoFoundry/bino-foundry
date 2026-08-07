@@ -1,5 +1,8 @@
 import type { StrandRenderProfile } from "./strand-render-profile.js";
-import { effectiveStrandContactWidth } from "./strand-render-profile.js";
+import {
+  effectiveStrandContactWidth,
+  verticalOffsetHeightFraction,
+} from "./strand-render-profile.js";
 
 /** Physical strand contact properties — spacing is independent of bitmap size. */
 export interface StrandContactGeometry {
@@ -47,7 +50,10 @@ export function contactGeometryFromProfile(
     contactWidth: profile.contactWidth,
     leadingOverlap: profile.leadingOverlap,
     trailingOverlap: profile.trailingOverlap,
-    hangOffset: profile.hangOffset !== 0 ? profile.hangOffset : profile.verticalOffset,
+    hangOffset:
+      profile.hangOffset !== 0
+        ? profile.hangOffset
+        : verticalOffsetHeightFraction(profile.verticalOffset),
     visualScale: profile.visualScale,
     anchorX: profile.anchorX,
     anchorY: profile.anchorY,

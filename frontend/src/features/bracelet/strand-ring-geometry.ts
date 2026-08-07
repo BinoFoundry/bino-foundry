@@ -237,7 +237,7 @@ export function effectiveLayoutDiameterPx(
   layoutScale = 1,
 ): number {
   const measured = Math.max(0, measuredRenderedDiameterPx);
-  const scale = Math.max(0.9, Math.min(1.1, layoutScale));
+  const scale = Number.isFinite(layoutScale) && layoutScale > 0 ? layoutScale : 1;
   return measured * scale;
 }
 

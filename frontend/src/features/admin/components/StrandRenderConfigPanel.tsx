@@ -1,9 +1,19 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   mergeStrandRenderProfile,
   parseStrandRenderProfile,
   STRAND_CONTACT_SPACING_MAX,
   STRAND_CONTACT_SPACING_MIN,
+  STRAND_CONTACT_SPACING_STEP,
+  STRAND_LAYOUT_SCALE_MAX,
+  STRAND_LAYOUT_SCALE_MIN,
+  STRAND_LAYOUT_SCALE_STEP,
+  STRAND_VERTICAL_OFFSET_MAX,
+  STRAND_VERTICAL_OFFSET_MIN,
+  STRAND_VERTICAL_OFFSET_STEP,
+  STRAND_VISUAL_SCALE_MAX,
+  STRAND_VISUAL_SCALE_MIN,
+  STRAND_VISUAL_SCALE_STEP,
   strandRenderSourceLabel,
   type StrandAnchorPreset,
   type StrandOrientationMode,
@@ -18,6 +28,13 @@ import { adminFieldClass } from "./admin-styles";
 import { StrandRenderLivePreview } from "./StrandRenderLivePreview";
 
 export type StrandRenderConfigPanelMode = "system" | "beadType" | "subBeadType" | "bead";
+
+type CalibrationFieldKey =
+  | "layoutScale"
+  | "contactWidth"
+  | "contactOffset"
+  | "visualScale"
+  | "verticalOffset";
 
 export interface StrandRenderConfigPanelProps {
   mode: StrandRenderConfigPanelMode;
@@ -77,6 +94,20 @@ export function StrandRenderConfigPanel({
         : mode === "subBeadType"
           ? "Sub-type rendering defaults"
           : "Strand appearance";
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<CalibrationFieldKey, string>>>({});
+
+  const setFieldError = (key: CalibrationFieldKey, message: string | null) => {
+    setFieldErrors((prev) => {
+      if (!message) {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      if (prev[key] === message) return prev;
+      return { ...prev, [key]: message };
+    });
+  };
 
   return (
     <section className="space-y-3 rounded-xl border border-border bg-muted/15 p-4">
@@ -141,14 +172,18 @@ export function StrandRenderConfigPanel({
           <AdminDeferredNumberInput
             value={value.layoutScale}
             onCommit={(layoutScale) => onChange({ layoutScale })}
-            min={0.9}
-            max={1.1}
-            step={0.001}
-            decimals={3}
+            min={STRAND_LAYOUT_SCALE_MIN}
+            max={STRAND_LAYOUT_SCALE_MAX}
+            step={STRAND_LAYOUT_SCALE_STEP}
+            decimals={2}
             disabled={readOnly}
             aria-label="Layout scale"
+            clampOnCommit={false}
+            onRangeError={(message) => setFieldError("layoutScale", message)}
+            onClearError={() => setFieldError("layoutScale", null)}
           />
-          <InputExamples examples={["1", "1.00", "0.92", "1.15"]} />
+          <InputExamples examples={["0.50", "1.00", "2.00", "3.75", "5.00"]} />
+          <FieldError message={fieldErrors.layoutScale} />
         </Field>
         <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
           <label className="flex items-center gap-2 text-sm">
@@ -172,12 +207,16 @@ export function StrandRenderConfigPanel({
             onCommit={(contactWidth) => onChange({ contactWidth })}
             min={STRAND_CONTACT_SPACING_MIN}
             max={STRAND_CONTACT_SPACING_MAX}
-            step={0.01}
+            step={STRAND_CONTACT_SPACING_STEP}
             decimals={2}
             disabled={readOnly}
             aria-label="Contact width"
+            clampOnCommit={false}
+            onRangeError={(message) => setFieldError("contactWidth", message)}
+            onClearError={() => setFieldError("contactWidth", null)}
           />
-          <InputExamples examples={["0", "1", "2.5"]} />
+          <InputExamples examples={["-2", "0", "1", "2.5", "10"]} />
+          <FieldError message={fieldErrors.contactWidth} />
         </Field>
         <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
           <AdminDeferredNumberInput
@@ -185,25 +224,33 @@ export function StrandRenderConfigPanel({
             onCommit={(contactOffset) => onChange({ contactOffset })}
             min={STRAND_CONTACT_SPACING_MIN}
             max={STRAND_CONTACT_SPACING_MAX}
-            step={0.01}
+            step={STRAND_CONTACT_SPACING_STEP}
             decimals={2}
             disabled={readOnly}
             aria-label="Contact adjustment"
+            clampOnCommit={false}
+            onRangeError={(message) => setFieldError("contactOffset", message)}
+            onClearError={() => setFieldError("contactOffset", null)}
           />
           <InputExamples examples={["-2", "-0.5", "0", "1", "2"]} />
+          <FieldError message={fieldErrors.contactOffset} />
         </Field>
         <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
           <AdminDeferredNumberInput
             value={value.visualScale}
             onCommit={(visualScale) => onChange({ visualScale })}
-            min={0.25}
-            max={3}
-            step={0.05}
+            min={STRAND_VISUAL_SCALE_MIN}
+            max={STRAND_VISUAL_SCALE_MAX}
+            step={STRAND_VISUAL_SCALE_STEP}
             decimals={2}
             disabled={readOnly}
             aria-label="Render calibration"
+            clampOnCommit={false}
+            onRangeError={(message) => setFieldError("visualScale", message)}
+            onClearError={() => setFieldError("visualScale", null)}
           />
-          <InputExamples examples={["0.90", "1", "1.08"]} />
+          <InputExamples examples={["0.50", "0.90", "1", "1.08", "2.00"]} />
+          <FieldError message={fieldErrors.visualScale} />
         </Field>
         <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
           <select
@@ -237,15 +284,18 @@ export function StrandRenderConfigPanel({
           <AdminDeferredNumberInput
             value={value.verticalOffset}
             onCommit={(verticalOffset) => onChange({ verticalOffset })}
-            min={-1}
-            max={1}
-            step={0.01}
-            displayScale={100}
+            min={STRAND_VERTICAL_OFFSET_MIN}
+            max={STRAND_VERTICAL_OFFSET_MAX}
+            step={STRAND_VERTICAL_OFFSET_STEP}
             decimals={1}
             disabled={readOnly}
             aria-label="Vertical offset"
+            clampOnCommit={false}
+            onRangeError={(message) => setFieldError("verticalOffset", message)}
+            onClearError={() => setFieldError("verticalOffset", null)}
           />
-          <InputExamples examples={["-5", "-2.5", "0", "3"]} />
+          <InputExamples examples={["-5", "-2.5", "0", "3", "10"]} />
+          <FieldError message={fieldErrors.verticalOffset} />
         </Field>
         <Field label="Z priority" source={provenance?.zPriority} readOnly={readOnly}>
           <AdminDeferredNumberInput
@@ -407,6 +457,15 @@ function InputExamples({ examples }: { examples: string[] }) {
   return (
     <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
       Examples: {examples.join(" | ")}
+    </p>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="mt-1 text-[10px] text-destructive" role="alert">
+      {message}
     </p>
   );
 }

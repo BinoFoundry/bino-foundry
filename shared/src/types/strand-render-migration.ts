@@ -3,6 +3,7 @@ import {
   mergeStrandRenderProfile,
   parseStrandRenderProfile,
   STRAND_RENDER_PRESETS,
+  strandRenderStorageMeta,
   type StrandRenderProfile,
 } from "./strand-render-profile.js";
 import { STRAND_RENDER_PROFILE_KEYS, type StrandRenderProfileKey } from "./strand-render-config.js";
@@ -139,7 +140,8 @@ export function pruneStrandRenderOverride(
       (pruned as Record<string, unknown>)[key] = value;
     }
   }
-  return pruned;
+  if (Object.keys(pruned).length === 0) return {};
+  return { ...pruned, ...strandRenderStorageMeta() } as Partial<StrandRenderProfile>;
 }
 
 export function strandRenderOverrideIsEmpty(

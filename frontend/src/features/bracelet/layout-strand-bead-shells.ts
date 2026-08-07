@@ -100,7 +100,7 @@ export function layoutStrandBeadShells(
       ringCircumferencePx,
       bead.profile,
     );
-    // layoutScale calibrates contact diameter (clamped 0.9–1.1) without changing capacity mm.
+    // layoutScale calibrates contact diameter without changing capacity mm.
     const contactArcPx = effectiveLayoutDiameterPx(base.contactArcPx, bead.profile.layoutScale);
     return {
       contactArcPx,
