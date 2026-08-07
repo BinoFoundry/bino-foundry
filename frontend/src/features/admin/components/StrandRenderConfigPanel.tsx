@@ -138,22 +138,17 @@ export function StrandRenderConfigPanel({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
-          <AdminNumberWithSlider
+          <AdminDeferredNumberInput
             value={value.layoutScale}
             onCommit={(layoutScale) => onChange({ layoutScale })}
             min={0.9}
             max={1.1}
             step={0.001}
-            displayScale={100}
-            decimals={1}
+            decimals={3}
             disabled={readOnly}
-            aria-label="Layout scale percent"
+            aria-label="Layout scale"
           />
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            {mode === "system"
-              ? "Scales bead size and contact diameter on the strand (100% = measured). Types can override."
-              : "Scales bead size and contact diameter relative to the bracelet layout."}
-          </p>
+          <InputExamples examples={["1", "1.00", "0.92", "1.15"]} />
         </Field>
         <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
           <label className="flex items-center gap-2 text-sm">
@@ -172,7 +167,7 @@ export function StrandRenderConfigPanel({
           </p>
         </Field>
         <Field label="Contact width" source={provenance?.contactWidth} readOnly={readOnly}>
-          <AdminNumberWithSlider
+          <AdminDeferredNumberInput
             value={value.contactWidth}
             onCommit={(contactWidth) => onChange({ contactWidth })}
             min={STRAND_CONTACT_SPACING_MIN}
@@ -182,13 +177,10 @@ export function StrandRenderConfigPanel({
             disabled={readOnly}
             aria-label="Contact width"
           />
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            How much ring each bead claims (1 = full sizeMm). Lower leaves more empty gap between
-            beads; higher fills the strand.
-          </p>
+          <InputExamples examples={["0", "1", "2.5"]} />
         </Field>
         <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
-          <AdminNumberWithSlider
+          <AdminDeferredNumberInput
             value={value.contactOffset}
             onCommit={(contactOffset) => onChange({ contactOffset })}
             min={STRAND_CONTACT_SPACING_MIN}
@@ -198,12 +190,10 @@ export function StrandRenderConfigPanel({
             disabled={readOnly}
             aria-label="Contact adjustment"
           />
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Fine nudge added to contact width. Negative frees more gap; positive fills more.
-          </p>
+          <InputExamples examples={["-2", "-0.5", "0", "1", "2"]} />
         </Field>
         <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
-          <AdminNumberWithSlider
+          <AdminDeferredNumberInput
             value={value.visualScale}
             onCommit={(visualScale) => onChange({ visualScale })}
             min={0.25}
@@ -213,9 +203,7 @@ export function StrandRenderConfigPanel({
             disabled={readOnly}
             aria-label="Render calibration"
           />
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Overrides General. Scales the bead in the Builder (does not change capacity mm).
-          </p>
+          <InputExamples examples={["0.90", "1", "1.08"]} />
         </Field>
         <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
           <select
@@ -246,21 +234,18 @@ export function StrandRenderConfigPanel({
           </select>
         </Field>
         <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
-          <AdminNumberWithSlider
+          <AdminDeferredNumberInput
             value={value.verticalOffset}
             onCommit={(verticalOffset) => onChange({ verticalOffset })}
             min={-1}
             max={1}
             step={0.01}
             displayScale={100}
-            decimals={0}
+            decimals={1}
             disabled={readOnly}
-            aria-label="Vertical offset percent"
+            aria-label="Vertical offset"
           />
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Percent of bead height (−100 … 100). Negative pulls toward / above the cord; positive
-            hangs farther out.
-          </p>
+          <InputExamples examples={["-5", "-2.5", "0", "3"]} />
         </Field>
         <Field label="Z priority" source={provenance?.zPriority} readOnly={readOnly}>
           <AdminDeferredNumberInput
@@ -415,6 +400,14 @@ function Field({
       </div>
       {children}
     </div>
+  );
+}
+
+function InputExamples({ examples }: { examples: string[] }) {
+  return (
+    <p className="mt-1 whitespace-pre-line text-[10px] leading-snug text-muted-foreground">
+      {`Examples:\n${examples.join("\n")}`}
+    </p>
   );
 }
 
