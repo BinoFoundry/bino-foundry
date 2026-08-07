@@ -405,8 +405,8 @@ function Field({
 
 function InputExamples({ examples }: { examples: string[] }) {
   return (
-    <p className="mt-1 whitespace-pre-line text-[10px] leading-snug text-muted-foreground">
-      {`Examples:\n${examples.join("\n")}`}
+    <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+      Examples: {examples.join(" | ")}
     </p>
   );
 }
