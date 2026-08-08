@@ -163,4 +163,20 @@ describe("DesignAutoSaveController", () => {
     await controller.flush();
     expect(build).toHaveBeenCalledWith({ includeThumbnail: false });
   });
+
+  it("rethrows API errors from flush so callers can show real messages", async () => {
+    const save = vi.fn().mockRejectedValue(new Error("Size 8mm is not enabled for bead rose"));
+    const onStatus = vi.fn();
+    const controller = new DesignAutoSaveController({
+      mode: "explicit",
+      debounceMs: 0,
+      save,
+      onStatus,
+      getDesignId: () => null,
+    });
+
+    controller.schedule("fp-1", "vis-1", () => ({ productType: "bracelet" as const }));
+    await expect(controller.flush()).rejects.toThrow(/not enabled/i);
+    expect(onStatus).toHaveBeenCalledWith("error");
+  });
 });

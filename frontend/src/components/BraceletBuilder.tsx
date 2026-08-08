@@ -35,6 +35,7 @@ import {
   fingerprintBraceletPayload,
   fingerprintBraceletVisual,
 } from "@/features/designs/design-save-fingerprint";
+import { formatDesignSaveError } from "@/features/designs/format-design-save-error";
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import {
   clearStaleDesignUrl,
@@ -446,10 +447,18 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
 
     let designId = savedDesignId;
     if (!designId || hasPendingChanges()) {
-      const saved = await flush();
-      designId = saved?.id ?? savedDesignId;
+      try {
+        const saved = await flush();
+        designId = saved?.id ?? savedDesignId;
+      } catch (err) {
+        toast.error(formatDesignSaveError(err));
+        return;
+      }
     }
-    if (!designId) return;
+    if (!designId) {
+      toast.error(CUSTOMER_COPY.saveDesignFailed);
+      return;
+    }
     setCheckoutOpen(true);
   }, [
     user,
@@ -472,7 +481,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       return;
     }
     if (builder.hasUnavailableBeads) {
-      toast.error(BRACELET_COPY.checkoutBlockedUnavailable);
+      toast.error(BRACELET_COPY.saveBlockedUnavailable);
       return;
     }
 
@@ -484,18 +493,24 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
           return;
         }
-        if (hasPendingChanges()) {
-          toast.error(CUSTOMER_COPY.saveDesignFailed);
-          return;
-        }
+        // null = auth modal opened (401), offline, or no buildable payload.
+        // Real API failures now throw from flush() and are handled below.
+        return;
       }
 
       const request = await buildBraceletRequest({ includeThumbnail: true });
-      if (!request) return;
+      if (!request) {
+        toast.error(CUSTOMER_COPY.saveDesignNeedBeads);
+        return;
+      }
 
       // Unauthenticated: saveDesign stores a pending save and opens the auth modal;
       // the pending-design listener resumes the save after sign-in.
-      const saved = await saveDesign(request, { designId: savedDesignId ?? undefined });
+      // silent: caller owns toasts (avoids duplicate success messages).
+      const saved = await saveDesign(request, {
+        designId: savedDesignId ?? undefined,
+        silent: true,
+      });
       if (saved) {
         handleDesignSaved(saved);
         if (braceletPayload) {
@@ -508,7 +523,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
         toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
       }
     } catch (err) {
-      toast.error(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
+      toast.error(formatDesignSaveError(err));
     } finally {
       setSavingDesign(false);
     }

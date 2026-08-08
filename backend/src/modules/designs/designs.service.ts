@@ -59,9 +59,19 @@ export class DesignsService {
 
     const supabase = getSupabaseServiceRole();
     const publicId = newDesignPublicId();
-    const previewThumbnailUrl = dto.previewThumbnailDataUrl
-      ? await persistDesignThumbnail(userId, publicId, dto.previewThumbnailDataUrl)
-      : null;
+    let previewThumbnailUrl: string | null = null;
+    if (dto.previewThumbnailDataUrl) {
+      try {
+        previewThumbnailUrl = await persistDesignThumbnail(
+          userId,
+          publicId,
+          dto.previewThumbnailDataUrl,
+        );
+      } catch (err) {
+        // Thumbnail is best-effort — never block saving a valid design.
+        console.warn("[designs] preview thumbnail skipped on create:", err);
+      }
+    }
 
     const { data, error } = await supabase
       .from("saved_designs")
@@ -107,7 +117,16 @@ export class DesignsService {
     const supabase = getSupabaseServiceRole();
     let previewThumbnailUrl: string | null | undefined;
     if (dto.previewThumbnailDataUrl) {
-      previewThumbnailUrl = await persistDesignThumbnail(userId, designPublicId, dto.previewThumbnailDataUrl);
+      try {
+        previewThumbnailUrl = await persistDesignThumbnail(
+          userId,
+          designPublicId,
+          dto.previewThumbnailDataUrl,
+        );
+      } catch (err) {
+        console.warn("[designs] preview thumbnail skipped on update:", err);
+        previewThumbnailUrl = undefined;
+      }
     }
 
     const { data, error } = await supabase

@@ -612,6 +612,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         showAdvanced={showStrandAdvanced}
         previewImageUrl={form.processedImage?.trim() || form.image?.trim() || originalUrl || null}
         previewSampleBead={form.id ? form : null}
+        previewSizeMms={enabledSizeMms}
         onInheritTypeDefaultsChange={(inherit) =>
           setForm((f) => {
             if (inherit) return setInheritTypeDefaults(f, true);

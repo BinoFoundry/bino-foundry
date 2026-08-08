@@ -9,6 +9,7 @@ import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
 import { CheckoutDialog } from "@/features/account/components/CheckoutDialog";
 import { captureSunglassesThumbnail } from "@/features/designs/capture-thumbnail";
 import { fingerprintSunglassesConfig, fingerprintSunglassesVisual } from "@/features/designs/design-save-fingerprint";
+import { formatDesignSaveError } from "@/features/designs/format-design-save-error";
 import { setPendingDesignListener } from "@/features/designs/pending-design";
 import {
   clearStaleDesignUrl,
@@ -298,10 +299,18 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
 
     let designId = savedDesignId;
     if (!designId || hasPendingChanges()) {
-      const saved = await flush();
-      designId = saved?.id ?? savedDesignId;
+      try {
+        const saved = await flush();
+        designId = saved?.id ?? savedDesignId;
+      } catch (err) {
+        toast.error(formatDesignSaveError(err));
+        return;
+      }
     }
-    if (!designId) return;
+    if (!designId) {
+      toast.error(CUSTOMER_COPY.saveDesignFailed);
+      return;
+    }
     setCheckoutOpen(true);
   }, [user, openAuth, flow, savedDesignId, flush, hasPendingChanges, state.hasUnavailableFrame]);
 
@@ -325,10 +334,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
           toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
           return;
         }
-        if (hasPendingChanges()) {
-          toast.error(CUSTOMER_COPY.saveDesignFailed);
-          return;
-        }
+        return;
       }
 
       const request = await buildSunglassesRequest({ includeThumbnail: true });
@@ -336,7 +342,10 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
 
       // When unauthenticated, saveDesign stores a pending save and opens the auth
       // modal; the pending-design listener resumes the save after sign-in.
-      const saved = await saveDesign(request, { designId: savedDesignId ?? undefined });
+      const saved = await saveDesign(request, {
+        designId: savedDesignId ?? undefined,
+        silent: true,
+      });
       if (saved) {
         handleDesignSaved(saved);
         setBaseline(
@@ -361,7 +370,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
         toast.success(CUSTOMER_COPY.saveDesignSuccess(saved.id));
       }
     } catch (err) {
-      toast.error(isApiError(err) ? err.message : CUSTOMER_COPY.saveDesignFailed);
+      toast.error(formatDesignSaveError(err));
     } finally {
       setSavingDesign(false);
     }

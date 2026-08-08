@@ -14,6 +14,8 @@ export const CUSTOMER_COPY = {
   saveDesignNeedBeads: "Add at least one bead before saving your design.",
   saveDesignSuccess: (ref: string) => `Design saved · reference ${ref}`,
   saveDesignFailed: "We couldn't save your design. Please try again.",
+  saveDesignSessionExpired: "Your session has expired. Please log in again.",
+  saveDesignInvalidPayload: "Some required design information is missing. Please review your bracelet and try again.",
   quoteCopiedPrescription:
     "Your configuration was copied. Our team will contact you about prescription details.",
   quoteCopiedReady:

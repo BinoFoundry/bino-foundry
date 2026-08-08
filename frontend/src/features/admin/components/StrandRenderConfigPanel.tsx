@@ -54,6 +54,11 @@ export interface StrandRenderConfigPanelProps {
   previewImageUrl?: string | null;
   /** Library bead used for Builder-matching slot sizing in the live preview. */
   previewSampleBead?: import("@/types/beads").BeadLibraryEntry | null;
+  /**
+   * Enabled size mm values from the current bead editor form (unsaved).
+   * Drives Preview Size options without persisting anything.
+   */
+  previewSizeMms?: number[];
   /** Show lightweight strand preview (type / sub-type / bead editors). */
   showLivePreview?: boolean;
 }
@@ -89,6 +94,7 @@ export function StrandRenderConfigPanel({
   showAdvanced = false,
   previewImageUrl = null,
   previewSampleBead = null,
+  previewSizeMms,
   showLivePreview,
 }: StrandRenderConfigPanelProps) {
   const inheritedLock =
@@ -565,6 +571,7 @@ export function StrandRenderConfigPanel({
           profile={previewProfile}
           imageUrl={previewImageUrl}
           sampleBead={previewSampleBead}
+          previewSizeMms={previewSizeMms}
         />
       ) : null}
     </section>

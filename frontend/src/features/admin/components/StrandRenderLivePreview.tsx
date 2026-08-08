@@ -42,6 +42,12 @@ export interface StrandRenderLivePreviewProps {
   imageUrl?: string | null;
   sampleBead?: BeadLibraryEntry | null;
   wristSizeCm?: number;
+  /**
+   * Enabled bead sizes from the current editor form (unsaved state).
+   * When set, Preview Size options come from this list instead of only the catalogue.
+   */
+  previewSizeMms?: number[];
+  /** @deprecated Prefer previewSizeMms + internal selector; still honored as initial preference. */
   beadSizeMm?: number;
   className?: string;
 }
@@ -77,20 +83,79 @@ export function previewPlacedBeadFromSample(
   };
 }
 
+/** Unique positive mm values, sorted ascending. */
+export function normalizePreviewSizeMms(sizeMms: number[] | null | undefined): number[] {
+  if (!sizeMms?.length) return [];
+  return [...new Set(sizeMms.filter((mm) => Number.isFinite(mm) && mm > 0))].sort((a, b) => a - b);
+}
+
+/**
+ * Resolve which sizes the Admin can preview.
+ * Prefer editor form enabled sizes; fall back to the sample bead's catalogue offers.
+ */
+export function resolvePreviewSizeOptions(
+  sampleBead: BeadLibraryEntry | null | undefined,
+  beadLibrarySizes: BeadLibrarySizeOffer[],
+  enabledSizeMms?: number[] | null,
+): number[] {
+  const fromForm = normalizePreviewSizeMms(enabledSizeMms);
+  if (fromForm.length) return fromForm;
+
+  if (!sampleBead?.id) return [STRAND_RENDER_PREVIEW_BEAD_MM];
+
+  const fromCatalogue = normalizePreviewSizeMms(
+    beadLibrarySizes
+      .filter((o) => o.beadLibraryId === sampleBead.id && o.availableForNew !== false)
+      .map((o) => o.sizeMm),
+  );
+  return fromCatalogue.length ? fromCatalogue : [STRAND_RENDER_PREVIEW_BEAD_MM];
+}
+
 export function pickPreviewSizeOffer(
   sampleBead: BeadLibraryEntry | null | undefined,
   beadLibrarySizes: BeadLibrarySizeOffer[],
+  preferredMm?: number | null,
+  allowedMms?: number[] | null,
   fallbackMm = STRAND_RENDER_PREVIEW_BEAD_MM,
 ): { sizeMm: number; offer: BeadLibrarySizeOffer | null } {
-  if (!sampleBead) {
-    return { sizeMm: fallbackMm, offer: null };
-  }
-  const offers = beadLibrarySizes.filter((o) => o.beadLibraryId === sampleBead.id && o.sizeMm > 0);
-  if (!offers.length) {
-    return { sizeMm: fallbackMm, offer: null };
-  }
-  const preferred = offers.find((o) => o.isDefault) ?? offers[0]!;
-  return { sizeMm: preferred.sizeMm, offer: preferred };
+  const options = resolvePreviewSizeOptions(sampleBead, beadLibrarySizes, allowedMms);
+  const catalogueOffers = sampleBead
+    ? beadLibrarySizes.filter((o) => o.beadLibraryId === sampleBead.id && o.sizeMm > 0)
+    : [];
+
+  const preferredOk =
+    preferredMm != null && preferredMm > 0 && options.includes(preferredMm) ? preferredMm : null;
+
+  const defaultOffer = catalogueOffers.find(
+    (o) => o.isDefault && options.includes(o.sizeMm) && o.availableForNew !== false,
+  );
+  const sizeMm =
+    preferredOk ??
+    defaultOffer?.sizeMm ??
+    options[0] ??
+    fallbackMm;
+
+  const offer =
+    catalogueOffers.find((o) => o.sizeMm === sizeMm) ??
+    null;
+
+  return { sizeMm, offer };
+}
+
+function syntheticPreviewOffer(
+  sampleBead: BeadLibraryEntry,
+  sizeMm: number,
+  offer: BeadLibrarySizeOffer | null,
+): Pick<BeadLibrarySizeOffer, "sizeMm" | "label" | "unitPrice" | "offerKey"> &
+  Partial<BeadLibrarySizeOffer> {
+  if (offer && offer.sizeMm === sizeMm) return offer;
+  return {
+    ...(offer ?? {}),
+    sizeMm,
+    label: `${sizeMm} mm`,
+    unitPrice: offer?.unitPrice ?? 0,
+    offerKey: `${sampleBead.id}:${sizeMm}`,
+  };
 }
 
 /**
@@ -161,6 +226,7 @@ export function StrandRenderLivePreview({
   profile,
   sampleBead = null,
   wristSizeCm: wristSizeCmProp,
+  previewSizeMms,
   beadSizeMm: beadSizeMmProp,
   className,
 }: StrandRenderLivePreviewProps) {
@@ -180,22 +246,31 @@ export function StrandRenderLivePreview({
     setWristSizeCm(initialWristCm);
   }, [initialWristCm]);
 
-  const sizePick = useMemo(
-    () => pickPreviewSizeOffer(sampleBead, beadLibrarySizes, STRAND_RENDER_PREVIEW_BEAD_MM),
-    [sampleBead, beadLibrarySizes],
+  const sizeOptions = useMemo(
+    () => resolvePreviewSizeOptions(sampleBead, beadLibrarySizes, previewSizeMms),
+    [sampleBead, beadLibrarySizes, previewSizeMms],
   );
-  const beadSizeMm = beadSizeMmProp ?? sizePick.sizeMm;
+
+  /** null = use default/preferred from options; set when Admin picks Preview Size. */
+  const [previewSizeMm, setPreviewSizeMm] = useState<number | null>(beadSizeMmProp ?? null);
+
+  useEffect(() => {
+    if (previewSizeMm == null) return;
+    if (sizeOptions.length && !sizeOptions.includes(previewSizeMm)) {
+      setPreviewSizeMm(null);
+    }
+  }, [sizeOptions, previewSizeMm]);
+
+  const sizePick = useMemo(
+    () =>
+      pickPreviewSizeOffer(sampleBead, beadLibrarySizes, previewSizeMm ?? beadSizeMmProp, sizeOptions),
+    [sampleBead, beadLibrarySizes, previewSizeMm, beadSizeMmProp, sizeOptions],
+  );
+  const beadSizeMm = sizePick.sizeMm;
 
   const seedBeads = useMemo(() => {
     if (!sampleBead) return [];
-    const offer =
-      sizePick.offer ??
-      ({
-        sizeMm: beadSizeMm,
-        label: `${beadSizeMm}mm`,
-        unitPrice: 0,
-        offerKey: `${sampleBead.id}:${beadSizeMm}`,
-      } satisfies Pick<BeadLibrarySizeOffer, "sizeMm" | "label" | "unitPrice" | "offerKey">);
+    const offer = syntheticPreviewOffer(sampleBead, beadSizeMm, sizePick.offer);
     return buildPreviewPlacedBeads(sampleBead, offer, wristSizeCm);
   }, [sampleBead, sizePick.offer, beadSizeMm, wristSizeCm]);
 
@@ -278,7 +353,8 @@ export function StrandRenderLivePreview({
     () =>
       [
         wristSizeCm,
-        placedBeads.map((b) => `${b.position}:${b.size.offerKey}`).join(","),
+        beadSizeMm,
+        placedBeads.map((b) => `${b.position}:${b.size.offerKey}:${b.size.sizeMm}`).join(","),
         applyDraft ? "draft" : "catalogue",
         applyDraft
           ? [
@@ -295,26 +371,59 @@ export function StrandRenderLivePreview({
             ].join(":")
           : "cat",
       ].join("|"),
-    [wristSizeCm, placedBeads, applyDraft, profile],
+    [wristSizeCm, beadSizeMm, placedBeads, applyDraft, profile],
   );
 
   return (
     <div className={className}>
-      <div className="mb-2 space-y-2">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-medium">Live Preview</p>
-            <p className="text-xs text-muted-foreground">
-              Same Bracelet Builder strand (viewport, zoom, canvas, renderer).
+      <div className="mb-3 space-y-2.5">
+        <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">Live Preview</p>
+            <p className="text-[11px] text-muted-foreground">
+              Uses the same strand renderer as the Bracelet Builder.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Wrist
+
+          <div className="flex flex-wrap items-end gap-2">
+            {sizeOptions.length > 1 ? (
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Bead size
+                </span>
+                <select
+                  className={adminFieldClass("h-8 min-w-[5.5rem] py-1 text-xs")}
+                  value={beadSizeMm}
+                  onChange={(e) => setPreviewSizeMm(Number(e.target.value))}
+                  aria-label="Bead size"
+                >
+                  {sizeOptions.map((mm) => (
+                    <option key={mm} value={mm}>
+                      {mm} mm
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : sizeOptions.length === 1 ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Bead size
+                </span>
+                <span className="flex h-8 items-center px-0.5 text-xs tabular-nums text-foreground">
+                  {sizeOptions[0]} mm
+                </span>
+              </div>
+            ) : null}
+
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Wrist
+              </span>
               <select
-                className={adminFieldClass("h-8 w-auto py-1 text-xs")}
+                className={adminFieldClass("h-8 min-w-[5.5rem] py-1 text-xs")}
                 value={wristSizeCm}
                 onChange={(e) => setWristSizeCm(Number(e.target.value))}
+                aria-label="Wrist size"
               >
                 {wristOptions.length ? (
                   wristOptions.map((w) => (
@@ -327,9 +436,10 @@ export function StrandRenderLivePreview({
                 )}
               </select>
             </label>
+
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40"
+              className="h-8 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
               onClick={handleResetStrand}
             >
               Reset strand
@@ -337,30 +447,30 @@ export function StrandRenderLivePreview({
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={applyDraft}
-            onChange={(e) => setApplyDraft(e.target.checked)}
-          />
-          Apply draft settings to preview
-        </label>
-        {!applyDraft ? (
-          <p className="text-xs text-muted-foreground">
-            Preview uses saved catalogue resolve — identical to the live Builder after Save.
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Draft values update the strand live (same layout pipeline as the Bracelet Builder).
-          </p>
-        )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              className="size-3.5 rounded border-border"
+              checked={applyDraft}
+              onChange={(e) => setApplyDraft(e.target.checked)}
+            />
+            Apply draft settings
+          </label>
+          <span className="text-[11px] text-muted-foreground">
+            {applyDraft
+              ? "Unsaved calibration updates the preview immediately."
+              : "Showing saved catalogue resolve (as after Save)."}
+          </span>
+        </div>
+
         {!sampleBead ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             Add a bead of this type to seed the strand with a real asset.
           </p>
         ) : null}
         {sampleHasBeadOverride && !applyDraft ? (
-          <p className="text-xs text-amber-700 dark:text-amber-400">
+          <p className="text-[11px] text-amber-700 dark:text-amber-400">
             Sample bead has its own render override — Builder will keep that until beads inherit
             this type/sub-type.
           </p>

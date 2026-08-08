@@ -277,11 +277,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return saved;
       } catch (err) {
+        // Session recovery must run even for silent/flush saves — otherwise Save Design
+        // fails with a generic toast and never prompts the customer to sign in again.
         if (isApiError(err) && err.status === 401) {
-          if (!options?.silent) {
-            storePendingDesign({ request, designId: options?.designId });
-            openAuth({ mode: "sign-in", pendingSave: { request, designId: options?.designId } });
-          }
+          storePendingDesign({ request, designId: options?.designId });
+          openAuth({ mode: "sign-in", pendingSave: { request, designId: options?.designId } });
           return null;
         }
         if (!options?.silent) {

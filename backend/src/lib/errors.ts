@@ -68,8 +68,13 @@ export class ConflictError extends HttpError {
   }
 }
 
+import { ZodError } from "zod";
+
 export function wrapUnknownError(error: unknown): HttpError {
   if (error instanceof HttpError) return error;
+  if (error instanceof ZodError) {
+    return new ValidationError("Request validation failed", error.flatten());
+  }
   if (error instanceof Error) {
     const http = error as Error & { statusCode?: number; code?: string };
     if (typeof http.statusCode === "number" && http.code) {

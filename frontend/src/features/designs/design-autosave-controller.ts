@@ -1,5 +1,7 @@
 import type { SaveDesignRequest, SavedDesignSummary } from "@bino-foundry/shared/types";
 
+import { ApiError } from "@/services/api/errors";
+
 export type DesignAutoSaveStatus = "idle" | "pending" | "saving" | "saved" | "error" | "offline";
 
 /** `explicit` (default): track dirty locally; server save only via `flush()`. `autosave`: legacy debounce → server. */
@@ -15,7 +17,7 @@ export type DesignAutoSaveBuildFn = (
 
 export type DesignAutoSaveSaveFn = (
   request: SaveDesignRequest,
-  options: { designId?: string; silent: true },
+  options: { designId?: string; silent?: boolean },
 ) => Promise<SavedDesignSummary | null>;
 
 export interface DesignAutoSaveControllerOptions {
@@ -188,6 +190,11 @@ export class DesignAutoSaveController {
 
     if (!navigator.onLine) {
       this.onStatus("offline");
+      if (force) {
+        throw new ApiError(503, "You appear to be offline. Reconnect and try saving again.", {
+          code: "NETWORK_ERROR",
+        });
+      }
       return null;
     }
 
@@ -204,6 +211,8 @@ export class DesignAutoSaveController {
     try {
       const saved = await this.save(request, {
         designId: this.getDesignId() ?? undefined,
+        // Flush still uses silent so callers own success/error toasts (avoids duplicates).
+        // AuthProvider still opens the sign-in modal on 401 for silent saves.
         silent: true,
       });
       if (saved) {
@@ -222,8 +231,9 @@ export class DesignAutoSaveController {
       }
       this.onStatus("error");
       return null;
-    } catch {
+    } catch (err) {
       this.onStatus("error");
+      if (force) throw err;
       return null;
     } finally {
       this.inFlight = false;

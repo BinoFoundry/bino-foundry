@@ -66,10 +66,15 @@ export class BraceletService {
       else if (!bead.allowNewDesigns) unavailable.push(id);
     }
     if (missing.length) {
-      throw new ValidationError(`Unknown or removed beads: ${missing.join(", ")}`);
+      throw new ValidationError(
+        `Some beads in this design were removed from the catalogue: ${missing.join(", ")}. Please replace them before saving.`,
+      );
     }
     if (unavailable.length) {
-      throw new ValidationError(`Unavailable beads in configuration: ${unavailable.join(", ")}`);
+      throw new ValidationError(
+        "Some items in this design are no longer available. Please replace them before saving your design.",
+        { unavailableBeadIds: unavailable },
+      );
     }
   }
 
@@ -90,6 +95,7 @@ export class BraceletService {
     this.validateItemsAgainstCatalog(publicIds, beadByPublicId);
 
     const missingSizes: string[] = [];
+    const unavailableSizes: string[] = [];
     let subtotal = 0;
     const itemRows = dto.items.map((item) => {
       const bead = beadByPublicId.get(item.beadLibraryId)!;
@@ -100,7 +106,12 @@ export class BraceletService {
         return null;
       }
       if (offer.libraryUuid !== bead.id) {
-        throw new ValidationError(`Size ${item.beadSizeMm}mm is not enabled for bead ${item.beadLibraryId}`);
+        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
+        return null;
+      }
+      if (offer.availableForNew === false) {
+        unavailableSizes.push(`${bead.name} (${offer.sizeMm} mm)`);
+        return null;
       }
       const unit = offer.unitPrice;
       subtotal += unit;
@@ -115,8 +126,16 @@ export class BraceletService {
       };
     });
 
+    if (unavailableSizes.length) {
+      throw new ValidationError(
+        "Some items in this design are no longer available. Please replace them before saving your design.",
+        { unavailableSizes: [...new Set(unavailableSizes)] },
+      );
+    }
     if (missingSizes.length) {
-      throw new ValidationError(`Size not enabled for bead: ${[...new Set(missingSizes)].join(", ")}`);
+      throw new ValidationError(
+        `Some bead sizes in this design are no longer available: ${[...new Set(missingSizes)].join(", ")}. Please replace them before saving.`,
+      );
     }
     const rows = itemRows.filter((r): r is NonNullable<typeof r> => r !== null);
 
@@ -178,6 +197,7 @@ export class BraceletService {
     this.validateItemsAgainstCatalog(publicIds, beadByPublicId);
 
     const missingSizes: string[] = [];
+    const unavailableSizes: string[] = [];
     let subtotal = 0;
     const itemRows = dto.items.map((item) => {
       const bead = beadByPublicId.get(item.beadLibraryId)!;
@@ -188,7 +208,12 @@ export class BraceletService {
         return null;
       }
       if (offer.libraryUuid !== bead.id) {
-        throw new ValidationError(`Size ${item.beadSizeMm}mm is not enabled for bead ${item.beadLibraryId}`);
+        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
+        return null;
+      }
+      if (offer.availableForNew === false) {
+        unavailableSizes.push(`${bead.name} (${offer.sizeMm} mm)`);
+        return null;
       }
       const unit = offer.unitPrice;
       subtotal += unit;
@@ -203,8 +228,16 @@ export class BraceletService {
       };
     });
 
+    if (unavailableSizes.length) {
+      throw new ValidationError(
+        "Some items in this design are no longer available. Please replace them before saving your design.",
+        { unavailableSizes: [...new Set(unavailableSizes)] },
+      );
+    }
     if (missingSizes.length) {
-      throw new ValidationError(`Size not enabled for bead: ${[...new Set(missingSizes)].join(", ")}`);
+      throw new ValidationError(
+        `Some bead sizes in this design are no longer available: ${[...new Set(missingSizes)].join(", ")}. Please replace them before saving.`,
+      );
     }
     const rows = itemRows.filter((r): r is NonNullable<typeof itemRows[number]> => r !== null);
 
@@ -256,7 +289,7 @@ export class BraceletService {
     const { data: items, error: itemsErr } = await supabase
       .from("bracelet_configuration_items")
       .select(
-        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, bead_library_sizes(unit_price, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs, label))",
+        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, bead_library_sizes(unit_price, available_for_new, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs, label))",
       )
       .eq("configuration_id", configId)
       .order("strand_index")
@@ -280,7 +313,12 @@ export class BraceletService {
       const libraryPublicId = String(lib?.public_id ?? snapshotId ?? "");
       const isMissing = !lib;
       const allowNewDesigns = status?.allow_new_designs === true;
-      const catalogIssue = isMissing ? "deleted" : !allowNewDesigns ? "unavailable" : null;
+      const sizeAvailableForNew = offer == null || offer.available_for_new !== false;
+      const catalogIssue = isMissing
+        ? "deleted"
+        : !allowNewDesigns || !sizeAvailableForNew
+          ? "unavailable"
+          : null;
       return {
         strandIndex: r.strand_index,
         slotPosition: r.slot_position,
@@ -291,7 +329,7 @@ export class BraceletService {
         sizeLabel: sizeRow?.label ?? `${sizeMm} mm`,
         beadTypeSlug: type?.slug,
         unitPrice: Number(r.unit_price_snapshot),
-        beadActive: lib ? allowNewDesigns : false,
+        beadActive: lib ? allowNewDesigns && sizeAvailableForNew : false,
         catalogIssue,
         availabilityStatusCode: lib ? String(lib.availability_status_code ?? "ACTIVE") : null,
         availabilityStatusLabel: status?.label ?? null,

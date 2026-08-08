@@ -274,7 +274,15 @@ export class BeadLibrarySizeService {
   ): Promise<
     Map<
       string,
-      { id: string; sizeMm: number; unitPrice: number; libraryUuid: string; libraryPublicId: string; label: string }
+      {
+        id: string;
+        sizeMm: number;
+        unitPrice: number;
+        libraryUuid: string;
+        libraryPublicId: string;
+        label: string;
+        availableForNew: boolean;
+      }
     >
   > {
     const supabase = getSupabaseServiceRole();
@@ -303,7 +311,15 @@ export class BeadLibrarySizeService {
 
     const map = new Map<
       string,
-      { id: string; sizeMm: number; unitPrice: number; libraryUuid: string; libraryPublicId: string; label: string }
+      {
+        id: string;
+        sizeMm: number;
+        unitPrice: number;
+        libraryUuid: string;
+        libraryPublicId: string;
+        label: string;
+        availableForNew: boolean;
+      }
     >();
 
     for (const raw of rows ?? []) {
@@ -317,6 +333,7 @@ export class BeadLibrarySizeService {
         libraryUuid: String(row.beadLibraryUuid),
         libraryPublicId: libPublic,
         label: row.label,
+        availableForNew: row.availableForNew !== false,
       });
     }
     return map;

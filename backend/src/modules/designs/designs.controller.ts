@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 
 import { asyncHandler } from "../../lib/async-handler.js";
 import { sendData, sendDataCreated, sendNoContent } from "../../lib/http-response.js";
+import { validateBody } from "../../lib/validation.js";
 import { getAuthUserId } from "../../middleware/auth-mutations.js";
 import { designsService } from "./designs.service.js";
 import { bulkDeleteDesignsDto, designIdParam, saveDesignDto } from "./designs.validation.js";
@@ -19,7 +20,7 @@ async function getDesign(req: Request, res: Response): Promise<void> {
 
 async function saveDesign(req: Request, res: Response): Promise<void> {
   const userId = getAuthUserId(req)!;
-  const body = saveDesignDto.parse(req.body);
+  const body = validateBody(saveDesignDto, req.body);
   const isUpdate = Boolean(body.designId);
   const result = await designsService.saveDesign(userId, body);
   if (isUpdate) {

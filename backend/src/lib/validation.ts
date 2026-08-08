@@ -1,8 +1,10 @@
-import { ZodError, ZodSchema } from "zod";
+import { ZodError } from "zod";
 
 import { ValidationError } from "../lib/errors.js";
 
-function parseSchema<T>(schema: ZodSchema<T>, value: unknown): T {
+type ParsableSchema<T> = { parse: (data: unknown) => T };
+
+function parseSchema<T>(schema: ParsableSchema<T>, value: unknown): T {
   try {
     return schema.parse(value);
   } catch (error) {
@@ -13,10 +15,10 @@ function parseSchema<T>(schema: ZodSchema<T>, value: unknown): T {
   }
 }
 
-export function validateBody<T>(schema: ZodSchema<T>, body: unknown): T {
+export function validateBody<T>(schema: ParsableSchema<T>, body: unknown): T {
   return parseSchema(schema, body);
 }
 
-export function validateQuery<T>(schema: ZodSchema<T>, query: unknown): T {
+export function validateQuery<T>(schema: ParsableSchema<T>, query: unknown): T {
   return parseSchema(schema, query);
 }

@@ -131,6 +131,8 @@ export const BRACELET_COPY = {
     "Some items in this saved design are no longer available. Please review your design and replace the unavailable item(s) before continuing.",
   checkoutBlockedUnavailable:
     "Replace all unavailable beads before adding this design to your cart.",
+  saveBlockedUnavailable:
+    "Some items in this design are no longer available. Please replace them before saving your design.",
 
   mobileBracelet1: "Bracelet 1",
   mobileBracelet2: "Bracelet 2",

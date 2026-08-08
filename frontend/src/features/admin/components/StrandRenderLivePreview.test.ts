@@ -83,7 +83,41 @@ describe("Admin Live Preview Builder strand parity", () => {
     });
     expect(placed.bead).toBe(sample);
     expect(placed.size.sizeMm).toBe(12);
-    expect(pickPreviewSizeOffer(sample, [], 8).sizeMm).toBe(8);
+    expect(pickPreviewSizeOffer(sample, [], null, null, 8).sizeMm).toBe(8);
+  });
+
+  it("prefers the requested preview size when it is enabled", () => {
+    const sample = { id: "bead-1", name: "Charm" } as BeadLibraryEntry;
+    const offers = [
+      {
+        id: "a",
+        beadLibraryId: "bead-1",
+        beadSizeId: "s6",
+        sizeMm: 6,
+        label: "6 mm",
+        unitPrice: 1,
+        offerKey: "bead-1:6",
+        isDefault: true,
+      },
+      {
+        id: "b",
+        beadLibraryId: "bead-1",
+        beadSizeId: "s10",
+        sizeMm: 10,
+        label: "10 mm",
+        unitPrice: 1,
+        offerKey: "bead-1:10",
+      },
+    ];
+    const picked = pickPreviewSizeOffer(sample, offers, 10, [6, 10]);
+    expect(picked.sizeMm).toBe(10);
+    expect(picked.offer?.sizeMm).toBe(10);
+  });
+
+  it("falls back when the preferred preview size is no longer enabled", () => {
+    const sample = { id: "bead-1", name: "Charm" } as BeadLibraryEntry;
+    const picked = pickPreviewSizeOffer(sample, [], 6, [8, 10]);
+    expect(picked.sizeMm).toBe(8);
   });
 
   it("seeds a partial-fill strand like typical Builder use", () => {
