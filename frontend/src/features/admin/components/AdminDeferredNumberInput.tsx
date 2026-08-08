@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { parseLocaleNumber } from "@/lib/bead-size-format";
 
@@ -30,11 +30,14 @@ export interface AdminDeferredNumberInputProps {
   clampOnCommit?: boolean;
   onRangeError?: (message: string) => void;
   onClearError?: () => void;
+  /** Notifies parent when the field gains / loses focus (for form-state isolation). */
+  onEditingChange?: (editing: boolean) => void;
 }
 
 /**
  * Numeric field with temporary draft state.
  * Empty / partial input is allowed while focused; validate on blur or Enter.
+ * While focused, parent `value` updates never overwrite the in-progress draft.
  */
 export function AdminDeferredNumberInput({
   value,
@@ -51,18 +54,29 @@ export function AdminDeferredNumberInput({
   clampOnCommit = true,
   onRangeError,
   onClearError,
+  onEditingChange,
 }: AdminDeferredNumberInputProps) {
   const [draft, setDraft] = useState<string | null>(null);
+  const draftRef = useRef<string | null>(null);
+  const focusedRef = useRef(false);
   const scaled = value * displayScale;
   const shown = draft !== null ? draft : formatCommitted(scaled, decimals);
 
+  // Sync from committed value only when the field is not being edited.
   useEffect(() => {
+    if (focusedRef.current || draftRef.current !== null) return;
     setDraft(null);
   }, [value, displayScale]);
 
+  const setDraftBoth = (next: string | null) => {
+    draftRef.current = next;
+    setDraft(next);
+  };
+
   const commit = () => {
-    if (draft === null) return;
-    const trimmed = draft.trim();
+    const currentDraft = draftRef.current;
+    if (currentDraft === null) return;
+    const trimmed = currentDraft.trim();
     if (
       trimmed === "" ||
       trimmed === "-" ||
@@ -70,13 +84,14 @@ export function AdminDeferredNumberInput({
       trimmed === "-." ||
       trimmed === "+"
     ) {
-      setDraft(null);
+      // Empty / incomplete on blur → revert display to last committed value (no parent write).
+      setDraftBoth(null);
       onClearError?.();
       return;
     }
     const parsed = parseLocaleNumber(trimmed);
     if (!Number.isFinite(parsed)) {
-      setDraft(null);
+      setDraftBoth(null);
       onClearError?.();
       return;
     }
@@ -86,17 +101,19 @@ export function AdminDeferredNumberInput({
         const minLabel = Number.isFinite(min) ? String(min) : "−∞";
         const maxLabel = Number.isFinite(max) ? String(max) : "∞";
         onRangeError?.(`Must be between ${minLabel} and ${maxLabel}.`);
+        // Keep draft so the typed value stays visible.
         return;
       }
       const clamped = Math.min(max, Math.max(min, stored));
-      setDraft(null);
       onClearError?.();
-      if (Math.abs(clamped - value) > 1e-9) onCommit(clamped);
+      onCommit(clamped);
+      setDraftBoth(null);
       return;
     }
-    setDraft(null);
     onClearError?.();
-    if (Math.abs(stored - value) > 1e-9) onCommit(stored);
+    // Commit first so parent/local form state updates before draft clears.
+    onCommit(stored);
+    setDraftBoth(null);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -105,7 +122,7 @@ export function AdminDeferredNumberInput({
       (e.target as HTMLInputElement).blur();
     } else if (e.key === "Escape") {
       e.preventDefault();
-      setDraft(null);
+      setDraftBoth(null);
       onClearError?.();
       (e.target as HTMLInputElement).blur();
     }
@@ -123,11 +140,19 @@ export function AdminDeferredNumberInput({
       className={className ?? adminFieldClass()}
       value={shown}
       step={step}
+      onFocus={() => {
+        focusedRef.current = true;
+        onEditingChange?.(true);
+      }}
       onChange={(e) => {
-        setDraft(e.target.value);
+        setDraftBoth(e.target.value);
         onClearError?.();
       }}
-      onBlur={commit}
+      onBlur={() => {
+        commit();
+        focusedRef.current = false;
+        onEditingChange?.(false);
+      }}
       onKeyDown={onKeyDown}
     />
   );

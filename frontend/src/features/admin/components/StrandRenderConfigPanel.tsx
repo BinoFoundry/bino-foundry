@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   mergeStrandRenderProfile,
   parseStrandRenderProfile,
@@ -35,6 +35,26 @@ type CalibrationFieldKey =
   | "contactOffset"
   | "visualScale"
   | "verticalOffset";
+
+const CALIBRATION_KEYS: readonly CalibrationFieldKey[] = [
+  "layoutScale",
+  "contactWidth",
+  "contactOffset",
+  "visualScale",
+  "verticalOffset",
+] as const;
+
+type CalibrationValues = Pick<StrandRenderProfile, CalibrationFieldKey>;
+
+function calibrationFromProfile(profile: StrandRenderProfile): CalibrationValues {
+  return {
+    layoutScale: profile.layoutScale,
+    contactWidth: profile.contactWidth,
+    contactOffset: profile.contactOffset,
+    visualScale: profile.visualScale,
+    verticalOffset: profile.verticalOffset,
+  };
+}
 
 export interface StrandRenderConfigPanelProps {
   mode: StrandRenderConfigPanelMode;
@@ -95,6 +115,49 @@ export function StrandRenderConfigPanel({
           ? "Sub-type rendering defaults"
           : "Strand appearance";
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<CalibrationFieldKey, string>>>({});
+  /** Editable calibration snapshot — updated on commit; not overwritten while a field is focused. */
+  const [editValues, setEditValues] = useState<CalibrationValues>(() => calibrationFromProfile(value));
+  const editingFieldsRef = useRef<Set<CalibrationFieldKey>>(new Set());
+  /** Commits waiting for parent props to catch up — prevents stale hydrate from reverting blur. */
+  const pendingCommitsRef = useRef<Partial<Record<CalibrationFieldKey, number>>>({});
+  const propsCalibration = useMemo(
+    () => calibrationFromProfile(value),
+    [
+      value.layoutScale,
+      value.contactWidth,
+      value.contactOffset,
+      value.visualScale,
+      value.verticalOffset,
+    ],
+  );
+
+  // Hydrate from parent when not editing and not waiting on a local commit.
+  useEffect(() => {
+    setEditValues((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const key of CALIBRATION_KEYS) {
+        if (editingFieldsRef.current.has(key)) continue;
+        const propVal = propsCalibration[key];
+        const pending = pendingCommitsRef.current[key];
+        if (pending !== undefined) {
+          if (propVal === pending) {
+            delete pendingCommitsRef.current[key];
+          } else if (next[key] !== pending) {
+            // Parent has not applied our commit yet — keep the local value.
+            next[key] = pending;
+            changed = true;
+          }
+          continue;
+        }
+        if (next[key] !== propVal) {
+          next[key] = propVal;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [propsCalibration]);
 
   const setFieldError = (key: CalibrationFieldKey, message: string | null) => {
     setFieldErrors((prev) => {
@@ -108,6 +171,24 @@ export function StrandRenderConfigPanel({
       return { ...prev, [key]: message };
     });
   };
+
+  const commitCalibration = (key: CalibrationFieldKey, next: number) => {
+    pendingCommitsRef.current[key] = next;
+    setEditValues((prev) => (prev[key] === next ? prev : { ...prev, [key]: next }));
+    onChange({ [key]: next });
+  };
+
+  const setFieldEditing = (key: CalibrationFieldKey, editing: boolean) => {
+    if (editing) editingFieldsRef.current.add(key);
+    else editingFieldsRef.current.delete(key);
+  };
+
+  const discardLocalCalibrationEdits = () => {
+    pendingCommitsRef.current = {};
+    editingFieldsRef.current.clear();
+  };
+
+  const previewProfile = useMemo(() => ({ ...value, ...editValues }), [value, editValues]);
 
   return (
     <section className="space-y-3 rounded-xl border border-border bg-muted/15 p-4">
@@ -129,7 +210,10 @@ export function StrandRenderConfigPanel({
             <button
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              onClick={onResetToType}
+              onClick={() => {
+                discardLocalCalibrationEdits();
+                onResetToType();
+              }}
             >
               Reset to sub-type
             </button>
@@ -138,7 +222,10 @@ export function StrandRenderConfigPanel({
             <button
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              onClick={onResetToType}
+              onClick={() => {
+                discardLocalCalibrationEdits();
+                onResetToType();
+              }}
             >
               Reset to bead type
             </button>
@@ -147,7 +234,10 @@ export function StrandRenderConfigPanel({
             <button
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              onClick={onResetToSystem}
+              onClick={() => {
+                discardLocalCalibrationEdits();
+                onResetToSystem();
+              }}
             >
               Reset to system defaults
             </button>
@@ -161,7 +251,10 @@ export function StrandRenderConfigPanel({
             type="checkbox"
             className="h-5 w-5 shrink-0 rounded border border-border accent-foreground"
             checked={inheritTypeDefaults}
-            onChange={(e) => onInheritTypeDefaultsChange(e.target.checked)}
+            onChange={(e) => {
+              discardLocalCalibrationEdits();
+              onInheritTypeDefaultsChange(e.target.checked);
+            }}
           />
           <span className="select-none">Use Parent Calibration</span>
         </label>
@@ -170,8 +263,9 @@ export function StrandRenderConfigPanel({
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={value.layoutScale}
-            onCommit={(layoutScale) => onChange({ layoutScale })}
+            value={editValues.layoutScale}
+            onCommit={(layoutScale) => commitCalibration("layoutScale", layoutScale)}
+            onEditingChange={(editing) => setFieldEditing("layoutScale", editing)}
             min={STRAND_LAYOUT_SCALE_MIN}
             max={STRAND_LAYOUT_SCALE_MAX}
             step={STRAND_LAYOUT_SCALE_STEP}
@@ -203,8 +297,9 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Contact width" source={provenance?.contactWidth} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={value.contactWidth}
-            onCommit={(contactWidth) => onChange({ contactWidth })}
+            value={editValues.contactWidth}
+            onCommit={(contactWidth) => commitCalibration("contactWidth", contactWidth)}
+            onEditingChange={(editing) => setFieldEditing("contactWidth", editing)}
             min={STRAND_CONTACT_SPACING_MIN}
             max={STRAND_CONTACT_SPACING_MAX}
             step={STRAND_CONTACT_SPACING_STEP}
@@ -220,8 +315,9 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={value.contactOffset}
-            onCommit={(contactOffset) => onChange({ contactOffset })}
+            value={editValues.contactOffset}
+            onCommit={(contactOffset) => commitCalibration("contactOffset", contactOffset)}
+            onEditingChange={(editing) => setFieldEditing("contactOffset", editing)}
             min={STRAND_CONTACT_SPACING_MIN}
             max={STRAND_CONTACT_SPACING_MAX}
             step={STRAND_CONTACT_SPACING_STEP}
@@ -237,8 +333,9 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={value.visualScale}
-            onCommit={(visualScale) => onChange({ visualScale })}
+            value={editValues.visualScale}
+            onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
+            onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
             min={STRAND_VISUAL_SCALE_MIN}
             max={STRAND_VISUAL_SCALE_MAX}
             step={STRAND_VISUAL_SCALE_STEP}
@@ -282,8 +379,9 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={value.verticalOffset}
-            onCommit={(verticalOffset) => onChange({ verticalOffset })}
+            value={editValues.verticalOffset}
+            onCommit={(verticalOffset) => commitCalibration("verticalOffset", verticalOffset)}
+            onEditingChange={(editing) => setFieldEditing("verticalOffset", editing)}
             min={STRAND_VERTICAL_OFFSET_MIN}
             max={STRAND_VERTICAL_OFFSET_MAX}
             step={STRAND_VERTICAL_OFFSET_STEP}
@@ -423,7 +521,7 @@ export function StrandRenderConfigPanel({
       {livePreview ? (
         <StrandRenderLivePreview
           className="border-t border-border pt-4"
-          profile={value}
+          profile={previewProfile}
           imageUrl={previewImageUrl}
           sampleBead={previewSampleBead}
         />

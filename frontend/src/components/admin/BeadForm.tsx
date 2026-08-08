@@ -31,6 +31,7 @@ import {
   parseStrandRenderProfile,
   pruneStrandRenderOverride,
   strandRenderOverrideIsEmpty,
+  strandRenderStorageMeta,
   beadLibraryInheritsTypeStrandDefaults,
   normalizeBeadLibraryStrandMetadata,
   type BeadCropConfig,
@@ -71,8 +72,12 @@ function updateStrandOverride(
 ): BeadLibraryEntry {
   const meta = form.metadata as { strandRenderOverride?: unknown; useTypeStrandDefaults?: boolean } | undefined;
   const current = parseStrandRenderProfile(meta?.strandRenderOverride) ?? {};
-  // In custom mode keep authored values (including equals-to-parent) so sliders persist.
-  const next = { ...current, ...patch } as Partial<StrandRenderProfile>;
+  // In custom mode keep authored values (including equals-to-parent) so edits persist after blur.
+  const next = {
+    ...current,
+    ...patch,
+    ...strandRenderStorageMeta(),
+  } as Partial<StrandRenderProfile>;
   if (strandRenderOverrideIsEmpty(next)) {
     const keepOptOut = meta?.useTypeStrandDefaults === false;
     return setInheritTypeDefaults(form, !keepOptOut);

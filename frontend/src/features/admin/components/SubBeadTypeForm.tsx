@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/button";
 import type { BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import {
   DEFAULT_STRAND_RENDER_PROFILE,
-  mergeLazyStrandRenderOverride,
+  mergeStrandRenderProfile,
   normalizeSubBeadTypeStrandMetadata,
   parseStrandRenderProfile,
   pruneStrandRenderOverride,
   resolvedTypeStrandProfile,
   resolveStrandRenderConfig,
   strandRenderOverrideIsEmpty,
+  strandRenderStorageMeta,
   subBeadTypeInheritsBeadTypeStrandDefaults,
+  type StrandRenderProfile,
 } from "@bino-foundry/shared/types";
 import { useCatalogue } from "@/state/catalogue";
 
@@ -42,9 +44,19 @@ function updateSubTypeStrandOverride(
   inheritedBeadTypeProfile: ReturnType<typeof resolvedTypeStrandProfile>,
 ): SubBeadTypeEntry {
   const current = subTypeOverrideFromForm(form) ?? {};
-  const next = mergeLazyStrandRenderOverride(current, patch, inheritedBeadTypeProfile);
-  if (strandRenderOverrideIsEmpty(next)) {
-    // Keep an explicit opt-out; only snap back to inherit when already inheriting.
+  // Keep the authored patch on the override; prune only drops keys that still match parent.
+  const merged = { ...current, ...patch } as Partial<StrandRenderProfile>;
+  const next = pruneStrandRenderOverride(
+    mergeStrandRenderProfile(inheritedBeadTypeProfile, merged),
+    inheritedBeadTypeProfile,
+  );
+  // If prune emptied everything, still persist the explicit patch so blur edits are not lost
+  // when the typed value happens to match the parent after resolve.
+  const persisted =
+    strandRenderOverrideIsEmpty(next) && Object.keys(patch).length > 0
+      ? ({ ...patch, ...strandRenderStorageMeta() } as Partial<StrandRenderProfile>)
+      : next;
+  if (strandRenderOverrideIsEmpty(persisted) && Object.keys(patch).length === 0) {
     const keepOptOut = form.metadata?.useBeadTypeStrandDefaults === false;
     return setInheritBeadTypeDefaults(form, !keepOptOut);
   }
@@ -53,7 +65,7 @@ function updateSubTypeStrandOverride(
     metadata: {
       ...(form.metadata ?? {}),
       useBeadTypeStrandDefaults: false,
-      strandRenderOverride: next,
+      strandRenderOverride: persisted,
     },
   };
 }

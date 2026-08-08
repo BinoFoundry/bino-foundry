@@ -6,6 +6,7 @@ import {
   beadLibraryInheritsTypeStrandDefaults,
   DEFAULT_BEAD_PLACEMENT_MODE,
   DEFAULT_STRAND_RENDER_PROFILE,
+  mergeStrandRenderProfile,
   parseBeadPlacementMode,
   parseStrandRenderProfile,
   pruneStrandRenderOverride,
@@ -52,7 +53,9 @@ function updateTypeStrandRender(
 ): BeadTypeEntry {
   const system = systemProfile(strandRenderDefaults);
   const current = typePartialFromForm(form) ?? {};
-  const resolved = { ...system, ...current, ...patch };
+  // Apply the authored patch onto the current type partial, then resolve against system
+  // so prune keeps only real diffs — including the just-edited calibration value.
+  const resolved = mergeStrandRenderProfile(system, { ...current, ...patch });
   const pruned = pruneStrandRenderOverride(resolved, system);
   const metadata = { ...(form.metadata ?? {}) } as Record<string, unknown>;
   if (strandRenderOverrideIsEmpty(pruned)) {
