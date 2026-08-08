@@ -3,13 +3,27 @@ import { formatCurrency, formatCurrencyRange } from "@bino-foundry/shared/curren
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeInput, BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
+export function isSizeAvailableForNew(offer: BeadLibrarySizeOffer): boolean {
+  return offer.availableForNew !== false;
+}
+
 export function sizesForLibrary(
   offers: BeadLibrarySizeOffer[],
   libraryId: string,
+  options?: { includeUnavailable?: boolean },
 ): BeadLibrarySizeOffer[] {
   return offers
     .filter((o) => o.beadLibraryId === libraryId)
+    .filter((o) => options?.includeUnavailable || isSizeAvailableForNew(o))
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.sizeMm - b.sizeMm);
+}
+
+/** All junction rows for admin editors (including soft-disabled sizes). */
+export function allSizesForLibrary(
+  offers: BeadLibrarySizeOffer[],
+  libraryId: string,
+): BeadLibrarySizeOffer[] {
+  return sizesForLibrary(offers, libraryId, { includeUnavailable: true });
 }
 
 export function defaultSizeForLibrary(
@@ -42,26 +56,37 @@ export function findSizeOffer(
   offers: BeadLibrarySizeOffer[],
   libraryId: string,
   sizeMm: number,
+  options?: { includeUnavailable?: boolean },
 ): BeadLibrarySizeOffer | undefined {
-  return offers.find((o) => o.beadLibraryId === libraryId && o.sizeMm === sizeMm);
+  return offers.find(
+    (o) =>
+      o.beadLibraryId === libraryId &&
+      o.sizeMm === sizeMm &&
+      (options?.includeUnavailable || isSizeAvailableForNew(o)),
+  );
 }
 
 /** Resolve by offer key (`libraryPublicId-mm`) or legacy variant public id. */
 export function findSizeOfferByKey(
   offers: BeadLibrarySizeOffer[],
   key: string,
+  options?: { includeUnavailable?: boolean },
 ): BeadLibrarySizeOffer | undefined {
-  const direct = offers.find((o) => o.offerKey === key || o.id === key);
+  const direct = offers.find(
+    (o) =>
+      (o.offerKey === key || o.id === key) &&
+      (options?.includeUnavailable || isSizeAvailableForNew(o)),
+  );
   if (direct) return direct;
   const m = key.match(/^(.+)-(\d+)$/);
   if (!m) return undefined;
   const libraryId = m[1];
   const sizeMm = Number(m[2]);
-  return findSizeOffer(offers, libraryId, sizeMm);
+  return findSizeOffer(offers, libraryId, sizeMm, options);
 }
 
 export function minActiveOfferSizeMm(offers: BeadLibrarySizeOffer[]): number {
-  const active = offers.map((o) => o.sizeMm);
+  const active = offers.filter(isSizeAvailableForNew).map((o) => o.sizeMm);
   return active.length ? Math.min(...active) : 1;
 }
 

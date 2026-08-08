@@ -17,7 +17,7 @@ import {
   useDirtySnapshot,
   useUnsavedChangesGuard,
 } from "@/features/admin/unsaved-changes";
-import { sizesForLibrary } from "@/features/bracelet/library-sizes";
+import { allSizesForLibrary } from "@/features/bracelet/library-sizes";
 import { validateBeadSizeMm } from "@/lib/bead-size-mm";
 import { resolveStrandRenderConfigForBead, resolveStrandRenderConfigForSubBeadType } from "@/render/bead-crop";
 import { useCatalogue } from "@/state/catalogue";
@@ -49,7 +49,7 @@ interface BeadFormProps {
 function buildSizeRows(
   globalSizes: { sizeMm: number; label: string; isActive?: boolean }[],
   libraryId: string | undefined,
-  existingOffers: ReturnType<typeof sizesForLibrary>,
+  existingOffers: ReturnType<typeof allSizesForLibrary>,
 ): BeadSizeDraftRow[] {
   return globalSizes
     .filter((s) => s.isActive !== false)
@@ -59,8 +59,9 @@ function buildSizeRows(
       return {
         sizeMm: gs.sizeMm,
         label: gs.label,
-        enabled: Boolean(offer),
+        enabled: Boolean(offer && offer.availableForNew !== false),
         unitPrice: offer?.unitPrice ?? 0,
+        designReferenceCount: offer?.designReferenceCount ?? 0,
       };
     });
 }
@@ -177,12 +178,16 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
   );
 
   const existingOffers = useMemo(
-    () => (form.id ? sizesForLibrary(cat.beadLibrarySizes, form.id) : []),
+    () => (form.id ? allSizesForLibrary(cat.beadLibrarySizes, form.id) : []),
     [cat.beadLibrarySizes, form.id],
   );
 
   const [sizeRows, setSizeRows] = useState<BeadSizeDraftRow[]>(() =>
-    buildSizeRows(globalSizes, initial?.id, initial?.id ? sizesForLibrary(cat.beadLibrarySizes, initial.id) : []),
+    buildSizeRows(
+      globalSizes,
+      initial?.id,
+      initial?.id ? allSizesForLibrary(cat.beadLibrarySizes, initial.id) : [],
+    ),
   );
   const [cropDraftDirty, setCropDraftDirty] = useState(false);
   /** First crop draft callback is editor hydration — treat as baseline, not a user edit. */
@@ -205,7 +210,7 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
 
   const resetSizeRows = useCallback(
     (libraryId?: string) => {
-      const offers = libraryId ? sizesForLibrary(cat.beadLibrarySizes, libraryId) : [];
+      const offers = libraryId ? allSizesForLibrary(cat.beadLibrarySizes, libraryId) : [];
       setSizeRows(buildSizeRows(globalSizes, libraryId, offers));
     },
     [cat.beadLibrarySizes, globalSizes],

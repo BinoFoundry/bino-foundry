@@ -231,7 +231,7 @@ const BeadLibraryCard = memo(function BeadLibraryCard({
           </p>
         </div>
       </div>
-      {activeSize && sizes.length > 0 ? (
+      {activeSize && sizes.length > 1 ? (
         <div className="overflow-hidden rounded-b-lg border-t border-border/50 px-1.5 py-1.5">
           <Select value={selectValue} onValueChange={onSelectSize}>
             <SelectTrigger
@@ -251,6 +251,12 @@ const BeadLibraryCard = memo(function BeadLibraryCard({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      ) : activeSize && sizes.length === 1 ? (
+        <div className="overflow-hidden rounded-b-lg border-t border-border/50 px-1.5 py-1.5">
+          <p className="px-1 text-center text-[10px] tabular-nums text-muted-foreground">
+            {activeSize.sizeMm} mm
+          </p>
         </div>
       ) : null}
     </div>
@@ -396,8 +402,10 @@ const BeadLibrary = ({
         return false;
       }
 
+      const sizes = sizesForLibrary(cat.beadLibrarySizes, b.id);
+      if (!sizes.length) return false;
+
       if (isMobileRail && activeSizeMmFilter !== null) {
-        const sizes = sizesForLibrary(cat.beadLibrarySizes, b.id);
         if (!sizes.some((s) => s.sizeMm === activeSizeMmFilter)) return false;
       }
 

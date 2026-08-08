@@ -32,37 +32,51 @@ export function BeadLibrarySizesPanel({ rows, onRowsChange }: BeadLibrarySizesPa
       <div>
         <p className="text-xs font-medium text-foreground">Available sizes</p>
         <p className="text-[10px] text-muted-foreground">
-          Select sizes to offer and set the price for each. Pricing is defined only at the size level.
+          Control which sizes new customers can select. Existing bracelets and saved designs keep
+          their sizes even when unchecked.
         </p>
       </div>
 
       <ul className="space-y-2">
-        {rows.map((r) => (
-          <li key={r.sizeMm} className="flex flex-wrap items-center gap-2 text-xs">
-            <label className="flex min-w-[5.5rem] items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={r.enabled}
-                onChange={(e) => toggle(r.sizeMm, e.target.checked)}
-              />
-              <span className="font-medium tabular-nums">{formatBeadSizeMm(r.sizeMm)}</span>
-            </label>
-            <span className="text-muted-foreground">→</span>
-            <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">$</span>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                disabled={!r.enabled}
-                value={r.enabled ? r.unitPrice : ""}
-                placeholder="—"
-                className="w-24 rounded border border-border px-2 py-1 disabled:opacity-40"
-                onChange={(e) => setPrice(r.sizeMm, Number(e.target.value) || 0)}
-              />
-            </div>
-          </li>
-        ))}
+        {rows.map((r) => {
+          const usage = r.designReferenceCount ?? 0;
+          return (
+            <li key={r.sizeMm} className="space-y-1 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex min-w-[5.5rem] items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={r.enabled}
+                    onChange={(e) => toggle(r.sizeMm, e.target.checked)}
+                  />
+                  <span className="font-medium tabular-nums">{formatBeadSizeMm(r.sizeMm)}</span>
+                </label>
+                <span className="text-muted-foreground">→</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    disabled={!r.enabled}
+                    value={r.enabled ? r.unitPrice : ""}
+                    placeholder="—"
+                    className="w-24 rounded border border-border px-2 py-1 disabled:opacity-40"
+                    onChange={(e) => setPrice(r.sizeMm, Number(e.target.value) || 0)}
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {r.enabled ? "Available" : "Not available for new"}
+                </span>
+              </div>
+              {usage > 0 ? (
+                <p className="pl-6 text-[10px] text-muted-foreground">
+                  Currently used by {usage} bracelet{usage === 1 ? "" : "s"}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

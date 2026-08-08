@@ -227,9 +227,13 @@ function SortableBeadInner({
 
   const unavailable = bead ? isUnavailablePlacedBead(bead) : false;
   const unavailableIssue = bead ? unavailableIssueForPlaced(bead) : null;
+  const isPlaceholderUnavailable =
+    unavailable && Boolean(bead?.bead.metadata?.isPlaceholder);
 
-  const imgSrc = unavailable ? "" : getBeadImageUrl(bead, sizingCatalogue);
-  const deliveryUrl = bead && !unavailable ? resolveStrandDeliveryUrl(bead.bead) : null;
+  // Soft-unavailable (e.g. disabled size): keep the bead asset visible so customers can identify it.
+  const imgSrc = isPlaceholderUnavailable ? "" : getBeadImageUrl(bead, sizingCatalogue);
+  const deliveryUrl =
+    bead && !isPlaceholderUnavailable ? resolveStrandDeliveryUrl(bead.bead) : null;
   const needsProcessedMetrics =
     Boolean(deliveryUrl) && Boolean(bead && usesProcessedStrandAsset(bead.bead));
   const processedReady =
@@ -270,9 +274,13 @@ function SortableBeadInner({
   const outward = computeBeadOutwardOffset(ringAnchorX, ringAnchorY, ringCenterX, ringCenterY, rotationDeg, slotExtent);
   const removeBtnSize = Math.max(18, Math.min(22, slotExtent * 0.4));
 
-  const label = unavailable ? BRACELET_COPY.unavailableBeadName : (bead?.bead.name ?? "");
+  const displayName =
+    bead && !bead.bead.metadata?.isPlaceholder
+      ? bead.bead.name
+      : BRACELET_COPY.unavailableBeadName;
+  const label = unavailable ? displayName : (bead?.bead.name ?? "");
   const title = unavailable
-    ? `${BRACELET_COPY.unavailableBeadName} · ${BRACELET_COPY.unavailableBeadPrompt}`
+    ? `${displayName} · ${BRACELET_COPY.unavailableBeadPrompt}`
     : bead
       ? `${label} · ${displayBeadSizeLabel(bead.size.sizeMm, bead.size.label)} — ${BRACELET_COPY.dragToReorder}`
       : BRACELET_COPY.emptySlotHint;
@@ -342,15 +350,21 @@ function SortableBeadInner({
         </div>
       ) : null}
       {unavailable && bead ? (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center">
+        <div
+          className={cn(
+            "flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center",
+            !isPlaceholderUnavailable && "absolute inset-0 bg-background/70",
+          )}
+        >
           <AlertTriangle className="h-4 w-4 text-destructive" aria-hidden />
           <span className="text-[9px] font-medium leading-tight text-destructive">
-            {BRACELET_COPY.unavailableBeadName}
+            {displayName}
           </span>
           <span className="text-[8px] leading-tight text-muted-foreground">
             {unavailableIssue === "deleted"
               ? BRACELET_COPY.unavailableBeadDeleted
               : BRACELET_COPY.unavailableBeadStatus}
+            {bead.size?.sizeMm ? ` · ${bead.size.sizeMm} mm` : ""}
           </span>
           <span className="text-[8px] font-medium leading-tight text-primary">
             {BRACELET_COPY.unavailableBeadPrompt}

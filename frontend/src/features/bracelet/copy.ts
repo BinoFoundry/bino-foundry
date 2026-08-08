@@ -128,7 +128,7 @@ export const BRACELET_COPY = {
   unavailableBeadStatus: "Unavailable",
   unavailableBeadPrompt: "Replace this bead",
   unavailableBeadsNotice:
-    "Some beads used in this design are no longer available and need to be replaced before ordering.",
+    "Some items in this saved design are no longer available. Please review your design and replace the unavailable item(s) before continuing.",
   checkoutBlockedUnavailable:
     "Replace all unavailable beads before adding this design to your cart.",
 

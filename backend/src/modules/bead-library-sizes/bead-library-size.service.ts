@@ -6,7 +6,7 @@ import { runBackgroundTask } from "../../lib/run-background-task.js";
 import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
 import type { SaveNormalizedExportsDTO, SyncLibrarySizesDTO } from "./bead-library-size.validation.js";
 
-function mapRow(row: Record<string, unknown>) {
+function mapRow(row: Record<string, unknown>, usageById?: Map<string, number>) {
   const lib = row.bead_libraries as { public_id?: string } | null | undefined;
   const size = row.bead_sizes as {
     id?: string;
@@ -22,8 +22,9 @@ function mapRow(row: Record<string, unknown>) {
   const normalizedVisible = row.normalized_visible_diameter_px;
   const groupRef = size?.group_reference_diameter_px;
   const deliveryUrls = row.normalized_delivery_urls;
+  const id = String(row.id);
   return {
-    id: row.id,
+    id,
     beadLibraryId: libraryPublicId,
     beadLibraryUuid: row.bead_library_id,
     beadSizeId: size?.id ?? row.bead_size_id,
@@ -33,6 +34,9 @@ function mapRow(row: Record<string, unknown>) {
     currencyCode: row.currency_code,
     displayOrder: size?.display_order ?? 0,
     isDefault: row.is_default === true,
+    /** False = kept for existing designs; hidden from new builder selections. */
+    availableForNew: row.available_for_new !== false,
+    designReferenceCount: usageById?.get(id) ?? 0,
     normalizationFactor: norm != null && Number(norm) > 0 ? Number(norm) : 1,
     assetVisibleDiameterPx:
       visible != null && Number(visible) > 0 ? Number(visible) : null,
@@ -85,6 +89,38 @@ async function clearOtherDefaults(libraryUuid: string, exceptId?: string) {
 }
 
 export class BeadLibrarySizeService {
+  private async designReferenceCounts(sizeIds: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (!sizeIds.length) return counts;
+    const supabase = getSupabaseServiceRole();
+    const { data, error } = await supabase
+      .from("bracelet_configuration_items")
+      .select("bead_library_size_id, configuration_id")
+      .in("bead_library_size_id", sizeIds);
+    assertNoDbError(error);
+
+    const configsBySize = new Map<string, Set<string>>();
+    for (const raw of data ?? []) {
+      const row = raw as {
+        bead_library_size_id?: string;
+        configuration_id?: string;
+      };
+      const sizeId = row.bead_library_size_id;
+      const configId = row.configuration_id;
+      if (!sizeId || !configId) continue;
+      let set = configsBySize.get(sizeId);
+      if (!set) {
+        set = new Set();
+        configsBySize.set(sizeId, set);
+      }
+      set.add(configId);
+    }
+    for (const [sizeId, configs] of configsBySize) {
+      counts.set(sizeId, configs.size);
+    }
+    return counts;
+  }
+
   async list(options?: { libraryId?: string }) {
     const supabase = getSupabaseServiceRole();
     let q = supabase.from("bead_library_sizes").select(SELECT);
@@ -94,12 +130,14 @@ export class BeadLibrarySizeService {
     }
     const { data, error } = await q;
     assertNoDbError(error);
-    return (data ?? [])
-      .filter((row) => {
-        const size = (row as Record<string, unknown>).bead_sizes as { is_active?: boolean } | null;
-        return size?.is_active !== false;
-      })
-      .map((r) => mapRow(r as Record<string, unknown>));
+    const filtered = (data ?? []).filter((row) => {
+      const size = (row as Record<string, unknown>).bead_sizes as { is_active?: boolean } | null;
+      return size?.is_active !== false;
+    });
+    const usage = await this.designReferenceCounts(
+      filtered.map((r) => String((r as { id: string }).id)),
+    );
+    return filtered.map((r) => mapRow(r as Record<string, unknown>, usage));
   }
 
   async syncLibrarySizes(
@@ -137,35 +175,33 @@ export class BeadLibrarySizeService {
 
     const { data: existingRows, error: existingErr } = await supabase
       .from("bead_library_sizes")
-      .select("id, bead_size_id, unit_price, is_default, bead_sizes(size_mm, label)")
+      .select("id, bead_size_id, unit_price, is_default, available_for_new, bead_sizes(size_mm, label)")
       .eq("bead_library_id", libraryUuid);
     assertNoDbError(existingErr);
 
-    const existingFingerprint = (existingRows ?? []).map((raw) => {
-      const row = raw as {
-        unit_price: number;
-        is_default: boolean;
-        bead_sizes: { size_mm?: number } | null;
-      };
-      return {
+    type ExistingRow = {
+      id: string;
+      bead_size_id: string;
+      unit_price: number;
+      is_default: boolean;
+      available_for_new?: boolean;
+      bead_sizes: { size_mm?: number; label?: string } | null;
+    };
+
+    const existing = (existingRows ?? []) as ExistingRow[];
+
+    // Fingerprint only sizes currently offered for new selections.
+    const existingFingerprint = existing
+      .filter((row) => row.available_for_new !== false)
+      .map((row) => ({
         sizeMm: Number(row.bead_sizes?.size_mm ?? 0),
         unitPrice: Number(row.unit_price),
         isDefault: row.is_default === true,
-      };
-    });
+      }));
 
     if (librarySizesSemanticallyEqual(dto.sizes, existingFingerprint) && !dto.force) {
       const current = await this.list({ libraryId });
       return { rows: current, changed: false };
-    }
-
-    if (!dto.sizes.length) {
-      await this.deleteUnreferencedLibrarySizes(
-        supabase,
-        libraryUuid,
-        (existingRows ?? []) as { id: string; bead_size_id: string; bead_sizes: { size_mm?: number; label?: string } | null }[],
-      );
-      return { rows: [], changed: true };
     }
 
     let defaultSet = false;
@@ -183,32 +219,33 @@ export class BeadLibrarySizeService {
         bead_size_id: beadSizeId,
         unit_price: s.unitPrice,
         is_default: isDefault,
+        available_for_new: true,
       };
     });
 
-    if (!defaultSet) upsertRows[0].is_default = true;
+    if (upsertRows.length && !defaultSet) upsertRows[0].is_default = true;
 
-    const staleRows = ((existingRows ?? []) as {
-      id: string;
-      bead_size_id: string;
-      bead_sizes: { size_mm?: number; label?: string } | null;
-    }[]).filter((row) => !desiredBeadSizeIds.has(row.bead_size_id));
+    const staleRows = existing.filter((row) => !desiredBeadSizeIds.has(row.bead_size_id));
+    await this.softDisableLibrarySizes(supabase, staleRows.map((row) => row.id));
 
-    await this.deleteUnreferencedLibrarySizes(supabase, libraryUuid, staleRows);
+    if (upsertRows.length) {
+      await clearOtherDefaults(libraryUuid);
 
-    await clearOtherDefaults(libraryUuid);
+      const { error } = await supabase
+        .from("bead_library_sizes")
+        .upsert(upsertRows, { onConflict: "bead_library_id,bead_size_id" });
+      assertNoDbError(error);
+    } else {
+      // No sizes available for new — clear any leftover default flags.
+      await clearOtherDefaults(libraryUuid);
+    }
 
-    const { data, error } = await supabase
-      .from("bead_library_sizes")
-      .upsert(upsertRows, { onConflict: "bead_library_id,bead_size_id" })
-      .select(SELECT);
-    assertNoDbError(error);
-    const rows = (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
     if (!dto.skipNormalization) {
       runBackgroundTask("mm-normalization", async () => {
         await mmGroupNormalizationService.recalculateForLibrary(libraryId);
       });
     }
+    const rows = await this.list({ libraryId });
     return { rows, changed: true };
   }
 
@@ -216,43 +253,20 @@ export class BeadLibrarySizeService {
     await mmGroupNormalizationService.recalculateForLibrary(libraryId);
   }
 
-  private async deleteUnreferencedLibrarySizes(
+  /**
+   * Hide sizes from new selections without deleting junction rows.
+   * Existing bracelet designs keep their bead_library_size_id references.
+   */
+  private async softDisableLibrarySizes(
     supabase: ReturnType<typeof getSupabaseServiceRole>,
-    libraryUuid: string,
-    rows: { id: string; bead_size_id: string; bead_sizes: { size_mm?: number; label?: string } | null }[],
+    sizeIds: string[],
   ) {
-    if (!rows.length) return;
-
-    const staleIds = rows.map((row) => row.id);
-    const { data: refs, error: refsErr } = await supabase
-      .from("bracelet_configuration_items")
-      .select("bead_library_size_id")
-      .in("bead_library_size_id", staleIds);
-    assertNoDbError(refsErr);
-
-    const referencedIds = new Set(
-      (refs ?? [])
-        .map((r) => (r as { bead_library_size_id?: string }).bead_library_size_id)
-        .filter((id): id is string => Boolean(id)),
-    );
-
-    const blocked = rows.filter((row) => referencedIds.has(row.id));
-    if (blocked.length) {
-      const labels = blocked.map((row) => {
-        const mm = row.bead_sizes?.size_mm;
-        return row.bead_sizes?.label ?? (mm !== undefined ? `${mm} mm` : "a size");
-      });
-      throw new ValidationError(
-        `Cannot remove ${labels.join(", ")} — used in saved bracelet designs. Unchecking a size only works when no saved designs reference it.`,
-      );
-    }
-
-    const { error: delErr } = await supabase
+    if (!sizeIds.length) return;
+    const { error } = await supabase
       .from("bead_library_sizes")
-      .delete()
-      .eq("bead_library_id", libraryUuid)
-      .in("id", staleIds);
-    assertNoDbError(delErr);
+      .update({ available_for_new: false, is_default: false })
+      .in("id", sizeIds);
+    assertNoDbError(error);
   }
 
   async resolveForConfiguration(

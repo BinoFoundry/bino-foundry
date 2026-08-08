@@ -9,13 +9,11 @@ import { useSiteGeneralSettings } from "@/hooks/use-site-settings";
 import { CheckoutDialog } from "@/features/account/components/CheckoutDialog";
 import { captureSunglassesThumbnail } from "@/features/designs/capture-thumbnail";
 import { fingerprintSunglassesConfig, fingerprintSunglassesVisual } from "@/features/designs/design-save-fingerprint";
-import { BuilderDraftRecoveryDialog } from "@/features/designs/BuilderDraftRecoveryDialog";
 import { setPendingDesignListener } from "@/features/designs/pending-design";
 import {
   clearStaleDesignUrl,
   createRecoveringSaveDesign,
 } from "@/features/designs/recovering-save-design";
-import { useBuilderDraftRecovery } from "@/features/designs/useBuilderDraftRecovery";
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import type { CustomiserStep } from "@/features/sunglasses/constants";
 import { designsApi } from "@/services/api/designs";
@@ -172,52 +170,6 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
     getVisualFingerprint: getSunglassesVisualFingerprint,
     buildRequest: buildSunglassesRequest,
   });
-
-  const recoveryBaselineFp =
-    hydrationDone && sunglassesPayload
-      ? fingerprintSunglassesConfig(
-          {
-            frameId: sunglassesPayload.frameId,
-            lensTintId: sunglassesPayload.lensTintId,
-            selectedOptions: sunglassesPayload.selectedOptions,
-            builderStep: sunglassesPayload.builderStep,
-            subtotal: sunglassesPayload.subtotal,
-            currencyCode: sunglassesPayload.currencyCode,
-          },
-          sunglassesPayload.title,
-        )
-      : null;
-
-  const { recoveryOpen, takeDraftForRestore, discardDraft } = useBuilderDraftRecovery({
-    productType: "sunglasses",
-    designId: savedDesignId,
-    hydrationDone,
-    baselineFingerprint: recoveryBaselineFp,
-  });
-
-  const handleRestoreDraft = useCallback(() => {
-    const draft = takeDraftForRestore();
-    const sunglasses = draft?.request.sunglasses;
-    if (!draft || !sunglasses) return;
-    state.applyLoadedFrame(sunglasses.frameId);
-    if (sunglassesCatalog.getTintById(sunglasses.lensTintId)) {
-      state.selectTintById(sunglasses.lensTintId);
-    }
-    state.dispatch({ type: "SET_OPTIONS", options: sunglasses.selectedOptions });
-    if (sunglasses.builderStep) {
-      flow.goTo(sunglasses.builderStep as CustomiserStep);
-    }
-    setBaseline(draft.baselineFingerprint ?? `__unsaved__:${draft.key}`);
-    baselineSetRef.current = true;
-  }, [
-    takeDraftForRestore,
-    state.applyLoadedFrame,
-    state.selectTintById,
-    state.dispatch,
-    sunglassesCatalog.getTintById,
-    flow.goTo,
-    setBaseline,
-  ]);
 
   useEffect(() => {
     if (!hydrationDone || baselineSetRef.current || !sunglassesPayload) return;
@@ -495,11 +447,6 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
       currencyCode={currencyCode}
     />
     {leaveGuard}
-    <BuilderDraftRecoveryDialog
-      open={recoveryOpen}
-      onRestore={handleRestoreDraft}
-      onDiscard={discardDraft}
-    />
     </>
   );
 }

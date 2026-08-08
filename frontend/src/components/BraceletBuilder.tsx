@@ -35,8 +35,6 @@ import {
   fingerprintBraceletPayload,
   fingerprintBraceletVisual,
 } from "@/features/designs/design-save-fingerprint";
-import { BuilderDraftRecoveryDialog } from "@/features/designs/BuilderDraftRecoveryDialog";
-import { useBuilderDraftRecovery } from "@/features/designs/useBuilderDraftRecovery";
 import { useDesignAutoSave } from "@/features/designs/useDesignAutoSave";
 import {
   clearStaleDesignUrl,
@@ -165,7 +163,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     builder.pricing.placedCount > 0 &&
     !builder.isOverCapacity &&
     !builder.hasUnavailableBeads;
-  // Track dirty + local drafts for everyone; server writes only happen via explicit Save / checkout flush.
+  // Track dirty state for Stay/Leave; server writes only via explicit Save / checkout flush.
   const draftTrackingEnabled = canConfigureSave;
 
   const autoSavePaused = Boolean(designIdFromUrl && user && !hydrationDone);
@@ -182,19 +180,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     builder.wristSizeB,
     builder.pricing,
   ]);
-
-  /** Snapshot for draft recovery — available as soon as the builder initializes (even empty). */
-  const recoveryBraceletSnapshot = useMemo(
-    () => builder.toSavedPayload("draft"),
-    [
-      builder.placedBeadsA,
-      builder.placedBeadsB,
-      builder.twinning,
-      builder.wristSizeA,
-      builder.wristSizeB,
-      builder.pricing,
-    ],
-  );
 
   const getBraceletFingerprint = useCallback(() => {
     if (!braceletPayload) return null;
@@ -333,42 +318,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     interactionHold: autoSaveInteractionHold,
   });
 
-  // Fingerprint the initialized builder immediately (empty strand is fine).
-  // Do not gate on canConfigureSave / first bead — that delayed the restore dialog.
-  const recoveryBaselineFp = hydrationDone
-    ? fingerprintBraceletPayload(recoveryBraceletSnapshot, braceletName)
-    : null;
-
-  const { recoveryOpen, takeDraftForRestore, discardDraft } = useBuilderDraftRecovery({
-    productType: "bracelet",
-    designId: savedDesignId,
-    hydrationDone,
-    baselineFingerprint: recoveryBaselineFp,
-  });
-
-  const handleRestoreDraft = useCallback(() => {
-    const draft = takeDraftForRestore();
-    const bracelet = draft?.request.bracelet;
-    if (!draft || !bracelet) return;
-    builder.loadFromSaved({
-      twinning: bracelet.twinning,
-      wristSizeCmA: bracelet.wristSizeCmA,
-      wristSizeCmB: bracelet.wristSizeCmB,
-      items: bracelet.items.map((item) => ({
-        strandIndex: item.strandIndex,
-        slotPosition: item.slotPosition,
-        beadLibraryId: item.beadLibraryId,
-        beadSizeMm: item.beadSizeMm,
-        offerKey: item.offerKey,
-        catalogIssue: item.catalogIssue ?? null,
-        unitPrice: item.unitPrice,
-      })),
-    });
-    if (draft.request.title?.trim()) setBraceletName(draft.request.title.trim());
-    setBaseline(draft.baselineFingerprint ?? `__unsaved__:${draft.key}`);
-    baselineSetRef.current = true;
-  }, [takeDraftForRestore, builder.loadFromSaved, setBaseline]);
-
+  // Fingerprint the initialized builder after hydration for dirty-state tracking.
   useEffect(() => {
     if (!hydrationDone || baselineSetRef.current || !braceletPayload) return;
     const fp = fingerprintBraceletPayload(braceletPayload, braceletName);
@@ -611,11 +561,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           </div>
         </div>
         {leaveGuard}
-        <BuilderDraftRecoveryDialog
-          open={recoveryOpen}
-          onRestore={handleRestoreDraft}
-          onDiscard={discardDraft}
-        />
       </>
     );
   }
@@ -990,11 +935,6 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       preparation={builder.preparationSelection}
     />
     {leaveGuard}
-    <BuilderDraftRecoveryDialog
-      open={recoveryOpen}
-      onRestore={handleRestoreDraft}
-      onDiscard={discardDraft}
-    />
     </>
   );
 };

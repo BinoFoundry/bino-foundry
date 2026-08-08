@@ -4,11 +4,7 @@ import { useBlocker } from "react-router-dom";
 import type { DesignProductType, SaveDesignRequest, SavedDesignSummary } from "@bino-foundry/shared/types";
 
 import { LEAVE_PAGE_WARNING } from "./builder-save-copy";
-import {
-  clearBuilderLocalDraft,
-  builderDraftKey,
-  writeBuilderLocalDraft,
-} from "./builder-local-draft";
+import { clearBuilderLocalDraft, builderDraftKey } from "./builder-local-draft";
 import {
   DesignAutoSaveController,
   type DesignAutoSaveBuildFn,
@@ -17,10 +13,8 @@ import {
 } from "./design-autosave-controller";
 import { BuilderUnsavedLeaveDialog } from "./BuilderUnsavedLeaveDialog";
 
-const LOCAL_DRAFT_DEBOUNCE_MS = 300;
-
 export interface UseDesignAutoSaveOptions {
-  /** Track dirty state + local drafts. Server save only happens via `flush()` in explicit mode. */
+  /** Track dirty state. Server save only happens via `flush()` in explicit mode. */
   enabled: boolean;
   paused?: boolean;
   /** When true (autosave mode only), dirty state is tracked but saves wait until the interaction ends. */
@@ -73,30 +67,6 @@ export function useDesignAutoSave({
   onSavedRef.current = onSaved;
   saveDesignRef.current = saveDesign;
 
-  const persistLocalDraft = useCallback(
-    (fingerprint: string, build: DesignAutoSaveBuildFn) => {
-      if (localDraftTimerRef.current) clearTimeout(localDraftTimerRef.current);
-      localDraftTimerRef.current = setTimeout(() => {
-        void (async () => {
-          try {
-            const request = await Promise.resolve(build({ includeThumbnail: false }));
-            if (!request) return;
-            await writeBuilderLocalDraft({
-              productType: productTypeRef.current,
-              designId: designIdRef.current,
-              fingerprint,
-              baselineFingerprint: baselineFingerprintRef.current,
-              request,
-            });
-          } catch {
-            // Local draft is best-effort.
-          }
-        })();
-      }, LOCAL_DRAFT_DEBOUNCE_MS);
-    },
-    [],
-  );
-
   const clearLocalDraft = useCallback(async () => {
     if (localDraftTimerRef.current) {
       clearTimeout(localDraftTimerRef.current);
@@ -120,8 +90,8 @@ export function useDesignAutoSave({
         void clearBuilderLocalDraft(builderDraftKey(productTypeRef.current, null));
         onSavedRef.current?.(summary);
       },
-      onDraftChange: ({ fingerprint, build }) => {
-        persistLocalDraft(fingerprint, build);
+      onDraftChange: () => {
+        // Intentionally no IndexedDB draft writes — Stay/Leave uses in-memory dirty state only.
       },
       getDesignId: () => designIdRef.current,
       save: (request, options) => saveDesignRef.current(request, options),

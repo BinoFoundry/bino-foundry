@@ -13,6 +13,8 @@ export interface BeadSizeDraftRow {
   label: string;
   enabled: boolean;
   unitPrice: number;
+  /** How many saved bracelet designs currently reference this size offer. */
+  designReferenceCount?: number;
 }
 
 /** Enabled size + price for one bead library (junction with global bead_sizes). */
@@ -26,6 +28,13 @@ export interface BeadLibrarySizeOffer {
   offerKey: string;
   isDefault?: boolean;
   displayOrder?: number;
+  /**
+   * When false, kept for existing designs/orders but hidden from new builder selections.
+   * Defaults to true when omitted (legacy API rows).
+   */
+  availableForNew?: boolean;
+  /** Distinct saved bracelet configurations that reference this junction row. */
+  designReferenceCount?: number;
   /** group_reference / asset_visible — legacy runtime factor metadata. */
   normalizationFactor?: number;
   assetVisibleDiameterPx?: number | null;

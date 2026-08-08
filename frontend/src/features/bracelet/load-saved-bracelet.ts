@@ -37,7 +37,7 @@ function resolveSizeOffer(
   beadLibrarySizes: BeadLibrarySizeOffer[],
 ): BeadLibrarySizeOffer | undefined {
   if (item.offerKey) {
-    return findSizeOfferByKey(beadLibrarySizes, item.offerKey);
+    return findSizeOfferByKey(beadLibrarySizes, item.offerKey, { includeUnavailable: true });
   }
   return beadLibrarySizes.find(
     (s) => s.beadLibraryId === bead.id && s.sizeMm === item.beadSizeMm,
@@ -95,6 +95,21 @@ function buildPlaced(
           savedPublicId: item.beadLibraryId,
           unitPrice: item.unitPrice,
         });
+      }
+
+      // Soft-disabled / sold-out size: keep the bead visible but mark it for replacement.
+      if (size.availableForNew === false) {
+        return {
+          position: item.slotPosition,
+          bead: {
+            ...bead,
+            metadata: {
+              ...(bead.metadata ?? {}),
+              catalogIssue: "unavailable",
+            },
+          },
+          size,
+        } satisfies PlacedBead;
       }
 
       return {

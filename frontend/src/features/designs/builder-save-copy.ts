@@ -27,7 +27,7 @@ export function labelForAutoSaveStatus(status: DesignAutoSaveStatus): string | n
 }
 
 export const LEAVE_PAGE_WARNING =
-  "You have unsaved changes. If you leave now, your recent edits will be lost.";
+  "You have unsaved changes. If you leave this page, your changes will be lost.";
 
 export const BUILDER_DRAFT_RECOVERY_COPY = {
   title: "Restore your previous edits?",
@@ -37,8 +37,8 @@ export const BUILDER_DRAFT_RECOVERY_COPY = {
 } as const;
 
 export const BUILDER_UNSAVED_LEAVE_COPY = {
-  title: "You have unsaved changes",
-  description: "If you leave now, your recent edits will be lost.",
+  title: "You have unsaved changes.",
+  description: "If you leave this page, your changes will be lost.",
   stay: "Stay",
   leave: "Leave",
 } as const;
