@@ -236,16 +236,24 @@ export function normalizeSubBeadTypeStrandMetadata(
 ): Record<string, unknown> {
   const base = { ...(metadata ?? {}) } as Record<string, unknown>;
   const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
-  const pruned = pruneStrandRenderOverride(rawOverride, inherited);
   const explicitOptOut = base.useBeadTypeStrandDefaults === false;
 
+  // Custom mode: keep authored override fields (including values that match parent)
+  // so Orientation / Anchor / etc. persist after save/reload.
+  if (explicitOptOut) {
+    if (rawOverride && !strandRenderOverrideIsEmpty(rawOverride)) {
+      base.strandRenderOverride = { ...rawOverride, ...strandRenderStorageMeta() };
+    } else {
+      delete base.strandRenderOverride;
+    }
+    base.useBeadTypeStrandDefaults = false;
+    return base;
+  }
+
+  const pruned = pruneStrandRenderOverride(rawOverride, inherited);
   if (strandRenderOverrideIsEmpty(pruned)) {
     delete base.strandRenderOverride;
-    if (!explicitOptOut) {
-      base.useBeadTypeStrandDefaults = true;
-    } else {
-      base.useBeadTypeStrandDefaults = false;
-    }
+    base.useBeadTypeStrandDefaults = true;
     return base;
   }
 

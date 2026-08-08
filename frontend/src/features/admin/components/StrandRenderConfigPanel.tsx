@@ -36,26 +36,6 @@ type CalibrationFieldKey =
   | "visualScale"
   | "verticalOffset";
 
-const CALIBRATION_KEYS: readonly CalibrationFieldKey[] = [
-  "layoutScale",
-  "contactWidth",
-  "contactOffset",
-  "visualScale",
-  "verticalOffset",
-] as const;
-
-type CalibrationValues = Pick<StrandRenderProfile, CalibrationFieldKey>;
-
-function calibrationFromProfile(profile: StrandRenderProfile): CalibrationValues {
-  return {
-    layoutScale: profile.layoutScale,
-    contactWidth: profile.contactWidth,
-    contactOffset: profile.contactOffset,
-    visualScale: profile.visualScale,
-    verticalOffset: profile.verticalOffset,
-  };
-}
-
 export interface StrandRenderConfigPanelProps {
   mode: StrandRenderConfigPanelMode;
   /** Effective values shown in the form. */
@@ -87,6 +67,15 @@ function SourceBadge({ source }: { source?: StrandRenderConfigSource }) {
   );
 }
 
+function fieldClass(readOnly: boolean): string {
+  return [
+    adminFieldClass(),
+    readOnly ? "cursor-not-allowed opacity-60" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 export function StrandRenderConfigPanel({
   mode,
   value,
@@ -102,7 +91,9 @@ export function StrandRenderConfigPanel({
   previewSampleBead = null,
   showLivePreview,
 }: StrandRenderConfigPanelProps) {
-  const readOnly = disabled || ((mode === "bead" || mode === "subBeadType") && inheritTypeDefaults);
+  const inheritedLock =
+    (mode === "bead" || mode === "subBeadType") && inheritTypeDefaults;
+  const readOnly = disabled || inheritedLock;
   const livePreview =
     showLivePreview ??
     (mode === "beadType" || mode === "subBeadType" || mode === "bead" || mode === "system");
@@ -114,50 +105,44 @@ export function StrandRenderConfigPanel({
         : mode === "subBeadType"
           ? "Sub-type rendering defaults"
           : "Strand appearance";
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<CalibrationFieldKey, string>>>({});
-  /** Editable calibration snapshot — updated on commit; not overwritten while a field is focused. */
-  const [editValues, setEditValues] = useState<CalibrationValues>(() => calibrationFromProfile(value));
-  const editingFieldsRef = useRef<Set<CalibrationFieldKey>>(new Set());
-  /** Commits waiting for parent props to catch up — prevents stale hydrate from reverting blur. */
-  const pendingCommitsRef = useRef<Partial<Record<CalibrationFieldKey, number>>>({});
-  const propsCalibration = useMemo(
-    () => calibrationFromProfile(value),
-    [
-      value.layoutScale,
-      value.contactWidth,
-      value.contactOffset,
-      value.visualScale,
-      value.verticalOffset,
-    ],
-  );
 
-  // Hydrate from parent when not editing and not waiting on a local commit.
+  /**
+   * Local editable draft for EVERY control.
+   * Parent/resolved props hydrate into this, but commits update it immediately so selects
+   * and numbers never appear "stuck" while waiting on inheritance/resolve round-trips.
+   */
+  const [draft, setDraft] = useState<StrandRenderProfile>(() => ({ ...value }));
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<CalibrationFieldKey, string>>>({});
+  const editingFieldsRef = useRef<Set<CalibrationFieldKey>>(new Set());
+  const pendingCommitsRef = useRef<Partial<Record<keyof StrandRenderProfile, unknown>>>({});
+
+  // Hydrate from parent for keys that are not mid-edit / awaiting parent ack.
   useEffect(() => {
-    setEditValues((prev) => {
+    setDraft((prev) => {
       let changed = false;
-      const next = { ...prev };
-      for (const key of CALIBRATION_KEYS) {
-        if (editingFieldsRef.current.has(key)) continue;
-        const propVal = propsCalibration[key];
+      const next: StrandRenderProfile = { ...prev };
+      (Object.keys(value) as (keyof StrandRenderProfile)[]).forEach((key) => {
+        if (editingFieldsRef.current.has(key as CalibrationFieldKey)) return;
         const pending = pendingCommitsRef.current[key];
         if (pending !== undefined) {
-          if (propVal === pending) {
+          if (Object.is(value[key], pending)) {
             delete pendingCommitsRef.current[key];
-          } else if (next[key] !== pending) {
-            // Parent has not applied our commit yet — keep the local value.
-            next[key] = pending;
-            changed = true;
+          } else {
+            if (!Object.is(next[key], pending)) {
+              (next as Record<string, unknown>)[key] = pending;
+              changed = true;
+            }
+            return;
           }
-          continue;
         }
-        if (next[key] !== propVal) {
-          next[key] = propVal;
+        if (!Object.is(next[key], value[key])) {
+          (next as Record<string, unknown>)[key] = value[key];
           changed = true;
         }
-      }
+      });
       return changed ? next : prev;
     });
-  }, [propsCalibration]);
+  }, [value]);
 
   const setFieldError = (key: CalibrationFieldKey, message: string | null) => {
     setFieldErrors((prev) => {
@@ -172,10 +157,17 @@ export function StrandRenderConfigPanel({
     });
   };
 
+  const patchDraft = (patch: Partial<StrandRenderProfile>) => {
+    if (readOnly) return;
+    for (const key of Object.keys(patch) as (keyof StrandRenderProfile)[]) {
+      pendingCommitsRef.current[key] = patch[key];
+    }
+    setDraft((prev) => ({ ...prev, ...patch }));
+    onChange(patch);
+  };
+
   const commitCalibration = (key: CalibrationFieldKey, next: number) => {
-    pendingCommitsRef.current[key] = next;
-    setEditValues((prev) => (prev[key] === next ? prev : { ...prev, [key]: next }));
-    onChange({ [key]: next });
+    patchDraft({ [key]: next });
   };
 
   const setFieldEditing = (key: CalibrationFieldKey, editing: boolean) => {
@@ -183,12 +175,12 @@ export function StrandRenderConfigPanel({
     else editingFieldsRef.current.delete(key);
   };
 
-  const discardLocalCalibrationEdits = () => {
+  const discardLocalEdits = () => {
     pendingCommitsRef.current = {};
     editingFieldsRef.current.clear();
   };
 
-  const previewProfile = useMemo(() => ({ ...value, ...editValues }), [value, editValues]);
+  const previewProfile = useMemo(() => draft, [draft]);
 
   return (
     <section className="space-y-3 rounded-xl border border-border bg-muted/15 p-4">
@@ -211,7 +203,7 @@ export function StrandRenderConfigPanel({
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
               onClick={() => {
-                discardLocalCalibrationEdits();
+                discardLocalEdits();
                 onResetToType();
               }}
             >
@@ -223,7 +215,7 @@ export function StrandRenderConfigPanel({
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
               onClick={() => {
-                discardLocalCalibrationEdits();
+                discardLocalEdits();
                 onResetToType();
               }}
             >
@@ -235,7 +227,7 @@ export function StrandRenderConfigPanel({
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
               onClick={() => {
-                discardLocalCalibrationEdits();
+                discardLocalEdits();
                 onResetToSystem();
               }}
             >
@@ -252,7 +244,7 @@ export function StrandRenderConfigPanel({
             className="h-5 w-5 shrink-0 rounded border border-border accent-foreground"
             checked={inheritTypeDefaults}
             onChange={(e) => {
-              discardLocalCalibrationEdits();
+              discardLocalEdits();
               onInheritTypeDefaultsChange(e.target.checked);
             }}
           />
@@ -260,10 +252,23 @@ export function StrandRenderConfigPanel({
         </label>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      {inheritedLock ? (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+          Controls are locked while <span className="font-medium">Use Parent Calibration</span> is
+          on. Uncheck it to edit Orientation, Anchor Point, and other rendering options for this
+          level.
+        </p>
+      ) : null}
+
+      <div
+        className={
+          inheritedLock ? "pointer-events-none grid gap-3 opacity-70 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"
+        }
+        aria-disabled={inheritedLock || undefined}
+      >
         <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={editValues.layoutScale}
+            value={draft.layoutScale}
             onCommit={(layoutScale) => commitCalibration("layoutScale", layoutScale)}
             onEditingChange={(editing) => setFieldEditing("layoutScale", editing)}
             min={STRAND_LAYOUT_SCALE_MIN}
@@ -284,8 +289,8 @@ export function StrandRenderConfigPanel({
             <input
               type="checkbox"
               disabled={readOnly}
-              checked={value.balanceSpacing}
-              onChange={(e) => onChange({ balanceSpacing: e.target.checked })}
+              checked={draft.balanceSpacing}
+              onChange={(e) => patchDraft({ balanceSpacing: e.target.checked })}
             />
             Equalise empty gaps (Top / Right / Bottom / Left)
           </label>
@@ -297,7 +302,7 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Contact width" source={provenance?.contactWidth} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={editValues.contactWidth}
+            value={draft.contactWidth}
             onCommit={(contactWidth) => commitCalibration("contactWidth", contactWidth)}
             onEditingChange={(editing) => setFieldEditing("contactWidth", editing)}
             min={STRAND_CONTACT_SPACING_MIN}
@@ -315,7 +320,7 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={editValues.contactOffset}
+            value={draft.contactOffset}
             onCommit={(contactOffset) => commitCalibration("contactOffset", contactOffset)}
             onEditingChange={(editing) => setFieldEditing("contactOffset", editing)}
             min={STRAND_CONTACT_SPACING_MIN}
@@ -333,7 +338,7 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={editValues.visualScale}
+            value={draft.visualScale}
             onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
             onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
             min={STRAND_VISUAL_SCALE_MIN}
@@ -352,10 +357,10 @@ export function StrandRenderConfigPanel({
         <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
           <select
             disabled={readOnly}
-            className={adminFieldClass()}
-            value={value.anchorPreset}
+            className={fieldClass(readOnly)}
+            value={draft.anchorPreset}
             onChange={(e) =>
-              onChange({ anchorPreset: e.target.value as StrandAnchorPreset })
+              patchDraft({ anchorPreset: e.target.value as StrandAnchorPreset })
             }
           >
             <option value="center">Center</option>
@@ -367,10 +372,10 @@ export function StrandRenderConfigPanel({
         <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
           <select
             disabled={readOnly}
-            className={adminFieldClass()}
-            value={value.orientationMode}
+            className={fieldClass(readOnly)}
+            value={draft.orientationMode}
             onChange={(e) =>
-              onChange({ orientationMode: e.target.value as StrandOrientationMode })
+              patchDraft({ orientationMode: e.target.value as StrandOrientationMode })
             }
           >
             <option value="outward">Outward (face away from centre)</option>
@@ -379,7 +384,7 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={editValues.verticalOffset}
+            value={draft.verticalOffset}
             onCommit={(verticalOffset) => commitCalibration("verticalOffset", verticalOffset)}
             onEditingChange={(editing) => setFieldEditing("verticalOffset", editing)}
             min={STRAND_VERTICAL_OFFSET_MIN}
@@ -397,8 +402,8 @@ export function StrandRenderConfigPanel({
         </Field>
         <Field label="Z priority" source={provenance?.zPriority} readOnly={readOnly}>
           <AdminDeferredNumberInput
-            value={value.zPriority}
-            onCommit={(zPriority) => onChange({ zPriority: Math.round(zPriority) })}
+            value={draft.zPriority}
+            onCommit={(zPriority) => patchDraft({ zPriority: Math.round(zPriority) })}
             step={1}
             decimals={0}
             disabled={readOnly}
@@ -408,11 +413,17 @@ export function StrandRenderConfigPanel({
       </div>
 
       {showAdvanced ? (
-        <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+        <div
+          className={
+            inheritedLock
+              ? "pointer-events-none grid gap-3 border-t border-border pt-3 opacity-70 sm:grid-cols-2"
+              : "grid gap-3 border-t border-border pt-3 sm:grid-cols-2"
+          }
+        >
           <Field label="Leading overlap" source={provenance?.leadingOverlap} readOnly={readOnly}>
             <AdminDeferredNumberInput
-              value={value.leadingOverlap}
-              onCommit={(leadingOverlap) => onChange({ leadingOverlap })}
+              value={draft.leadingOverlap}
+              onCommit={(leadingOverlap) => patchDraft({ leadingOverlap })}
               min={0}
               max={0.5}
               step={0.01}
@@ -422,8 +433,8 @@ export function StrandRenderConfigPanel({
           </Field>
           <Field label="Trailing overlap" source={provenance?.trailingOverlap} readOnly={readOnly}>
             <AdminDeferredNumberInput
-              value={value.trailingOverlap}
-              onCommit={(trailingOverlap) => onChange({ trailingOverlap })}
+              value={draft.trailingOverlap}
+              onCommit={(trailingOverlap) => patchDraft({ trailingOverlap })}
               min={0}
               max={0.5}
               step={0.01}
@@ -433,8 +444,8 @@ export function StrandRenderConfigPanel({
           </Field>
           <Field label="Hang offset" source={provenance?.hangOffset} readOnly={readOnly}>
             <AdminNumberWithSlider
-              value={value.hangOffset}
-              onCommit={(hangOffset) => onChange({ hangOffset })}
+              value={draft.hangOffset}
+              onCommit={(hangOffset) => patchDraft({ hangOffset })}
               min={-1}
               max={1}
               step={0.01}
@@ -453,8 +464,8 @@ export function StrandRenderConfigPanel({
             readOnly={readOnly}
           >
             <AdminNumberWithSlider
-              value={value.strandOccupancy}
-              onCommit={(strandOccupancy) => onChange({ strandOccupancy })}
+              value={draft.strandOccupancy}
+              onCommit={(strandOccupancy) => patchDraft({ strandOccupancy })}
               min={0.05}
               max={2}
               step={0.01}
@@ -466,10 +477,10 @@ export function StrandRenderConfigPanel({
           <Field label="Rotation (advanced)" source={provenance?.rotationMode} readOnly={readOnly}>
             <select
               disabled={readOnly}
-              className={adminFieldClass()}
-              value={value.rotationMode}
+              className={fieldClass(readOnly)}
+              value={draft.rotationMode}
               onChange={(e) =>
-                onChange({ rotationMode: e.target.value as StrandRotationMode })
+                patchDraft({ rotationMode: e.target.value as StrandRotationMode })
               }
             >
               <option value="tangent">Rotate with strand (legacy)</option>
@@ -484,8 +495,8 @@ export function StrandRenderConfigPanel({
             readOnly={readOnly}
           >
             <AdminDeferredNumberInput
-              value={value.collisionPadding}
-              onCommit={(collisionPadding) => onChange({ collisionPadding })}
+              value={draft.collisionPadding}
+              onCommit={(collisionPadding) => patchDraft({ collisionPadding })}
               min={0}
               max={20}
               step={0.5}
@@ -499,14 +510,44 @@ export function StrandRenderConfigPanel({
             readOnly={readOnly}
           >
             <AdminDeferredNumberInput
-              value={value.stringOcclusion}
-              onCommit={(stringOcclusion) => onChange({ stringOcclusion })}
+              value={draft.stringOcclusion}
+              onCommit={(stringOcclusion) => patchDraft({ stringOcclusion })}
               min={0}
               max={1}
               step={0.05}
               decimals={2}
               disabled={readOnly}
             />
+          </Field>
+          <Field label="Attachment style" source={provenance?.attachmentStyle} readOnly={readOnly}>
+            <select
+              disabled={readOnly}
+              className={fieldClass(readOnly)}
+              value={draft.attachmentStyle}
+              onChange={(e) =>
+                patchDraft({
+                  attachmentStyle: e.target.value as StrandRenderProfile["attachmentStyle"],
+                })
+              }
+            >
+              <option value="inline">Inline</option>
+              <option value="betweenItems">Between items</option>
+            </select>
+          </Field>
+          <Field label="Layout mode" source={provenance?.layoutMode} readOnly={readOnly}>
+            <select
+              disabled={readOnly}
+              className={fieldClass(readOnly)}
+              value={draft.layoutMode}
+              onChange={(e) =>
+                patchDraft({
+                  layoutMode: e.target.value as StrandRenderProfile["layoutMode"],
+                })
+              }
+            >
+              <option value="inline">Inline</option>
+              <option value="dangling">Dangling</option>
+            </select>
           </Field>
         </div>
       ) : null}

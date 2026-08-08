@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import type { BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import {
   DEFAULT_STRAND_RENDER_PROFILE,
-  mergeStrandRenderProfile,
   normalizeSubBeadTypeStrandMetadata,
   parseStrandRenderProfile,
   pruneStrandRenderOverride,
@@ -44,41 +43,64 @@ function updateSubTypeStrandOverride(
   inheritedBeadTypeProfile: ReturnType<typeof resolvedTypeStrandProfile>,
 ): SubBeadTypeEntry {
   const current = subTypeOverrideFromForm(form) ?? {};
-  // Keep the authored patch on the override; prune only drops keys that still match parent.
-  const merged = { ...current, ...patch } as Partial<StrandRenderProfile>;
-  const next = pruneStrandRenderOverride(
-    mergeStrandRenderProfile(inheritedBeadTypeProfile, merged),
-    inheritedBeadTypeProfile,
-  );
-  // If prune emptied everything, still persist the explicit patch so blur edits are not lost
-  // when the typed value happens to match the parent after resolve.
-  const persisted =
-    strandRenderOverrideIsEmpty(next) && Object.keys(patch).length > 0
-      ? ({ ...patch, ...strandRenderStorageMeta() } as Partial<StrandRenderProfile>)
-      : next;
-  if (strandRenderOverrideIsEmpty(persisted) && Object.keys(patch).length === 0) {
-    const keepOptOut = form.metadata?.useBeadTypeStrandDefaults === false;
-    return setInheritBeadTypeDefaults(form, !keepOptOut);
-  }
+  // Keep authored patch keys on the override (including values that match parent) so
+  // selects/checkboxes remain editable and persist after blur/save.
+  const next = {
+    ...current,
+    ...patch,
+    ...strandRenderStorageMeta(),
+  } as Partial<StrandRenderProfile>;
   return {
     ...form,
     metadata: {
       ...(form.metadata ?? {}),
       useBeadTypeStrandDefaults: false,
-      strandRenderOverride: persisted,
+      strandRenderOverride: next,
     },
   };
 }
 
-function setInheritBeadTypeDefaults(form: SubBeadTypeEntry, inherit: boolean): SubBeadTypeEntry {
+function setInheritBeadTypeDefaults(
+  form: SubBeadTypeEntry,
+  inherit: boolean,
+  seedOverride?: Partial<StrandRenderProfile> | null,
+): SubBeadTypeEntry {
   const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
   if (inherit) {
     delete meta.strandRenderOverride;
     meta.useBeadTypeStrandDefaults = true;
   } else {
     meta.useBeadTypeStrandDefaults = false;
+    if (seedOverride && !strandRenderOverrideIsEmpty(seedOverride)) {
+      meta.strandRenderOverride = seedOverride;
+    } else if (!meta.strandRenderOverride) {
+      // Ensure custom mode has an editable override object even when values match parent.
+      meta.strandRenderOverride = { ...strandRenderStorageMeta() };
+    }
   }
   return { ...form, metadata: meta };
+}
+
+/** Seed durable custom-mode fields when unlocking parent calibration. */
+function seedSubTypeStrandOverride(
+  resolved: StrandRenderProfile,
+  inherited: StrandRenderProfile,
+): Partial<StrandRenderProfile> {
+  const pruned = pruneStrandRenderOverride(resolved, inherited) ?? {};
+  return {
+    ...pruned,
+    ...strandRenderStorageMeta(),
+    layoutScale: resolved.layoutScale,
+    contactWidth: resolved.contactWidth,
+    contactOffset: resolved.contactOffset,
+    visualScale: resolved.visualScale,
+    verticalOffset: resolved.verticalOffset,
+    orientationMode: resolved.orientationMode,
+    anchorPreset: resolved.anchorPreset,
+    attachmentStyle: resolved.attachmentStyle,
+    layoutMode: resolved.layoutMode,
+    rotationMode: resolved.rotationMode,
+  };
 }
 
 export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBeadTypeFormProps) {
@@ -206,7 +228,16 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         value={effective}
         provenance={effective.provenance}
         inheritTypeDefaults={inheritBeadTypeDefaults}
-        onInheritTypeDefaultsChange={(inherit) => setForm((prev) => setInheritBeadTypeDefaults(prev, inherit))}
+        onInheritTypeDefaultsChange={(inherit) =>
+          setForm((prev) => {
+            if (inherit) return setInheritBeadTypeDefaults(prev, true);
+            return setInheritBeadTypeDefaults(
+              prev,
+              false,
+              seedSubTypeStrandOverride(effective, inheritedBeadTypeProfile),
+            );
+          })
+        }
         showAdvanced={showAdvanced}
         previewImageUrl={previewImageUrl}
         previewSampleBead={previewSampleBead}
