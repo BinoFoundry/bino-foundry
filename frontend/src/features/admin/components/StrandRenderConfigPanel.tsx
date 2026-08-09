@@ -14,6 +14,9 @@ import {
   STRAND_VISUAL_SCALE_MAX,
   STRAND_VISUAL_SCALE_MIN,
   STRAND_VISUAL_SCALE_STEP,
+  STRAND_VISUAL_SIZE_SCALING_MAX,
+  STRAND_VISUAL_SIZE_SCALING_MIN,
+  STRAND_VISUAL_SIZE_SCALING_STEP,
   strandRenderSourceLabel,
   type StrandAnchorPreset,
   type StrandOrientationMode,
@@ -34,6 +37,7 @@ type CalibrationFieldKey =
   | "contactWidth"
   | "contactOffset"
   | "visualScale"
+  | "visualSizeScaling"
   | "verticalOffset";
 
 export interface StrandRenderConfigPanelProps {
@@ -359,6 +363,34 @@ export function StrandRenderConfigPanel({
           />
           <InputExamples examples={["0.50", "0.90", "1", "1.08", "2.00"]} />
           <FieldError message={fieldErrors.visualScale} />
+        </Field>
+        <Field
+          label="Visual size scaling"
+          source={provenance?.visualSizeScaling}
+          readOnly={readOnly}
+        >
+          <AdminDeferredNumberInput
+            value={draft.visualSizeScaling}
+            onCommit={(visualSizeScaling) =>
+              commitCalibration("visualSizeScaling", visualSizeScaling)
+            }
+            onEditingChange={(editing) => setFieldEditing("visualSizeScaling", editing)}
+            min={STRAND_VISUAL_SIZE_SCALING_MIN}
+            max={STRAND_VISUAL_SIZE_SCALING_MAX}
+            step={STRAND_VISUAL_SIZE_SCALING_STEP}
+            decimals={2}
+            disabled={readOnly}
+            aria-label="Visual size scaling"
+            clampOnCommit={false}
+            onRangeError={(message) => setFieldError("visualSizeScaling", message)}
+            onClearError={() => setFieldError("visualSizeScaling", null)}
+          />
+          <InputExamples examples={["0.50", "0.70", "1.00", "1.25"]} />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Controls how strongly size differences are shown visually. 1.00 = linear physical
+            scaling. Lower values make size differences more subtle. 6&nbsp;mm stays anchored.
+          </p>
+          <FieldError message={fieldErrors.visualSizeScaling} />
         </Field>
         <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
           <select

@@ -39,6 +39,7 @@ export const STRAND_RENDER_PROFILE_KEYS = [
   "anchorY",
   "verticalOffset",
   "visualScale",
+  "visualSizeScaling",
   "orientationMode",
   "rotationMode",
   "rotationOffsetDeg",

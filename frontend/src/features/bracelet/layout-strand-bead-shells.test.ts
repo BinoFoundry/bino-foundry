@@ -43,7 +43,7 @@ describe("layoutStrandBeadShells", () => {
         ringY: bead.ringY,
         angleRad: bead.angleRad,
         slotDim: bead.renderDim,
-        profile: { ...profile, layoutScale: 1, visualScale: 1 },
+        profile: { ...profile, layoutScale: 1, visualScale: 1, visualSizeScaling: 1 },
       });
       expect(bead.shellLeft).toBeCloseTo(direct.shellLeft, 8);
       expect(bead.shellTop).toBeCloseTo(direct.shellTop, 8);

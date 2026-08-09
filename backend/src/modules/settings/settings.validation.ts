@@ -11,6 +11,8 @@ import {
   STRAND_VERTICAL_OFFSET_MIN,
   STRAND_VISUAL_SCALE_MAX,
   STRAND_VISUAL_SCALE_MIN,
+  STRAND_VISUAL_SIZE_SCALING_MAX,
+  STRAND_VISUAL_SIZE_SCALING_MIN,
   clampBeadRenderCalibrationFactor,
 } from "@bino-foundry/shared/types";
 import { z } from "zod";
@@ -46,6 +48,11 @@ export const strandRenderDefaultsDto = z.object({
   anchorY: z.number().min(0).max(1),
   verticalOffset: z.number().min(STRAND_VERTICAL_OFFSET_MIN).max(STRAND_VERTICAL_OFFSET_MAX),
   visualScale: z.number().min(STRAND_VISUAL_SCALE_MIN).max(STRAND_VISUAL_SCALE_MAX),
+  visualSizeScaling: z
+    .number()
+    .min(STRAND_VISUAL_SIZE_SCALING_MIN)
+    .max(STRAND_VISUAL_SIZE_SCALING_MAX)
+    .default(1),
   orientationMode: z.enum(["outward", "inward"]),
   rotationMode: z.enum(["tangent", "radial-upright", "fixed-upright", "none"]),
   rotationOffsetDeg: z.number().min(-180).max(180),

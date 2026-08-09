@@ -92,6 +92,14 @@ export interface StrandRenderProfile {
    * Allowed range: {@link STRAND_VISUAL_SCALE_MIN}…{@link STRAND_VISUAL_SCALE_MAX}.
    */
   visualScale: number;
+  /**
+   * Power-curve exponent for how strongly catalogue mm differences appear visually.
+   * `1` = linear physical scaling. Values below 1 compress size jumps (e.g. 6→8→10mm).
+   * Anchored so the reference size ({@link STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}) is unchanged.
+   * Does not affect occupancy, contact width, or layout scale.
+   * Allowed range: {@link STRAND_VISUAL_SIZE_SCALING_MIN}…{@link STRAND_VISUAL_SIZE_SCALING_MAX}.
+   */
+  visualSizeScaling: number;
   /** Resolved facing — outward (away from centre) or inward (toward centre). */
   orientationMode: StrandOrientationMode;
   rotationMode: StrandRotationMode;
@@ -136,6 +144,18 @@ export const STRAND_CONTACT_ADJUSTMENT_MAX = STRAND_CONTACT_SPACING_MAX;
 export const STRAND_VISUAL_SCALE_MIN = 0.1;
 export const STRAND_VISUAL_SCALE_MAX = 5;
 export const STRAND_VISUAL_SCALE_STEP = 0.01;
+
+/**
+ * Visual size scaling (power-curve exponent) — stored and edited 1:1.
+ * Code / missing-field fallback is linear (`1`). System defaults may seed a softer curve.
+ */
+export const STRAND_VISUAL_SIZE_SCALING_MIN = 0.25;
+export const STRAND_VISUAL_SIZE_SCALING_MAX = 2;
+export const STRAND_VISUAL_SIZE_SCALING_STEP = 0.01;
+/** Mm size whose rendered diameter stays fixed for any exponent (preserves current calibration). */
+export const STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM = 6;
+/** Suggested system default — subtle progression between catalogue sizes. */
+export const STRAND_VISUAL_SIZE_SCALING_SYSTEM_DEFAULT = 0.7;
 
 /**
  * Vertical offset as percent of bead height (−100…100).
@@ -200,6 +220,7 @@ export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
   anchorY: 0.5,
   verticalOffset: 0,
   visualScale: 1,
+  visualSizeScaling: 1,
   orientationMode: "outward",
   rotationMode: "tangent",
   rotationOffsetDeg: 0,
@@ -388,6 +409,11 @@ export function mergeStrandRenderProfile(
     STRAND_VISUAL_SCALE_MIN,
     STRAND_VISUAL_SCALE_MAX,
   );
+  merged.visualSizeScaling = clampToRange(
+    merged.visualSizeScaling,
+    STRAND_VISUAL_SIZE_SCALING_MIN,
+    STRAND_VISUAL_SIZE_SCALING_MAX,
+  );
   merged.stringOcclusion = Math.max(0, Math.min(1, merged.stringOcclusion));
   merged.placementMode = parseBeadPlacementMode(merged.placementMode);
   return merged;
@@ -427,6 +453,7 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
     partial.verticalOffset = coerceVerticalOffsetPercent(o.verticalOffset, o.verticalOffsetUnit);
   }
   if (typeof o.visualScale === "number") partial.visualScale = o.visualScale;
+  if (typeof o.visualSizeScaling === "number") partial.visualSizeScaling = o.visualSizeScaling;
   if (o.orientationMode === "outward" || o.orientationMode === "inward") {
     partial.orientationMode = o.orientationMode;
   }

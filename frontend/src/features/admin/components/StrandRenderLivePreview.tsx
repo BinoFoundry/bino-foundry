@@ -363,6 +363,7 @@ export function StrandRenderLivePreview({
               profile.contactOffset,
               profile.spacingAdjustment,
               profile.visualScale,
+              profile.visualSizeScaling,
               profile.hangOffset,
               profile.verticalOffset,
               profile.anchorY,

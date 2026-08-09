@@ -51,9 +51,14 @@ export {
 } from "./canonical-strand-mm-scale";
 export {
   calibratedVisualDiameterPx,
+  clampVisualSizeScaling,
+  visualDiameterRatio,
+  visualSizeCurveRelativeFactor,
   VISUAL_BEAD_BASE_PX,
   VISUAL_BEAD_MAX_PX,
   VISUAL_PX_PER_MM,
+  VISUAL_SIZE_CURVE_ANCHOR_MM,
+  VISUAL_SIZE_CURVE_EXPONENT,
 } from "./visual-bead-scale";
 export {
   detectBeadOutline,

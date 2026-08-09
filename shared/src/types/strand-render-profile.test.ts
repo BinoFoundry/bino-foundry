@@ -11,6 +11,8 @@ import {
   STRAND_LAYOUT_SCALE_MAX,
   STRAND_VERTICAL_OFFSET_UNIT_PERCENT,
   STRAND_VISUAL_SCALE_MAX,
+  STRAND_VISUAL_SIZE_SCALING_MAX,
+  STRAND_VISUAL_SIZE_SCALING_MIN,
   strandContactSpacingMin,
   verticalOffsetHeightFraction,
 } from "./strand-render-profile.js";
@@ -158,6 +160,23 @@ describe("mergeStrandRenderProfile calibration ranges", () => {
 
   it("clamps visual scale only to explicit bounds", () => {
     expect(mergeStrandRenderProfile({ visualScale: 9 }).visualScale).toBe(STRAND_VISUAL_SCALE_MAX);
+  });
+
+  it("defaults visualSizeScaling to linear when omitted", () => {
+    expect(mergeStrandRenderProfile({}).visualSizeScaling).toBe(1);
+  });
+
+  it("clamps visualSizeScaling to explicit bounds", () => {
+    expect(mergeStrandRenderProfile({ visualSizeScaling: 0.01 }).visualSizeScaling).toBe(
+      STRAND_VISUAL_SIZE_SCALING_MIN,
+    );
+    expect(mergeStrandRenderProfile({ visualSizeScaling: 9 }).visualSizeScaling).toBe(
+      STRAND_VISUAL_SIZE_SCALING_MAX,
+    );
+  });
+
+  it("parses visualSizeScaling from stored JSON", () => {
+    expect(parseStrandRenderProfile({ visualSizeScaling: 0.7 })?.visualSizeScaling).toBe(0.7);
   });
 });
 

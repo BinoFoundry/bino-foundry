@@ -6,6 +6,7 @@
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 import { verticalOffsetHeightFraction } from "@bino-foundry/shared/types";
 
+import { visualSizeCurveRelativeFactor } from "@/render/bead-crop/visual-bead-scale";
 import { resolveStrandRenderProfileBySlug } from "@/render/bead-crop/strand-render-profile";
 
 import { computeElasticBeadLayout } from "./strand-elastic-layout";
@@ -793,8 +794,9 @@ export function computeBeadShellPosition(
   angle: number,
   dim: BeadSlotDimensions,
   profile: StrandRenderProfile,
+  sizeMm?: number,
 ): BeadShellPlacement {
-  const renderDim = strandLayoutShellDimensions(dim, profile);
+  const renderDim = strandLayoutShellDimensions(dim, profile, sizeMm);
   const hang =
     profile.hangOffset !== 0
       ? profile.hangOffset
@@ -817,23 +819,30 @@ export function strandLayoutShellDimensions(
   dim: BeadSlotDimensions,
   profile: Pick<
     StrandRenderProfile,
-    "visualScale" | "layoutScale" | "forceRoundFootprint" | "attachmentStyle"
+    "visualScale" | "layoutScale" | "visualSizeScaling" | "forceRoundFootprint" | "attachmentStyle"
   >,
+  sizeMm?: number,
 ): BeadSlotDimensions {
-  return visualSlotDimensions(dim, profile);
+  return visualSlotDimensions(dim, profile, sizeMm);
 }
 
 /**
- * Visual slot size after layoutScale × visualScale — does not affect capacity mm.
+ * Visual slot size after layoutScale × visualScale × size curve — does not affect capacity mm.
  * layoutScale here matches contact-arc calibration so shells stay aligned with packing.
+ * visualSizeScaling compresses mm size jumps; the 6 mm anchor stays unchanged.
  */
 export function visualSlotDimensions(
   dim: BeadSlotDimensions,
-  profile: Pick<StrandRenderProfile, "visualScale" | "layoutScale">,
+  profile: Pick<StrandRenderProfile, "visualScale" | "layoutScale" | "visualSizeScaling">,
+  sizeMm?: number,
 ): BeadSlotDimensions {
   const layout = Number.isFinite(profile.layoutScale) ? profile.layoutScale : 1;
   const visual = Number.isFinite(profile.visualScale) ? profile.visualScale : 1;
-  const s = layout * visual;
+  const curve =
+    sizeMm != null && Number.isFinite(sizeMm)
+      ? visualSizeCurveRelativeFactor(sizeMm, profile.visualSizeScaling ?? 1)
+      : 1;
+  const s = layout * visual * curve;
   if (!Number.isFinite(s) || s <= 0 || s === 1) return dim;
   return { width: dim.width * s, height: dim.height * s };
 }

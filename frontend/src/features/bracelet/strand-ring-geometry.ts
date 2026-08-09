@@ -2,7 +2,7 @@ import { placedBeadSizeMm, type PlacedBead } from "@/lib/luxe-data";
 import {
   getBeadSlotDimensions,
   getBeadTangentArcPx,
-  getMaxSlotExtent,
+  getGuideSlotDimensions,
   getBeadStrandTangentContactPx,
   resolveBeadSlotSizing,
   type BeadSlotDimensions,
@@ -415,6 +415,8 @@ export function resolveStrandRingLayout(params: {
   if (!normalized.length) return null;
 
   const center = canvasSize / 2;
+  // Optional beadScaleBoost is for explicit callers only — Live Builder always uses 1
+  // (content changes must never auto-shrink world scale).
   const scaleFactor = (canvasSize / STRAND_LAYOUT_BASELINE_PX) * beadScaleBoost;
   const prelimDims = normalized.map((p) =>
     getBeadSlotDimensions(p, placedBeadSizeMm(p), scaleFactor),
@@ -422,7 +424,9 @@ export function resolveStrandRingLayout(params: {
   const sizingResults = normalized.map((p) =>
     resolveBeadSlotSizing(p, placedBeadSizeMm(p), scaleFactor, renderCatalogue),
   );
-  const maxExtent = getMaxSlotExtent(prelimDims);
+  // Guide-sized padding only — dangling charm shells must not shrink wrist radius.
+  const guideDim = getGuideSlotDimensions(scaleFactor, guideSizeMm);
+  const maxExtent = Math.max(guideDim.width, guideDim.height);
   const bounds =
     wristSizeBounds.minCm > 0 && wristSizeBounds.maxCm > 0
       ? wristSizeBounds

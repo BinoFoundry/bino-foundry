@@ -3,6 +3,8 @@ import {
   type StrandRenderProfile,
 } from "@bino-foundry/shared/types";
 
+import { visualSizeCurveRelativeFactor } from "@/render/bead-crop/visual-bead-scale";
+
 import { effectiveLayoutDiameterPx } from "./strand-ring-geometry";
 import {
   calculateBeadRenderTransform,
@@ -54,15 +56,83 @@ export interface StrandBeadShellLayout {
 }
 
 /**
+ * Linear (curve-neutral) visual + pack footprint for one bead.
+ * Shared by Crystal / Charm / Spacer / Connector / Separator / Accent — profile-driven only.
+ *
+ * - Tangential pack uses max(contact, visual width) so occupancy spacing stays capacity-correct.
+ * - Dangling types (charms) may extend height past the pack width for the CSS shell.
+ * - visualSizeScaling is applied once afterward as a uniform factor on the pack box.
+ */
+export function resolveStrandShellFootprint(params: {
+  occupancyMm: number;
+  slotDim: BeadSlotDimensions;
+  profile: StrandRenderProfile;
+  contactArcPx: number;
+}): {
+  visualWidthLinear: number;
+  visualHeightLinear: number;
+  packLinearWidth: number;
+  packLinearHeight: number;
+  /** Tangential footprint used for neighbour packing (curve-neutral). */
+  packDiameterPx: number;
+  /** CSS shell after size-curve factor (preserves 6mm / linear absolute size). */
+  renderDim: BeadSlotDimensions;
+  curveFactor: number;
+} {
+  const { occupancyMm, slotDim, profile, contactArcPx } = params;
+  const visualBaseLinear = strandLayoutShellDimensions(
+    slotDim,
+    {
+      ...profile,
+      layoutScale: 1,
+      visualSizeScaling: 1,
+    },
+    occupancyMm,
+  );
+  const visualWidthLinear = effectiveLayoutDiameterPx(
+    visualBaseLinear.width,
+    profile.layoutScale,
+  );
+  const visualHeightLinear = effectiveLayoutDiameterPx(
+    visualBaseLinear.height,
+    profile.layoutScale,
+  );
+  const packLinearWidth = Math.max(contactArcPx, visualWidthLinear);
+  const packLinearHeight =
+    profile.layoutMode === "dangling"
+      ? Math.max(packLinearWidth, visualHeightLinear)
+      : packLinearWidth;
+  const curveFactor = visualSizeCurveRelativeFactor(
+    occupancyMm,
+    profile.visualSizeScaling ?? 1,
+  );
+  return {
+    visualWidthLinear,
+    visualHeightLinear,
+    packLinearWidth,
+    packLinearHeight,
+    packDiameterPx: packLinearWidth,
+    renderDim: {
+      width: packLinearWidth * curveFactor,
+      height: packLinearHeight * curveFactor,
+    },
+    curveFactor,
+  };
+}
+
+/**
  * Shared strand shell layout pipeline used by Live Builder and Admin Preview.
  *
  * Steps (identical to SortableCircularStrand):
  * 1. mm occupancy → contact arcs (capacity-consistent; contactWidth/offsets tune span)
  * 2. path packing using max(occupancy, visual shell tangent) so mixed charms/crystals
  *    do not overlap when silhouettes exceed the mm arc
- * 3. per-bead {@link calculateBeadRenderTransform}
+ * 3. per-bead CSS shell = linear pack footprint × size-curve factor
  *
- * Capacity panel still charges catalogue sizeMm; profile fields tune how beads sit.
+ * Absolute size at the curve anchor (6mm) and at visualSizeScaling=1 matches the
+ * previous contact-driven render. Exponents below 1 only soften jumps for larger mm.
+ * Occupancy / spacing stay linear in catalogue mm.
+ * Works for every dynamic type via {@link StrandRenderProfile} — no category branches.
  */
 export function layoutStrandBeadShells(
   params: LayoutStrandBeadShellsParams,
@@ -109,27 +179,25 @@ export function layoutStrandBeadShells(
     };
   });
 
+  const footprints = beads.map((bead, i) =>
+    resolveStrandShellFootprint({
+      occupancyMm: bead.occupancyMm,
+      slotDim: bead.slotDim,
+      profile: bead.profile,
+      contactArcPx: contactArcs[i]!.contactArcPx,
+    }),
+  );
+
   const sequential = computeBalancedRadialStrandPathLayout({
     beads: beads.map((bead, i) => {
       const arc = contactArcs[i]!;
-      // visualScale only on the mm→px slot; layoutScale is applied once via contact or below.
-      const visualBase = strandLayoutShellDimensions(bead.slotDim, {
-        ...bead.profile,
-        layoutScale: 1,
-      });
-      const visualCalibrated = effectiveLayoutDiameterPx(
-        visualBase.width,
-        bead.profile.layoutScale,
-      );
-      const visualRadiusPx = Math.max(0, visualCalibrated) / 2;
+      const footprint = footprints[i]!;
+      const visualRadiusPx = Math.max(0, footprint.visualWidthLinear) / 2;
       const occupancyRadiusPx = Math.max(0, arc.contactArcPx) / 2;
-      // Pack on the larger of capacity arc vs rendered tangent width (each layout-scaled once).
-      const packDiameterPx = Math.max(arc.contactArcPx, visualCalibrated);
       return {
         index: i,
-        occupancyPx: packDiameterPx,
+        occupancyPx: footprint.packDiameterPx,
         visualRadiusPx: Math.max(occupancyRadiusPx, visualRadiusPx),
-        // Pair nudge is already encoded in contactArc via effectiveStrandContactWidth.
         contactAdjustmentPx: 0,
       };
     }),
@@ -138,8 +206,6 @@ export function layoutStrandBeadShells(
     radius: requestedRadius,
     startAngle,
     balanceSpacing,
-    // Array order is the bracelet sequence. Never use largest-gap — it parks beads at
-    // Top/Bottom/Right/Left anchors and reshuffles angular neighbours on every add.
     placement: "physical-contact",
   });
 
@@ -148,34 +214,16 @@ export function layoutStrandBeadShells(
 
   const laidOut: LaidOutStrandBeadShell[] = pathLayout.map((path) => {
     const input = beads[path.index]!;
-    const arc = contactArcs[path.index]!;
-    const visualBase = strandLayoutShellDimensions(input.slotDim, {
-      ...input.profile,
-      layoutScale: 1,
-    });
-    const visualCalibrated = effectiveLayoutDiameterPx(
-      visualBase.width,
-      input.profile.layoutScale,
-    );
-    const packDiameterPx = Math.max(arc.contactArcPx, visualCalibrated);
-    const danglingHeight = effectiveLayoutDiameterPx(
-      visualBase.height,
-      input.profile.layoutScale,
-    );
-    // Shell equals packed physical footprint — layoutScale already baked into packDiameter.
-    const slotForRender = {
-      width: packDiameterPx,
-      height:
-        input.profile.layoutMode === "dangling"
-          ? Math.max(packDiameterPx, danglingHeight)
-          : packDiameterPx,
-    };
+    const footprint = footprints[path.index]!;
     const transform = calculateBeadRenderTransform({
       ringX: path.x,
       ringY: path.y,
       angleRad: path.angle,
-      slotDim: slotForRender,
-      profile: { ...input.profile, layoutScale: 1, visualScale: 1 },
+      slotDim: footprint.renderDim,
+      // Neutralise scale fields already baked into renderDim (avoid double application).
+      // Keep hangOffset / anchors / layoutMode / orientation for charm dangling placement.
+      profile: { ...input.profile, layoutScale: 1, visualScale: 1, visualSizeScaling: 1 },
+      sizeMm: input.occupancyMm,
     });
     return {
       ...transform,

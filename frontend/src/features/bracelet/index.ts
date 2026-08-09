@@ -135,6 +135,7 @@ export {
 } from "./strand-bead-render-transform";
 export {
   layoutStrandBeadShells,
+  resolveStrandShellFootprint,
   strandCordPathFromShells,
   type LaidOutStrandBeadShell,
   type LayoutStrandBeadShellsParams,

@@ -17,6 +17,8 @@ export interface BeadRenderTransformInput {
   slotDim: BeadSlotDimensions;
   /** Fully resolved strand render profile. */
   profile: StrandRenderProfile;
+  /** Catalogue size mm — drives visual size scaling curve (occupancy unchanged). */
+  sizeMm?: number;
 }
 
 /**
@@ -57,9 +59,9 @@ export function beadShellCssTransform(
 export function calculateBeadRenderTransform(
   input: BeadRenderTransformInput,
 ): BeadRenderTransform {
-  const { ringX, ringY, angleRad, slotDim, profile } = input;
-  const renderDim = strandLayoutShellDimensions(slotDim, profile);
-  const shell = computeBeadShellPosition(ringX, ringY, angleRad, slotDim, profile);
+  const { ringX, ringY, angleRad, slotDim, profile, sizeMm } = input;
+  const renderDim = strandLayoutShellDimensions(slotDim, profile, sizeMm);
+  const shell = computeBeadShellPosition(ringX, ringY, angleRad, slotDim, profile, sizeMm);
   const rotationDeg = strandRotationDeg(angleRad, profile);
   return {
     ringX,

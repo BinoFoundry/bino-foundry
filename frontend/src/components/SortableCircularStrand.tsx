@@ -28,7 +28,6 @@ import {
   getBeadImageUrl,
   getBeadSlotDimensions,
   getGuideSlotDimensions,
-  getMaxSlotExtent,
   getPlacedBeadShellStyle,
   getStrandBeadImageStyle,
   getStrandBeadRasterSize,
@@ -77,13 +76,8 @@ import {
   beadShellCssTransform,
 } from "@/features/bracelet/strand-bead-render-transform";
 import {
-  computeStrandContentBounds,
   shiftStrandLayoutToCanvasCenter,
-  squareCanvasSizeForBounds,
-  computeStrandCanvasFitBoost,
-  STRAND_CONTENT_PADDING_PX,
   STRAND_LAYOUT_BASELINE_PX,
-  STRAND_RING_EDGE_PADDING_PX,
 } from "@/features/bracelet/strand-viewport";
 import { cn } from "@/lib/utils";
 import type { BeadLibraryEntry } from "@/types/beads";
@@ -652,8 +646,10 @@ const SortableCircularStrand = ({
       isInsertionSlot: boolean;
     };
 
-    const buildLayout = (beadScaleBoost: number) => {
-      const scaleFactor = (canvasSize / STRAND_LAYOUT_BASELINE_PX) * beadScaleBoost;
+    const buildLayout = () => {
+      // Fixed world scale from the layout canvas only — never shrink when content
+      // (e.g. hanging charms) expands the bounding box. Camera Fit handles framing.
+      const scaleFactor = canvasSize / STRAND_LAYOUT_BASELINE_PX;
       const ringStrokeHalf = computeStrandRingStrokePx(scaleFactor) / 2;
       const guideSlotDim = getGuideSlotDimensions(scaleFactor, guideSizeMm);
 
@@ -667,7 +663,8 @@ const SortableCircularStrand = ({
           resolveBeadSlotSizing(placed, placedBeadSizeMm(placed), scaleFactor, sizingCatalogue),
         );
         prelimDims = sizingResults.map((s) => s.dimensions);
-        maxExtent = getMaxSlotExtent(prelimDims);
+        // Keep wrist radius on the guide extent. Dangling charm shells in prelimDims
+        // would otherwise inflate maxExtent and shrink the whole bracelet; Fit reframes.
       }
 
       const renderProfiles = applyStrandSpacingForceOverrides(
@@ -824,35 +821,7 @@ const SortableCircularStrand = ({
       return { slotsWithPosition, scaleFactor, center, radius, layoutSectors, insertionAngles, ringStrokeHalf };
     };
 
-    const base = buildLayout(1);
-
-    const measureRequiredCanvas = (laidOut: ReturnType<typeof buildLayout>) => {
-      const edgePad = STRAND_RING_EDGE_PADDING_PX * laidOut.scaleFactor + STRAND_CONTENT_PADDING_PX;
-      const bounds = computeStrandContentBounds(
-        laidOut.slotsWithPosition.map((slot) => ({
-          x: slot.shellLeft + slot.renderDim.width / 2,
-          y: slot.shellTop + slot.renderDim.height / 2,
-          width: slot.renderDim.width,
-          height: slot.renderDim.height,
-        })),
-        laidOut.radius,
-        laidOut.center,
-        laidOut.ringStrokeHalf,
-      );
-      return squareCanvasSizeForBounds(bounds, edgePad);
-    };
-
-    let scaleBoost = 1;
-    let laidOut = base;
-    let requiredCanvas = measureRequiredCanvas(laidOut);
-
-    for (let attempt = 0; attempt < 8 && requiredCanvas > canvasSize; attempt++) {
-      const nextBoost = scaleBoost * computeStrandCanvasFitBoost(requiredCanvas, canvasSize);
-      if (nextBoost >= scaleBoost) break;
-      scaleBoost = nextBoost;
-      laidOut = buildLayout(scaleBoost);
-      requiredCanvas = measureRequiredCanvas(laidOut);
-    }
+    const laidOut = buildLayout();
 
     const effectiveCanvasSize = canvasSize;
     const targetCenter = effectiveCanvasSize / 2;
@@ -1131,9 +1100,10 @@ const SortableCircularStrand = ({
 
   const activeSlotDim = activeSizing?.dimensions ?? null;
   const activeProfile = activeBead ? getForBead(activeBead.bead) : null;
+  const activeSizeMm = activeBead ? placedBeadSizeMm(activeBead) : undefined;
   const activeRenderDim =
     activeSlotDim && activeProfile
-      ? strandLayoutShellDimensions(activeSlotDim, activeProfile)
+      ? strandLayoutShellDimensions(activeSlotDim, activeProfile, activeSizeMm)
       : activeSlotDim;
   const activeRenderSizing =
     activeSizing && activeProfile

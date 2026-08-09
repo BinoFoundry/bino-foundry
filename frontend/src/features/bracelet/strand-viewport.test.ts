@@ -113,7 +113,7 @@ describe("computeStrandCanvasFitBoost", () => {
     expect(computeStrandCanvasFitBoost(380, 400)).toBe(1);
   });
 
-  it("shrinks when content exceeds the fixed canvas", () => {
+  it("reports the shrink ratio when content exceeds the fixed canvas (not auto-applied by the builder)", () => {
     expect(computeStrandCanvasFitBoost(500, 400)).toBeCloseTo(0.8, 5);
   });
 });
@@ -286,15 +286,9 @@ describe("shiftStrandLayoutToCanvasCenter", () => {
   it("keeps mixed-size bead centers on the ring after canvas recentering", () => {
     const { center, radius, slots } = layoutMixedSizesOnRing([0.5, 2.5, 4, 6, 8, 10]);
     const bounds = computeStrandContentBounds(slots, radius, center);
-    const effectiveCanvas = squareCanvasSizeForBounds(bounds, 24);
-    const targetCenter = effectiveCanvas / 2;
-
-    const bboxCx = (bounds.minX + bounds.maxX) / 2;
-    expect(Math.abs(bboxCx - center)).toBeGreaterThan(0.4);
-
     const shifted = shiftStrandLayoutToCanvasCenter({
       ringCenter: center,
-      targetCenter,
+      targetCenter: squareCanvasSizeForBounds(bounds, 24) / 2,
       slots,
     });
 

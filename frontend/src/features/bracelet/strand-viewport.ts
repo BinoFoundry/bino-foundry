@@ -206,13 +206,18 @@ export function squareCanvasSizeForBounds(
 
 /**
  * Fixed layout canvas size — always matches the viewport budget.
- * Bead-driven expansion is handled by internal strand scaling, not DOM size.
+ * Content that extends past the canvas (e.g. hanging charms) is clipped;
+ * users reframe with camera Fit / zoom — we do not shrink world scale.
  */
 export function computeLayoutCanvasSize(viewportBudgetPx: number): number {
   return viewportBudgetPx;
 }
 
-/** Uniform boost (≤ 1) to fit computed strand bounds inside a fixed canvas. */
+/**
+ * Legacy helper: ratio to shrink content into a fixed canvas.
+ * Not applied by the Live Builder strand — camera Fit owns framing.
+ * Kept for tests and any tooling that still wants an explicit fit ratio.
+ */
 export function computeStrandCanvasFitBoost(requiredCanvasPx: number, fixedCanvasPx: number): number {
   if (requiredCanvasPx <= 0 || fixedCanvasPx <= 0) return 1;
   return Math.min(1, fixedCanvasPx / requiredCanvasPx);
