@@ -512,6 +512,8 @@ export function physicalMetricsFromVisibleFootprint(
     visibleDiameterPx: diameter,
     processedWidthPx: canvasWidth,
     processedHeightPx: canvasHeight,
+    visibleOriginXPx: footprint.x,
+    visibleOriginYPx: footprint.y,
     occupancyRatio:
       canvasMax > 0 && diameter > 0 ? Math.min(1, Math.max(0.05, diameter / canvasMax)) : undefined,
   };

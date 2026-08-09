@@ -10,10 +10,12 @@ import {
   seedProcessedStrandMetrics,
 } from "./processed-strand-metrics";
 import { resolveBeadSlotSizing } from "./strand-bead-sizing";
+import { TEST_STRAND_RENDER_CATALOGUE } from "./strand-render-test-catalogue";
 
 const PROCESSED_A = "https://example.com/charm-padded.png";
 const PROCESSED_B = "https://example.com/charm-tight.png";
 const PROCESSED_C = "https://example.com/bead-round.png";
+const PROCESSED_CRYSTAL = "https://example.com/crystal-round.png";
 
 function placed(
   id: string,
@@ -22,6 +24,7 @@ function placed(
   maskVisible: { w: number; h: number },
   processedCanvas: { w: number; h: number },
   sizeMm = 8,
+  beadType: { id: string; slug: string } = { id: "type-charm", slug: "charm" },
 ): PlacedBead {
   const maskD = Math.max(maskVisible.w, maskVisible.h);
   return {
@@ -30,8 +33,8 @@ function placed(
     bead: {
       id,
       name: id,
-      beadTypeId: "charm",
-      beadTypeSlug: "charm",
+      beadTypeId: beadType.id,
+      beadTypeSlug: beadType.slug,
       image: processedUrl,
       processedImage: processedUrl,
       description: "",
@@ -79,32 +82,39 @@ describe("same-mm visual size from painted content bounds", () => {
     expect(metrics.processedHeightPx).toBe(500);
   });
 
-  it("without live alpha metrics, inflated mask makes sparse charms underscale", () => {
+  it("without live alpha metrics, inflated mask does not use full canvas as scale denom", () => {
     const wrapper = layoutDiameterPxForMm(8, 1);
-    // Mask = full 500px square, but content is only 220×380 (max 380).
+    // Mask = full 500px square on 540 canvas — previously used as scale denom → speck.
     const padded = resolveBeadSlotSizing(
       placed("padded", PROCESSED_A, { w: 500, h: 500 }, { w: 540, h: 540 }),
       8,
       1,
+      TEST_STRAND_RENDER_CATALOGUE,
     );
-    // Scale uses mask diameter 500 → visible content maps below wrapper.
-    expect(padded.actualVisibleDiameterPx).toBeCloseTo(wrapper, 5);
-    // Image scale denom is mask (500), so content fraction 380/500 of wrapper appears small
-    // once live metrics are applied below — here we only assert mask path uses 500.
-    expect(padded.assetVisibleDiameterPx).toBe(500);
+    // Content shell stays mm-wide (packing footprint), not padded-canvas-wide.
+    expect(padded.dimensions.width).toBeCloseTo(wrapper, 5);
+    // Image layer is larger than the shell (pad hangs outside; overflow clips it).
+    expect(padded.imageDimensions.width).toBeGreaterThan(wrapper * 1.05);
+    // Scale denom recovered below full canvas (~0.7 assumed fill → scale > W/540).
+    expect(padded.imageRenderScale).toBeGreaterThan(wrapper / 540);
   });
 
-  it("live processed alpha metrics equalize same-mm visual diameter across padding/aspect", () => {
+  it("live processed alpha metrics paint dangling WIDTH to the mm wrapper", () => {
     const wrapper = layoutDiameterPxForMm(8, 1);
+    const contentW = 220;
+    const contentH = 380;
+    const canvas = 540;
 
     // Padded tall charm: mask claimed 500×500; painted content 220×380 on 540 canvas.
     seedProcessedStrandMetrics(PROCESSED_A, {
-      visibleWidthPx: 220,
-      visibleHeightPx: 380,
-      referenceDiameterPx: 380,
-      visibleDiameterPx: 380,
-      processedWidthPx: 540,
-      processedHeightPx: 540,
+      visibleWidthPx: contentW,
+      visibleHeightPx: contentH,
+      referenceDiameterPx: contentH,
+      visibleDiameterPx: contentH,
+      processedWidthPx: canvas,
+      processedHeightPx: canvas,
+      visibleOriginXPx: 160,
+      visibleOriginYPx: 20,
     });
     // Tight square charm: content fills mask.
     seedProcessedStrandMetrics(PROCESSED_B, {
@@ -115,7 +125,7 @@ describe("same-mm visual size from painted content bounds", () => {
       processedWidthPx: 486,
       processedHeightPx: 486,
     });
-    // Round bead.
+    // Round-ish dangling asset.
     seedProcessedStrandMetrics(PROCESSED_C, {
       visibleWidthPx: 400,
       visibleHeightPx: 400,
@@ -126,32 +136,98 @@ describe("same-mm visual size from painted content bounds", () => {
     });
 
     const padded = resolveBeadSlotSizing(
-      placed("padded", PROCESSED_A, { w: 500, h: 500 }, { w: 540, h: 540 }),
+      placed("padded", PROCESSED_A, { w: 500, h: 500 }, { w: canvas, h: canvas }),
       8,
       1,
+      TEST_STRAND_RENDER_CATALOGUE,
     );
     const tight = resolveBeadSlotSizing(
       placed("tight", PROCESSED_B, { w: 450, h: 450 }, { w: 486, h: 486 }),
       8,
       1,
+      TEST_STRAND_RENDER_CATALOGUE,
     );
     const round = resolveBeadSlotSizing(
       placed("round", PROCESSED_C, { w: 400, h: 400 }, { w: 432, h: 432 }, 8),
       8,
       1,
+      TEST_STRAND_RENDER_CATALOGUE,
     );
 
-    // Painted max-edge maps to the mm wrapper for every asset.
-    expect(padded.actualVisibleDiameterPx).toBeCloseTo(wrapper, 5);
-    expect(tight.actualVisibleDiameterPx).toBeCloseTo(wrapper, 5);
-    expect(round.actualVisibleDiameterPx).toBeCloseTo(wrapper, 5);
+    // Content shell width = catalogue mm (what packing / CSS shell use).
+    expect(padded.dimensions.width).toBeCloseTo(wrapper, 5);
+    expect(tight.dimensions.width).toBeCloseTo(wrapper, 5);
+    expect(round.dimensions.width).toBeCloseTo(wrapper, 5);
+    expect(padded.visibleContentWidthPx).toBeCloseTo(wrapper, 5);
 
-    // Aspect preserved: tall charm width < height after scale.
-    expect(padded.visibleContentWidthPx!).toBeLessThan(padded.visibleContentHeightPx!);
-    expect(padded.visibleContentWidthPx! / padded.visibleContentHeightPx!).toBeCloseTo(220 / 380, 5);
+    // Painted width = contentW × scale ≈ mm wrapper (not canvas×scale).
+    expect(padded.imageRenderScale * contentW).toBeCloseTo(wrapper, 5);
+    expect(padded.imageDimensions.width).toBeCloseTo(canvas * (wrapper / contentW), 5);
+    // Origin-aligned: content left edge lands at shell left (not centered pad).
+    expect(padded.imageOffsetPx.left).toBeCloseTo(-160 * (wrapper / contentW), 5);
+    expect(padded.imageOffsetPx.top).toBeCloseTo(-20 * (wrapper / contentW), 5);
+    // Tall charm: shell grows in height with content aspect; width stays mm.
+    expect(padded.dimensions.height / padded.dimensions.width).toBeCloseTo(contentH / contentW, 5);
+    expect(padded.visibleContentWidthPx! / padded.visibleContentHeightPx!).toBeCloseTo(
+      contentW / contentH,
+      5,
+    );
 
     // Live metrics override inflated mask diameter.
-    expect(padded.assetVisibleDiameterPx).toBe(380);
+    expect(padded.assetVisibleDiameterPx).toBe(contentH);
+  });
+
+  it("same mm: dangling charm painted width matches crystal shell width", () => {
+    const wrapper = layoutDiameterPxForMm(8, 1);
+    const charmContentW = 220;
+    const charmCanvas = 540;
+    const crystalContent = 400;
+    const crystalCanvas = 420;
+
+    seedProcessedStrandMetrics(PROCESSED_A, {
+      visibleWidthPx: charmContentW,
+      visibleHeightPx: 380,
+      referenceDiameterPx: 380,
+      visibleDiameterPx: 380,
+      processedWidthPx: charmCanvas,
+      processedHeightPx: charmCanvas,
+    });
+    seedProcessedStrandMetrics(PROCESSED_CRYSTAL, {
+      visibleWidthPx: crystalContent,
+      visibleHeightPx: crystalContent,
+      referenceDiameterPx: crystalContent,
+      visibleDiameterPx: crystalContent,
+      processedWidthPx: crystalCanvas,
+      processedHeightPx: crystalCanvas,
+    });
+
+    const charm = resolveBeadSlotSizing(
+      placed("charm", PROCESSED_A, { w: 500, h: 500 }, { w: charmCanvas, h: charmCanvas }),
+      8,
+      1,
+      TEST_STRAND_RENDER_CATALOGUE,
+    );
+    const crystal = resolveBeadSlotSizing(
+      placed(
+        "crystal",
+        PROCESSED_CRYSTAL,
+        { w: crystalContent, h: crystalContent },
+        { w: crystalCanvas, h: crystalCanvas },
+        8,
+        { id: "type-crystal", slug: "crystal" },
+      ),
+      8,
+      1,
+      TEST_STRAND_RENDER_CATALOGUE,
+    );
+
+    // Both occupy the same mm wrapper for their primary visual axis.
+    expect(charm.dimensions.width).toBeCloseTo(wrapper, 5);
+    expect(crystal.wrapperDiameterPx).toBeCloseTo(wrapper, 5);
+    expect(charm.imageRenderScale * charmContentW).toBeCloseTo(crystal.wrapperDiameterPx, 5);
+    // Charm must not look like a speck vs crystal (ratio was historically ~0.4).
+    const paintedCharmWidth = charm.imageRenderScale * charmContentW;
+    expect(paintedCharmWidth / crystal.wrapperDiameterPx).toBeGreaterThan(0.95);
   });
 
   it("different mm sizes still scale proportionally with live metrics", () => {
@@ -168,21 +244,30 @@ describe("same-mm visual size from painted content bounds", () => {
       placed("padded", PROCESSED_A, { w: 500, h: 500 }, { w: 540, h: 540 }, 6),
       6,
       1,
+      TEST_STRAND_RENDER_CATALOGUE,
     );
     const eight = resolveBeadSlotSizing(
       placed("padded", PROCESSED_A, { w: 500, h: 500 }, { w: 540, h: 540 }, 8),
       8,
       1,
+      TEST_STRAND_RENDER_CATALOGUE,
     );
     const twelve = resolveBeadSlotSizing(
       placed("padded", PROCESSED_A, { w: 500, h: 500 }, { w: 540, h: 540 }, 12),
       12,
       1,
+      TEST_STRAND_RENDER_CATALOGUE,
     );
 
-    expect(six.actualVisibleDiameterPx).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
-    expect(eight.actualVisibleDiameterPx).toBeCloseTo(layoutDiameterPxForMm(8, 1), 5);
-    expect(twelve.actualVisibleDiameterPx).toBeCloseTo(layoutDiameterPxForMm(12, 1), 5);
+    // Dangling width-match: content width tracks catalogue mm.
+    expect(six.visibleContentWidthPx).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
+    expect(eight.visibleContentWidthPx).toBeCloseTo(layoutDiameterPxForMm(8, 1), 5);
+    expect(twelve.visibleContentWidthPx).toBeCloseTo(layoutDiameterPxForMm(12, 1), 5);
+    expect(six.imageRenderScale * 220).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
+    expect(eight.imageRenderScale * 220).toBeCloseTo(layoutDiameterPxForMm(8, 1), 5);
+    expect(twelve.imageRenderScale * 220).toBeCloseTo(layoutDiameterPxForMm(12, 1), 5);
+    expect(six.visibleContentWidthPx!).toBeLessThan(eight.visibleContentWidthPx!);
+    expect(eight.visibleContentWidthPx!).toBeLessThan(twelve.visibleContentWidthPx!);
     expect(six.wrapperDiameterPx).toBeLessThan(eight.wrapperDiameterPx);
     expect(eight.wrapperDiameterPx).toBeLessThan(twelve.wrapperDiameterPx);
   });

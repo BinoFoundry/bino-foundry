@@ -70,6 +70,8 @@ export async function loadProcessedStrandMetrics(
         visibleDiameterPx: referenceDiameterPx,
         processedWidthPx: w,
         processedHeightPx: h,
+        visibleOriginXPx: bounds.x,
+        visibleOriginYPx: bounds.y,
         occupancyRatio:
           Math.max(w, h) > 0
             ? Math.min(1, Math.max(0.05, referenceDiameterPx / Math.max(w, h)))

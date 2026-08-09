@@ -76,6 +76,13 @@ export interface BeadCropPhysicalMetrics {
   processedWidthPx?: number;
   /** Processed export canvas height (includes transparent pad), when exported. */
   processedHeightPx?: number;
+  /**
+   * Left edge of the painted silhouette in processed-canvas pixels.
+   * Used to align dangling charms so mm maps to paint, not transparent pad.
+   */
+  visibleOriginXPx?: number;
+  /** Top edge of the painted silhouette in processed-canvas pixels. */
+  visibleOriginYPx?: number;
   /** Axis-aligned bbox width of the crop path polygon in source-image pixels. */
   polygonBoundingWidthPx?: number;
   /** Axis-aligned bbox height of the crop path polygon in source-image pixels. */
@@ -312,6 +319,8 @@ function normalizePhysicalMetrics(metrics: BeadCropPhysicalMetrics): BeadCropPhy
     visibleDiameterPx,
     processedWidthPx: metrics.processedWidthPx ?? predicted.processedWidthPx,
     processedHeightPx: metrics.processedHeightPx ?? predicted.processedHeightPx,
+    visibleOriginXPx: metrics.visibleOriginXPx,
+    visibleOriginYPx: metrics.visibleOriginYPx,
     polygonBoundingWidthPx: metrics.polygonBoundingWidthPx,
     polygonBoundingHeightPx: metrics.polygonBoundingHeightPx,
     polygonDiameterPx: metrics.polygonDiameterPx,

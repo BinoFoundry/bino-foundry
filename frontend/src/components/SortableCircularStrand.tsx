@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, useEffect, memo, type KeyboardEvent } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect, memo, type CSSProperties, type KeyboardEvent } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { X, AlertTriangle } from "lucide-react";
 import {
@@ -40,6 +40,7 @@ import {
   subscribeProcessedStrandMetrics,
   peekProcessedStrandMetrics,
   usesProcessedStrandAsset,
+  resolveStrandRenderProfile,
   type BeadSlotDimensions,
 } from "@/render/bead-crop";
 import { normalizeFromSlots, strandCircumferenceMm } from "@/features/bracelet/composition";

@@ -4,7 +4,7 @@ import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { BeadTypeEntry } from "@/types/beads";
-import type { BeadCropMetricsResolution, BeadCropMetricsSource } from "@bino-foundry/shared/types";
+import type { BeadCropMetricsResolution, BeadCropMetricsSource, BeadCropPhysicalMetrics } from "@bino-foundry/shared/types";
 
 import {
   hasDistinctProcessedAsset,
@@ -230,6 +230,59 @@ function resolveStrandLayoutMetrics(
   };
 }
 
+/**
+ * True painted content size for dangling charms.
+ * Rejects full-canvas crop-mask "visible" bounds that count transparent padding.
+ */
+function resolveDanglingContentSizePx(metrics: BeadCropPhysicalMetrics): {
+  contentWidthPx: number;
+  contentHeightPx: number;
+} {
+  const visibleDiameter = resolveBeadVisibleDiameterPx(metrics);
+  const processedW = metrics.processedWidthPx ?? 0;
+  const processedH = metrics.processedHeightPx ?? 0;
+  const processedMax = Math.max(processedW, processedH);
+  let width = metrics.visibleWidthPx > 0 ? metrics.visibleWidthPx : visibleDiameter;
+  let height = metrics.visibleHeightPx > 0 ? metrics.visibleHeightPx : visibleDiameter;
+  if (width <= 0) width = Math.max(visibleDiameter, 1);
+  if (height <= 0) height = Math.max(visibleDiameter, 1);
+
+  const widthFills = processedW > 0 && width >= processedW * 0.9;
+  const heightFills = processedH > 0 && height >= processedH * 0.9;
+  const fill = beadExportSilhouetteFillRatio(metrics);
+  const occupancy =
+    typeof metrics.occupancyRatio === "number" && metrics.occupancyRatio > 0
+      ? metrics.occupancyRatio
+      : fill;
+
+  // Both axes claim the canvas — stored mask is pad, not paint.
+  if (widthFills && heightFills) {
+    if (occupancy != null && occupancy > 0 && occupancy < 0.98) {
+      // Recover an approximate paint box from canvas × occupancy (square-ish prior).
+      const side = processedMax * occupancy;
+      return {
+        contentWidthPx: Math.max(side, 1),
+        contentHeightPx: Math.max(side * (height / Math.max(width, 1)), side, 1),
+      };
+    }
+    // Last resort: assume moderately padded export (~70% fill) rather than trusting full canvas.
+    const assumed = processedMax > 0 ? processedMax * 0.7 : visibleDiameter;
+    return { contentWidthPx: Math.max(assumed, 1), contentHeightPx: Math.max(assumed, 1) };
+  }
+
+  // Width inflated, height looks real (tall charm on padded square mask).
+  if (widthFills && !heightFills) {
+    // Estimate width from height using a conservative aspect (avoid using inflated width).
+    const estimatedWidth = Math.min(height, processedW > 0 ? processedW * 0.7 : height);
+    return {
+      contentWidthPx: Math.max(estimatedWidth, 1),
+      contentHeightPx: Math.max(height, 1),
+    };
+  }
+
+  return { contentWidthPx: width, contentHeightPx: height };
+}
+
 /** Uniform scale for crop bitmap inside mm wrapper — scaleX always equals scaleY. */
 function resolveUniformStrandImageLayout(
   dimensions: BeadSlotDimensions,
@@ -274,57 +327,76 @@ function resolveUniformStrandImageLayout(
 
   const metrics = renderResolution.metrics;
   const visibleDiameter = resolveBeadVisibleDiameterPx(metrics);
-  const contentWidthPx =
-    metrics.visibleWidthPx > 0 ? metrics.visibleWidthPx : visibleDiameter;
-  const scaleDenom = options.scaleToContentWidth
-    ? contentWidthPx > 0
-      ? contentWidthPx
-      : visibleDiameter
-    : options.scaleReferenceDiameterPx && options.scaleReferenceDiameterPx > 0
+
+  // ── Dangling: mm maps to painted WIDTH; shell follows content aspect (not pad). ──
+  if (options.scaleToContentWidth) {
+    const { contentWidthPx, contentHeightPx } = resolveDanglingContentSizePx(metrics);
+    const scale = contentWidthPx > 0 ? wrapperDiameter / contentWidthPx : 1;
+    const contentShell = {
+      width: wrapperDiameter,
+      height: Math.max(wrapperDiameter, contentHeightPx * scale),
+    };
+
+    const processedW = metrics.processedWidthPx ?? contentWidthPx;
+    const processedH = metrics.processedHeightPx ?? contentHeightPx;
+    // Image layer = full processed canvas at content-width scale (pad hangs outside content shell).
+    const imageDimensions = {
+      width: Math.max(1, processedW * scale),
+      height: Math.max(1, processedH * scale),
+    };
+    // Align painted content to the shell — prefer measured origin so loop-top charms are not clipped.
+    const originX =
+      typeof metrics.visibleOriginXPx === "number" && Number.isFinite(metrics.visibleOriginXPx)
+        ? metrics.visibleOriginXPx
+        : Math.max(0, (processedW - contentWidthPx) / 2);
+    const originY =
+      typeof metrics.visibleOriginYPx === "number" && Number.isFinite(metrics.visibleOriginYPx)
+        ? metrics.visibleOriginYPx
+        : Math.max(0, (processedH - contentHeightPx) / 2);
+    const imageOffsetPx = {
+      left: -originX * scale,
+      top: -originY * scale,
+    };
+
+    return {
+      imageDimensions,
+      imageOffsetPx,
+      imageRenderScale: scale,
+      assetVisibleDiameterPx: Math.max(contentWidthPx, contentHeightPx),
+      renderResolution,
+      visibleContentWidthPx: contentShell.width,
+      visibleContentHeightPx: contentShell.height,
+      visibleContentDiameterPx: Math.max(contentShell.width, contentShell.height),
+      actualVisibleDiameterPx: Math.max(contentShell.width, contentShell.height),
+      exportFillRatio: beadExportSilhouetteFillRatio(metrics),
+      // Packing / CSS shell use the content box (mm × proportional height) — never the pad canvas.
+      shellDimensions: contentShell,
+    };
+  }
+
+  // ── Inline / round: mm maps to visible diameter (max edge). ──
+  const scaleDenom =
+    options.scaleReferenceDiameterPx && options.scaleReferenceDiameterPx > 0
       ? options.scaleReferenceDiameterPx
       : visibleDiameter;
   const uniformScale = scaleDenom > 0 ? wrapperDiameter / scaleDenom : 1;
 
   const imageFootprint = resolveBeadRenderFootprintPx(renderResolution, {
-    targetDiameterPx: options.scaleToContentWidth ? wrapperDiameter : wrapperDiameter,
+    targetDiameterPx: wrapperDiameter,
     preferProcessedCanvas: options.preferProcessedCanvas,
-    scaleReferenceDiameterPx: options.scaleToContentWidth
-      ? contentWidthPx > 0
-        ? contentWidthPx
-        : undefined
-      : options.scaleReferenceDiameterPx ?? undefined,
+    scaleReferenceDiameterPx: options.scaleReferenceDiameterPx ?? undefined,
   });
   if (!imageFootprint) return fallback;
 
   const visibleFootprint = resolveBeadRenderFootprintPx(renderResolution, {
     targetDiameterPx: wrapperDiameter,
     preferProcessedCanvas: false,
-    scaleReferenceDiameterPx: options.scaleToContentWidth
-      ? contentWidthPx > 0
-        ? contentWidthPx
-        : undefined
-      : options.scaleReferenceDiameterPx ?? undefined,
+    scaleReferenceDiameterPx: options.scaleReferenceDiameterPx ?? undefined,
   });
 
-  let imageDimensions = imageFootprint;
-  // Dangling: expand shell height so the dangle is not clipped after width-matched scale.
-  if (options.scaleToContentWidth && imageDimensions.height > dimensions.height) {
-    imageDimensions = {
-      width: Math.max(dimensions.width, imageDimensions.width),
-      height: imageDimensions.height,
-    };
-  }
-
-  const shellWidth = options.scaleToContentWidth
-    ? Math.max(dimensions.width, imageDimensions.width)
-    : dimensions.width;
-  const shellHeight = options.scaleToContentWidth
-    ? Math.max(dimensions.height, imageDimensions.height)
-    : dimensions.height;
-
   const imageOffsetPx = {
-    left: (shellWidth - imageFootprint.width) / 2,
-    top: (shellHeight - imageFootprint.height) / 2,
+    left: (dimensions.width - imageFootprint.width) / 2,
+    top: (dimensions.height - imageFootprint.height) / 2,
   };
   const visibleW = visibleFootprint?.width ?? imageFootprint.width;
   const visibleH = visibleFootprint?.height ?? imageFootprint.height;
@@ -340,10 +412,6 @@ function resolveUniformStrandImageLayout(
     visibleContentDiameterPx: Math.max(visibleW, visibleH),
     actualVisibleDiameterPx: Math.max(visibleW, visibleH),
     exportFillRatio: beadExportSilhouetteFillRatio(metrics),
-    // Optional shell expansion for callers (dangling).
-    shellDimensions: options.scaleToContentWidth
-      ? { width: shellWidth, height: shellHeight }
-      : undefined,
   };
 }
 
