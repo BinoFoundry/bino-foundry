@@ -56,7 +56,6 @@ export const strandRenderDefaultsDto = z.object({
   orientationMode: z.enum(["outward", "inward"]),
   rotationMode: z.enum(["tangent", "radial-upright", "fixed-upright", "none"]),
   rotationOffsetDeg: z.number().min(-180).max(180),
-  zPriority: z.number().int().min(-100).max(100),
   collisionPadding: z.number().min(0).max(20),
   stringOcclusion: z.number().min(0).max(1),
   forceRoundFootprint: z.boolean(),

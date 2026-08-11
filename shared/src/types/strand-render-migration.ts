@@ -25,7 +25,6 @@ export const STRAND_RENDER_BEHAVIOR_PRESETS: Record<
   "hanging-item": STRAND_RENDER_PRESETS.charm ?? {},
   "decorative-item": {
     ...(STRAND_RENDER_PRESETS.charm ?? {}),
-    zPriority: 5,
   },
   connector: STRAND_RENDER_PRESETS.connector ?? {},
 };

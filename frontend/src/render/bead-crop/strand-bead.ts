@@ -243,7 +243,9 @@ export function getPlacedBeadShellStyle(
     border: hasImage ? "none" : "1px solid hsl(var(--border) / 0.5)",
     borderRadius: hasImage ? 0 : 4,
     boxShadow: "none",
-    overflow: "hidden",
+    // The mm/contact shell is used for positioning/spacing; the visual asset must be allowed
+    // to extend beyond it (dangling parts, outward assets, transparent padding, etc.).
+    overflow: hasImage ? "visible" : "hidden",
     padding: 0,
     margin: 0,
   };

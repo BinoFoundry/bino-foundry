@@ -379,7 +379,6 @@ describe("strand render profile", () => {
           verticalOffset: 0,
           rotationMode: "tangent",
           rotationOffsetDeg: 0,
-          zPriority: 0,
           collisionPadding: 0,
           stringOcclusion: 1,
           forceRoundFootprint: true,

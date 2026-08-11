@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   mergeStrandRenderProfile,
+  effectiveStrandContactWidth,
   parseStrandRenderProfile,
   STRAND_CONTACT_SPACING_MAX,
-  STRAND_CONTACT_SPACING_MIN,
   STRAND_CONTACT_SPACING_STEP,
   STRAND_LAYOUT_SCALE_MAX,
   STRAND_LAYOUT_SCALE_MIN,
@@ -17,6 +17,7 @@ import {
   STRAND_VISUAL_SIZE_SCALING_MAX,
   STRAND_VISUAL_SIZE_SCALING_MIN,
   STRAND_VISUAL_SIZE_SCALING_STEP,
+  STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM,
   strandRenderSourceLabel,
   type StrandAnchorPreset,
   type StrandOrientationMode,
@@ -34,8 +35,7 @@ export type StrandRenderConfigPanelMode = "system" | "beadType" | "subBeadType" 
 
 type CalibrationFieldKey =
   | "layoutScale"
-  | "contactWidth"
-  | "contactOffset"
+  | "strandOccupancy"
   | "visualScale"
   | "visualSizeScaling"
   | "verticalOffset";
@@ -262,6 +262,14 @@ export function StrandRenderConfigPanel({
         </label>
       ) : null}
 
+      {(mode === "bead" || mode === "subBeadType") && onInheritTypeDefaultsChange ? (
+        <p className="mt-0 text-[10px] leading-snug text-muted-foreground">
+          When enabled, this level reuses its parent calibration values. Fields become read-only
+          and may show <span className="font-medium">AUTO</span> badges (inherited). Turn it off to
+          edit this level’s own settings (<span className="font-medium">Custom Override</span>).
+        </p>
+      ) : null}
+
       {inheritedLock ? (
         <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
           Controls are locked while <span className="font-medium">Use Parent Calibration</span> is
@@ -276,24 +284,173 @@ export function StrandRenderConfigPanel({
         }
         aria-disabled={inheritedLock || undefined}
       >
-        <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
-          <AdminDeferredNumberInput
-            value={draft.layoutScale}
-            onCommit={(layoutScale) => commitCalibration("layoutScale", layoutScale)}
-            onEditingChange={(editing) => setFieldEditing("layoutScale", editing)}
-            min={STRAND_LAYOUT_SCALE_MIN}
-            max={STRAND_LAYOUT_SCALE_MAX}
-            step={STRAND_LAYOUT_SCALE_STEP}
-            decimals={2}
-            disabled={readOnly}
-            aria-label="Layout scale"
-            clampOnCommit={false}
-            onRangeError={(message) => setFieldError("layoutScale", message)}
-            onClearError={() => setFieldError("layoutScale", null)}
-          />
-          <InputExamples examples={["0.50", "1.00", "2.00", "3.75", "5.00"]} />
-          <FieldError message={fieldErrors.layoutScale} />
-        </Field>
+        <SectionHeading title="Size" />
+        {mode === "system" ? (
+          <Field
+            label="Visual size scaling"
+            source={provenance?.visualSizeScaling}
+            readOnly={readOnly}
+          >
+            <AdminDeferredNumberInput
+              value={draft.visualSizeScaling}
+              onCommit={(visualSizeScaling) =>
+                commitCalibration("visualSizeScaling", visualSizeScaling)
+              }
+              onEditingChange={(editing) => setFieldEditing("visualSizeScaling", editing)}
+              min={STRAND_VISUAL_SIZE_SCALING_MIN}
+              max={STRAND_VISUAL_SIZE_SCALING_MAX}
+              step={STRAND_VISUAL_SIZE_SCALING_STEP}
+              decimals={2}
+              disabled={readOnly}
+              aria-label="Visual size scaling"
+              clampOnCommit={false}
+              onRangeError={(message) => setFieldError("visualSizeScaling", message)}
+              onClearError={() => setFieldError("visualSizeScaling", null)}
+            />
+            <InputExamples examples={["0.50", "0.70", "1.00", "1.25"]} />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Platform-wide curve for how 6 / 8 / 10&nbsp;mm look relative to each other.{" "}
+              {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm stays anchored. Use Live Preview → Compare
+              sizes. Per-bead tuning uses Render Size only.
+            </p>
+            <FieldError message={fieldErrors.visualSizeScaling} />
+          </Field>
+        ) : (
+          <Field label="Render size" source={provenance?.visualScale} readOnly={readOnly}>
+            <AdminDeferredNumberInput
+              value={draft.visualScale}
+              onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
+              onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
+              min={STRAND_VISUAL_SCALE_MIN}
+              max={STRAND_VISUAL_SCALE_MAX}
+              step={STRAND_VISUAL_SCALE_STEP}
+              decimals={2}
+              disabled={readOnly}
+              aria-label="Render size"
+              clampOnCommit={false}
+              onRangeError={(message) => setFieldError("visualScale", message)}
+              onClearError={() => setFieldError("visualScale", null)}
+            />
+            <InputExamples examples={["0.50", "0.90", "1.00", "1.08", "2.00"]} />
+            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              How large this asset looks. 1.00 = normal. Size differences between 6 / 8 / 10&nbsp;mm follow
+              the system curve — you do not need a separate setting here.
+            </p>
+            <FieldError message={fieldErrors.visualScale} />
+          </Field>
+        )}
+
+        {mode !== "system" ? (
+          <>
+            <SectionHeading title="Strand" />
+            <Field label="Strand occupancy" source={provenance?.contactWidth} readOnly={readOnly}>
+              <AdminDeferredNumberInput
+                value={effectiveStrandContactWidth({
+                  contactWidth: draft.contactWidth,
+                  contactOffset: draft.contactOffset,
+                  spacingAdjustment: draft.spacingAdjustment,
+                })}
+                onCommit={(strandOccupancy) => {
+                  patchDraft({
+                    strandOccupancy,
+                    contactWidth: 1,
+                    contactOffset: strandOccupancy - 1,
+                    spacingAdjustment: 0,
+                  });
+                }}
+                onEditingChange={(editing) => setFieldEditing("strandOccupancy", editing)}
+                min={0}
+                max={STRAND_CONTACT_SPACING_MAX}
+                step={STRAND_CONTACT_SPACING_STEP}
+                decimals={2}
+                disabled={readOnly}
+                aria-label="Strand occupancy"
+                clampOnCommit={false}
+                onRangeError={(message) => setFieldError("strandOccupancy", message)}
+                onClearError={() => setFieldError("strandOccupancy", null)}
+              />
+              <InputExamples examples={["0.50", "1.00", "1.50", "2.00", "5.00"]} />
+              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                How much space this item takes along the bracelet strand. Does not change how large the
+                asset looks — only spacing on the layout.
+              </p>
+              <FieldError message={fieldErrors.strandOccupancy} />
+            </Field>
+          </>
+        ) : null}
+
+        {mode !== "system" ? (
+          <>
+            <SectionHeading title="Position" />
+            <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
+              <AdminDeferredNumberInput
+                value={draft.verticalOffset}
+                onCommit={(verticalOffset) => commitCalibration("verticalOffset", verticalOffset)}
+                onEditingChange={(editing) => setFieldEditing("verticalOffset", editing)}
+                min={STRAND_VERTICAL_OFFSET_MIN}
+                max={STRAND_VERTICAL_OFFSET_MAX}
+                step={STRAND_VERTICAL_OFFSET_STEP}
+                decimals={1}
+                disabled={readOnly}
+                aria-label="Vertical offset"
+                clampOnCommit={false}
+                onRangeError={(message) => setFieldError("verticalOffset", message)}
+                onClearError={() => setFieldError("verticalOffset", null)}
+              />
+              <InputExamples examples={["-5", "-2.5", "0", "3", "10"]} />
+              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                Moves the attachment point vertically (% of item height). Positive hangs farther from the
+                cord; negative pulls closer.
+              </p>
+              <FieldError message={fieldErrors.verticalOffset} />
+            </Field>
+          </>
+        ) : null}
+
+        {mode !== "system" ? (
+          <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
+            <select
+              disabled={readOnly}
+              className={fieldClass(readOnly)}
+              value={draft.anchorPreset}
+              onChange={(e) =>
+                patchDraft({ anchorPreset: e.target.value as StrandAnchorPreset })
+              }
+            >
+              <option value="center">Center</option>
+              <option value="loop">Loop (top bail)</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+            </select>
+            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              Which part of the asset attaches to the strand. “Loop” = top bail; “Center” = middle.
+            </p>
+          </Field>
+        ) : null}
+
+        {mode !== "system" ? (
+          <>
+            <SectionHeading title="Orientation" />
+            <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
+              <select
+                disabled={readOnly}
+                className={fieldClass(readOnly)}
+                value={draft.orientationMode}
+                onChange={(e) =>
+                  patchDraft({ orientationMode: e.target.value as StrandOrientationMode })
+                }
+              >
+                <option value="outward">Outward (face away from centre)</option>
+                <option value="inward">Inward (face toward centre)</option>
+              </select>
+              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                Outward faces away from the bracelet centre; inward faces toward it.
+              </p>
+            </Field>
+          </>
+        ) : null}
+
+        <SectionHeading title="Spacing" />
         <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -309,144 +466,9 @@ export function StrandRenderConfigPanel({
               ? "General default. Type/sub-type settings override this in the Builder."
               : "Overrides General for beads that inherit this level."}
           </p>
-        </Field>
-        <Field label="Contact width" source={provenance?.contactWidth} readOnly={readOnly}>
-          <AdminDeferredNumberInput
-            value={draft.contactWidth}
-            onCommit={(contactWidth) => commitCalibration("contactWidth", contactWidth)}
-            onEditingChange={(editing) => setFieldEditing("contactWidth", editing)}
-            min={STRAND_CONTACT_SPACING_MIN}
-            max={STRAND_CONTACT_SPACING_MAX}
-            step={STRAND_CONTACT_SPACING_STEP}
-            decimals={2}
-            disabled={readOnly}
-            aria-label="Contact width"
-            clampOnCommit={false}
-            onRangeError={(message) => setFieldError("contactWidth", message)}
-            onClearError={() => setFieldError("contactWidth", null)}
-          />
-          <InputExamples examples={["-2", "0", "1", "2.5", "10"]} />
-          <FieldError message={fieldErrors.contactWidth} />
-        </Field>
-        <Field label="Contact adjustment" source={provenance?.contactOffset} readOnly={readOnly}>
-          <AdminDeferredNumberInput
-            value={draft.contactOffset}
-            onCommit={(contactOffset) => commitCalibration("contactOffset", contactOffset)}
-            onEditingChange={(editing) => setFieldEditing("contactOffset", editing)}
-            min={STRAND_CONTACT_SPACING_MIN}
-            max={STRAND_CONTACT_SPACING_MAX}
-            step={STRAND_CONTACT_SPACING_STEP}
-            decimals={2}
-            disabled={readOnly}
-            aria-label="Contact adjustment"
-            clampOnCommit={false}
-            onRangeError={(message) => setFieldError("contactOffset", message)}
-            onClearError={() => setFieldError("contactOffset", null)}
-          />
-          <InputExamples examples={["-2", "-0.5", "0", "1", "2"]} />
-          <FieldError message={fieldErrors.contactOffset} />
-        </Field>
-        <Field label="Render calibration" source={provenance?.visualScale} readOnly={readOnly}>
-          <AdminDeferredNumberInput
-            value={draft.visualScale}
-            onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
-            onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
-            min={STRAND_VISUAL_SCALE_MIN}
-            max={STRAND_VISUAL_SCALE_MAX}
-            step={STRAND_VISUAL_SCALE_STEP}
-            decimals={2}
-            disabled={readOnly}
-            aria-label="Render calibration"
-            clampOnCommit={false}
-            onRangeError={(message) => setFieldError("visualScale", message)}
-            onClearError={() => setFieldError("visualScale", null)}
-          />
-          <InputExamples examples={["0.50", "0.90", "1", "1.08", "2.00"]} />
-          <FieldError message={fieldErrors.visualScale} />
-        </Field>
-        <Field
-          label="Visual size scaling"
-          source={provenance?.visualSizeScaling}
-          readOnly={readOnly}
-        >
-          <AdminDeferredNumberInput
-            value={draft.visualSizeScaling}
-            onCommit={(visualSizeScaling) =>
-              commitCalibration("visualSizeScaling", visualSizeScaling)
-            }
-            onEditingChange={(editing) => setFieldEditing("visualSizeScaling", editing)}
-            min={STRAND_VISUAL_SIZE_SCALING_MIN}
-            max={STRAND_VISUAL_SIZE_SCALING_MAX}
-            step={STRAND_VISUAL_SIZE_SCALING_STEP}
-            decimals={2}
-            disabled={readOnly}
-            aria-label="Visual size scaling"
-            clampOnCommit={false}
-            onRangeError={(message) => setFieldError("visualSizeScaling", message)}
-            onClearError={() => setFieldError("visualSizeScaling", null)}
-          />
-          <InputExamples examples={["0.50", "0.70", "1.00", "1.25"]} />
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Controls how strongly size differences are shown visually. 1.00 = linear physical
-            scaling. Lower values make size differences more subtle. 6&nbsp;mm stays anchored.
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Distributes unused strand space evenly so remaining gaps look balanced.
           </p>
-          <FieldError message={fieldErrors.visualSizeScaling} />
-        </Field>
-        <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
-          <select
-            disabled={readOnly}
-            className={fieldClass(readOnly)}
-            value={draft.anchorPreset}
-            onChange={(e) =>
-              patchDraft({ anchorPreset: e.target.value as StrandAnchorPreset })
-            }
-          >
-            <option value="center">Center</option>
-            <option value="loop">Loop (top bail)</option>
-            <option value="top">Top</option>
-            <option value="bottom">Bottom</option>
-          </select>
-        </Field>
-        <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
-          <select
-            disabled={readOnly}
-            className={fieldClass(readOnly)}
-            value={draft.orientationMode}
-            onChange={(e) =>
-              patchDraft({ orientationMode: e.target.value as StrandOrientationMode })
-            }
-          >
-            <option value="outward">Outward (face away from centre)</option>
-            <option value="inward">Inward (face toward centre)</option>
-          </select>
-        </Field>
-        <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
-          <AdminDeferredNumberInput
-            value={draft.verticalOffset}
-            onCommit={(verticalOffset) => commitCalibration("verticalOffset", verticalOffset)}
-            onEditingChange={(editing) => setFieldEditing("verticalOffset", editing)}
-            min={STRAND_VERTICAL_OFFSET_MIN}
-            max={STRAND_VERTICAL_OFFSET_MAX}
-            step={STRAND_VERTICAL_OFFSET_STEP}
-            decimals={1}
-            disabled={readOnly}
-            aria-label="Vertical offset"
-            clampOnCommit={false}
-            onRangeError={(message) => setFieldError("verticalOffset", message)}
-            onClearError={() => setFieldError("verticalOffset", null)}
-          />
-          <InputExamples examples={["-5", "-2.5", "0", "3", "10"]} />
-          <FieldError message={fieldErrors.verticalOffset} />
-        </Field>
-        <Field label="Z priority" source={provenance?.zPriority} readOnly={readOnly}>
-          <AdminDeferredNumberInput
-            value={draft.zPriority}
-            onCommit={(zPriority) => patchDraft({ zPriority: Math.round(zPriority) })}
-            step={1}
-            decimals={0}
-            disabled={readOnly}
-            aria-label="Z priority"
-          />
         </Field>
       </div>
 
@@ -458,6 +480,29 @@ export function StrandRenderConfigPanel({
               : "grid gap-3 border-t border-border pt-3 sm:grid-cols-2"
           }
         >
+          <SectionHeading title="Advanced" />
+          <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
+            <AdminDeferredNumberInput
+              value={draft.layoutScale}
+              onCommit={(layoutScale) => commitCalibration("layoutScale", layoutScale)}
+              onEditingChange={(editing) => setFieldEditing("layoutScale", editing)}
+              min={STRAND_LAYOUT_SCALE_MIN}
+              max={STRAND_LAYOUT_SCALE_MAX}
+              step={STRAND_LAYOUT_SCALE_STEP}
+              decimals={2}
+              disabled={readOnly}
+              aria-label="Layout scale"
+              clampOnCommit={false}
+              onRangeError={(message) => setFieldError("layoutScale", message)}
+              onClearError={() => setFieldError("layoutScale", null)}
+            />
+            <InputExamples examples={["1.00"]} />
+            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              Rarely needed — keep at 1.00 unless support asks you to change it. Affects layout footprint
+              and shell together; prefer Render size and Strand occupancy instead.
+            </p>
+            <FieldError message={fieldErrors.layoutScale} />
+          </Field>
           <Field label="Leading overlap" source={provenance?.leadingOverlap} readOnly={readOnly}>
             <AdminDeferredNumberInput
               value={draft.leadingOverlap}
@@ -495,22 +540,6 @@ export function StrandRenderConfigPanel({
             <p className="mt-1 text-[10px] text-muted-foreground">
               Percent of bead height (−100 … 100). Supports negative values.
             </p>
-          </Field>
-          <Field
-            label="Strand occupancy (legacy)"
-            source={provenance?.strandOccupancy}
-            readOnly={readOnly}
-          >
-            <AdminNumberWithSlider
-              value={draft.strandOccupancy}
-              onCommit={(strandOccupancy) => patchDraft({ strandOccupancy })}
-              min={0.05}
-              max={2}
-              step={0.01}
-              decimals={2}
-              disabled={readOnly}
-              aria-label="Strand occupancy"
-            />
           </Field>
           <Field label="Rotation (advanced)" source={provenance?.rotationMode} readOnly={readOnly}>
             <select
@@ -607,6 +636,14 @@ export function StrandRenderConfigPanel({
         />
       ) : null}
     </section>
+  );
+}
+
+function SectionHeading({ title }: { title: string }) {
+  return (
+    <p className="col-span-full pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:pt-0">
+      {title}
+    </p>
   );
 }
 

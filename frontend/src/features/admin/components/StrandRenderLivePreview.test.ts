@@ -16,10 +16,12 @@ import type { BeadLibraryEntry } from "@/types/beads";
 
 import { AdminDeferredNumberInput } from "./AdminDeferredNumberInput";
 import {
+  buildComparePreviewPlacedBeads,
   buildPreviewPlacedBeads,
   pickPreviewSizeOffer,
   previewBeadCount,
   previewPlacedBeadFromSample,
+  resolveVisualSizeScalingCompareMms,
   StrandRenderLivePreview,
   STRAND_RENDER_PREVIEW_BEAD_MM,
   STRAND_RENDER_PREVIEW_WRIST_CM,
@@ -133,5 +135,38 @@ describe("Admin Live Preview Builder strand parity", () => {
       STRAND_RENDER_PREVIEW_WRIST_CM,
     );
     expect(beads).toHaveLength(partial);
+  });
+
+  it("resolves 6/8/10 mm compare sizes when catalogue offers them", () => {
+    expect(resolveVisualSizeScalingCompareMms([6, 8, 10, 12])).toEqual([6, 8, 10]);
+  });
+
+  it("builds alternating mm beads for visual size scaling comparison", () => {
+    const sample = { id: "bead-1", name: "Crystal" } as BeadLibraryEntry;
+    const offers = [
+      {
+        id: "a",
+        beadLibraryId: "bead-1",
+        beadSizeId: "s6",
+        sizeMm: 6,
+        label: "6 mm",
+        unitPrice: 1,
+        offerKey: "bead-1:6",
+      },
+      {
+        id: "b",
+        beadLibraryId: "bead-1",
+        beadSizeId: "s10",
+        sizeMm: 10,
+        label: "10 mm",
+        unitPrice: 1,
+        offerKey: "bead-1:10",
+      },
+    ];
+    const beads = buildComparePreviewPlacedBeads(sample, offers, [6, 10], 17);
+    expect(beads.length).toBeGreaterThan(2);
+    expect(beads[0]!.size.sizeMm).toBe(6);
+    expect(beads[1]!.size.sizeMm).toBe(10);
+    expect(beads[2]!.size.sizeMm).toBe(6);
   });
 });

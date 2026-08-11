@@ -7,7 +7,10 @@ import {
   type RefObject,
 } from "react";
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
-import { beadLibraryInheritsTypeStrandDefaults } from "@bino-foundry/shared/types";
+import {
+  beadLibraryInheritsTypeStrandDefaults,
+  STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM,
+} from "@bino-foundry/shared/types";
 
 import SortableCircularStrand from "@/components/SortableCircularStrand";
 import { BuilderPreviewFitScope } from "@/features/builder/components/BuilderPreviewFitScope";
@@ -179,6 +182,58 @@ export function buildPreviewPlacedBeads(
   );
 }
 
+/** Preferred mm sizes for visual-size-scaling comparison (anchor + larger steps). */
+export const VISUAL_SIZE_SCALING_COMPARE_MM = [
+  STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM,
+  8,
+  10,
+] as const;
+
+/**
+ * Pick catalogue mm values available for a visual-size-scaling A/B preview.
+ * Requires at least two distinct sizes above the anchor to show curve compression.
+ */
+export function resolveVisualSizeScalingCompareMms(sizeOptions: number[]): number[] {
+  const available = normalizePreviewSizeMms(sizeOptions);
+  if (available.length < 2) return [];
+
+  const preferred = VISUAL_SIZE_SCALING_COMPARE_MM.filter((mm) => available.includes(mm));
+  if (preferred.length >= 2) return preferred;
+
+  const anchor =
+    available.find((mm) => mm === STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM) ?? available[0]!;
+  const larger = available.filter((mm) => mm > anchor);
+  if (!larger.length) return [];
+
+  const mid = larger[Math.floor(larger.length / 2)]!;
+  const largest = larger[larger.length - 1]!;
+  return [...new Set([anchor, mid, largest])].sort((a, b) => a - b);
+}
+
+/** Seed a strand with alternating mm sizes so visualSizeScaling curve is visible. */
+export function buildComparePreviewPlacedBeads(
+  sampleBead: BeadLibraryEntry,
+  beadLibrarySizes: BeadLibrarySizeOffer[],
+  compareMms: number[],
+  wristSizeCm = STRAND_RENDER_PREVIEW_WRIST_CM,
+): PlacedBead[] {
+  if (compareMms.length < 2) return [];
+
+  const anchorMm = compareMms[0]!;
+  const count = previewBeadCount(wristSizeCm, anchorMm);
+  const catalogueOffers = beadLibrarySizes.filter((o) => o.beadLibraryId === sampleBead.id);
+
+  return Array.from({ length: count }, (_, position) => {
+    const sizeMm = compareMms[position % compareMms.length]!;
+    const offer = catalogueOffers.find((o) => o.sizeMm === sizeMm) ?? null;
+    return previewPlacedBeadFromSample(
+      sampleBead,
+      syntheticPreviewOffer(sampleBead, sizeMm, offer),
+      position,
+    );
+  });
+}
+
 function useAdminStrandCanvasSize(enabled: boolean) {
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -268,11 +323,34 @@ export function StrandRenderLivePreview({
   );
   const beadSizeMm = sizePick.sizeMm;
 
-  const seedBeads = useMemo(() => {
+  const compareSizeMms = useMemo(
+    () => resolveVisualSizeScalingCompareMms(sizeOptions),
+    [sizeOptions],
+  );
+  const compareSizesAvailable = compareSizeMms.length >= 2;
+
+  const uniformSeedBeads = useMemo(() => {
     if (!sampleBead) return [];
     const offer = syntheticPreviewOffer(sampleBead, beadSizeMm, sizePick.offer);
     return buildPreviewPlacedBeads(sampleBead, offer, wristSizeCm);
   }, [sampleBead, sizePick.offer, beadSizeMm, wristSizeCm]);
+
+  const compareSeedBeads = useMemo(() => {
+    if (!sampleBead || !compareSizesAvailable) return [];
+    return buildComparePreviewPlacedBeads(
+      sampleBead,
+      beadLibrarySizes,
+      compareSizeMms,
+      wristSizeCm,
+    );
+  }, [sampleBead, beadLibrarySizes, compareSizeMms, compareSizesAvailable, wristSizeCm]);
+
+  const [compareSizes, setCompareSizes] = useState(false);
+  useEffect(() => {
+    if (!compareSizesAvailable) setCompareSizes(false);
+  }, [compareSizesAvailable]);
+
+  const seedBeads = compareSizes && compareSizesAvailable ? compareSeedBeads : uniformSeedBeads;
 
   const [placedBeads, setPlacedBeads] = useState<PlacedBead[]>(seedBeads);
   useEffect(() => {
@@ -355,6 +433,8 @@ export function StrandRenderLivePreview({
         wristSizeCm,
         beadSizeMm,
         placedBeads.map((b) => `${b.position}:${b.size.offerKey}:${b.size.sizeMm}`).join(","),
+        compareSizes ? "compare" : "uniform",
+        compareSizes ? compareSizeMms.join(",") : "",
         applyDraft ? "draft" : "catalogue",
         applyDraft
           ? [
@@ -372,7 +452,7 @@ export function StrandRenderLivePreview({
             ].join(":")
           : "cat",
       ].join("|"),
-    [wristSizeCm, beadSizeMm, placedBeads, applyDraft, profile],
+    [wristSizeCm, beadSizeMm, placedBeads, compareSizes, compareSizeMms, applyDraft, profile],
   );
 
   return (
@@ -458,12 +538,35 @@ export function StrandRenderLivePreview({
             />
             Apply draft settings
           </label>
+          {compareSizesAvailable ? (
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+              <input
+                type="checkbox"
+                className="size-3.5 rounded border-border"
+                checked={compareSizes}
+                onChange={(e) => setCompareSizes(e.target.checked)}
+              />
+              Compare sizes ({compareSizeMms.map((mm) => `${mm} mm`).join(" · ")})
+            </label>
+          ) : null}
           <span className="text-[11px] text-muted-foreground">
             {applyDraft
               ? "Unsaved calibration updates the preview immediately."
               : "Showing saved catalogue resolve (as after Save)."}
           </span>
         </div>
+        {compareSizes && compareSizesAvailable ? (
+          <p className="text-[11px] text-muted-foreground">
+            Visual size scaling changes how {compareSizeMms.filter((mm) => mm !== STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM).join(" / ")}&nbsp;mm
+            look relative to {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm. Lower values compress size jumps;{" "}
+            {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm stays anchored.
+          </p>
+        ) : compareSizesAvailable ? (
+          <p className="text-[11px] text-muted-foreground">
+            To preview visual size scaling, enable Compare sizes — a single {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm
+            strand will not show curve changes because that size is anchored.
+          </p>
+        ) : null}
 
         {!sampleBead ? (
           <p className="text-[11px] text-muted-foreground">

@@ -16,6 +16,7 @@ import {
   initializeBraceletCamera,
   isRenderCameraDebugEnabled,
   logRenderCameraSnapshot,
+  RENDER_CAMERA_SAFETY_MARGIN,
   refitMatchingPairCamera,
   syncRenderScale,
   type RenderCamera,
@@ -126,6 +127,39 @@ function expectedContentExtent(
     width: scaled * 2 + TWIN_STRAND_PREVIEW_GAP_PX,
     height: scaled + STRAND_CHROME_Y_PX,
   };
+}
+
+/**
+ * Auto-fit camera to measured rendered content bounds after layout changes.
+ *
+ * The viewport uses `overflow-hidden`, so hanging/extended charm visuals can clip when
+ * wrist size changes unless we reframe. We recompute only `fitScale` and preserve the
+ * user's `camera.zoom`, keeping zoom level independent from wrist-size changes.
+ */
+function computeFitScaleFromMeasuredBounds(input: {
+  layout: StrandZoomLayout;
+  camera: RenderCamera;
+  measured: { width: number; height: number };
+}): number | null {
+  const { layout, camera, measured } = input;
+  const w = measured.width;
+  const h = measured.height;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+
+  const budgetW = layout.viewportWidthPx * RENDER_CAMERA_SAFETY_MARGIN;
+  const budgetH = layout.viewportHeightPx * RENDER_CAMERA_SAFETY_MARGIN;
+  if (budgetW <= 0 || budgetH <= 0) return null;
+
+  const desiredRenderScale = Math.min(budgetW / w, budgetH / h);
+  if (!Number.isFinite(desiredRenderScale) || desiredRenderScale <= 0) return null;
+
+  const zoom = camera.zoom;
+  if (!Number.isFinite(zoom) || zoom <= 0) return null;
+
+  const desiredFitScale = desiredRenderScale / zoom;
+  if (!Number.isFinite(desiredFitScale) || desiredFitScale <= 0) return null;
+
+  return desiredFitScale;
 }
 
 /**
@@ -387,6 +421,32 @@ export function useStrandZoom(
     activeCameraRef.current = resolveActiveCamera();
     prevTwinningRef.current = isTwinning;
     prevLayoutSigRef.current = layoutSig;
+
+    // Prevent overflow-hidden clipping on layout changes by auto-fitting.
+    // This preserves camera.zoom (user intent) while adjusting fitScale.
+    if (
+      layoutChanged &&
+      initializedRef.current &&
+      contentRef?.current &&
+      layout.viewportWidthPx > 0 &&
+      layout.viewportHeightPx > 0
+    ) {
+      const measured = measureContentExtent(contentRef.current);
+      const desiredFitScale = computeFitScaleFromMeasuredBounds({
+        layout,
+        camera: activeCameraRef.current,
+        measured,
+      });
+
+      if (
+        desiredFitScale != null &&
+        Math.abs(desiredFitScale - activeCameraRef.current.fitScale) > 1e-4
+      ) {
+        writeActiveCamera({ ...activeCameraRef.current, fitScale: desiredFitScale });
+        activeCameraRef.current = resolveActiveCamera();
+      }
+    }
+
     applyTransform();
     swappingRef.current = false;
   }, [

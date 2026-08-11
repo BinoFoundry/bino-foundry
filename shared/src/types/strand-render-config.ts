@@ -43,7 +43,6 @@ export const STRAND_RENDER_PROFILE_KEYS = [
   "orientationMode",
   "rotationMode",
   "rotationOffsetDeg",
-  "zPriority",
   "collisionPadding",
   "stringOcclusion",
   "forceRoundFootprint",

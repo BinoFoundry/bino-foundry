@@ -105,7 +105,6 @@ export interface StrandRenderProfile {
   rotationMode: StrandRotationMode;
   /** Extra rotation applied after path rotation (degrees). */
   rotationOffsetDeg: number;
-  zPriority: number;
   /** Extra arc padding between neighbours (px at scale 1). */
   collisionPadding: number;
   /** 0–1 — how much this asset hides the cord beneath it. */
@@ -224,7 +223,6 @@ export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
   orientationMode: "outward",
   rotationMode: "tangent",
   rotationOffsetDeg: 0,
-  zPriority: 0,
   collisionPadding: 0,
   stringOcclusion: 1,
   forceRoundFootprint: true,
@@ -282,7 +280,6 @@ export const STRAND_RENDER_PRESETS: Record<string, Partial<StrandRenderProfile>>
     hangOffset: 0,
     visualScale: 1,
     orientationMode: "outward",
-    zPriority: 10,
     forceRoundFootprint: false,
     placementMode: "insert_between",
   },
@@ -459,7 +456,6 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   }
   if (typeof o.rotationMode === "string") partial.rotationMode = o.rotationMode as StrandRotationMode;
   if (typeof o.rotationOffsetDeg === "number") partial.rotationOffsetDeg = o.rotationOffsetDeg;
-  if (typeof o.zPriority === "number") partial.zPriority = o.zPriority;
   if (typeof o.collisionPadding === "number") partial.collisionPadding = o.collisionPadding;
   if (typeof o.stringOcclusion === "number") partial.stringOcclusion = o.stringOcclusion;
   if (typeof o.forceRoundFootprint === "boolean") partial.forceRoundFootprint = o.forceRoundFootprint;

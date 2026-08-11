@@ -259,8 +259,9 @@ function SortableBeadInner({
     transformOrigin: `${transformOriginX}px ${transformOriginY}px`,
     transform: beadShellTransform(rotationDeg, { dragOverlay: isDragging }),
     boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.12)" : shell.boxShadow,
-    // Clip to the mm shell so raster overflow cannot make beads look larger than configured.
-    overflow: "hidden",
+    // The mm/contact shell is used for positioning/spacing; the visual raster asset must
+    // be allowed to extend beyond it (dangling/outward assets, transparent padding, etc.).
+    overflow: showImage ? "visible" : "hidden",
   };
 
   const slotExtent = Math.max(renderDim.width, renderDim.height);
