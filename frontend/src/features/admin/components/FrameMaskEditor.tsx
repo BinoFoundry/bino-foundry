@@ -1245,7 +1245,7 @@ export function FrameMaskEditor({
               <div className="space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground">
-                    Smart Auto Detect — click a detail, refine with Expand / Tolerance, use Add Area
+                    Smart Auto Detect — click a detail, refine with Tolerance / Border size, use Add Area
                     for more pieces in this cutout. Switch to Manual Polygon anytime.
                   </p>
                   <Button

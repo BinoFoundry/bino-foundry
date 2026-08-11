@@ -5,6 +5,7 @@ import {
   applyFeather,
   createSmartCutoutFramePart,
   createSmartCutoutHole,
+  detectBorderPx,
   detectSmartCutout,
   dilateMask,
   fillMaskHoles,
@@ -15,6 +16,7 @@ import {
   removeAreaAtPoint,
   subtractMasks,
   unionMasks,
+  withDetectBorderPx,
 } from "./smart-cutout-detect";
 
 function makeSolidDiskImage(
@@ -266,5 +268,19 @@ describe("smart-cutout-detect", () => {
     expect(parseSmartCutoutNotes(right.notes).meta?.tolerance).toBe(24);
     expect(parseSmartCutoutNotes(leftPatched.notes).meta?.expand).toBe(2);
     expect(parseSmartCutoutNotes(right.notes).meta?.smoothEdge).toBe(3);
+  });
+
+  it("folds expand/shrink/feather into a single border size control", () => {
+    expect(detectBorderPx({ expand: 2, shrink: 0, feather: 1 })).toBe(3);
+    expect(detectBorderPx({ expand: 0, shrink: 2, feather: 0 })).toBe(-2);
+    const grown = withDetectBorderPx(
+      { tolerance: 28, expand: 0, shrink: 0, feather: 1, smoothEdge: 1 },
+      3,
+    );
+    expect(grown).toMatchObject({ expand: 3, shrink: 0, feather: 0 });
+    expect(detectBorderPx(grown)).toBe(3);
+    const shrunk = withDetectBorderPx(grown, -2);
+    expect(shrunk).toMatchObject({ expand: 0, shrink: 2, feather: 0 });
+    expect(detectBorderPx(shrunk)).toBe(-2);
   });
 });

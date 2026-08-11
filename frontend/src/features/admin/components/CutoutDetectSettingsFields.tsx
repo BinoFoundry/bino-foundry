@@ -1,5 +1,9 @@
 import { Label } from "@/components/ui/label";
-import type { CutoutDetectSettings } from "@/render/mask/smart-cutout-detect";
+import {
+  detectBorderPx,
+  withDetectBorderPx,
+  type CutoutDetectSettings,
+} from "@/render/mask/smart-cutout-detect";
 
 export interface CutoutDetectSettingsFieldsProps {
   settings: CutoutDetectSettings;
@@ -10,7 +14,8 @@ export interface CutoutDetectSettingsFieldsProps {
 }
 
 /**
- * Per-cutout detection controls. Parent must pass settings owned by the active cutout only.
+ * Per-cutout detection controls (Tolerance · Border size · Smooth edge).
+ * Expand / Shrink / Feather are folded into Border size.
  */
 export function CutoutDetectSettingsFields({
   settings,
@@ -18,14 +23,12 @@ export function CutoutDetectSettingsFields({
   caption,
   className,
 }: CutoutDetectSettingsFieldsProps) {
-  const patch = (partial: Partial<CutoutDetectSettings>) => {
-    onChange({ ...settings, ...partial });
-  };
+  const border = detectBorderPx(settings);
 
   return (
     <div className={className}>
       {caption ? <p className="mb-2 text-[10px] text-muted-foreground">{caption}</p> : null}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[10px] text-muted-foreground">Tolerance</Label>
@@ -37,58 +40,34 @@ export function CutoutDetectSettingsFields({
             max={90}
             step={1}
             value={settings.tolerance}
-            onChange={(e) => patch({ tolerance: Number(e.target.value) })}
+            onChange={(e) => onChange({ ...settings, tolerance: Number(e.target.value) })}
             className="w-full accent-foreground"
+            title="How broadly similar colours are included from the click"
           />
+          <p className="text-[9px] leading-snug text-muted-foreground">Colour match range</p>
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[10px] text-muted-foreground">Expand</Label>
-            <span className="tabular-nums text-[10px] text-muted-foreground">{settings.expand}px</span>
+            <Label className="text-[10px] text-muted-foreground">Border size</Label>
+            <span className="tabular-nums text-[10px] text-muted-foreground">
+              {border > 0 ? `+${border}` : border}px
+            </span>
           </div>
           <input
             type="range"
-            min={0}
+            min={-8}
             max={8}
             step={1}
-            value={settings.expand}
-            onChange={(e) => patch({ expand: Number(e.target.value) })}
+            value={border}
+            onChange={(e) => onChange(withDetectBorderPx(settings, Number(e.target.value)))}
             className="w-full accent-foreground"
+            title="Grow (+) or shrink (−) the selection edge"
           />
+          <p className="text-[9px] leading-snug text-muted-foreground">Grow / shrink edge</p>
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[10px] text-muted-foreground">Shrink</Label>
-            <span className="tabular-nums text-[10px] text-muted-foreground">{settings.shrink}px</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={8}
-            step={1}
-            value={settings.shrink}
-            onChange={(e) => patch({ shrink: Number(e.target.value) })}
-            className="w-full accent-foreground"
-          />
-        </div>
-        <div className="space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-[10px] text-muted-foreground">Feather</Label>
-            <span className="tabular-nums text-[10px] text-muted-foreground">{settings.feather}</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={6}
-            step={0.1}
-            value={settings.feather}
-            onChange={(e) => patch({ feather: Number(e.target.value) })}
-            className="w-full accent-foreground"
-          />
-        </div>
-        <div className="space-y-1 sm:col-span-2">
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-[10px] text-muted-foreground">Smooth Edge</Label>
+            <Label className="text-[10px] text-muted-foreground">Smooth edge</Label>
             <span className="tabular-nums text-[10px] text-muted-foreground">{settings.smoothEdge}</span>
           </div>
           <input
@@ -97,9 +76,11 @@ export function CutoutDetectSettingsFields({
             max={3}
             step={1}
             value={settings.smoothEdge}
-            onChange={(e) => patch({ smoothEdge: Number(e.target.value) })}
+            onChange={(e) => onChange({ ...settings, smoothEdge: Number(e.target.value) })}
             className="w-full accent-foreground"
+            title="How much to simplify / soften the polygon outline"
           />
+          <p className="text-[9px] leading-snug text-muted-foreground">Polygon outline</p>
         </div>
       </div>
     </div>

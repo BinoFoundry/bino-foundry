@@ -31,6 +31,8 @@ export {
   getCutoutDetectSettings,
   patchCutoutDetectSettings,
   clampCutoutDetectSettings,
+  detectBorderPx,
+  withDetectBorderPx,
   smartCutoutExtraRings,
   finalizeSmartMask,
   removeAreaAtPoint,

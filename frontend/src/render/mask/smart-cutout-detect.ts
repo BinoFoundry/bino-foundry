@@ -40,9 +40,10 @@ export type CutoutDetectSettings = Pick<
 
 export const DEFAULT_CUTOUT_DETECT_SETTINGS: CutoutDetectSettings = {
   tolerance: 28,
-  expand: 0,
+  /** Default +1px border (formerly feather: 1). */
+  expand: 1,
   shrink: 0,
-  feather: 1,
+  feather: 0,
   smoothEdge: 1,
 };
 
@@ -87,6 +88,34 @@ export const DEFAULT_SMART_CUTOUT_PARAMS: SmartCutoutParams = {
 /** Net morphological radius: expand − shrink. */
 export function netExpandPx(params: Pick<SmartCutoutParams, "expand" | "shrink">): number {
   return Math.round(Math.max(0, params.expand)) - Math.round(Math.max(0, params.shrink));
+}
+
+/**
+ * Effective selection border in px (expand − shrink + feather).
+ * Used by the consolidated Border size control in admin UI.
+ */
+export function detectBorderPx(
+  settings: Pick<CutoutDetectSettings, "expand" | "shrink" | "feather">,
+): number {
+  const net = netExpandPx(settings) + Math.round(Math.max(0, settings.feather));
+  return Math.max(-8, Math.min(8, net));
+}
+
+/**
+ * Encode a single Border size slider into expand / shrink / feather.
+ * Feather is cleared — net effect is applied as expand or shrink only.
+ */
+export function withDetectBorderPx(
+  settings: CutoutDetectSettings,
+  borderPx: number,
+): CutoutDetectSettings {
+  const b = Math.max(-8, Math.min(8, Math.round(borderPx)));
+  return clampCutoutDetectSettings({
+    ...settings,
+    expand: b > 0 ? b : 0,
+    shrink: b < 0 ? -b : 0,
+    feather: 0,
+  });
 }
 
 export function clampCutoutDetectSettings(
@@ -397,8 +426,13 @@ export function finalizeSmartMask(
     Math.floor(width * height * (params.maxAreaFraction ?? 0.08) * Math.max(1, seeds.length)),
   );
 
-  let mask = applyExpand(coreMask, width, height, netExpandPx(params));
-  mask = applyFeather(mask, width, height, Math.round(params.feather));
+  let mask = applyExpand(
+    coreMask,
+    width,
+    height,
+    // Single border pass: expand − shrink + legacy feather (same net as old two-step).
+    netExpandPx(params) + Math.round(params.feather),
+  );
   mask = fillMaskHoles(mask, width, height);
 
   const areaPx = maskArea(mask);

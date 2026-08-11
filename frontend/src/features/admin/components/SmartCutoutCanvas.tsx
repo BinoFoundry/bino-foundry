@@ -734,7 +734,7 @@ export function SmartCutoutCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per plate / polygon id
   }, [imageUrl, initialPolygon?.id]);
 
-  // Live refine from this cutout's expand / shrink / feather / smooth (no re-detect).
+  // Live refine from Border size / Smooth edge (no re-detect).
   useEffect(() => {
     if (suppressParamRedetectRef.current) return;
     if (!coreMaskRef.current) return;
