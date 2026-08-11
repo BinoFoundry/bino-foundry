@@ -181,8 +181,8 @@ export function CopyFrameConfigDialog({
           <DialogHeader>
             <DialogTitle>Copy configuration from existing frame</DialogTitle>
             <DialogDescription>
-              Reuse completed work from another frame. Choose exactly what to copy — nothing is
-              applied automatically.
+              Reuse completed crop, lens polygons, details, and rendering from another frame. Lens
+              paths are copied exactly — then nudge points for this plate.
             </DialogDescription>
           </DialogHeader>
 

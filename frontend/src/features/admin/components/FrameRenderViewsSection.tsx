@@ -1,6 +1,6 @@
 import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { FramePlateCropEditorHandle } from "./FramePlateCropEditor";
-import { Check, Copy, Loader2, RotateCcw, Scan, UploadCloud, Wand2 } from "lucide-react";
+import { Check, Copy, Loader2, RotateCcw, UploadCloud, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
   maskConfigToLensClipConfig,
   resolveMaskConfigForEditor,
 } from "@/render/lens-clip";
-import { loadImage, loadImageForProcessing } from "@/render/bead-crop/image-loader";
+import { loadImage } from "@/render/bead-crop/image-loader";
 import { isBeadCropConfigValid, type BeadCropConfig } from "@bino-foundry/shared/types";
 import {
   detectPlateCropConfig,
@@ -33,14 +33,14 @@ import {
   resolveOriginalPlate,
 } from "@/render/frame-plate/crop";
 import {
-  detectFrameLensMaskFromSource,
-  detectFrameLensSideFromSource,
+  ensureFrameLensSet,
   hasAnyLensMask,
   isDualLensMaskValid,
   isLensSideValid,
   isMaskConfigValid,
   LENS_SIDE_LABELS,
   mergeLensSideIntoMask,
+  migrateAnchors,
   resolveMaskFrameExclusions,
   type FrameLensSide,
   type MaskConfig,
@@ -63,11 +63,7 @@ const FrameMaskEditor = lazy(() =>
   import("./FrameMaskEditor").then((m) => ({ default: m.FrameMaskEditor })),
 );
 
-type BusyAction =
-  | { axis: FrameViewAxis; kind: "frame-auto" }
-  | { axis: FrameViewAxis; kind: "detect-left" }
-  | { axis: FrameViewAxis; kind: "detect-right" }
-  | { axis: FrameViewAxis; kind: "detect-both" };
+type BusyAction = { axis: FrameViewAxis; kind: "frame-auto" };
 
 type ExpandedPanel = "frame" | "left" | "right" | "exclusions";
 
@@ -101,15 +97,46 @@ function emptyView(view: FrameViewAxis): FrameRenderView {
 /**
  * Prefer in-progress editor draft/preview, but restore cutouts from the saved view when
  * the local mask lost empty `holes` while clip still has `holePathDs`.
+ * When the view mask was replaced externally (e.g. Copy setup), prefer the view geometry.
  */
+function maskGeometryFingerprint(mask: MaskConfig): string {
+  const lenses = ensureFrameLensSet(mask.lenses ?? []).map((lens) => ({
+    id: lens.id,
+    points: migrateAnchors(lens.points).map((p) => [
+      Number(p.x.toFixed(5)),
+      Number(p.y.toFixed(5)),
+      Boolean(p.curved),
+      p.handleIn ? [Number(p.handleIn.x.toFixed(5)), Number(p.handleIn.y.toFixed(5))] : null,
+      p.handleOut ? [Number(p.handleOut.x.toFixed(5)), Number(p.handleOut.y.toFixed(5))] : null,
+    ]),
+  }));
+  const details = resolveMaskFrameExclusions(mask).map((part) => ({
+    id: part.id,
+    points: migrateAnchors(part.points).map((p) => [Number(p.x.toFixed(5)), Number(p.y.toFixed(5))]),
+    holes: (part.holes ?? []).map((hole) => ({
+      id: hole.id,
+      points: migrateAnchors(hole.points).map((p) => [
+        Number(p.x.toFixed(5)),
+        Number(p.y.toFixed(5)),
+      ]),
+    })),
+  }));
+  return JSON.stringify({ lenses, details });
+}
+
 function resolveEditorMask(
   view: FrameRenderView,
   local: MaskConfig | null | undefined,
 ): MaskConfig | null {
   const resolved = resolveMaskConfigForEditor(view);
-  if (local && hasAnyLensMask(local)) {
-    return resolved ? enrichMaskHolesFromSource(local, resolved) : local;
+  if (local && hasAnyLensMask(local) && resolved && hasAnyLensMask(resolved)) {
+    if (maskGeometryFingerprint(local) === maskGeometryFingerprint(resolved)) {
+      return enrichMaskHolesFromSource(local, resolved);
+    }
+    // External replace (Copy configuration, etc.) — adopt view geometry.
+    return resolved;
   }
+  if (local && hasAnyLensMask(local)) return local;
   return resolved;
 }
 
@@ -218,6 +245,8 @@ export const FrameRenderViewsSection = forwardRef<
   const [previewMasks, setPreviewMasks] = useState<Partial<Record<FrameViewAxis, MaskConfig | null>>>({});
   const draftRef = useRef<Partial<Record<FrameViewAxis, MaskConfig | null>>>({});
   const lensSnapshotRef = useRef<Partial<Record<FrameViewAxis, MaskConfig | null>>>({});
+  /** Fingerprint of mask geometry last adopted from `views` (survives draft edits). */
+  const lastViewsMaskFpRef = useRef<Partial<Record<FrameViewAxis, string>>>({});
   const draftPlateUrlsRef = useRef<Partial<Record<FrameViewAxis, string>>>({});
   /** First mask change after opening an editor is hydration, not a user edit. */
   const editorHydratingRef = useRef(false);
@@ -291,20 +320,40 @@ export const FrameRenderViewsSection = forwardRef<
       const view = views.find((v) => v.view === axis);
       if (!view) continue;
       const resolved = resolveMaskConfigForEditor(view);
-      if (!resolved || !hasAnyLensMask(resolved)) continue;
-
-      const existing = draftRef.current[axis];
-      if (existing && hasAnyLensMask(existing)) {
-        const enriched = enrichMaskHolesFromSource(existing, resolved);
-        if (enriched !== existing) {
-          draftRef.current[axis] = enriched;
-          setPreviewMasks((prev) => ({ ...prev, [axis]: enriched }));
+      if (!resolved || !hasAnyLensMask(resolved)) {
+        if (draftRef.current[axis] || lastViewsMaskFpRef.current[axis]) {
+          draftRef.current[axis] = null;
+          lastViewsMaskFpRef.current[axis] = undefined;
+          setPreviewMasks((prev) => ({ ...prev, [axis]: null }));
         }
         continue;
       }
 
+      const viewFp = maskGeometryFingerprint(resolved);
+      const existing = draftRef.current[axis];
+
+      // Views geometry unchanged — keep in-progress draft edits; only restore missing holes.
+      if (lastViewsMaskFpRef.current[axis] === viewFp) {
+        if (existing && hasAnyLensMask(existing)) {
+          const enriched = enrichMaskHolesFromSource(existing, resolved);
+          if (enriched !== existing) {
+            draftRef.current[axis] = enriched;
+            setPreviewMasks((prev) => ({ ...prev, [axis]: enriched }));
+          }
+        }
+        continue;
+      }
+
+      // Views mask changed externally (Copy configuration, upload clear, save, etc.).
+      lastViewsMaskFpRef.current[axis] = viewFp;
       draftRef.current[axis] = resolved;
-      setPreviewMasks((prev) => (prev[axis] ? prev : { ...prev, [axis]: resolved }));
+      setPreviewMasks((prev) => ({ ...prev, [axis]: resolved }));
+      setEditSession((s) => ({
+        ...s,
+        [`${axis}-left`]: (s[`${axis}-left`] ?? 0) + 1,
+        [`${axis}-right`]: (s[`${axis}-right`] ?? 0) + 1,
+        [`${axis}-exclusions`]: (s[`${axis}-exclusions`] ?? 0) + 1,
+      }));
     }
   }, [views]);
 
@@ -564,35 +613,11 @@ export const FrameRenderViewsSection = forwardRef<
 
       // Always open Crop immediately so upload → editor needs no extra click (front + side).
       openEditor(axis, "frame");
-
-      // Best-effort dual lens detection; patchView chains through viewsRef so plateUrl is kept.
-      try {
-        const detection = detectFrameLensMaskFromSource(img);
-        if (detection.config && isDualLensMaskValid(detection.config)) {
-          commitMaskToView(axis, detection.config);
-          const conf = detection.confidence ?? 0;
-          setAxisNotice(
-            axis,
-            detection.message ??
-              (conf >= 0.7
-                ? "Original saved and both lenses detected — crop the frame, then review lenses."
-                : "Original saved with starting lens polygons — crop the frame, then adjust lenses."),
-            conf >= 0.7 ? "success" : "warning",
-          );
-        } else {
-          setAxisNotice(
-            axis,
-            "Original saved. Draw the frame crop path, then detect or draw lenses.",
-            "success",
-          );
-        }
-      } catch {
-        setAxisNotice(
-          axis,
-          "Original saved. Draw the frame crop path, then detect or draw lenses.",
-          "success",
-        );
-      }
+      setAxisNotice(
+        axis,
+        "Original saved. Draw the frame crop path, then copy lens setup from another frame or draw lenses manually.",
+        "success",
+      );
     } catch (err) {
       toast.error(isApiError(err) ? err.message : "Upload failed");
     } finally {
@@ -651,166 +676,6 @@ export const FrameRenderViewsSection = forwardRef<
     onChange(next);
     closeEditor();
     setAxisNotice(axis, "Frame clip path saved to draft.", "success");
-  };
-
-  const handleDetectLensSide = async (axis: FrameViewAxis, side: FrameLensSide) => {
-    const view = getView(axis);
-    const original = resolveOriginalPlate(view);
-    if (!original.url) {
-      setAxisNotice(axis, "Upload a plate photo before running lens detection.", "warning");
-      return;
-    }
-
-    setBusyAction({ axis, kind: side === "left" ? "detect-left" : "detect-right" });
-    setAxisNotice(axis, `Detecting ${LENS_SIDE_LABELS[side].toLowerCase()}…`, "warning");
-
-    try {
-      const plate = await getWorkingPlate(axis);
-      if (!plate.url) {
-        setAxisNotice(axis, "No plate image available for detection.", "warning");
-        return;
-      }
-
-      if (import.meta.env.DEV) {
-        console.info(`[lens-detect:${side}] plate`, {
-          url: plate.url.slice(0, 80),
-          width: plate.width,
-          height: plate.height,
-        });
-      }
-
-      const img = await loadImageForProcessing(plate.url);
-      const imgW = img.naturalWidth;
-      const imgH = img.naturalHeight;
-      if (imgW <= 0 || imgH <= 0) {
-        setAxisNotice(axis, "Could not read plate image dimensions for lens detection.", "warning");
-        return;
-      }
-
-      if (import.meta.env.DEV) {
-        console.info(`[lens-detect:${side}] image loaded`, { imgW, imgH });
-      }
-
-      const existing =
-        draftRef.current[axis] ?? resolveMaskConfigForEditor(view) ?? null;
-
-      const detection = detectFrameLensSideFromSource(img, side);
-
-      if (import.meta.env.DEV) {
-        console.info(`[lens-detect:${side}] result`, {
-          detected: detection.detected,
-          pointCount: detection.diagnostics?.pointCount,
-          regions: detection.diagnostics?.regionCount,
-          source: detection.diagnostics?.imageSource,
-        });
-      }
-
-      if (detection.detected && detection.anchors) {
-        const mask = mergeLensSideIntoMask(
-          existing,
-          imgW,
-          imgH,
-          side,
-          detection.anchors,
-        );
-        draftRef.current[axis] = mask;
-        setPreviewMasks((prev) => ({ ...prev, [axis]: mask }));
-
-        const sessionKey = `${axis}-${side}`;
-        const editorOpen =
-          expandedEditor?.axis === axis && expandedEditor.panel === side;
-
-        if (!editorOpen) {
-          openEditor(axis, side);
-        } else {
-          setEditSession((s) => ({ ...s, [sessionKey]: (s[sessionKey] ?? 0) + 1 }));
-        }
-
-        const conf = detection.confidence ?? 0;
-        const fallbackMsg =
-          detection.message ??
-          `${LENS_SIDE_LABELS[side]} ready — review the overlay, then save changes.`;
-        setAxisNotice(axis, fallbackMsg, conf >= 0.7 ? "success" : "warning");
-      } else {
-        const diag = detection.diagnostics
-          ? ` ${detection.diagnostics.imageWidth}×${detection.diagnostics.imageHeight}px, ${detection.diagnostics.regionCount} region(s) found.`
-          : "";
-        setAxisNotice(
-          axis,
-          `${detection.message ?? `Could not detect ${LENS_SIDE_LABELS[side].toLowerCase()}.`}${diag}`,
-          "warning",
-        );
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Lens contour detection failed.";
-      if (import.meta.env.DEV) {
-        console.error(`[lens-detect:${side}] failed`, err);
-      }
-      setAxisNotice(axis, message, "warning");
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleDetectBothLenses = async (axis: FrameViewAxis) => {
-    const view = getView(axis);
-    const original = resolveOriginalPlate(view);
-    if (!original.url) {
-      setAxisNotice(axis, "Upload a plate photo before running lens detection.", "warning");
-      return;
-    }
-
-    setBusyAction({ axis, kind: "detect-both" });
-    setAxisNotice(axis, "Detecting left and right lenses…", "warning");
-
-    try {
-      const plate = await getWorkingPlate(axis);
-      if (!plate.url) {
-        setAxisNotice(axis, "No plate image available for detection.", "warning");
-        return;
-      }
-      const img = await loadImageForProcessing(plate.url);
-      const detection = detectFrameLensMaskFromSource(img);
-
-      if (detection.config && isDualLensMaskValid(detection.config)) {
-        // Auto-detect rebuilds both openings; keep any frame exclusions already drawn.
-        const preserved = resolveMaskFrameExclusions(
-          previewMasks[axis] ?? draftRef.current[axis] ?? resolveMaskConfigForEditor(view),
-        );
-        const detected = preserved.length
-          ? { ...detection.config, frameExclusions: preserved }
-          : detection.config;
-        commitMaskToView(axis, detected);
-        openEditor(axis, "left");
-        const conf = detection.confidence ?? 0;
-        setAxisNotice(
-          axis,
-          detection.message ??
-            (conf >= 0.7
-              ? "Both lenses detected — review overlays, then Save frame."
-              : "Starting lens polygons ready — review and adjust before saving."),
-          conf >= 0.7 ? "success" : "warning",
-        );
-      } else if (detection.config && hasAnyLensMask(detection.config)) {
-        draftRef.current[axis] = detection.config;
-        setPreviewMasks((prev) => ({ ...prev, [axis]: detection.config }));
-        setAxisNotice(
-          axis,
-          detection.message ?? "Partial lens polygons added — finish the missing side, then save.",
-          "warning",
-        );
-      } else {
-        setAxisNotice(
-          axis,
-          detection.message ?? "Could not build lens polygons. Draw them manually.",
-          "warning",
-        );
-      }
-    } catch (err) {
-      setAxisNotice(axis, err instanceof Error ? err.message : "Lens detection failed.", "warning");
-    } finally {
-      setBusyAction(null);
-    }
   };
 
   const handleEditorChange = useCallback((axis: FrameViewAxis, mask: MaskConfig | null) => {
@@ -1089,20 +954,6 @@ export const FrameRenderViewsSection = forwardRef<
                       {label}
                     </Button>
                   ))}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={isBusy(axis, "detect-both")}
-                    onClick={() => void handleDetectBothLenses(axis)}
-                  >
-                    {isBusy(axis, "detect-both") ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                    )}
-                    Auto Detect Lenses
-                  </Button>
                 </div>
 
                 {isFramePanelOpen ? (
@@ -1165,33 +1016,17 @@ export const FrameRenderViewsSection = forwardRef<
                   <div className={INLINE_SECTION_ACTIVE_CLASS}>
                     <InlineEditorPanel
                       title="Left lens"
-                      description="Edit the left lens opening. Inner Frame lip is automatic; rivets/logos go under Details."
+                      description="Edit the left lens opening. Prefer Copy configuration from a completed frame, then nudge points. Inner Frame lip is automatic; rivets/logos go under Details."
                       toolbar={
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={isBusy(axis, "detect-left")}
-                            onClick={() => void handleDetectLensSide(axis, "left")}
-                          >
-                            {isBusy(axis, "detect-left") ? (
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Scan className="mr-1.5 h-3.5 w-3.5" />
-                            )}
-                            Auto Detect
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => resetLensSideInEditor(axis, "left")}
-                          >
-                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            Reset
-                          </Button>
-                        </>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => resetLensSideInEditor(axis, "left")}
+                        >
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                          Reset
+                        </Button>
                       }
                       onSave={() => saveLensEditor(axis, "left")}
                       onCancel={() => cancelEditor(axis)}
@@ -1219,33 +1054,17 @@ export const FrameRenderViewsSection = forwardRef<
                   <div className={INLINE_SECTION_ACTIVE_CLASS}>
                     <InlineEditorPanel
                       title="Right lens"
-                      description="Edit the right lens opening. Inner Frame lip is automatic; rivets/logos go under Details."
+                      description="Edit the right lens opening. Prefer Copy configuration from a completed frame, then nudge points. Inner Frame lip is automatic; rivets/logos go under Details."
                       toolbar={
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={isBusy(axis, "detect-right")}
-                            onClick={() => void handleDetectLensSide(axis, "right")}
-                          >
-                            {isBusy(axis, "detect-right") ? (
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Scan className="mr-1.5 h-3.5 w-3.5" />
-                            )}
-                            Auto Detect
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => resetLensSideInEditor(axis, "right")}
-                          >
-                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                            Reset
-                          </Button>
-                        </>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => resetLensSideInEditor(axis, "right")}
+                        >
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                          Reset
+                        </Button>
                       }
                       onSave={() => saveLensEditor(axis, "right")}
                       onCancel={() => cancelEditor(axis)}

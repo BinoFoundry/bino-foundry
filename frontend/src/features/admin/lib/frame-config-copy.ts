@@ -1,17 +1,21 @@
 import {
   isBeadCropConfigValid,
+  isLensClipConfigValid,
   type BeadCropConfig,
   type LensClipRenderSettings,
 } from "@bino-foundry/shared/types";
 
 import type { FrameEntry } from "@/data/glasses";
+import { lensClipConfigToMaskConfig } from "@/render/lens-clip";
 import {
   createMaskConfig,
   ensureFrameLensSet,
   hasAnyLensMask,
   isMaskConfigValid,
+  migrateAnchors,
   resolveMaskFrameExclusions,
   type MaskConfig,
+  type PathAnchor,
 } from "@/render/mask";
 import type { FrameRenderView } from "@/types/frame-rendering";
 import { FRAME_VIEW_AXES } from "@/types/frame-rendering";
@@ -211,6 +215,32 @@ export function retargetCropConfig(
   };
 }
 
+function cloneAnchor(p: PathAnchor): PathAnchor {
+  return {
+    x: p.x,
+    y: p.y,
+    curved: Boolean(p.curved),
+    handleIn: p.handleIn ? { x: p.handleIn.x, y: p.handleIn.y } : null,
+    handleOut: p.handleOut ? { x: p.handleOut.x, y: p.handleOut.y } : null,
+  };
+}
+
+function cloneAnchors(points: PathAnchor[] | null | undefined): PathAnchor[] {
+  return migrateAnchors(points ?? []).map(cloneAnchor);
+}
+
+/** Prefer stored mask anchors; fall back to rebuilding from SVG clip paths. */
+export function resolveSourceMaskForCopy(view: FrameRenderView | undefined): MaskConfig | null {
+  if (!view) return null;
+  if (view.maskConfig && isMaskConfigValid(view.maskConfig)) {
+    return view.maskConfig;
+  }
+  if (view.clipConfig && isLensClipConfigValid(view.clipConfig)) {
+    return lensClipConfigToMaskConfig(view.clipConfig);
+  }
+  return null;
+}
+
 function cloneMaskOntoPlate(
   source: MaskConfig,
   width: number,
@@ -223,14 +253,20 @@ function cloneMaskOntoPlate(
   const lenses = options.lenses
     ? ensureFrameLensSet(source.lenses ?? []).map((lens) => ({
         ...lens,
-        points: lens.points.map((p) => ({ ...p })),
+        points: cloneAnchors(lens.points),
       }))
     : ensureFrameLensSet(existing?.lenses ?? []);
 
   let exclusions = options.exclusions
     ? resolveMaskFrameExclusions(source).map((part, index) => ({
         ...part,
-        points: part.points.map((p) => ({ ...p })),
+        points: cloneAnchors(part.points),
+        shapeBaseline: part.shapeBaseline?.length ? cloneAnchors(part.shapeBaseline) : part.shapeBaseline,
+        holes: (part.holes ?? []).map((hole) => ({
+          ...hole,
+          points: cloneAnchors(hole.points),
+          shapeBaseline: hole.shapeBaseline?.length ? cloneAnchors(hole.shapeBaseline) : hole.shapeBaseline,
+        })),
         depth: part.depth ?? index,
         layerOrder: part.layerOrder ?? ("front" as const),
       }))
@@ -261,7 +297,15 @@ function appendManualDetails(
     merged.push({
       ...part,
       id,
-      points: part.points.map((p) => ({ ...p })),
+      points: cloneAnchors(part.points),
+      shapeBaseline: part.shapeBaseline?.length ? cloneAnchors(part.shapeBaseline) : part.shapeBaseline,
+      holes: (part.holes ?? []).map((hole) => ({
+        ...hole,
+        points: cloneAnchors(hole.points),
+        shapeBaseline: hole.shapeBaseline?.length
+          ? cloneAnchors(hole.shapeBaseline)
+          : hole.shapeBaseline,
+      })),
       depth: part.depth ?? merged.length,
       layerOrder: part.layerOrder ?? "front",
     });
@@ -471,27 +515,33 @@ export function applyFrameConfigCopy(options: {
     const size = destPlateSize(next);
     const wantLens = flags.lensPolygon;
     const wantDetails = flags.manualDetails;
+    const srcMask = resolveSourceMaskForCopy(src);
 
-    if ((wantLens || wantDetails) && src.maskConfig && isMaskConfigValid(src.maskConfig)) {
+    if ((wantLens || wantDetails) && srcMask && isMaskConfigValid(srcMask)) {
       let mask: MaskConfig | null = null;
       if (wantDetails && mode === "merge" && !wantLens) {
-        mask = appendManualDetails(next.maskConfig, src.maskConfig, size.width || src.maskConfig.imageWidth, size.height || src.maskConfig.imageHeight);
+        mask = appendManualDetails(
+          next.maskConfig,
+          srcMask,
+          size.width || srcMask.imageWidth,
+          size.height || srcMask.imageHeight,
+        );
       } else if (wantDetails && mode === "merge" && wantLens) {
         const lensesFirst = cloneMaskOntoPlate(
-          src.maskConfig,
-          size.width || src.maskConfig.imageWidth,
-          size.height || src.maskConfig.imageHeight,
+          srcMask,
+          size.width || srcMask.imageWidth,
+          size.height || srcMask.imageHeight,
           { lenses: true, exclusions: false },
           next.maskConfig,
         );
         mask = lensesFirst
-          ? appendManualDetails(lensesFirst, src.maskConfig, lensesFirst.imageWidth, lensesFirst.imageHeight)
+          ? appendManualDetails(lensesFirst, srcMask, lensesFirst.imageWidth, lensesFirst.imageHeight)
           : null;
       } else {
         mask = cloneMaskOntoPlate(
-          src.maskConfig,
-          size.width || src.maskConfig.imageWidth,
-          size.height || src.maskConfig.imageHeight,
+          srcMask,
+          size.width || srcMask.imageWidth,
+          size.height || srcMask.imageHeight,
           { lenses: wantLens, exclusions: wantDetails },
           next.maskConfig,
         );

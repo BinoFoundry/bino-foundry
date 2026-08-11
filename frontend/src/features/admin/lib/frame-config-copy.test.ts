@@ -9,6 +9,7 @@ import {
   EMPTY_FRAME_CONFIG_COPY_SELECTION,
   filterFramePickerItems,
   resolveFrameConfigCopyFlags,
+  resolveSourceMaskForCopy,
   retargetCropConfig,
 } from "./frame-config-copy";
 
@@ -262,6 +263,42 @@ describe("applyFrameConfigCopy", () => {
 
     const details = result.renderViews.find((v) => v.view === "front")!.maskConfig!.frameExclusions!;
     expect(details.map((d) => d.label).sort()).toEqual(["Logo", "Rivet"]);
+  });
+  it("copies lens polygons from clipConfig when maskConfig is missing", () => {
+    const source = sourceFrame();
+    source.renderViews = source.renderViews!.map((v) =>
+      v.view === "front"
+        ? {
+            ...v,
+            maskConfig: null,
+            maskStatus: "draft",
+            clipConfig: {
+              version: 1,
+              imageWidth: 1000,
+              imageHeight: 500,
+              lenses: [
+                { id: "left", label: "Left", pathD: "M100 100 L400 100 L400 400 L100 400 Z" },
+                { id: "right", label: "Right", pathD: "M600 100 L900 100 L900 400 L600 400 Z" },
+              ],
+            },
+          }
+        : v,
+    );
+
+    const resolved = resolveSourceMaskForCopy(source.renderViews!.find((v) => v.view === "front"));
+    expect(resolved).toBeTruthy();
+    expect(resolved?.lenses.some((l) => (l.points?.length ?? 0) >= 3)).toBe(true);
+
+    const result = applyFrameConfigCopy({
+      source,
+      destination: destFrame(),
+      selection: { ...EMPTY_FRAME_CONFIG_COPY_SELECTION, lensPolygon: true },
+    });
+
+    const front = result.renderViews.find((v) => v.view === "front")!;
+    expect(front.maskConfig).toBeTruthy();
+    expect(front.maskConfig?.lenses.some((l) => (l.points?.length ?? 0) >= 3)).toBe(true);
+    expect(front.plateUrl).toBe("https://cdn.example/dest-front.png");
   });
 });
 
