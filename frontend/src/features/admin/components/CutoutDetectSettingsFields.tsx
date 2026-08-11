@@ -80,7 +80,9 @@ export function CutoutDetectSettingsFields({
             className="w-full accent-foreground"
             title="How much to simplify / soften the polygon outline"
           />
-          <p className="text-[9px] leading-snug text-muted-foreground">Polygon outline</p>
+          <p className="text-[9px] leading-snug text-muted-foreground">
+            Polygon outline (white edge on preview)
+          </p>
         </div>
       </div>
     </div>

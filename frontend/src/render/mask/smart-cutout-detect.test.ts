@@ -326,4 +326,38 @@ describe("smart-cutout-detect", () => {
     expect(shrunk).toMatchObject({ expand: 0, shrink: 2, feather: 0 });
     expect(detectBorderPx(shrunk)).toBe(-2);
   });
+
+  it("changes polygon outline when Smooth Edge changes (mask area stays similar)", () => {
+    const width = 80;
+    const height = 80;
+    const core = new Uint8Array(width * height);
+    // Jagged square so smoothing has something to do.
+    for (let y = 20; y <= 55; y++) {
+      for (let x = 20; x <= 55; x++) {
+        if ((x + y) % 3 === 0 || (x >= 22 && x <= 53 && y >= 22 && y <= 53)) {
+          core[y * width + x] = 1;
+        }
+      }
+    }
+    const jagged = finalizeSmartMask(core, width, height, {
+      tolerance: 28,
+      expand: 0,
+      shrink: 0,
+      feather: 0,
+      smoothEdge: 0,
+      maxAreaFraction: 0.5,
+    }, [{ x: 40, y: 40 }]);
+    const smooth = finalizeSmartMask(core, width, height, {
+      tolerance: 28,
+      expand: 0,
+      shrink: 0,
+      feather: 0,
+      smoothEdge: 3,
+      maxAreaFraction: 0.5,
+    }, [{ x: 40, y: 40 }]);
+    expect(jagged.ok && smooth.ok).toBe(true);
+    if (!jagged.ok || !smooth.ok) return;
+    expect(smooth.points.length).toBeLessThan(jagged.points.length);
+    expect(Math.abs(smooth.areaPx - jagged.areaPx) / Math.max(1, jagged.areaPx)).toBeLessThan(0.15);
+  });
 });

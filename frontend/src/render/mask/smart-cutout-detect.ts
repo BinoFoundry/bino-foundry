@@ -394,18 +394,26 @@ function contourToAnchors(
   height: number,
   smoothPasses: number,
 ): PathAnchor[] {
+  const passes = Math.max(0, Math.min(3, Math.round(smoothPasses)));
+  // Higher smooth → more Chaikin passes + fewer vertices so the outline change is obvious.
+  const targetPoints = Math.max(16, 52 - passes * 10);
+  const minSpacing = Math.max(
+    1.5,
+    Math.max(width, height) * (0.0015 + passes * 0.001),
+  );
   const processed = processSilhouetteContour(contour, width, height, {
     maxDim: Math.max(width, height),
-    smoothPasses: Math.max(0, Math.min(3, Math.round(smoothPasses))),
-    minSpacing: Math.max(1.5, Math.max(width, height) * 0.002),
-    targetPoints: 28,
+    smoothPasses: passes,
+    minSpacing,
+    targetPoints,
   });
   const pts = processed.points.length >= 3 ? processed.points : contour;
   return migrateAnchors(
     pts.map((p) => ({
       x: p.x / Math.max(1, width - 1),
       y: p.y / Math.max(1, height - 1),
-      curved: false,
+      // Mark as curved when smoothed so Manual Polygon inherits soft segments.
+      curved: passes > 0,
       handleIn: null,
       handleOut: null,
     })),

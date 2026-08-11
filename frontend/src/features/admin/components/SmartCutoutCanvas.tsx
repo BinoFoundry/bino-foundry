@@ -152,6 +152,8 @@ export function SmartCutoutCanvas({
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewMaskRef = useRef<Uint8Array | null>(null);
   const previewSizeRef = useRef({ w: 0, h: 0 });
+  /** Normalized polygon rings (primary + Add Area islands) for Smooth Edge preview. */
+  const previewRingsRef = useRef<PathAnchor[][]>([]);
   const coreMaskRef = useRef<Uint8Array | null>(null);
   const seedsRef = useRef<SmartCutoutSeed[]>([]);
   const brushMaskRef = useRef<Uint8Array | null>(null);
@@ -311,6 +313,9 @@ export function SmartCutoutCanvas({
         seedsRef.current = result.seeds;
         previewMaskRef.current = result.mask;
         previewSizeRef.current = { w: result.width, h: result.height };
+        previewRingsRef.current = [result.points, ...(result.regions ?? [])].filter(
+          (ring) => ring.length >= 3,
+        );
         const islands = 1 + result.regions.length;
         const nextStatus =
           `${result.areaPx} px · ${result.points.length} pts` +
@@ -359,8 +364,13 @@ export function SmartCutoutCanvas({
         if (previewClone?.ok) {
           previewMaskRef.current = previewClone.mask;
           previewSizeRef.current = { w: previewClone.width, h: previewClone.height };
+          previewRingsRef.current = [
+            previewClone.points,
+            ...(previewClone.regions ?? []),
+          ].filter((ring) => ring.length >= 3);
         } else {
           previewMaskRef.current = null;
+          previewRingsRef.current = [];
           previewSizeRef.current = { w: snap.previewW, h: snap.previewH };
         }
         statusRef.current = snap.status;
@@ -398,6 +408,7 @@ export function SmartCutoutCanvas({
       previewRef.current = null;
       onPreviewChange?.(null);
       previewMaskRef.current = null;
+      previewRingsRef.current = [];
       coreMaskRef.current = null;
       seedsRef.current = [];
       brushMaskRef.current = null;
@@ -511,6 +522,7 @@ export function SmartCutoutCanvas({
       // Fresh Detect: clear old overlay immediately so switching regions feels responsive.
       if (!opts.merge) {
         previewMaskRef.current = null;
+        previewRingsRef.current = [];
         scheduleDraw();
       }
 
@@ -649,6 +661,47 @@ export function SmartCutoutCanvas({
     const mh = previewSizeRef.current.h;
     if (mask && mw === imgW && mh === imgH) {
       paintMaskTint(mask, 250, 204, 21, 110);
+    }
+
+    // Polygon outline from finalizeSmartMask — this is what Smooth Edge changes.
+    const rings = previewRingsRef.current;
+    if (rings.length && imgW > 1 && imgH > 1) {
+      const lineW = Math.max(1.25, 2 / Math.max(0.05, scale));
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      for (const ring of rings) {
+        if (ring.length < 2) continue;
+        ctx.beginPath();
+        for (let i = 0; i < ring.length; i++) {
+          const p = ring[i]!;
+          const x = p.x * (imgW - 1);
+          const y = p.y * (imgH - 1);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(15, 23, 42, 0.55)";
+        ctx.lineWidth = lineW + 1.5 / Math.max(0.05, scale);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = lineW;
+        ctx.stroke();
+      }
+      // Vertices — denser when Smooth Edge is low (more points).
+      const dot = Math.max(1.5, 3 / Math.max(0.05, scale));
+      for (const ring of rings) {
+        for (const p of ring) {
+          const x = p.x * (imgW - 1);
+          const y = p.y * (imgH - 1);
+          ctx.beginPath();
+          ctx.arc(x, y, dot, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(250, 204, 21, 0.95)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(15, 23, 42, 0.7)";
+          ctx.lineWidth = Math.max(0.75, 1 / Math.max(0.05, scale));
+          ctx.stroke();
+        }
+      }
     }
 
     ctx.restore();
