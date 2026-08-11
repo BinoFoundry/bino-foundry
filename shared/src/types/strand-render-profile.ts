@@ -376,7 +376,9 @@ export function mergeStrandRenderProfile(
     if (!partial) continue;
     Object.assign(merged, partial);
   }
-  if (partials.some((p) => p?.anchorPreset && p.anchorX === undefined && p.anchorY === undefined)) {
+  // UI only exposes presets (no freeform X/Y). Always derive coords from the final preset so
+  // changing Anchor point cannot leave stale anchorY from a previous preset in the override.
+  {
     const coords = anchorCoordsForPreset(merged.anchorPreset);
     merged.anchorX = coords.anchorX;
     merged.anchorY = coords.anchorY;

@@ -25,6 +25,7 @@ import {
   type StrandRenderProfile,
   type StrandRenderProfileKey,
   type StrandRotationMode,
+  anchorCoordsForPreset,
 } from "@bino-foundry/shared/types";
 
 import { AdminDeferredNumberInput, AdminNumberWithSlider } from "./AdminDeferredNumberInput";
@@ -423,9 +424,15 @@ export function StrandRenderConfigPanel({
                   disabled={readOnly}
                   className={fieldClass(readOnly)}
                   value={draft.anchorPreset}
-                  onChange={(e) =>
-                    patchDraft({ anchorPreset: e.target.value as StrandAnchorPreset })
-                  }
+                  onChange={(e) => {
+                    const anchorPreset = e.target.value as StrandAnchorPreset;
+                    // Always sync coords — overrides often already carry stale anchorX/Y from a
+                    // previous preset, and the live preview reads draft.anchorY directly.
+                    patchDraft({
+                      anchorPreset,
+                      ...anchorCoordsForPreset(anchorPreset),
+                    });
+                  }}
                 >
                   <option value="center">Center</option>
                   <option value="loop">Loop (top bail)</option>

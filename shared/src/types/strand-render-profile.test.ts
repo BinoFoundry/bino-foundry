@@ -123,6 +123,16 @@ describe("effectiveStrandContactWidth", () => {
 });
 
 describe("mergeStrandRenderProfile calibration ranges", () => {
+  it("syncs anchorX/Y when preset changes even if stale coords were stored", () => {
+    const merged = mergeStrandRenderProfile(
+      { anchorPreset: "center", anchorX: 0.5, anchorY: 0.5 },
+      { anchorPreset: "loop", anchorX: 0.5, anchorY: 0.5 },
+    );
+    expect(merged.anchorPreset).toBe("loop");
+    expect(merged.anchorX).toBe(0.5);
+    expect(merged.anchorY).toBe(0.08);
+  });
+
   it("preserves layout scale values inside the explicit range (no 1.1 remapping)", () => {
     const merged = mergeStrandRenderProfile({ layoutScale: 2 });
     expect(merged.layoutScale).toBe(2);
