@@ -8,6 +8,7 @@ import {
   RotateCcw,
   ScanSearch,
   Search,
+  CircleDot,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -43,9 +44,10 @@ import {
   type SmartCutoutSeed,
 } from "@/render/mask/smart-cutout-detect";
 
-type CanvasTool = "detect" | "add" | "remove" | "brush" | "pan" | "zoom";
+type CanvasTool = "detect" | "add" | "remove" | "brush" | "edit" | "pan" | "zoom";
 
 const MAX_SMART_SESSION_HISTORY = 40;
+const EDIT_HIT_PX = 10;
 
 export type SmartCutoutCanvasHandle = {
   undo: () => boolean;
@@ -158,6 +160,10 @@ export function SmartCutoutCanvas({
   const seedsRef = useRef<SmartCutoutSeed[]>([]);
   const brushMaskRef = useRef<Uint8Array | null>(null);
   const brushingRef = useRef(false);
+  const vertexDragRef = useRef<{
+    ringIndex: number;
+    pointIndex: number;
+  } | null>(null);
   const paramsRef = useRef<SmartCutoutParams>({
     ...DEFAULT_SMART_CUTOUT_PARAMS,
     ...clampCutoutDetectSettings(detectSettings),
@@ -401,6 +407,56 @@ export function SmartCutoutCanvas({
     if (historyApplyingRef.current) return;
     pushSessionHistory(captureSession());
   }, [captureSession, pushSessionHistory]);
+
+  const findNearestVertex = useCallback((imgX: number, imgY: number) => {
+    const { scale, imgW, imgH } = viewRef.current;
+    if (imgW <= 1 || imgH <= 1) return null;
+    const hitPx = EDIT_HIT_PX / Math.max(0.05, scale);
+    let best: { ringIndex: number; pointIndex: number; dist: number } | null = null;
+    const rings = previewRingsRef.current;
+    for (let ri = 0; ri < rings.length; ri++) {
+      const ring = rings[ri]!;
+      for (let pi = 0; pi < ring.length; pi++) {
+        const p = ring[pi]!;
+        const px = p.x * (imgW - 1);
+        const py = p.y * (imgH - 1);
+        const dist = Math.hypot(px - imgX, py - imgY);
+        if (dist <= hitPx && (!best || dist < best.dist)) {
+          best = { ringIndex: ri, pointIndex: pi, dist };
+        }
+      }
+    }
+    return best;
+  }, []);
+
+  const commitPreviewRings = useCallback(
+    (rings: PathAnchor[][], opts?: { recordHistory?: boolean }) => {
+      const prev = previewRef.current;
+      if (!prev?.ok || !rings[0] || rings[0].length < 3) return;
+      if (opts?.recordHistory) recordSessionHistory();
+      const next: SmartCutoutDetectResult = {
+        ...prev,
+        points: cloneAnchors(rings[0]),
+        regions: rings
+          .slice(1)
+          .filter((ring) => ring.length >= 3)
+          .map((ring) => cloneAnchors(ring)),
+      };
+      previewRingsRef.current = [next.points, ...next.regions];
+      previewRef.current = next;
+      setPreview(next);
+      onPreviewChange?.(next);
+      const islands = 1 + next.regions.length;
+      const nextStatus =
+        `${next.areaPx} px · ${next.points.length} pts` +
+        (islands > 1 ? ` · ${islands} areas` : "") +
+        " · points edited";
+      setStatus(nextStatus);
+      statusRef.current = nextStatus;
+      scheduleDraw();
+    },
+    [onPreviewChange, recordSessionHistory, scheduleDraw],
+  );
 
   const wipeWorkingSelection = useCallback(
     (reason: string | null) => {
@@ -871,6 +927,7 @@ export function SmartCutoutCanvas({
       if (e.key === "a" || e.key === "A") setTool("add");
       if (e.key === "r" || e.key === "R") setTool("remove");
       if (e.key === "b" || e.key === "B") setTool("brush");
+      if (e.key === "e" || e.key === "E") setTool("edit");
       if (e.key === "h" || e.key === "H") setTool("pan");
       if (e.key === "z" || e.key === "Z") {
         if (!(e.metaKey || e.ctrlKey)) setTool("zoom");
@@ -912,6 +969,22 @@ export function SmartCutoutCanvas({
     }
 
     const img = clientToImage(e.clientX, e.clientY);
+
+    if (activeTool === "edit") {
+      if (!previewRef.current || previewRef.current.ok !== true) {
+        setStatus("Detect a region before editing points.");
+        return;
+      }
+      const hit = findNearestVertex(img.x, img.y);
+      if (!hit) {
+        setStatus("Drag a yellow vertex to nudge the outline.");
+        return;
+      }
+      recordSessionHistory();
+      vertexDragRef.current = { ringIndex: hit.ringIndex, pointIndex: hit.pointIndex };
+      return;
+    }
+
     if (activeTool === "brush") {
       ensureBrushMask()?.fill(0);
       brushingRef.current = true;
@@ -959,7 +1032,10 @@ export function SmartCutoutCanvas({
         setTool("detect");
         return;
       }
-      runDetect({ seed: img, merge: true });
+      // Drag paints a merge brush; click (no move) still seed-merges on pointer up via runDetect.
+      ensureBrushMask()?.fill(0);
+      brushingRef.current = true;
+      paintBrushAt(img.x, img.y);
       return;
     }
 
@@ -983,6 +1059,26 @@ export function SmartCutoutCanvas({
       scheduleDraw();
       return;
     }
+    if (vertexDragRef.current) {
+      const { ringIndex, pointIndex } = vertexDragRef.current;
+      const { imgW, imgH } = viewRef.current;
+      if (imgW <= 1 || imgH <= 1) return;
+      const img = clientToImage(e.clientX, e.clientY);
+      const rings = previewRingsRef.current.map((ring) => ring.map((p) => ({ ...p })));
+      const ring = rings[ringIndex];
+      const point = ring?.[pointIndex];
+      if (!ring || !point) return;
+      ring[pointIndex] = {
+        ...point,
+        x: Math.max(0, Math.min(1, img.x / (imgW - 1))),
+        y: Math.max(0, Math.min(1, img.y / (imgH - 1))),
+        handleIn: null,
+        handleOut: null,
+      };
+      previewRingsRef.current = rings;
+      scheduleDraw();
+      return;
+    }
     if (brushingRef.current) {
       const img = clientToImage(e.clientX, e.clientY);
       paintBrushAt(img.x, img.y);
@@ -991,10 +1087,23 @@ export function SmartCutoutCanvas({
 
   const onPointerUp = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     panRef.current = null;
+    if (vertexDragRef.current) {
+      vertexDragRef.current = null;
+      commitPreviewRings(previewRingsRef.current);
+      try {
+        canvasRef.current?.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     if (brushingRef.current) {
       brushingRef.current = false;
       const hint = brushMaskRef.current?.slice() ?? null;
-      const merge = Boolean(coreMaskRef.current) && toolRef.current === "add";
+      // Brush continues the current cutout (Add Area). Clear / Detect to start over.
+      const merge =
+        Boolean(coreMaskRef.current) &&
+        (toolRef.current === "add" || toolRef.current === "brush");
       runDetect({ brushHint: hint, merge });
     }
     try {
@@ -1011,9 +1120,11 @@ export function SmartCutoutCanvas({
       ? "cursor-grab"
       : tool === "zoom"
         ? "cursor-zoom-in"
-        : tool === "brush" || tool === "detect" || tool === "add" || tool === "remove"
-          ? "cursor-crosshair"
-          : "cursor-default";
+        : tool === "edit"
+          ? "cursor-pointer"
+          : tool === "brush" || tool === "detect" || tool === "add" || tool === "remove"
+            ? "cursor-crosshair"
+            : "cursor-default";
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -1036,7 +1147,7 @@ export function SmartCutoutCanvas({
           className="h-7"
           disabled={!previewOk}
           onClick={() => setTool("add")}
-          title="Add Area (A) — merge another detail into this cutout"
+          title="Add Area (A) — click or brush another piece into this cutout"
         >
           <Plus className="mr-1 h-3.5 w-3.5" />
           Add Area
@@ -1059,10 +1170,22 @@ export function SmartCutoutCanvas({
           variant={tool === "brush" ? "default" : "outline"}
           className="h-7"
           onClick={() => setTool("brush")}
-          title="Brush hint (B)"
+          title="Brush (B) — first stroke detects; more strokes add to the same cutout"
         >
           <Paintbrush className="mr-1 h-3.5 w-3.5" />
           Brush
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={tool === "edit" ? "default" : "outline"}
+          className="h-7"
+          disabled={!previewOk}
+          onClick={() => setTool("edit")}
+          title="Edit points (E) — drag yellow vertices on the outline"
+        >
+          <CircleDot className="mr-1 h-3.5 w-3.5" />
+          Edit points
         </Button>
         <Button
           type="button"
@@ -1155,7 +1278,7 @@ export function SmartCutoutCanvas({
         </p>
       )}
 
-      {tool === "brush" ? (
+      {tool === "brush" || tool === "add" ? (
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[10px] text-muted-foreground">Brush size</Label>
@@ -1213,7 +1336,7 @@ export function SmartCutoutCanvas({
           {busy
             ? "Detecting…"
             : status ??
-              "Click a rivet/screw/logo. Click elsewhere to switch. Use Add Area for more pieces."}
+              "Click or brush a detail. More brush strokes add to the same cutout. Edit points to nudge the outline."}
         </p>
         <div className="flex flex-wrap gap-1.5">
           <Button type="button" size="sm" variant="ghost" className="h-7" onClick={clearPreview}>

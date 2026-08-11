@@ -925,9 +925,8 @@ export function applySmartResultToPolygon(
   result: SmartCutoutResult,
 ): LensPolygon {
   const parsed = parseSmartCutoutNotes(polygon.notes);
-  // Keep only the primary island on this polygon; callers append extras as siblings/holes.
-  const single: SmartCutoutResult = { ...result, regions: [] };
-  const smartCutout = metaFromResult(single);
+  // Keep primary ring on `points` and Add Area islands in smart meta (same part).
+  const smartCutout = metaFromResult(result);
   return {
     ...polygon,
     points: result.points,

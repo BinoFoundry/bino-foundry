@@ -66,7 +66,7 @@ import {
 import {
   applySmartResultToPolygon,
   clampCutoutDetectSettings,
-  createSmartCutoutFrameParts,
+  createSmartCutoutFramePart,
   createSmartCutoutHoles,
   DEFAULT_CUTOUT_DETECT_SETTINGS,
   getCutoutDetectSettings,
@@ -494,6 +494,26 @@ export function FrameMaskEditor({
     setSmartEditTarget("new");
   }, []);
 
+  /** Immediately add an empty Manual Detail and open Smart Detect on it. */
+  const startNewSmartManualDetail = useCallback(() => {
+    const n =
+      partListRef.current.filter((p) =>
+        (p.label || "").toLowerCase().includes("smart cutout"),
+      ).length + 1;
+    const part = createFramePart(`Smart Cutout ${n}`, "free", {
+      depth: partListRef.current.length,
+      layerOrder: "front",
+    });
+    const next = [...partListRef.current, part];
+    setShowAddMenu(false);
+    setSmartApplyMode("detail");
+    setSmartEditTarget("active");
+    setActiveSubpath("outer");
+    setEditPhase("smart");
+    setDraftDetectSettings({ ...DEFAULT_CUTOUT_DETECT_SETTINGS });
+    commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
+  }, [commitList]);
+
   const selectPart = (index: number, subpath: FramePartSubpath = "outer") => {
     setActivePartIndex(index);
     setActiveSubpath(subpath);
@@ -725,29 +745,10 @@ export function FrameMaskEditor({
         if (part) {
           if (sub === "outer") {
             const updated = applySmartResultToPolygon(part, result);
-            let next = partListRef.current.map((item, i) =>
+            const next = partListRef.current.map((item, i) =>
               i === activePartIndexRef.current ? updated : item,
             );
-            // Extra Add Area islands become sibling Manual Details (editable polygons).
-            if (extraIslands.length) {
-              const extras = createSmartCutoutFrameParts(
-                { ...result, points: extraIslands[0]!, regions: extraIslands.slice(1) },
-                updated.label || "Smart Cutout",
-                {
-                  depth: next.length,
-                  layerOrder: updated.layerOrder ?? "front",
-                  opacity: updated.opacity,
-                  visible: updated.visible,
-                },
-              );
-              // createSmartCutoutFrameParts treats points+regions as all islands — we passed
-              // extras only, so labels become "Label · 1", "Label · 2". Re-label from 2.
-              const relabeled = extras.map((p, i) => ({
-                ...p,
-                label: `${updated.label || "Smart Cutout"} · ${i + 2}`,
-              }));
-              next = [...next, ...relabeled];
-            }
+            setSmartEditTarget("active");
             setEditPhase("transform");
             commitList(next, { bumpRevision: true });
             return;
@@ -756,6 +757,7 @@ export function FrameMaskEditor({
           if (hole) {
             const updatedHole = applySmartResultToPolygon(hole, result);
             let holes = (part.holes ?? []).map((h, i) => (i === sub ? updatedHole : h));
+            // Extra Add Area islands become additional holes on the same Manual Detail.
             if (extraIslands.length) {
               const more = createSmartCutoutHoles(
                 { ...result, points: extraIslands[0]!, regions: extraIslands.slice(1) },
@@ -784,6 +786,7 @@ export function FrameMaskEditor({
             i === activePartIndexRef.current ? { ...item, holes } : item,
           );
           setActiveSubpath(holes.length - 1);
+          setSmartEditTarget("active");
           setEditPhase("transform");
           commitList(next, { bumpRevision: true });
           return;
@@ -793,15 +796,17 @@ export function FrameMaskEditor({
         partListRef.current.filter((p) =>
           (p.label || "").toLowerCase().includes("smart cutout"),
         ).length + 1;
-      const parts = createSmartCutoutFrameParts(result, `Smart Cutout ${n}`, {
+      // One Manual Detail for the whole detection (Add Area islands stay on this part).
+      const part = createSmartCutoutFramePart(result, `Smart Cutout ${n}`, {
         depth: partListRef.current.length,
         layerOrder: "front",
       });
-      const next = [...partListRef.current, ...parts];
+      const next = [...partListRef.current, part];
       setActiveSubpath("outer");
+      setSmartEditTarget("active");
       setEditPhase("transform");
       commitList(next, {
-        selectIndex: partListRef.current.length,
+        selectIndex: next.length - 1,
         bumpRevision: true,
       });
     },
@@ -884,16 +889,11 @@ export function FrameMaskEditor({
                   <button
                     type="button"
                     className="flex w-full flex-col rounded px-2 py-1.5 text-left text-[11px] hover:bg-muted/60"
-                    onClick={() => {
-                      setShowAddMenu(false);
-                      setSmartApplyMode("detail");
-                      beginNewSmartDraft();
-                      setEditPhase("smart");
-                    }}
+                    onClick={() => startNewSmartManualDetail()}
                   >
                     <span className="font-medium text-foreground">Smart Auto Detect</span>
                     <span className="text-[10px] text-muted-foreground">
-                      Click or brush a rivet / screw / logo — auto boundary
+                      Creates a new Manual Detail — click or brush to fill it
                     </span>
                   </button>
                   <div className="my-1 border-t border-border/60" />
@@ -937,11 +937,7 @@ export function FrameMaskEditor({
                 size="sm"
                 variant="secondary"
                 className="h-7"
-                onClick={() => {
-                  setSmartApplyMode("detail");
-                  beginNewSmartDraft();
-                  setEditPhase("smart");
-                }}
+                onClick={() => startNewSmartManualDetail()}
               >
                 Open Smart Auto Detect
               </Button>
@@ -1278,8 +1274,8 @@ export function FrameMaskEditor({
               <div className="space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground">
-                    Smart Auto Detect — click a detail, refine with Tolerance / Border size, use Add Area
-                    for more pieces in this cutout. Switch to Manual Polygon anytime.
+                    Smart Auto Detect — click or brush a detail, use Add Area / more brush strokes for
+                    extra pieces on the same cutout, Edit points to nudge vertices, then Apply.
                   </p>
                   <Button
                     type="button"
@@ -1290,7 +1286,7 @@ export function FrameMaskEditor({
                     Done
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-3 rounded-md border border-border/60 bg-muted/10 px-2.5 py-2 text-[11px]">
+                <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/10 px-2.5 py-2 text-[11px]">
                   <label className="flex items-center gap-1.5">
                     <input
                       type="radio"
@@ -1301,20 +1297,16 @@ export function FrameMaskEditor({
                     />
                     <span>Update selected path</span>
                   </label>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="radio"
-                      name="smart-edit-target"
-                      className="accent-foreground"
-                      checked={smartEditTarget === "new" && smartApplyMode === "detail"}
-                      onChange={() => {
-                        beginNewSmartDraft();
-                        setSmartApplyMode("detail");
-                        setEditPhase("smart");
-                      }}
-                    />
-                    <span>New Manual Detail</span>
-                  </label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    onClick={() => startNewSmartManualDetail()}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    New Manual Detail
+                  </Button>
                   <label className="flex items-center gap-1.5">
                     <input
                       type="radio"

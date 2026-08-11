@@ -7,6 +7,7 @@ import {
   createSmartCutoutFrameParts,
   createSmartCutoutHole,
   createSmartCutoutHoles,
+  applySmartResultToPolygon,
   detectBorderPx,
   detectSmartCutout,
   dilateMask,
@@ -309,6 +310,12 @@ describe("smart-cutout-detect", () => {
       expect(part.points.length).toBeGreaterThanOrEqual(3);
       expect(parseSmartCutoutNotes(part.notes).meta?.regions ?? []).toEqual([]);
     }
+    // Apply onto one Manual Detail keeps Add Area islands on the same part.
+    const single = createSmartCutoutFramePart(merged, "Smart Cutout 1", { depth: 0 });
+    const meta = parseSmartCutoutNotes(single.notes).meta;
+    expect(meta?.regions?.length ?? 0).toBeGreaterThanOrEqual(1);
+    const updated = applySmartResultToPolygon(single, merged);
+    expect(parseSmartCutoutNotes(updated.notes).meta?.regions?.length ?? 0).toBeGreaterThanOrEqual(1);
     const holes = createSmartCutoutHoles(merged, "Cutout", 1);
     expect(holes).toHaveLength(islands.length);
   });
