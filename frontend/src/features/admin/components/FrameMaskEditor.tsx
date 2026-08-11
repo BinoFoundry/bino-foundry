@@ -66,8 +66,8 @@ import {
 import {
   applySmartResultToPolygon,
   clampCutoutDetectSettings,
-  createSmartCutoutFramePart,
-  createSmartCutoutHole,
+  createSmartCutoutFrameParts,
+  createSmartCutoutHoles,
   DEFAULT_CUTOUT_DETECT_SETTINGS,
   getCutoutDetectSettings,
   patchCutoutDetectSettings,
@@ -716,6 +716,8 @@ export function FrameMaskEditor({
 
   const applySmartCutout = useCallback(
     (result: SmartCutoutResult) => {
+      const extraIslands = result.regions ?? [];
+
       // Update the currently selected outer/hole when editing an existing cutout.
       if (smartEditTarget === "active" && partListRef.current.length) {
         const part = partListRef.current[activePartIndexRef.current];
@@ -723,9 +725,29 @@ export function FrameMaskEditor({
         if (part) {
           if (sub === "outer") {
             const updated = applySmartResultToPolygon(part, result);
-            const next = partListRef.current.map((item, i) =>
+            let next = partListRef.current.map((item, i) =>
               i === activePartIndexRef.current ? updated : item,
             );
+            // Extra Add Area islands become sibling Manual Details (editable polygons).
+            if (extraIslands.length) {
+              const extras = createSmartCutoutFrameParts(
+                { ...result, points: extraIslands[0]!, regions: extraIslands.slice(1) },
+                updated.label || "Smart Cutout",
+                {
+                  depth: next.length,
+                  layerOrder: updated.layerOrder ?? "front",
+                  opacity: updated.opacity,
+                  visible: updated.visible,
+                },
+              );
+              // createSmartCutoutFrameParts treats points+regions as all islands — we passed
+              // extras only, so labels become "Label · 1", "Label · 2". Re-label from 2.
+              const relabeled = extras.map((p, i) => ({
+                ...p,
+                label: `${updated.label || "Smart Cutout"} · ${i + 2}`,
+              }));
+              next = [...next, ...relabeled];
+            }
             setEditPhase("transform");
             commitList(next, { bumpRevision: true });
             return;
@@ -733,7 +755,15 @@ export function FrameMaskEditor({
           const hole = part.holes?.[sub];
           if (hole) {
             const updatedHole = applySmartResultToPolygon(hole, result);
-            const holes = (part.holes ?? []).map((h, i) => (i === sub ? updatedHole : h));
+            let holes = (part.holes ?? []).map((h, i) => (i === sub ? updatedHole : h));
+            if (extraIslands.length) {
+              const more = createSmartCutoutHoles(
+                { ...result, points: extraIslands[0]!, regions: extraIslands.slice(1) },
+                "Cutout",
+                holes.length + 1,
+              );
+              holes = [...holes, ...more];
+            }
             const next = partListRef.current.map((item, i) =>
               i === activePartIndexRef.current ? { ...item, holes } : item,
             );
@@ -747,9 +777,9 @@ export function FrameMaskEditor({
       if (smartApplyMode === "hole") {
         const part = partListRef.current[activePartIndexRef.current];
         if (part) {
-          const label = `Cutout ${(part.holes?.length ?? 0) + 1}`;
-          const hole = createSmartCutoutHole(result, label);
-          const holes = [...(part.holes ?? []), hole];
+          const start = (part.holes?.length ?? 0) + 1;
+          const more = createSmartCutoutHoles(result, "Cutout", start);
+          const holes = [...(part.holes ?? []), ...more];
           const next = partListRef.current.map((item, i) =>
             i === activePartIndexRef.current ? { ...item, holes } : item,
           );
@@ -763,14 +793,17 @@ export function FrameMaskEditor({
         partListRef.current.filter((p) =>
           (p.label || "").toLowerCase().includes("smart cutout"),
         ).length + 1;
-      const part = createSmartCutoutFramePart(result, `Smart Cutout ${n}`, {
+      const parts = createSmartCutoutFrameParts(result, `Smart Cutout ${n}`, {
         depth: partListRef.current.length,
         layerOrder: "front",
       });
-      const next = [...partListRef.current, part];
+      const next = [...partListRef.current, ...parts];
       setActiveSubpath("outer");
       setEditPhase("transform");
-      commitList(next, { selectIndex: next.length - 1, bumpRevision: true });
+      commitList(next, {
+        selectIndex: partListRef.current.length,
+        bumpRevision: true,
+      });
     },
     [commitList, smartApplyMode, smartEditTarget],
   );

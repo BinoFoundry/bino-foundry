@@ -4,7 +4,9 @@ import {
   applyExpand,
   applyFeather,
   createSmartCutoutFramePart,
+  createSmartCutoutFrameParts,
   createSmartCutoutHole,
+  createSmartCutoutHoles,
   detectBorderPx,
   detectSmartCutout,
   dilateMask,
@@ -14,6 +16,7 @@ import {
   patchCutoutDetectSettings,
   regionGrowFromSeed,
   removeAreaAtPoint,
+  smartResultIslands,
   subtractMasks,
   unionMasks,
   withDetectBorderPx,
@@ -268,6 +271,46 @@ describe("smart-cutout-detect", () => {
     expect(parseSmartCutoutNotes(right.notes).meta?.tolerance).toBe(24);
     expect(parseSmartCutoutNotes(leftPatched.notes).meta?.expand).toBe(2);
     expect(parseSmartCutoutNotes(right.notes).meta?.smoothEdge).toBe(3);
+  });
+
+  it("materializes every Add Area island as its own Manual Detail polygon", () => {
+    const image = makeSolidDiskImage(
+      100,
+      60,
+      [
+        { cx: 25, cy: 30, radius: 6, color: [200, 180, 140] },
+        { cx: 75, cy: 30, radius: 6, color: [200, 180, 140] },
+      ],
+      [25, 28, 32],
+    );
+    const first = detectSmartCutout({
+      imageData: image,
+      seed: { x: 25, y: 30 },
+      params: { tolerance: 30, feather: 0, expand: 0, smoothEdge: 0 },
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const merged = detectSmartCutout({
+      imageData: image,
+      seed: { x: 75, y: 30 },
+      existingCore: first.coreMask,
+      existingSeeds: first.seeds,
+      params: { tolerance: 30, feather: 0, expand: 0, smoothEdge: 0 },
+    });
+    expect(merged.ok).toBe(true);
+    if (!merged.ok) return;
+    expect(merged.regions.length).toBeGreaterThanOrEqual(1);
+
+    const islands = smartResultIslands(merged);
+    expect(islands.length).toBeGreaterThanOrEqual(2);
+    const parts = createSmartCutoutFrameParts(merged, "Smart Cutout 1", { depth: 0 });
+    expect(parts).toHaveLength(islands.length);
+    for (const part of parts) {
+      expect(part.points.length).toBeGreaterThanOrEqual(3);
+      expect(parseSmartCutoutNotes(part.notes).meta?.regions ?? []).toEqual([]);
+    }
+    const holes = createSmartCutoutHoles(merged, "Cutout", 1);
+    expect(holes).toHaveLength(islands.length);
   });
 
   it("folds expand/shrink/feather into a single border size control", () => {

@@ -833,15 +833,81 @@ export function createSmartCutoutFramePart(
   return part;
 }
 
+/**
+ * Materialize every detected island (primary + Add Area regions) as its own polygon.
+ * Apply must not drop secondary islands into notes-only metadata — editors only show `points`.
+ */
+export function smartResultIslands(result: SmartCutoutResult): PathAnchor[][] {
+  const rings = [result.points, ...(result.regions ?? [])].filter(
+    (ring) => migrateAnchors(ring).length >= 3,
+  );
+  return rings.length ? rings : [];
+}
+
+/** One Manual Detail per island so Transform / Manual Polygon show the full Add Area result. */
+export function createSmartCutoutFrameParts(
+  result: SmartCutoutResult,
+  label: string,
+  extras?: Partial<Pick<LensPolygon, "layerOrder" | "opacity" | "depth" | "visible">>,
+): LensPolygon[] {
+  const rings = smartResultIslands(result);
+  if (!rings.length) return [];
+  const baseDepth = extras?.depth ?? 50;
+  return rings.map((points, index) => {
+    const island: SmartCutoutResult = {
+      ...result,
+      points,
+      regions: [],
+      seeds:
+        result.seeds.length > index
+          ? [result.seeds[index]!]
+          : result.seeds.length
+            ? [result.seeds[0]!]
+            : result.seeds,
+    };
+    const partLabel = rings.length > 1 ? `${label} · ${index + 1}` : label;
+    return createSmartCutoutFramePart(island, partLabel, {
+      ...extras,
+      depth: baseDepth + index,
+    });
+  });
+}
+
 /** Build a hole cutout from detection (for Manual Detail holes). */
 export function createSmartCutoutHole(result: SmartCutoutResult, label: string): LensPolygon {
   const id = `smart-hole-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const baseline = migrateAnchors(result.points);
-  const smartCutout = metaFromResult(result);
+  // Single-island hole — callers should map each Add Area island to its own hole.
+  const single: SmartCutoutResult = { ...result, regions: [] };
+  const smartCutout = metaFromResult(single);
   return createLensPolygon(id, label, result.points, {
     shapePreset: "free",
     shapeBaseline: baseline,
     notes: encodeSmartCutoutNotes("", smartCutout),
+  });
+}
+
+/** One hole polygon per detected island (primary + Add Area regions). */
+export function createSmartCutoutHoles(
+  result: SmartCutoutResult,
+  labelPrefix: string,
+  startIndex = 1,
+): LensPolygon[] {
+  const rings = smartResultIslands(result);
+  return rings.map((points, index) => {
+    const island: SmartCutoutResult = {
+      ...result,
+      points,
+      regions: [],
+      seeds:
+        result.seeds.length > index
+          ? [result.seeds[index]!]
+          : result.seeds.length
+            ? [result.seeds[0]!]
+            : result.seeds,
+    };
+    const label = rings.length > 1 ? `${labelPrefix} ${startIndex + index}` : labelPrefix;
+    return createSmartCutoutHole(island, label);
   });
 }
 
@@ -851,7 +917,9 @@ export function applySmartResultToPolygon(
   result: SmartCutoutResult,
 ): LensPolygon {
   const parsed = parseSmartCutoutNotes(polygon.notes);
-  const smartCutout = metaFromResult(result);
+  // Keep only the primary island on this polygon; callers append extras as siblings/holes.
+  const single: SmartCutoutResult = { ...result, regions: [] };
+  const smartCutout = metaFromResult(single);
   return {
     ...polygon,
     points: result.points,
