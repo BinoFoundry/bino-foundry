@@ -114,8 +114,12 @@ export interface CatalogueActions {
   deleteHowWePrepareOption: (id: string) => Promise<void>;
   addFrame: (entry: FrameEntry) => Promise<FrameEntry>;
   updateFrame: (entry: FrameEntry) => Promise<FrameEntry>;
+  /** Load full frame (incl. maskConfig) into the store — list omits heavy editor masks. */
+  ensureFrameDetail: (id: string) => Promise<FrameEntry>;
   getFrameReferences: (id: string) => Promise<{ designCount: number; itemCount: number }>;
   deleteFrame: (id: string, options?: { force?: boolean }) => Promise<void>;
+  /** Load full bead library (incl. cropConfig) into the store — list omits crop polygons. */
+  ensureBeadLibraryDetail: (id: string) => Promise<BeadLibraryEntry>;
   resetToDefaults: () => void;
   refreshFromApi: () => Promise<void>;
 }
@@ -139,6 +143,11 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   const [isHydrating, setIsHydrating] = useState(true);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const hydratedOnce = useRef(false);
+  /** Frame / bead ids that already have full editor payloads (mask/crop) in the store. */
+  const frameDetailHydratedRef = useRef(new Set<string>());
+  const beadDetailHydratedRef = useRef(new Set<string>());
+  const storeRef = useRef(store);
+  storeRef.current = store;
 
   const refreshFromApi = useCallback(async () => {
     setIsHydrating(true);
@@ -191,6 +200,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       };
       saveToStorage(next);
       syncCatalogueSnapshot(next);
+      frameDetailHydratedRef.current.clear();
+      beadDetailHydratedRef.current.clear();
       setStore(next);
     } catch (error) {
       const message = isApiError(error)
@@ -233,6 +244,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     async (entry: BeadLibraryEntry, sizes: BeadLibrarySizeInput[]) => {
       const created = await beadsApi.createLibrary(entry, sizes);
       const librarySizes = await beadLibrarySizesApi.list(created.id);
+      beadDetailHydratedRef.current.add(created.id);
       mergeStore((prev) => ({
         ...prev,
         beadLibraries: replaceById(prev.beadLibraries, created),
@@ -250,6 +262,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   const updateBeadLibrary = useCallback(
     async (entry: BeadLibraryEntry) => {
       const updated = await beadsApi.updateLibrary(entry.id, entry);
+      beadDetailHydratedRef.current.add(updated.id);
       mergeStore((prev) => ({
         ...prev,
         beadLibraries: replaceById(prev.beadLibraries, updated),
@@ -313,6 +326,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
         beadTags.sort((a, b) => a.name.localeCompare(b.name));
         return { ...prev, beadLibraries, beadLibrarySizes, beadTags };
       });
+      beadDetailHydratedRef.current.add(entry.id);
 
       if (result.cropChanged || result.sizesChanged) {
         void beadLibrarySizesApi.list(entry.id).then((offers) => {
@@ -329,6 +343,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   const updateBeadCrop = useCallback(
     async (publicId: string, payload: Parameters<typeof beadsApi.updateCrop>[1]) => {
       const updated = await beadsApi.updateCrop(publicId, payload);
+      beadDetailHydratedRef.current.add(publicId);
       mergeStore((prev) => ({
         ...prev,
         beadLibraries: replaceById(prev.beadLibraries, updated),
@@ -341,6 +356,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   const deleteBeadLibrary = useCallback(
     async (id: string, options?: { force?: boolean }) => {
       await beadsApi.deleteLibrary(id, options);
+      beadDetailHydratedRef.current.delete(id);
       const librarySizes = await beadLibrarySizesApi.list();
       mergeStore((prev) => ({
         ...prev,
@@ -596,6 +612,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   const addFrame = useCallback(
     async (entry: FrameEntry) => {
       const created = await catalogueApi.createFrame(entry);
+      frameDetailHydratedRef.current.add(created.id);
       mergeStore((prev) => ({
         ...prev,
         frames: replaceById(prev.frames, created),
@@ -608,6 +625,7 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
   const updateFrame = useCallback(
     async (entry: FrameEntry) => {
       const updated = await catalogueApi.updateFrame(entry.id, entry);
+      frameDetailHydratedRef.current.add(updated.id);
       mergeStore((prev) => ({
         ...prev,
         frames: replaceById(prev.frames, updated),
@@ -617,9 +635,44 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
     [mergeStore],
   );
 
+  const ensureFrameDetail = useCallback(
+    async (id: string) => {
+      if (frameDetailHydratedRef.current.has(id)) {
+        const cached = storeRef.current.frames.find((f) => f.id === id);
+        if (cached) return cached;
+      }
+      const full = await catalogueApi.getFrame(id);
+      frameDetailHydratedRef.current.add(id);
+      mergeStore((prev) => ({
+        ...prev,
+        frames: replaceById(prev.frames, full),
+      }));
+      return full;
+    },
+    [mergeStore],
+  );
+
+  const ensureBeadLibraryDetail = useCallback(
+    async (id: string) => {
+      if (beadDetailHydratedRef.current.has(id)) {
+        const cached = storeRef.current.beadLibraries.find((b) => b.id === id);
+        if (cached) return cached;
+      }
+      const full = await beadsApi.getLibrary(id);
+      beadDetailHydratedRef.current.add(id);
+      mergeStore((prev) => ({
+        ...prev,
+        beadLibraries: replaceById(prev.beadLibraries, full),
+      }));
+      return full;
+    },
+    [mergeStore],
+  );
+
   const deleteFrame = useCallback(
     async (id: string, options?: { force?: boolean }) => {
       await catalogueApi.deleteFrame(id, options);
+      frameDetailHydratedRef.current.delete(id);
       mergeStore((prev) => ({
         ...prev,
         frames: removeById(prev.frames, id),
@@ -671,6 +724,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       deleteHowWePrepareOption,
       addFrame,
       updateFrame,
+      ensureFrameDetail,
+      ensureBeadLibraryDetail,
       deleteFrame,
       getFrameReferences,
       resetToDefaults,
@@ -708,6 +763,8 @@ export function CatalogueProvider({ children }: { children: ReactNode }) {
       deleteHowWePrepareOption,
       addFrame,
       updateFrame,
+      ensureFrameDetail,
+      ensureBeadLibraryDetail,
       deleteFrame,
       getFrameReferences,
       resetToDefaults,

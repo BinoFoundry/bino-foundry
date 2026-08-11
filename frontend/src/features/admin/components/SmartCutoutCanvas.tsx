@@ -432,23 +432,35 @@ export function SmartCutoutCanvas({
   const commitPreviewRings = useCallback(
     (rings: PathAnchor[][], opts?: { recordHistory?: boolean }) => {
       const prev = previewRef.current;
-      if (!prev?.ok || !rings[0] || rings[0].length < 3) return;
+      const { imgW, imgH } = viewRef.current;
+      if (!prev?.ok || !rings[0] || rings[0].length < 3 || imgW <= 1 || imgH <= 1) return;
       if (opts?.recordHistory) recordSessionHistory();
+      const extras = rings.slice(1).filter((ring) => ring.length >= 3);
+      const mask = rasterizeAnchorsToMask(rings[0], imgW, imgH, extras);
+      let areaPx = 0;
+      for (let i = 0; i < mask.length; i++) {
+        if (mask[i]) areaPx += 1;
+      }
       const next: SmartCutoutDetectResult = {
         ...prev,
         points: cloneAnchors(rings[0]),
-        regions: rings
-          .slice(1)
-          .filter((ring) => ring.length >= 3)
-          .map((ring) => cloneAnchors(ring)),
+        regions: extras.map((ring) => cloneAnchors(ring)),
+        mask,
+        coreMask: new Uint8Array(mask),
+        width: imgW,
+        height: imgH,
+        areaPx,
       };
       previewRingsRef.current = [next.points, ...next.regions];
+      previewMaskRef.current = mask;
+      previewSizeRef.current = { w: imgW, h: imgH };
+      coreMaskRef.current = new Uint8Array(mask);
       previewRef.current = next;
       setPreview(next);
       onPreviewChange?.(next);
       const islands = 1 + next.regions.length;
       const nextStatus =
-        `${next.areaPx} px · ${next.points.length} pts` +
+        `${areaPx} px · ${next.points.length} pts` +
         (islands > 1 ? ` · ${islands} areas` : "") +
         " · points edited";
       setStatus(nextStatus);
@@ -457,6 +469,20 @@ export function SmartCutoutCanvas({
     },
     [onPreviewChange, recordSessionHistory, scheduleDraw],
   );
+
+  /** Live yellow fill while dragging vertices (same coverage as the outline). */
+  const paintMaskFromRings = useCallback((rings: PathAnchor[][]) => {
+    const { imgW, imgH } = viewRef.current;
+    if (imgW <= 1 || imgH <= 1 || !rings[0] || rings[0].length < 3) return;
+    const mask = rasterizeAnchorsToMask(
+      rings[0],
+      imgW,
+      imgH,
+      rings.slice(1).filter((ring) => ring.length >= 3),
+    );
+    previewMaskRef.current = mask;
+    previewSizeRef.current = { w: imgW, h: imgH };
+  }, []);
 
   const wipeWorkingSelection = useCallback(
     (reason: string | null) => {
@@ -1076,6 +1102,7 @@ export function SmartCutoutCanvas({
         handleOut: null,
       };
       previewRingsRef.current = rings;
+      paintMaskFromRings(rings);
       scheduleDraw();
       return;
     }
@@ -1182,7 +1209,7 @@ export function SmartCutoutCanvas({
           className="h-7"
           disabled={!previewOk}
           onClick={() => setTool("edit")}
-          title="Edit points (E) — drag yellow vertices on the outline"
+          title="Edit points (E) — drag yellow vertices; the filled area updates live like Brush"
         >
           <CircleDot className="mr-1 h-3.5 w-3.5" />
           Edit points

@@ -67,9 +67,12 @@ export class RenderingService {
   async getBundle(frameId: string): Promise<{ frameId: string; views: FrameRenderViewRow[] }> {
     await this.assertFrameExists(frameId);
     const supabase = getSupabaseServiceRole();
+    // Customiser needs clip_config; mask_config is admin-only and can be multi‑MB.
     const { data, error } = await supabase
       .from("frame_render_views")
-      .select("*")
+      .select(
+        "id,frame_id,view_axis,plate_url,image_width,image_height,original_plate_url,original_image_width,original_image_height,plate_crop_config,clip_config,clip_status,mask_status",
+      )
       .eq("frame_id", frameId)
       .order("view_axis", { ascending: true });
 
@@ -131,7 +134,9 @@ export class RenderingService {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
       .from("frame_render_views")
-      .select("*")
+      .select(
+        "id,frame_id,view_axis,plate_url,image_width,image_height,original_plate_url,original_image_width,original_image_height,plate_crop_config,clip_config,clip_status,mask_status",
+      )
       .in("frame_id", frameIds)
       .order("frame_id")
       .order("view_axis", { ascending: true });

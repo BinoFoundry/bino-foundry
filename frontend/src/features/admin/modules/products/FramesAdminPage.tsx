@@ -19,6 +19,7 @@ import { useAdminEditorScroll } from "@/features/admin/hooks/useAdminEditorScrol
 import { useAdminResourceEditor } from "@/features/admin/hooks/useAdminResourceEditor";
 import { ADMIN_QUERY, adminResourcePath, withAdminSearch } from "@/features/admin/routing";
 
+import { LoadingState } from "@/components/common";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import {
@@ -48,6 +49,8 @@ export function FramesAdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailReadyId, setDetailReadyId] = useState<string | null>(null);
   const familyFilter = searchParams.get(ADMIN_QUERY.family) ?? "all";
   const dupFromId = searchParams.get("dup");
 
@@ -95,6 +98,33 @@ export function FramesAdminPage() {
     return frames.find((f) => f.id === editor.itemId) ?? null;
   }, [frames, editor.itemId]);
 
+  useEffect(() => {
+    if (!editor.isEditing || !editor.itemId) {
+      setDetailReadyId(null);
+      setDetailLoading(false);
+      return;
+    }
+    const id = editor.itemId;
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailReadyId(null);
+    void cat
+      .ensureFrameDetail(id)
+      .then(() => {
+        if (!cancelled) setDetailReadyId(id);
+      })
+      .catch((err) => {
+        console.error("Failed to load frame detail:", err);
+        if (!cancelled) toast.error("Could not load full frame data. Try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cat, editor.isEditing, editor.itemId]);
+
   const duplicateSeed = useMemo(() => {
     if (!editor.isCreating || !dupFromId) return undefined;
     const source = frames.find((f) => f.id === dupFromId);
@@ -102,10 +132,20 @@ export function FramesAdminPage() {
   }, [editor.isCreating, dupFromId, frames]);
 
   useEffect(() => {
-    if (editor.isEditing && !editingEntry && frames.length > 0 && !cat.isHydrating) {
+    if (!editor.isCreating || !dupFromId) return;
+    void cat.ensureFrameDetail(dupFromId).catch((err) => {
+      console.error("Failed to load frame for duplicate:", err);
+    });
+  }, [cat, editor.isCreating, dupFromId]);
+
+  useEffect(() => {
+    if (editor.isEditing && !editingEntry && frames.length > 0 && !cat.isHydrating && !detailLoading) {
       editor.close();
     }
-  }, [editor, editingEntry, frames.length, cat.isHydrating]);
+  }, [editor, editingEntry, frames.length, cat.isHydrating, detailLoading]);
+
+  const editorDetailReady =
+    editor.isCreating || (editor.isEditing && detailReadyId === editor.itemId && Boolean(editingEntry));
 
   const modalOpen = editor.isOpen;
   useAdminEditorScroll(
@@ -211,12 +251,14 @@ export function FramesAdminPage() {
           </span>
         }
       >
-        {editor.isCreating || (editor.isEditing && editingEntry) ? (
+        {editor.isEditing && detailLoading ? (
+          <LoadingState label="Loading frame masks & details…" className="min-h-[240px]" />
+        ) : editorDetailReady ? (
           <div className="mx-auto w-full max-w-4xl">
             <FrameForm
               key={
                 editor.isEditing
-                  ? editingEntry!.id
+                  ? `edit-${editingEntry!.id}-${detailReadyId}`
                   : duplicateSeed
                     ? `dup-${duplicateSeed.name}`
                     : "new"
@@ -267,6 +309,9 @@ export function FramesAdminPage() {
                   <AdminListRow
                     key={f.id}
                     onClick={() => editor.openEdit(f.id)}
+                    onMouseEnter={() => {
+                      void cat.ensureFrameDetail(f.id);
+                    }}
                     actions={
                       deleteState?.frameId === f.id ? (
                         <AdminDeleteConfirm

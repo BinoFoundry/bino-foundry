@@ -7,11 +7,19 @@ interface AdminListRowProps {
   /** Buttons/controls rendered outside the row click target (avoids nested buttons). */
   actions?: ReactNode;
   onClick?: () => void;
+  onMouseEnter?: () => void;
   selected?: boolean;
   className?: string;
 }
 
-export function AdminListRow({ children, actions, onClick, selected, className }: AdminListRowProps) {
+export function AdminListRow({
+  children,
+  actions,
+  onClick,
+  onMouseEnter,
+  selected,
+  className,
+}: AdminListRowProps) {
   const rowClass = cn(
     "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors",
     selected && "state-selected-subtle ring-1 ring-selection/30",
@@ -24,7 +32,7 @@ export function AdminListRow({ children, actions, onClick, selected, className }
   );
 
   return (
-    <div className={rowClass}>
+    <div className={rowClass} onMouseEnter={onMouseEnter}>
       {onClick ? (
         <button type="button" onClick={onClick} className={mainClass}>
           {children}

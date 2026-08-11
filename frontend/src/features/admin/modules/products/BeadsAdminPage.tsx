@@ -23,6 +23,7 @@ import type { BeadLibrarySizeInput } from "@/types/bead-library-sizes";
 import { useCatalogue } from "@/state/catalogue";
 import type { BeadLibraryEntry } from "@/types/beads";
 
+import { LoadingState } from "@/components/common";
 import { AdminStatusBadge } from "../../components/AdminStatusBadge";
 import { AdminDeleteConfirm } from "../../components/AdminDeleteConfirm";
 import { AdminEmptyState } from "../../components/AdminEmptyState";
@@ -77,6 +78,8 @@ export function BeadsAdminPage() {
 
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailReadyId, setDetailReadyId] = useState<string | null>(null);
 
   const statusLabelByCode = useMemo(
     () => new Map(cat.beadAvailabilityStatuses.map((s) => [s.code, s.label])),
@@ -106,12 +109,47 @@ export function BeadsAdminPage() {
     return cat.beadLibraries.find((b) => b.id === editor.itemId) ?? null;
   }, [cat.beadLibraries, editor.itemId]);
 
+  useEffect(() => {
+    if (!editor.isEditing || !editor.itemId) {
+      setDetailReadyId(null);
+      setDetailLoading(false);
+      return;
+    }
+    const id = editor.itemId;
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailReadyId(null);
+    void cat
+      .ensureBeadLibraryDetail(id)
+      .then(() => {
+        if (!cancelled) setDetailReadyId(id);
+      })
+      .catch((err) => {
+        console.error("Failed to load bead library detail:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cat, editor.isEditing, editor.itemId]);
+
   // Invalid deep link → return to list (wait until catalogue has loaded).
   useEffect(() => {
-    if (editor.isEditing && !editingEntry && cat.beadLibraries.length > 0 && !cat.isHydrating) {
+    if (
+      editor.isEditing &&
+      !editingEntry &&
+      cat.beadLibraries.length > 0 &&
+      !cat.isHydrating &&
+      !detailLoading
+    ) {
       editor.close();
     }
-  }, [editor, editingEntry, cat.beadLibraries.length, cat.isHydrating]);
+  }, [editor, editingEntry, cat.beadLibraries.length, cat.isHydrating, detailLoading]);
+
+  const editorDetailReady =
+    editor.isCreating || (editor.isEditing && detailReadyId === editor.itemId && Boolean(editingEntry));
 
   const modalOpen = editor.isOpen;
   useAdminEditorScroll(scrollRef, modalOpen ? { type: "edit" as const, entry: editingEntry ?? { id: "new" } } : null, [
@@ -204,9 +242,11 @@ export function BeadsAdminPage() {
       />
 
       <AdminPage scrollRef={scrollRef} footer={`${filtered.length} bead(s)`}>
-        {editor.isCreating || (editor.isEditing && editingEntry) ? (
+        {editor.isEditing && detailLoading ? (
+          <LoadingState label="Loading bead crop data…" className="min-h-[240px]" />
+        ) : editorDetailReady ? (
           <BeadForm
-            key={editor.isCreating ? "new" : editingEntry!.id}
+            key={editor.isCreating ? "new" : `edit-${editingEntry!.id}-${detailReadyId}`}
             initial={editor.isEditing ? editingEntry! : undefined}
             defaultBeadTypeId={defaultTypeId}
             defaultSubBeadTypeId={defaultSubTypeId}
@@ -253,6 +293,9 @@ export function BeadsAdminPage() {
                 <AdminListRow
                   key={b.id}
                   onClick={() => editor.openEdit(b.id)}
+                  onMouseEnter={() => {
+                    void cat.ensureBeadLibraryDetail(b.id);
+                  }}
                   actions={
                     deleteState?.beadId === b.id ? (
                       <AdminDeleteConfirm

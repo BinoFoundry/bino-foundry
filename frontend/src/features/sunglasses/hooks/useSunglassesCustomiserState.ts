@@ -14,6 +14,9 @@ import { FRAME_BASE_PRICE } from "@/lib/luxe-data";
 import { loadCustomiserSession, saveCustomiserSession } from "../utils/customiser-session";
 import { resolveLoadedSunglassesFrame } from "../load-saved-sunglasses";
 import { isUnavailableFrame } from "../unavailable-frame";
+import { isApiFrameId, renderingApi } from "@/services/api/rendering";
+import { isLensClipConfigValid } from "@bino-foundry/shared/types";
+import type { FrameRenderView } from "@/types/frame-rendering";
 
 const EMPTY_FRAME: FrameOption = {
   id: "fallback",
@@ -157,6 +160,47 @@ export function useSunglassesCustomiserState(onPriceChange?: (price: number) => 
         .map((v) => v.plateUrl) ?? [];
     void plateLoader.preloadMany(urls);
   }, [frameSku.id, frameSku.renderViews]);
+
+  // Catalogue list omits clip_config (too large). Load clips for the selected frame on demand.
+  useEffect(() => {
+    if (!frameSkuId || !isApiFrameId(frameSkuId) || isUnavailableFrame(frameSku)) return;
+    const views = frameSku.renderViews ?? [];
+    const hasClip = views.some((v) => v.clipConfig && isLensClipConfigValid(v.clipConfig));
+    if (hasClip || views.length === 0) return;
+
+    let cancelled = false;
+    void renderingApi
+      .getBundle(frameSkuId)
+      .then((bundle) => {
+        if (cancelled) return;
+        const base =
+          allFrames.find((f) => f.id === frameSkuId) ??
+          builderFrames.find((f) => f.id === frameSkuId);
+        if (!base) return;
+        const renderViews: FrameRenderView[] = (bundle.views ?? []).map((v) => ({
+          id: v.id,
+          view: v.view,
+          plateUrl: v.plateUrl,
+          width: v.width,
+          height: v.height,
+          originalPlateUrl: v.originalPlateUrl ?? undefined,
+          originalWidth: v.originalWidth ?? undefined,
+          originalHeight: v.originalHeight ?? undefined,
+          plateCropConfig: v.plateCropConfig ?? undefined,
+          clipConfig: v.clipConfig ?? null,
+          clipStatus: v.clipStatus ?? "draft",
+          maskStatus: v.maskStatus ?? "draft",
+        }));
+        setLoadedFrameOverride({ ...base, renderViews });
+      })
+      .catch((err) => {
+        console.error("Failed to load frame clip bundle:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allFrames, builderFrames, frameSku, frameSkuId]);
 
   const compositorConfig = useMemo(
     () =>

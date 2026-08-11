@@ -54,6 +54,11 @@ function mapFrameRow(
         ? localViews
         : [];
 
+  const legacyImages = Array.isArray(images) ? images : [];
+  const plateFallback = views
+    .map((v) => (v && typeof v === "object" && "plateUrl" in v ? String((v as { plateUrl?: string }).plateUrl ?? "") : ""))
+    .filter(Boolean);
+
   return {
     id: row.id,
     name: row.name,
@@ -68,7 +73,7 @@ function mapFrameRow(
       typeof row.model_family === "string" && row.model_family.trim()
         ? row.model_family.trim()
         : null,
-    frameImages: Array.isArray(images) ? images : [],
+    frameImages: legacyImages.length ? legacyImages : plateFallback,
     lensColors: Array.isArray(lens) ? lens : [],
     renderViews: views,
     createdAt: row.created_at,
@@ -76,14 +81,40 @@ function mapFrameRow(
   };
 }
 
-async function fetchRenderViewsForFrames(frameIds: string[]): Promise<Map<string, Record<string, unknown>[]>> {
+async function fetchRenderViewsForFrames(
+  frameIds: string[],
+  options?: { includeMaskConfig?: boolean; includeClipConfig?: boolean },
+): Promise<Map<string, Record<string, unknown>[]>> {
   const map = new Map<string, Record<string, unknown>[]>();
   if (frameIds.length === 0) return map;
+
+  const includeMask = options?.includeMaskConfig !== false;
+  const includeClip = options?.includeClipConfig !== false;
+  // List payloads omit heavy JSON (mask + optional clip). Admin / customiser reload detail as needed.
+  const columns =
+    includeMask && includeClip
+      ? "*"
+      : [
+          "id",
+          "frame_id",
+          "view_axis",
+          "plate_url",
+          "image_width",
+          "image_height",
+          "original_plate_url",
+          "original_image_width",
+          "original_image_height",
+          // plate_crop_config / clip / mask omitted from catalogue list — loaded on detail/bundle
+          "clip_status",
+          "mask_status",
+          ...(includeClip ? ["clip_config"] : []),
+          ...(includeMask ? ["mask_config"] : []),
+        ].join(",");
 
   const supabase = getSupabaseServiceRole();
   const { data, error } = await supabase
     .from("frame_render_views")
-    .select("*")
+    .select(columns)
     .in("frame_id", frameIds)
     .order("view_axis", { ascending: true });
 
@@ -219,24 +250,41 @@ export class FrameService {
     const supabase = getSupabaseServiceRole();
     const { data, error } = await supabase
       .from("frames")
-      .select("*")
+      .select(
+        "id,slug,name,base_price,currency_code,description,display_order,is_active,availability_status_code,lens_render_preset_id,use_lens_render_preset,model_family,created_at,updated_at",
+      )
       .order("display_order", { ascending: false })
       .order("name", { ascending: true });
 
     assertNoDbError(error);
     const rows = (data ?? []) as Record<string, unknown>[];
-    const viewMap = await fetchRenderViewsForFrames(rows.map((r) => String(r.id)));
+    const viewMap = await fetchRenderViewsForFrames(
+      rows.map((r) => String(r.id)),
+      { includeMaskConfig: false, includeClipConfig: false },
+    );
     return rows.map((row) => mapFrameRow(row, viewMap.get(String(row.id)) ?? []));
   }
 
   async getById(recordId: string): Promise<unknown> {
     const supabase = getSupabaseServiceRole();
-    const { data, error } = await supabase.from("frames").select("*").eq("id", recordId).maybeSingle();
+    // Frame row + render views in parallel — cuts ~half the wait on cold PostgREST.
+    const [frameResult, viewMap] = await Promise.all([
+      supabase.from("frames").select("*").eq("id", recordId).maybeSingle(),
+      fetchRenderViewsForFrames([recordId], {
+        includeMaskConfig: true,
+        includeClipConfig: true,
+      }),
+    ]);
 
-    assertNoDbError(error);
-    if (!data) throw new NotFoundError("Frame not found");
-    const viewMap = await fetchRenderViewsForFrames([recordId]);
-    return mapFrameRow(data as Record<string, unknown>, viewMap.get(recordId) ?? []);
+    assertNoDbError(frameResult.error);
+    if (!frameResult.data) throw new NotFoundError("Frame not found");
+    const row = frameResult.data as Record<string, unknown>;
+    const mc = normalizeMarketing(row.marketing_copy);
+    if ("render_views" in mc) {
+      delete mc.render_views;
+      row.marketing_copy = mc;
+    }
+    return mapFrameRow(row, viewMap.get(recordId) ?? []);
   }
 
   async create(payload: FrameCreateDTO): Promise<unknown> {

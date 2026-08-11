@@ -116,23 +116,49 @@ function mapAuthErrorMessage(status: number, code: string | undefined, message: 
   return message;
 }
 
+/** Default catalogue request budget — prevents infinite “Loading catalogue…” on gateway hangs. */
+const DEFAULT_API_TIMEOUT_MS = 25_000;
+
 /** Low-level catalogue HTTP call; path is relative to `/api` prefix. */
 export async function apiRequest<T>(path: string, init?: ApiRequestOptions): Promise<T> {
   const url = resolveApiUrl(path);
-  const { body: _body, rawBody: _raw, _authRetried, ...rest } = init ?? {};
+  const { body: _body, rawBody: _raw, _authRetried, signal: userSignal, ...rest } = init ?? {};
   const bootstrap = isAuthBootstrapPath(path);
 
   const accessToken = bootstrap ? getAccessToken() : await ensureFreshAccessToken();
+
+  const timeoutController = new AbortController();
+  const timeoutId = window.setTimeout(() => timeoutController.abort(), DEFAULT_API_TIMEOUT_MS);
+  const onUserAbort = () => timeoutController.abort();
+  if (userSignal) {
+    if (userSignal.aborted) timeoutController.abort();
+    else userSignal.addEventListener("abort", onUserAbort, { once: true });
+  }
 
   let res: Response;
   try {
     res = await fetch(url, {
       ...rest,
+      signal: timeoutController.signal,
       headers: buildHeaders(init, accessToken),
       body: resolveBody(init),
     });
-  } catch {
+  } catch (err) {
+    const aborted =
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError");
+    if (aborted && userSignal?.aborted) {
+      throw new ApiError(499, "Request cancelled.", { code: "ABORTED" });
+    }
+    if (aborted) {
+      throw new ApiError(504, "Unable to reach the server. Please try again.", {
+        code: "TIMEOUT",
+      });
+    }
     throw new ApiError(503, "Unable to reach the server. Please try again.", { code: "NETWORK_ERROR" });
+  } finally {
+    window.clearTimeout(timeoutId);
+    userSignal?.removeEventListener("abort", onUserAbort);
   }
 
   if (res.status === 401 && !bootstrap && !_authRetried) {

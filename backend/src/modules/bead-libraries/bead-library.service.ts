@@ -85,9 +85,12 @@ function mapBeadLibraryRow(
 export class BeadLibraryService {
   async list(options?: { forBuilder?: boolean }): Promise<unknown[]> {
     const supabase = getSupabaseServiceRole();
+    // Omit crop_config from list — polygon payloads are huge; admin edit loads GET by id.
     const { data, error } = await supabase
       .from("bead_libraries")
-      .select("*, bead_types(slug, name, is_active), sub_bead_types(slug, name, bead_type_id, is_active)")
+      .select(
+        "id,public_id,name,original_image_url,processed_image_url,bead_type_id,sub_bead_type_id,description,metadata,crop_status,is_active,availability_status_code,display_order,created_at,updated_at,bead_types(slug, name, is_active),sub_bead_types(slug, name, bead_type_id, is_active)",
+      )
       .order("display_order", { ascending: true })
       .order("public_id", { ascending: true });
 
