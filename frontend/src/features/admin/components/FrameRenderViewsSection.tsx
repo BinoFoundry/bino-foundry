@@ -95,9 +95,9 @@ function emptyView(view: FrameViewAxis): FrameRenderView {
 }
 
 /**
- * Prefer in-progress editor draft/preview, but restore cutouts from the saved view when
- * the local mask lost empty `holes` while clip still has `holePathDs`.
- * When the view mask was replaced externally (e.g. Copy setup), prefer the view geometry.
+ * Prefer in-progress editor draft (including intentional Reset / clear).
+ * External replaces (Copy setup) update `draftRef` via the views-sync effect first,
+ * so remounts still see the new geometry as local.
  */
 function maskGeometryFingerprint(mask: MaskConfig): string {
   const lenses = ensureFrameLensSet(mask.lenses ?? []).map((lens) => ({
@@ -129,14 +129,18 @@ function resolveEditorMask(
   local: MaskConfig | null | undefined,
 ): MaskConfig | null {
   const resolved = resolveMaskConfigForEditor(view);
-  if (local && hasAnyLensMask(local) && resolved && hasAnyLensMask(resolved)) {
-    if (maskGeometryFingerprint(local) === maskGeometryFingerprint(resolved)) {
+  if (local != null) {
+    if (
+      hasAnyLensMask(local) &&
+      resolved &&
+      hasAnyLensMask(resolved) &&
+      maskGeometryFingerprint(local) === maskGeometryFingerprint(resolved)
+    ) {
       return enrichMaskHolesFromSource(local, resolved);
     }
-    // External replace (Copy configuration, etc.) — adopt view geometry.
-    return resolved;
+    // Draft wins — Reset clears a side here; Copy already wrote the new mask into draft.
+    return local;
   }
-  if (local && hasAnyLensMask(local)) return local;
   return resolved;
 }
 
@@ -662,10 +666,34 @@ export const FrameRenderViewsSection = forwardRef<
     const existing = draftRef.current[axis] ?? resolveMaskConfigForEditor(view) ?? null;
     const cleared = mergeLensSideIntoMask(existing, dims.width, dims.height, side, []);
     draftRef.current[axis] = cleared;
-    setPreviewMasks((prev) => ({ ...prev, [axis]: hasAnyLensMask(cleared) ? cleared : null }));
+    setPreviewMasks((prev) => ({ ...prev, [axis]: cleared }));
     const sessionKey = `${axis}-${side}`;
     setEditSession((s) => ({ ...s, [sessionKey]: (s[sessionKey] ?? 0) + 1 }));
+    onDraftTouch?.();
     setAxisNotice(axis, `${LENS_SIDE_LABELS[side]} path cleared in editor.`, "success");
+  };
+
+  const resetDetailsInEditor = (axis: FrameViewAxis) => {
+    const view = getView(axis);
+    const existing = draftRef.current[axis] ?? resolveMaskConfigForEditor(view) ?? null;
+    if (!existing) {
+      setAxisNotice(axis, "No Manual Details to clear.", "warning");
+      return;
+    }
+    const cleared: MaskConfig = {
+      ...existing,
+      frameExclusions: [],
+      exclusions: undefined,
+      updatedAt: Date.now(),
+    };
+    draftRef.current[axis] = cleared;
+    setPreviewMasks((prev) => ({ ...prev, [axis]: cleared }));
+    setEditSession((s) => ({
+      ...s,
+      [`${axis}-exclusions`]: (s[`${axis}-exclusions`] ?? 0) + 1,
+    }));
+    onDraftTouch?.();
+    setAxisNotice(axis, "Manual Details cleared in editor.", "success");
   };
 
   const handleFramePathSave = (axis: FrameViewAxis, config: BeadCropConfig) => {
@@ -1093,6 +1121,17 @@ export const FrameRenderViewsSection = forwardRef<
                     <InlineEditorPanel
                       title="Manual Details"
                       description="Place rivets, screws, and logos above the glass. Smart Auto Detect finds boundaries from a click or brush; Manual Polygon is always available. Save stamps for this model family to reuse on other sizes."
+                      toolbar={
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => resetDetailsInEditor(axis)}
+                        >
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                          Reset
+                        </Button>
+                      }
                       onSave={() => saveExclusionsEditor(axis)}
                       onCancel={() => cancelEditor(axis)}
                       saveFeedback={

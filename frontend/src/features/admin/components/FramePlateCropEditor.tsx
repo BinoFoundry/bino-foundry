@@ -69,12 +69,15 @@ export const FramePlateCropEditor = forwardRef<FramePlateCropEditorHandle, Frame
     const initialCropRef = useRef(initialCrop);
     initialCropRef.current = initialCrop;
     const draftRef = useRef<BeadCropConfig | null>(initialCrop ?? null);
+    /** After Reset, do not fall back to saved `initialCrop` on remount. */
+    const clearedRef = useRef(false);
 
     const commitDraft = useCallback((): BeadCropConfig | null => {
       const config = draftRef.current;
       if (!config || !isBeadCropConfigValid(config)) return null;
       const committed = { ...config, updatedAt: Date.now() };
       draftRef.current = committed;
+      clearedRef.current = false;
       return committed;
     }, []);
 
@@ -84,12 +87,14 @@ export const FramePlateCropEditor = forwardRef<FramePlateCropEditorHandle, Frame
         commitDraft,
         isPathReady: () => pathReady,
         applyDraft: (config: BeadCropConfig) => {
+          clearedRef.current = false;
           draftRef.current = config;
           setPathReady(isBeadCropConfigValid(config));
           setEditorSession((s) => s + 1);
           onDraftChangeRef.current?.(config, isBeadCropConfigValid(config));
         },
         resetDraft: () => {
+          clearedRef.current = true;
           draftRef.current = null;
           setPathReady(false);
           setEditorSession((s) => s + 1);
@@ -111,6 +116,7 @@ export const FramePlateCropEditor = forwardRef<FramePlateCropEditorHandle, Frame
           return;
         }
         draftRef.current = result.config;
+        clearedRef.current = false;
         setPathReady(isBeadCropConfigValid(result.config));
         setEditorSession((s) => s + 1);
         onDraftChangeRef.current?.(result.config, isBeadCropConfigValid(result.config));
@@ -131,6 +137,7 @@ export const FramePlateCropEditor = forwardRef<FramePlateCropEditorHandle, Frame
           meta.imgH,
           originalUrl,
         );
+        clearedRef.current = false;
         draftRef.current = meta.valid ? config : null;
         const ready = meta.valid && isBeadCropConfigValid(config);
         setPathReady(ready);
@@ -165,12 +172,14 @@ export const FramePlateCropEditor = forwardRef<FramePlateCropEditorHandle, Frame
 
     useEffect(() => {
       if (initialCrop && isBeadCropConfigValid(initialCrop)) {
+        clearedRef.current = false;
         draftRef.current = initialCrop;
         setPathReady(true);
       }
     }, [initialCrop]);
 
     const cropReady = initialCrop && isBeadCropConfigValid(initialCrop);
+    const lensesSource = clearedRef.current ? draftRef.current : (draftRef.current ?? initialCrop);
 
     return (
       <div className={cn(inline ? "space-y-3" : "space-y-3 rounded-xl border border-border bg-background p-4", className)}>
@@ -218,9 +227,13 @@ export const FramePlateCropEditor = forwardRef<FramePlateCropEditorHandle, Frame
         )}
 
         <PolygonEditorShell
-          key={`frame-crop-${beadCropEditorPlateKey(originalUrl, draftRef.current ?? initialCrop)}|${editorSession}`}
+          key={`frame-crop-${beadCropEditorPlateKey(originalUrl, lensesSource)}|${editorSession}`}
           imageUrl={originalUrl}
-          getInitialLenses={() => beadCropConfigToEditorLenses(draftRef.current ?? initialCropRef.current)}
+          getInitialLenses={() =>
+            beadCropConfigToEditorLenses(
+              clearedRef.current ? draftRef.current : (draftRef.current ?? initialCropRef.current),
+            )
+          }
           onLensesChange={handleLensesChange}
           renderPreview={inline ? undefined : renderPreview}
           showThumbnailPreview={!inline}
