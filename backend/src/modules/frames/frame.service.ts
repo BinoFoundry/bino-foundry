@@ -119,10 +119,12 @@ async function fetchRenderViewsForFrames(
     .order("view_axis", { ascending: true });
 
   assertNoDbError(error);
-  for (const row of data ?? []) {
-    const fid = String((row as Record<string, unknown>).frame_id);
+  // Dynamic `columns` makes the client infer GenericStringError — normalize via unknown.
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  for (const row of rows) {
+    const fid = String(row.frame_id);
     const list = map.get(fid) ?? [];
-    list.push(row as Record<string, unknown>);
+    list.push(row);
     map.set(fid, list);
   }
   return map;
