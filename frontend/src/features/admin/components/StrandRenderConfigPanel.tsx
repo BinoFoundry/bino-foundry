@@ -193,11 +193,11 @@ export function StrandRenderConfigPanel({
   const previewProfile = useMemo(() => draft, [draft]);
 
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-muted/15 p-4">
+    <section className="space-y-2 rounded-xl border border-border bg-muted/15 p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] leading-snug text-muted-foreground">
             {mode === "system"
               ? "General defaults. Type, sub-type, and bead settings override these."
               : mode === "beadType"
@@ -278,179 +278,11 @@ export function StrandRenderConfigPanel({
         </p>
       ) : null}
 
+      {/* Balance spacing on its own row; main fields in a compact 3-col grid for laptop. */}
       <div
-        className={
-          inheritedLock ? "pointer-events-none grid gap-3 opacity-70 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"
-        }
+        className={inheritedLock ? "pointer-events-none space-y-2 opacity-70" : "space-y-2"}
         aria-disabled={inheritedLock || undefined}
       >
-        <SectionHeading title="Size" />
-        {mode === "system" ? (
-          <Field
-            label="Visual size scaling"
-            source={provenance?.visualSizeScaling}
-            readOnly={readOnly}
-          >
-            <AdminDeferredNumberInput
-              value={draft.visualSizeScaling}
-              onCommit={(visualSizeScaling) =>
-                commitCalibration("visualSizeScaling", visualSizeScaling)
-              }
-              onEditingChange={(editing) => setFieldEditing("visualSizeScaling", editing)}
-              min={STRAND_VISUAL_SIZE_SCALING_MIN}
-              max={STRAND_VISUAL_SIZE_SCALING_MAX}
-              step={STRAND_VISUAL_SIZE_SCALING_STEP}
-              decimals={2}
-              disabled={readOnly}
-              aria-label="Visual size scaling"
-              clampOnCommit={false}
-              onRangeError={(message) => setFieldError("visualSizeScaling", message)}
-              onClearError={() => setFieldError("visualSizeScaling", null)}
-            />
-            <InputExamples examples={["0.50", "0.70", "1.00", "1.25"]} />
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Platform-wide curve for how 6 / 8 / 10&nbsp;mm look relative to each other.{" "}
-              {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm stays anchored. Use Live Preview → Compare
-              sizes. Per-bead tuning uses Render Size only.
-            </p>
-            <FieldError message={fieldErrors.visualSizeScaling} />
-          </Field>
-        ) : (
-          <Field label="Render size" source={provenance?.visualScale} readOnly={readOnly}>
-            <AdminDeferredNumberInput
-              value={draft.visualScale}
-              onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
-              onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
-              min={STRAND_VISUAL_SCALE_MIN}
-              max={STRAND_VISUAL_SCALE_MAX}
-              step={STRAND_VISUAL_SCALE_STEP}
-              decimals={2}
-              disabled={readOnly}
-              aria-label="Render size"
-              clampOnCommit={false}
-              onRangeError={(message) => setFieldError("visualScale", message)}
-              onClearError={() => setFieldError("visualScale", null)}
-            />
-            <InputExamples examples={["0.50", "0.90", "1.00", "1.08", "2.00"]} />
-            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-              How large this asset looks. 1.00 = normal. Size differences between 6 / 8 / 10&nbsp;mm follow
-              the system curve — you do not need a separate setting here.
-            </p>
-            <FieldError message={fieldErrors.visualScale} />
-          </Field>
-        )}
-
-        {mode !== "system" ? (
-          <>
-            <SectionHeading title="Strand" />
-            <Field label="Strand occupancy" source={provenance?.contactWidth} readOnly={readOnly}>
-              <AdminDeferredNumberInput
-                value={effectiveStrandContactWidth({
-                  contactWidth: draft.contactWidth,
-                  contactOffset: draft.contactOffset,
-                  spacingAdjustment: draft.spacingAdjustment,
-                })}
-                onCommit={(strandOccupancy) => {
-                  patchDraft({
-                    strandOccupancy,
-                    contactWidth: 1,
-                    contactOffset: strandOccupancy - 1,
-                    spacingAdjustment: 0,
-                  });
-                }}
-                onEditingChange={(editing) => setFieldEditing("strandOccupancy", editing)}
-                min={0}
-                max={STRAND_CONTACT_SPACING_MAX}
-                step={STRAND_CONTACT_SPACING_STEP}
-                decimals={2}
-                disabled={readOnly}
-                aria-label="Strand occupancy"
-                clampOnCommit={false}
-                onRangeError={(message) => setFieldError("strandOccupancy", message)}
-                onClearError={() => setFieldError("strandOccupancy", null)}
-              />
-              <InputExamples examples={["0.50", "1.00", "1.50", "2.00", "5.00"]} />
-              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-                How much space this item takes along the bracelet strand. Does not change how large the
-                asset looks — only spacing on the layout.
-              </p>
-              <FieldError message={fieldErrors.strandOccupancy} />
-            </Field>
-          </>
-        ) : null}
-
-        {mode !== "system" ? (
-          <>
-            <SectionHeading title="Position" />
-            <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
-              <AdminDeferredNumberInput
-                value={draft.verticalOffset}
-                onCommit={(verticalOffset) => commitCalibration("verticalOffset", verticalOffset)}
-                onEditingChange={(editing) => setFieldEditing("verticalOffset", editing)}
-                min={STRAND_VERTICAL_OFFSET_MIN}
-                max={STRAND_VERTICAL_OFFSET_MAX}
-                step={STRAND_VERTICAL_OFFSET_STEP}
-                decimals={1}
-                disabled={readOnly}
-                aria-label="Vertical offset"
-                clampOnCommit={false}
-                onRangeError={(message) => setFieldError("verticalOffset", message)}
-                onClearError={() => setFieldError("verticalOffset", null)}
-              />
-              <InputExamples examples={["-5", "-2.5", "0", "3", "10"]} />
-              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-                Moves the attachment point vertically (% of item height). Positive hangs farther from the
-                cord; negative pulls closer.
-              </p>
-              <FieldError message={fieldErrors.verticalOffset} />
-            </Field>
-          </>
-        ) : null}
-
-        {mode !== "system" ? (
-          <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
-            <select
-              disabled={readOnly}
-              className={fieldClass(readOnly)}
-              value={draft.anchorPreset}
-              onChange={(e) =>
-                patchDraft({ anchorPreset: e.target.value as StrandAnchorPreset })
-              }
-            >
-              <option value="center">Center</option>
-              <option value="loop">Loop (top bail)</option>
-              <option value="top">Top</option>
-              <option value="bottom">Bottom</option>
-            </select>
-            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-              Which part of the asset attaches to the strand. “Loop” = top bail; “Center” = middle.
-            </p>
-          </Field>
-        ) : null}
-
-        {mode !== "system" ? (
-          <>
-            <SectionHeading title="Orientation" />
-            <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
-              <select
-                disabled={readOnly}
-                className={fieldClass(readOnly)}
-                value={draft.orientationMode}
-                onChange={(e) =>
-                  patchDraft({ orientationMode: e.target.value as StrandOrientationMode })
-                }
-              >
-                <option value="outward">Outward (face away from centre)</option>
-                <option value="inward">Inward (face toward centre)</option>
-              </select>
-              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-                Outward faces away from the bracelet centre; inward faces toward it.
-              </p>
-            </Field>
-          </>
-        ) : null}
-
-        <SectionHeading title="Spacing" />
         <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -461,15 +293,173 @@ export function StrandRenderConfigPanel({
             />
             Equalise empty gaps (Top / Right / Bottom / Left)
           </label>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            {mode === "system"
-              ? "General default. Type/sub-type settings override this in the Builder."
-              : "Overrides General for beads that inherit this level."}
-          </p>
-          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-            Distributes unused strand space evenly so remaining gaps look balanced.
+          <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+            When on, leftover empty space on the bracelet is shared evenly so gaps look balanced.
+            Does not change bead size.
           </p>
         </Field>
+
+        <div className="grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {mode === "system" ? (
+            <Field
+              label="Visual size scaling"
+              source={provenance?.visualSizeScaling}
+              readOnly={readOnly}
+            >
+              <AdminDeferredNumberInput
+                value={draft.visualSizeScaling}
+                onCommit={(visualSizeScaling) =>
+                  commitCalibration("visualSizeScaling", visualSizeScaling)
+                }
+                onEditingChange={(editing) => setFieldEditing("visualSizeScaling", editing)}
+                min={STRAND_VISUAL_SIZE_SCALING_MIN}
+                max={STRAND_VISUAL_SIZE_SCALING_MAX}
+                step={STRAND_VISUAL_SIZE_SCALING_STEP}
+                decimals={2}
+                disabled={readOnly}
+                aria-label="Visual size scaling"
+                clampOnCommit={false}
+                onRangeError={(message) => setFieldError("visualSizeScaling", message)}
+                onClearError={() => setFieldError("visualSizeScaling", null)}
+              />
+              <InputExamples examples={["0.50", "0.70", "1.00", "1.25"]} />
+              <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                Controls how strongly size jumps between catalogue mm look (6 → 8 → 10&nbsp;mm).{" "}
+                <span className="font-medium">1.00</span> = linear / natural. Lower = subtler
+                differences. {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm stays fixed. Turn on
+                Compare sizes in the preview to see the effect.
+              </p>
+              <FieldError message={fieldErrors.visualSizeScaling} />
+            </Field>
+          ) : (
+            <>
+              <Field label="Render size" source={provenance?.visualScale} readOnly={readOnly}>
+                <AdminDeferredNumberInput
+                  value={draft.visualScale}
+                  onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
+                  onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
+                  min={STRAND_VISUAL_SCALE_MIN}
+                  max={STRAND_VISUAL_SCALE_MAX}
+                  step={STRAND_VISUAL_SCALE_STEP}
+                  decimals={2}
+                  disabled={readOnly}
+                  aria-label="Render size"
+                  clampOnCommit={false}
+                  onRangeError={(message) => setFieldError("visualScale", message)}
+                  onClearError={() => setFieldError("visualScale", null)}
+                />
+                <InputExamples examples={["0.50", "1.00", "1.20", "2.00"]} />
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  Controls how large the asset looks on the bracelet.{" "}
+                  <span className="font-medium">Higher</span> = visually bigger;{" "}
+                  <span className="font-medium">lower</span> = visually smaller. Does not change how
+                  much strand space it occupies.
+                </p>
+                <FieldError message={fieldErrors.visualScale} />
+              </Field>
+
+              <Field label="Strand occupancy" source={provenance?.contactWidth} readOnly={readOnly}>
+                <AdminDeferredNumberInput
+                  value={effectiveStrandContactWidth({
+                    contactWidth: draft.contactWidth,
+                    contactOffset: draft.contactOffset,
+                    spacingAdjustment: draft.spacingAdjustment,
+                  })}
+                  onCommit={(strandOccupancy) => {
+                    patchDraft({
+                      strandOccupancy,
+                      contactWidth: 1,
+                      contactOffset: strandOccupancy - 1,
+                      spacingAdjustment: 0,
+                    });
+                  }}
+                  onEditingChange={(editing) => setFieldEditing("strandOccupancy", editing)}
+                  min={0}
+                  max={STRAND_CONTACT_SPACING_MAX}
+                  step={STRAND_CONTACT_SPACING_STEP}
+                  decimals={2}
+                  disabled={readOnly}
+                  aria-label="Strand occupancy"
+                  clampOnCommit={false}
+                  onRangeError={(message) => setFieldError("strandOccupancy", message)}
+                  onClearError={() => setFieldError("strandOccupancy", null)}
+                />
+                <InputExamples examples={["0.50", "1.00", "1.50", "2.00"]} />
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  Controls how much space this item takes along the bracelet strand.{" "}
+                  <span className="font-medium">Higher</span> = more room between neighbours;{" "}
+                  <span className="font-medium">lower</span> = packed tighter. Does not change how
+                  large the image looks.
+                </p>
+                <FieldError message={fieldErrors.strandOccupancy} />
+              </Field>
+
+              <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
+                <AdminDeferredNumberInput
+                  value={draft.verticalOffset}
+                  onCommit={(verticalOffset) => commitCalibration("verticalOffset", verticalOffset)}
+                  onEditingChange={(editing) => setFieldEditing("verticalOffset", editing)}
+                  min={STRAND_VERTICAL_OFFSET_MIN}
+                  max={STRAND_VERTICAL_OFFSET_MAX}
+                  step={STRAND_VERTICAL_OFFSET_STEP}
+                  decimals={1}
+                  disabled={readOnly}
+                  aria-label="Vertical offset"
+                  clampOnCommit={false}
+                  onRangeError={(message) => setFieldError("verticalOffset", message)}
+                  onClearError={() => setFieldError("verticalOffset", null)}
+                />
+                <InputExamples examples={["-5", "0", "5", "10"]} />
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  Moves the asset toward or away from the cord (% of item height).{" "}
+                  <span className="font-medium">Positive</span> = hangs farther out;{" "}
+                  <span className="font-medium">negative</span> = pulls closer to the strand.
+                </p>
+                <FieldError message={fieldErrors.verticalOffset} />
+              </Field>
+
+              <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
+                <select
+                  disabled={readOnly}
+                  className={fieldClass(readOnly)}
+                  value={draft.anchorPreset}
+                  onChange={(e) =>
+                    patchDraft({ anchorPreset: e.target.value as StrandAnchorPreset })
+                  }
+                >
+                  <option value="center">Center</option>
+                  <option value="loop">Loop (top bail)</option>
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                </select>
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  Which part of the asset attaches to the strand.{" "}
+                  <span className="font-medium">Loop</span> = top bail (charms);{" "}
+                  <span className="font-medium">Center</span> = middle of the asset.
+                </p>
+              </Field>
+
+              <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
+                <select
+                  disabled={readOnly}
+                  className={fieldClass(readOnly)}
+                  value={draft.orientationMode}
+                  onChange={(e) =>
+                    patchDraft({ orientationMode: e.target.value as StrandOrientationMode })
+                  }
+                >
+                  <option value="outward">Outward (away from centre)</option>
+                  <option value="inward">Inward (toward centre)</option>
+                </select>
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  Which way the asset faces around the bracelet.{" "}
+                  <span className="font-medium">Outward</span> = away from the centre;{" "}
+                  <span className="font-medium">Inward</span> = toward the centre.
+                </p>
+              </Field>
+            </>
+          )}
+        </div>
       </div>
 
       {showAdvanced ? (
@@ -628,7 +618,7 @@ export function StrandRenderConfigPanel({
 
       {livePreview ? (
         <StrandRenderLivePreview
-          className="border-t border-border pt-4"
+          className="border-t border-border pt-3"
           profile={previewProfile}
           imageUrl={previewImageUrl}
           sampleBead={previewSampleBead}
@@ -658,9 +648,9 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <label className="text-xs text-muted-foreground">{label}</label>
+    <div className="min-w-0">
+      <div className="mb-0.5 flex items-center justify-between gap-2">
+        <label className="text-[11px] font-medium text-muted-foreground">{label}</label>
         {source ? <SourceBadge source={source} /> : null}
       </div>
       {children}
@@ -670,8 +660,8 @@ function Field({
 
 function InputExamples({ examples }: { examples: string[] }) {
   return (
-    <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-      Examples: {examples.join(" | ")}
+    <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+      e.g. {examples.join(" · ")}
     </p>
   );
 }

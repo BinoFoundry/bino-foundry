@@ -457,12 +457,12 @@ export function StrandRenderLivePreview({
 
   return (
     <div className={className}>
-      <div className="mb-3 space-y-2.5">
+      <div className="mb-2 space-y-2">
         <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">Live Preview</p>
             <p className="text-[11px] text-muted-foreground">
-              Uses the same strand renderer as the Bracelet Builder.
+              Same renderer as the Bracelet Builder — updates with draft settings.
             </p>
           </div>
 
@@ -583,7 +583,7 @@ export function StrandRenderLivePreview({
 
       <div
         className="relative overflow-hidden rounded-lg border border-border bg-background"
-        style={{ height: 440 }}
+        style={{ height: 380 }}
       >
         <StrandZoomControls
           zoom={displayZoom}

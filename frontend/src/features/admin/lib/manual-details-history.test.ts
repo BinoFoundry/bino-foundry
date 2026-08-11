@@ -5,6 +5,7 @@ import {
   captureManualDetailsSnapshot,
   cloneManualDetailParts,
   isTypingInFormField,
+  manualDetailsPartsEqual,
 } from "./manual-details-history";
 
 describe("manual-details-history", () => {
@@ -34,6 +35,16 @@ describe("manual-details-history", () => {
     expect(Object.keys(snap).sort()).toEqual(["activePartIndex", "activeSubpath", "parts"]);
     expect(snap).not.toHaveProperty("editPhase");
     expect(snap).not.toHaveProperty("activeTab");
+  });
+
+  it("treats cloned parts as equal so hydrate commits can skip history", () => {
+    const part = createFramePart("Rivet", "ellipse");
+    const hole = createCutoutFromPreset(part.points, "rectangle", "Cutout 1");
+    part.holes = [hole];
+    const clone = cloneManualDetailParts([part]);
+    expect(manualDetailsPartsEqual([part], clone)).toBe(true);
+    clone[0]!.points[0]!.x += 1;
+    expect(manualDetailsPartsEqual([part], clone)).toBe(false);
   });
 
   it("detects typing targets so Delete does not steal keystrokes", () => {

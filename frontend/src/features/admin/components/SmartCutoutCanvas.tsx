@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Eraser,
   Hand,
@@ -25,7 +25,7 @@ import {
   resetViewportToDefault,
   SmoothCursorZoom,
 } from "@/render/mask/canvas-viewport";
-import type { LensPolygon, PathAnchor } from "@/render/mask/mask-types";
+import { migrateAnchors, type LensPolygon, type PathAnchor } from "@/render/mask/mask-types";
 import {
   DEFAULT_SMART_CUTOUT_PARAMS,
   clampCutoutDetectSettings,
@@ -44,6 +44,53 @@ import {
 } from "@/render/mask/smart-cutout-detect";
 
 type CanvasTool = "detect" | "add" | "remove" | "brush" | "pan" | "zoom";
+
+const MAX_SMART_SESSION_HISTORY = 40;
+
+export type SmartCutoutCanvasHandle = {
+  undo: () => boolean;
+  redo: () => boolean;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+};
+
+type SmartSessionSnapshot = {
+  preview: SmartCutoutDetectResult | null;
+  coreMask: Uint8Array | null;
+  seeds: SmartCutoutSeed[];
+  brushMask: Uint8Array | null;
+  previewW: number;
+  previewH: number;
+  status: string | null;
+};
+
+function cloneAnchors(points: PathAnchor[]): PathAnchor[] {
+  return migrateAnchors(points).map((p) => ({
+    x: p.x,
+    y: p.y,
+    curved: Boolean(p.curved),
+    handleIn: p.handleIn ? { x: p.handleIn.x, y: p.handleIn.y } : null,
+    handleOut: p.handleOut ? { x: p.handleOut.x, y: p.handleOut.y } : null,
+  }));
+}
+
+function cloneDetectResult(result: SmartCutoutDetectResult | null): SmartCutoutDetectResult | null {
+  if (!result) return null;
+  if (!result.ok) return { ok: false, reason: result.reason };
+  return {
+    ok: true,
+    mask: new Uint8Array(result.mask),
+    coreMask: new Uint8Array(result.coreMask),
+    width: result.width,
+    height: result.height,
+    areaPx: result.areaPx,
+    contourPx: result.contourPx.map((p) => ({ x: p.x, y: p.y })),
+    points: cloneAnchors(result.points),
+    regions: result.regions.map((ring) => cloneAnchors(ring)),
+    seeds: result.seeds.map((s) => ({ x: s.x, y: s.y })),
+    params: { ...result.params },
+  };
+}
 
 export interface SmartCutoutCanvasProps {
   imageUrl: string;
@@ -65,6 +112,9 @@ export interface SmartCutoutCanvasProps {
   onPreviewChange?: (result: SmartCutoutDetectResult | null) => void;
   onConfirm?: (result: SmartCutoutResult) => void;
   onSwitchToManual?: (result: SmartCutoutResult) => void;
+  /** Imperative undo/redo for detection session (wired to Manual Details toolbar). */
+  historyHandleRef?: MutableRefObject<SmartCutoutCanvasHandle | null>;
+  onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
 }
 
 /**
@@ -81,6 +131,8 @@ export function SmartCutoutCanvas({
   onPreviewChange,
   onConfirm,
   onSwitchToManual,
+  historyHandleRef,
+  onHistoryChange,
 }: SmartCutoutCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -109,6 +161,19 @@ export function SmartCutoutCanvas({
     ...clampCutoutDetectSettings(detectSettings),
   });
   const suppressParamRedetectRef = useRef(false);
+  const historyPastRef = useRef<SmartSessionSnapshot[]>([]);
+  const historyFutureRef = useRef<SmartSessionSnapshot[]>([]);
+  const historyApplyingRef = useRef(false);
+  const previewRef = useRef<SmartCutoutDetectResult | null>(null);
+  const statusRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
+  const pendingDetectRef = useRef<{
+    seed?: SmartCutoutSeed;
+    brushHint?: Uint8Array | null;
+    merge: boolean;
+  } | null>(null);
+  const onHistoryChangeRef = useRef(onHistoryChange);
+  onHistoryChangeRef.current = onHistoryChange;
 
   const [ready, setReady] = useState(false);
   const [tool, setTool] = useState<CanvasTool>("detect");
@@ -119,6 +184,8 @@ export function SmartCutoutCanvas({
   const [busy, setBusy] = useState(false);
 
   toolRef.current = tool;
+  previewRef.current = preview;
+  statusRef.current = status;
   paramsRef.current = {
     ...DEFAULT_SMART_CUTOUT_PARAMS,
     ...clampCutoutDetectSettings(detectSettings),
@@ -237,6 +304,7 @@ export function SmartCutoutCanvas({
   const publishResult = useCallback(
     (result: SmartCutoutDetectResult) => {
       setPreview(result);
+      previewRef.current = result;
       onPreviewChange?.(result);
       if (result.ok) {
         coreMaskRef.current = result.coreMask;
@@ -244,17 +312,134 @@ export function SmartCutoutCanvas({
         previewMaskRef.current = result.mask;
         previewSizeRef.current = { w: result.width, h: result.height };
         const islands = 1 + result.regions.length;
-        setStatus(
+        const nextStatus =
           `${result.areaPx} px · ${result.points.length} pts` +
-            (islands > 1 ? ` · ${islands} areas` : ""),
-        );
+          (islands > 1 ? ` · ${islands} areas` : "");
+        setStatus(nextStatus);
+        statusRef.current = nextStatus;
       } else {
         setStatus(result.reason);
+        statusRef.current = result.reason;
       }
       scheduleDraw();
     },
     [onPreviewChange, scheduleDraw],
   );
+
+  const captureSession = useCallback((): SmartSessionSnapshot => {
+    return {
+      preview: cloneDetectResult(previewRef.current),
+      coreMask: coreMaskRef.current ? new Uint8Array(coreMaskRef.current) : null,
+      seeds: seedsRef.current.map((s) => ({ x: s.x, y: s.y })),
+      brushMask: brushMaskRef.current ? new Uint8Array(brushMaskRef.current) : null,
+      previewW: previewSizeRef.current.w,
+      previewH: previewSizeRef.current.h,
+      status: statusRef.current,
+    };
+  }, []);
+
+  const notifyHistory = useCallback(() => {
+    onHistoryChangeRef.current?.({
+      canUndo: historyPastRef.current.length > 0,
+      canRedo: historyFutureRef.current.length > 0,
+    });
+  }, []);
+
+  const applySessionSnapshot = useCallback(
+    (snap: SmartSessionSnapshot) => {
+      historyApplyingRef.current = true;
+      try {
+        const previewClone = cloneDetectResult(snap.preview);
+        previewRef.current = previewClone;
+        setPreview(previewClone);
+        onPreviewChange?.(previewClone);
+        coreMaskRef.current = snap.coreMask ? new Uint8Array(snap.coreMask) : null;
+        seedsRef.current = snap.seeds.map((s) => ({ x: s.x, y: s.y }));
+        brushMaskRef.current = snap.brushMask ? new Uint8Array(snap.brushMask) : null;
+        if (previewClone?.ok) {
+          previewMaskRef.current = previewClone.mask;
+          previewSizeRef.current = { w: previewClone.width, h: previewClone.height };
+        } else {
+          previewMaskRef.current = null;
+          previewSizeRef.current = { w: snap.previewW, h: snap.previewH };
+        }
+        statusRef.current = snap.status;
+        setStatus(snap.status);
+        scheduleDraw();
+      } finally {
+        historyApplyingRef.current = false;
+        notifyHistory();
+      }
+    },
+    [notifyHistory, onPreviewChange, scheduleDraw],
+  );
+
+  const pushSessionHistory = useCallback(
+    (previous: SmartSessionSnapshot) => {
+      if (historyApplyingRef.current) return;
+      historyPastRef.current.push(previous);
+      if (historyPastRef.current.length > MAX_SMART_SESSION_HISTORY) {
+        historyPastRef.current.shift();
+      }
+      historyFutureRef.current = [];
+      notifyHistory();
+    },
+    [notifyHistory],
+  );
+
+  const recordSessionHistory = useCallback(() => {
+    if (historyApplyingRef.current) return;
+    pushSessionHistory(captureSession());
+  }, [captureSession, pushSessionHistory]);
+
+  const wipeWorkingSelection = useCallback(
+    (reason: string | null) => {
+      setPreview(null);
+      previewRef.current = null;
+      onPreviewChange?.(null);
+      previewMaskRef.current = null;
+      coreMaskRef.current = null;
+      seedsRef.current = [];
+      brushMaskRef.current = null;
+      statusRef.current = reason;
+      setStatus(reason);
+      scheduleDraw();
+    },
+    [onPreviewChange, scheduleDraw],
+  );
+
+  const undoSession = useCallback((): boolean => {
+    if (!historyPastRef.current.length) return false;
+    const current = captureSession();
+    const prev = historyPastRef.current.pop()!;
+    historyFutureRef.current.push(current);
+    applySessionSnapshot(prev);
+    return true;
+  }, [applySessionSnapshot, captureSession]);
+
+  const redoSession = useCallback((): boolean => {
+    if (!historyFutureRef.current.length) return false;
+    const current = captureSession();
+    const next = historyFutureRef.current.pop()!;
+    historyPastRef.current.push(current);
+    applySessionSnapshot(next);
+    return true;
+  }, [applySessionSnapshot, captureSession]);
+
+  useEffect(() => {
+    if (!historyHandleRef) return;
+    historyHandleRef.current = {
+      undo: undoSession,
+      redo: redoSession,
+      canUndo: () => historyPastRef.current.length > 0,
+      canRedo: () => historyFutureRef.current.length > 0,
+    };
+    notifyHistory();
+    return () => {
+      historyHandleRef.current = null;
+      onHistoryChangeRef.current?.({ canUndo: false, canRedo: false });
+    };
+  }, [historyHandleRef, notifyHistory, redoSession, undoSession]);
 
   const refineFromCore = useCallback(() => {
     const imageData = imageDataRef.current;
@@ -276,6 +461,7 @@ export function SmartCutoutCanvas({
       refineFromCore();
       return;
     }
+    busyRef.current = true;
     setBusy(true);
     try {
       const rebuilt = rebuildCoreFromSeeds(imageData, seedsRef.current, paramsRef.current);
@@ -294,6 +480,7 @@ export function SmartCutoutCanvas({
       );
       publishResult(result);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }, [publishResult, refineFromCore]);
@@ -306,7 +493,27 @@ export function SmartCutoutCanvas({
     }) => {
       const imageData = imageDataRef.current;
       if (!imageData) return;
+
+      // Don't drop clicks while a detect is in flight — keep the latest intent.
+      if (busyRef.current) {
+        pendingDetectRef.current = {
+          seed: opts.seed,
+          brushHint: opts.brushHint,
+          merge: opts.merge,
+        };
+        return;
+      }
+
+      busyRef.current = true;
       setBusy(true);
+      const previous = captureSession();
+
+      // Fresh Detect: clear old overlay immediately so switching regions feels responsive.
+      if (!opts.merge) {
+        previewMaskRef.current = null;
+        scheduleDraw();
+      }
+
       try {
         const result = detectSmartCutout({
           imageData,
@@ -316,27 +523,61 @@ export function SmartCutoutCanvas({
           existingSeeds: opts.merge ? seedsRef.current : [],
           params: paramsRef.current,
         });
-        if (!opts.merge && result.ok) {
-          // Fresh cutout replaces session.
+
+        if (result.ok) {
+          pushSessionHistory(previous);
+          publishResult(result);
+        } else if (!opts.merge) {
+          // Replace attempt failed — drop the old overlay so it doesn't feel stuck,
+          // but keep it on the undo stack so Undo brings it back.
+          pushSessionHistory(previous);
+          wipeWorkingSelection(result.reason);
+        } else {
+          // Add Area failed — keep prior overlay and show why.
+          statusRef.current = result.reason;
+          setStatus(result.reason);
+          if (previous.preview?.ok) {
+            previewMaskRef.current = previous.preview.mask;
+            previewSizeRef.current = {
+              w: previous.preview.width,
+              h: previous.preview.height,
+            };
+            scheduleDraw();
+          }
         }
-        publishResult(result);
       } finally {
+        busyRef.current = false;
         setBusy(false);
+        const pending = pendingDetectRef.current;
+        if (pending) {
+          pendingDetectRef.current = null;
+          // Recurse after releasing busy so the latest click runs.
+          queueMicrotask(() => {
+            runDetect(pending);
+          });
+        }
       }
     },
-    [publishResult],
+    [
+      captureSession,
+      publishResult,
+      pushSessionHistory,
+      scheduleDraw,
+      wipeWorkingSelection,
+    ],
   );
 
   const clearPreview = useCallback(() => {
-    setPreview(null);
-    onPreviewChange?.(null);
-    previewMaskRef.current = null;
-    coreMaskRef.current = null;
-    seedsRef.current = [];
-    brushMaskRef.current = null;
-    setStatus(null);
-    scheduleDraw();
-  }, [onPreviewChange, scheduleDraw]);
+    if (
+      previewRef.current ||
+      coreMaskRef.current ||
+      previewMaskRef.current ||
+      seedsRef.current.length
+    ) {
+      recordSessionHistory();
+    }
+    wipeWorkingSelection(null);
+  }, [recordSessionHistory, wipeWorkingSelection]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -594,7 +835,7 @@ export function SmartCutoutCanvas({
   }, []);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!ready || busy) return;
+    if (!ready) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.setPointerCapture(e.pointerId);
@@ -609,6 +850,11 @@ export function SmartCutoutCanvas({
     }
 
     if (activeTool === "zoom") {
+      return;
+    }
+
+    // Detect / Add queue while busy; other tools wait for the current op.
+    if (busyRef.current && activeTool !== "detect" && activeTool !== "add") {
       return;
     }
 
@@ -627,6 +873,8 @@ export function SmartCutoutCanvas({
         setStatus("Detect a region first.");
         return;
       }
+      const previous = captureSession();
+      busyRef.current = true;
       setBusy(true);
       try {
         const result = removeAreaAtPoint({
@@ -638,8 +886,15 @@ export function SmartCutoutCanvas({
           seeds: seedsRef.current,
           params: paramsRef.current,
         });
-        publishResult(result);
+        if (result.ok) {
+          pushSessionHistory(previous);
+          publishResult(result);
+        } else {
+          setStatus(result.reason);
+          statusRef.current = result.reason;
+        }
       } finally {
+        busyRef.current = false;
         setBusy(false);
       }
       return;
@@ -655,8 +910,8 @@ export function SmartCutoutCanvas({
       return;
     }
 
-    // Fresh detect (replaces session) or first click
-    runDetect({ seed: img, merge: Boolean(coreMaskRef.current) && tool === "detect" ? false : false });
+    // Fresh Detect always replaces the current selection (click elsewhere = switch).
+    runDetect({ seed: img, merge: false });
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -716,7 +971,7 @@ export function SmartCutoutCanvas({
           variant={tool === "detect" ? "default" : "outline"}
           className="h-7"
           onClick={() => setTool("detect")}
-          title="Click to detect (V) — starts / replaces selection"
+          title="Click to detect (V) — click another spot to switch selection"
         >
           <MousePointer2 className="mr-1 h-3.5 w-3.5" />
           Detect
@@ -905,7 +1160,7 @@ export function SmartCutoutCanvas({
           {busy
             ? "Detecting…"
             : status ??
-              "Click a rivet/screw/logo. Use Add Area for more pieces in the same cutout."}
+              "Click a rivet/screw/logo. Click elsewhere to switch. Use Add Area for more pieces."}
         </p>
         <div className="flex flex-wrap gap-1.5">
           <Button type="button" size="sm" variant="ghost" className="h-7" onClick={clearPreview}>

@@ -54,11 +54,15 @@ import {
   MAX_MANUAL_DETAILS_HISTORY,
   captureManualDetailsSnapshot,
   isTypingInFormField,
+  manualDetailsPartsEqual,
   type ManualDetailsSnapshot,
 } from "@/features/admin/lib/manual-details-history";
 import { FramePartTransformCanvas } from "@/features/admin/components/FramePartTransformCanvas";
 import { CutoutDetectSettingsFields } from "@/features/admin/components/CutoutDetectSettingsFields";
-import { SmartCutoutCanvas } from "@/features/admin/components/SmartCutoutCanvas";
+import {
+  SmartCutoutCanvas,
+  type SmartCutoutCanvasHandle,
+} from "@/features/admin/components/SmartCutoutCanvas";
 import {
   applySmartResultToPolygon,
   clampCutoutDetectSettings,
@@ -148,6 +152,8 @@ export function FrameMaskEditor({
   const [showInsetForm, setShowInsetForm] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [smartCanUndo, setSmartCanUndo] = useState(false);
+  const [smartCanRedo, setSmartCanRedo] = useState(false);
 
   const [partList, setPartListState] = useState<LensPolygon[]>(() =>
     getFrameParts(initialMaskRef.current),
@@ -170,12 +176,31 @@ export function FrameMaskEditor({
   const historyCoalesceRef = useRef(false);
   const historyCoalesceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyingHistoryRef = useRef(false);
+  /** Swallow PolygonEditorShell hydrate emits after undo/redo remount (clears redo otherwise). */
+  const historyHydrateSuppressRef = useRef(0);
   const vertexEditorHandleRef = useRef<PolygonEditorShellHandle | null>(null);
+  const smartHistoryHandleRef = useRef<SmartCutoutCanvasHandle | null>(null);
 
   const syncHistoryButtons = useCallback(() => {
-    setCanUndo(historyPastRef.current.length > 0);
-    setCanRedo(historyFutureRef.current.length > 0);
-  }, []);
+    const smartUndo =
+      editPhaseRef.current === "smart" &&
+      (smartCanUndo || (smartHistoryHandleRef.current?.canUndo() ?? false));
+    const smartRedo =
+      editPhaseRef.current === "smart" &&
+      (smartCanRedo || (smartHistoryHandleRef.current?.canRedo() ?? false));
+    setCanUndo(historyPastRef.current.length > 0 || smartUndo);
+    setCanRedo(historyFutureRef.current.length > 0 || smartRedo);
+  }, [smartCanRedo, smartCanUndo]);
+
+  const handleSmartHistoryChange = useCallback(
+    (state: { canUndo: boolean; canRedo: boolean }) => {
+      setSmartCanUndo(state.canUndo);
+      setSmartCanRedo(state.canRedo);
+      setCanUndo(historyPastRef.current.length > 0 || state.canUndo);
+      setCanRedo(historyFutureRef.current.length > 0 || state.canRedo);
+    },
+    [],
+  );
 
   const captureNow = useCallback(
     (): ManualDetailsSnapshot =>
@@ -237,7 +262,13 @@ export function FrameMaskEditor({
         coalesce?: boolean;
       },
     ) => {
-      if (!options?.skipHistory && !applyingHistoryRef.current) {
+      const ordered = withListOrderDepth(list);
+      // No-op hydrates (and identical re-commits) must not push history or clear redo.
+      const partsUnchanged = manualDetailsPartsEqual(ordered, partListRef.current);
+      const skipHistory =
+        Boolean(options?.skipHistory) || applyingHistoryRef.current || partsUnchanged;
+
+      if (!skipHistory) {
         if (options?.coalesce) {
           if (!historyCoalesceRef.current) {
             recordHistory();
@@ -254,7 +285,6 @@ export function FrameMaskEditor({
         }
       }
 
-      const ordered = withListOrderDepth(list);
       setPartList(ordered);
       if (options?.selectIndex != null) {
         setActivePartIndex(options.selectIndex);
@@ -270,6 +300,10 @@ export function FrameMaskEditor({
   const applyHistorySnapshot = useCallback(
     (snap: ManualDetailsSnapshot) => {
       applyingHistoryRef.current = true;
+      // Vertex editor remount emits hydrate changes after partRevision bump; swallow those only.
+      if (editPhaseRef.current === "vertex") {
+        historyHydrateSuppressRef.current = Math.max(historyHydrateSuppressRef.current, 2);
+      }
       endHistoryCoalesce();
       try {
         const ordered = withListOrderDepth(snap.parts);
@@ -282,7 +316,10 @@ export function FrameMaskEditor({
         setPartRevision((r) => r + 1);
         emitParts(ordered);
       } finally {
-        applyingHistoryRef.current = false;
+        // Keep mute until after this turn — remount hydrate is async (image + rAF).
+        queueMicrotask(() => {
+          applyingHistoryRef.current = false;
+        });
         syncHistoryButtons();
       }
     },
@@ -290,6 +327,11 @@ export function FrameMaskEditor({
   );
 
   const undoManualDetails = useCallback(() => {
+    // Prefer Smart Detect session steps while that tool is open (detection vanish / reappear).
+    if (editPhaseRef.current === "smart" && smartHistoryHandleRef.current?.canUndo()) {
+      smartHistoryHandleRef.current.undo();
+      return;
+    }
     if (!historyPastRef.current.length) return;
     const current = captureNow();
     const prev = historyPastRef.current.pop()!;
@@ -298,6 +340,10 @@ export function FrameMaskEditor({
   }, [applyHistorySnapshot, captureNow]);
 
   const redoManualDetails = useCallback(() => {
+    if (editPhaseRef.current === "smart" && smartHistoryHandleRef.current?.canRedo()) {
+      smartHistoryHandleRef.current.redo();
+      return;
+    }
     if (!historyFutureRef.current.length) return;
     const current = captureNow();
     const next = historyFutureRef.current.pop()!;
@@ -347,7 +393,7 @@ export function FrameMaskEditor({
         const idx = Math.min(activePartIndex, Math.max(0, next.length - 1));
         const current = next[idx];
         if (!current || lenses.length === 0) {
-          commitList(next);
+          commitList(next, { skipHistory: true });
           return;
         }
         const [outer, ...holePaths] = lenses;
@@ -369,7 +415,12 @@ export function FrameMaskEditor({
             };
           }),
         };
-        commitList(next, { coalesce: true });
+        let skipHistory = false;
+        if (historyHydrateSuppressRef.current > 0) {
+          historyHydrateSuppressRef.current -= 1;
+          skipHistory = true;
+        }
+        commitList(next, { coalesce: true, skipHistory });
         return;
       }
 
@@ -518,6 +569,17 @@ export function FrameMaskEditor({
     }
     removeActivePart();
   }, [deleteActiveCutout, removeActivePart]);
+
+  useEffect(() => {
+    if (editPhase !== "vertex") {
+      historyHydrateSuppressRef.current = 0;
+    }
+    if (editPhase !== "smart") {
+      setSmartCanUndo(false);
+      setSmartCanRedo(false);
+    }
+    syncHistoryButtons();
+  }, [editPhase, syncHistoryButtons]);
 
   useEffect(() => {
     if (editMode !== "exclusions") return;
@@ -1110,7 +1172,7 @@ export function FrameMaskEditor({
                 className="h-8 px-2"
                 disabled={!canUndo}
                 onClick={undoManualDetails}
-                title="Undo (⌘Z / Ctrl+Z)"
+                title="Undo last Manual Details change (⌘Z / Ctrl+Z) — including Smart Detect steps"
               >
                 <Undo2 className="mr-1 h-3.5 w-3.5" />
                 Undo
@@ -1249,6 +1311,8 @@ export function FrameMaskEditor({
                   showDetectSettings={false}
                   onConfirm={applySmartCutout}
                   onSwitchToManual={switchSmartToManual}
+                  historyHandleRef={smartHistoryHandleRef}
+                  onHistoryChange={handleSmartHistoryChange}
                 />
               </div>
             ) : editPhase === "transform" ? (
@@ -1358,6 +1422,8 @@ export function FrameMaskEditor({
               }
               onConfirm={applySmartCutout}
               onSwitchToManual={switchSmartToManual}
+              historyHandleRef={smartHistoryHandleRef}
+              onHistoryChange={handleSmartHistoryChange}
             />
           </div>
         ) : null}
