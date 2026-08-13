@@ -109,12 +109,16 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
           body: (
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
-                <span className="font-medium text-foreground">Render size</span> — how large the
-                image looks. Does not change how much bracelet length it consumes.
+                <span className="font-medium text-foreground">Render size (image only)</span> — how
+                large the image looks. Does not change gaps along the cord.
               </li>
               <li>
-                <span className="font-medium text-foreground">Strand occupancy</span> — how much
-                space along the cord neighbours leave. Does not change how large the image looks.
+                <span className="font-medium text-foreground">Strand occupancy (gaps only)</span> —
+                how much space along the cord neighbours leave. Stay near 1.00 unless packing is
+                wrong. Does not change how large the image looks. With Balance spacing on a sparse
+                bracelet, leftover gaps are equalised so occupancy can look inactive — use Live
+                Preview → <span className="font-medium text-foreground">Reveal occupancy gaps</span>{" "}
+                to demonstrate.
               </li>
             </ul>
           ),
@@ -175,8 +179,8 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
                 (crystals, fixed charms, spacers).
               </li>
               <li>
-                <span className="font-medium text-foreground">Dangling</span> — hangs from a bail /
-                loop; height may extend past the cord.
+                <span className="font-medium text-foreground">Dangling</span> — hangs from its
+                hanging ring; height may extend past the cord.
               </li>
             </ul>
           ),
@@ -209,12 +213,12 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
           body: (
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
-                <span className="font-medium text-foreground">Render size</span> — visual scale of
-                the asset.
+                <span className="font-medium text-foreground">Render size (image only)</span> —
+                visual scale of the asset.
               </li>
               <li>
-                <span className="font-medium text-foreground">Strand occupancy</span> — space along
-                the bracelet.
+                <span className="font-medium text-foreground">Strand occupancy (gaps only)</span> —
+                space along the bracelet (stay near 1.00).
               </li>
               <li>
                 <span className="font-medium text-foreground">Vertical offset</span> — push toward /
@@ -222,7 +226,7 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
               </li>
               <li>
                 <span className="font-medium text-foreground">Anchor point</span> — Center vs Loop
-                (bail).
+                (hanging ring).
               </li>
               <li>
                 <span className="font-medium text-foreground">Orientation</span> — outward or inward
@@ -276,8 +280,8 @@ Not: invent 0.1 / −0.2 values from scratch for every asset.`}
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-5">
                 <li>
-                  <span className="font-medium text-foreground">Dangling (on cord)</span> — bail sits
-                  on the cord (higher hang).
+                  <span className="font-medium text-foreground">Dangling (on cord)</span> — hanging
+                  ring sits on the cord (higher hang).
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Drop (lower hang)</span> — same hang
@@ -306,7 +310,7 @@ Not: invent 0.1 / −0.2 values from scratch for every asset.`}
               </li>
               <li>
                 Tune <span className="font-medium text-foreground">Vertical offset</span> until the
-                bail sits on the cord. Use Hang offset only for a fine radial nudge.
+                hanging ring sits on the cord. Use Hang offset only for a fine radial nudge.
               </li>
               <li>
                 Turn on <span className="font-medium text-foreground">Compare sizes</span> to preview

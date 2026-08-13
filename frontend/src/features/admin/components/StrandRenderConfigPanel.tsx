@@ -298,11 +298,12 @@ export function StrandRenderConfigPanel({
               checked={draft.balanceSpacing}
               onChange={(e) => patchDraft({ balanceSpacing: e.target.checked })}
             />
-            Equalise empty gaps (Top / Right / Bottom / Left)
+            Equalise leftover empty gaps (keep bead order)
           </label>
           <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-            When on, leftover empty space on the bracelet is shared evenly so gaps look balanced.
-            Does not change bead size.
+            On: leftover cord space is shared evenly between neighbours; beads stay in clockwise
+            sequence (not Top / Right / Bottom / Left). Off: beads pack as a tight cluster — easier
+            to see Strand occupancy. Does not change photo size.
           </p>
         </Field>
 
@@ -341,7 +342,7 @@ export function StrandRenderConfigPanel({
             </Field>
           ) : (
             <>
-              <Field label="Render size" source={provenance?.visualScale} readOnly={readOnly}>
+              <Field label="Render size (image only)" source={provenance?.visualScale} readOnly={readOnly}>
                 <AdminDeferredNumberInput
                   value={draft.visualScale}
                   onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
@@ -356,17 +357,17 @@ export function StrandRenderConfigPanel({
                   onRangeError={(message) => setFieldError("visualScale", message)}
                   onClearError={() => setFieldError("visualScale", null)}
                 />
-                <InputExamples examples={["0.50", "1.00", "1.20", "2.00"]} />
+                <InputExamples examples={["0.90", "1.00", "1.10", "1.25"]} />
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  Controls how large the asset looks on the bracelet.{" "}
+                  How large the photo looks.{" "}
                   <span className="font-medium">Higher</span> = visually bigger;{" "}
-                  <span className="font-medium">lower</span> = visually smaller. Does not change how
-                  much strand space it occupies.
+                  <span className="font-medium">lower</span> = visually smaller. Does not change
+                  gaps along the cord.
                 </p>
                 <FieldError message={fieldErrors.visualScale} />
               </Field>
 
-              <Field label="Strand occupancy" source={provenance?.contactWidth} readOnly={readOnly}>
+              <Field label="Strand occupancy (gaps only)" source={provenance?.contactWidth} readOnly={readOnly}>
                 <AdminDeferredNumberInput
                   value={effectiveStrandContactWidth({
                     contactWidth: draft.contactWidth,
@@ -392,12 +393,16 @@ export function StrandRenderConfigPanel({
                   onRangeError={(message) => setFieldError("strandOccupancy", message)}
                   onClearError={() => setFieldError("strandOccupancy", null)}
                 />
-                <InputExamples examples={["0.50", "1.00", "1.50", "2.00"]} />
+                <InputExamples examples={["0.70", "0.85", "1.00", "1.15"]} />
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  Controls how much space this item takes along the bracelet strand.{" "}
-                  <span className="font-medium">Higher</span> = more room between neighbours;{" "}
-                  <span className="font-medium">lower</span> = packed tighter. Does not change how
-                  large the image looks.
+                  Cord space relative to catalogue mm.{" "}
+                  <span className="font-medium">1.00</span> = natural.{" "}
+                  <span className="font-medium">Below 1</span> (e.g. 0.85) = tighter;{" "}
+                  <span className="font-medium">above 1</span> = more gap. Does not change photo
+                  size. With <span className="font-medium">Balance spacing</span> on and a sparse
+                  strand, gaps look even — use Live Preview →{" "}
+                  <span className="font-medium">Reveal occupancy gaps</span> to demo the effect.
+                  Minimum is 0 (use values under 1 to tighten).
                 </p>
                 <FieldError message={fieldErrors.strandOccupancy} />
               </Field>
@@ -442,13 +447,13 @@ export function StrandRenderConfigPanel({
                   }}
                 >
                   <option value="center">Center</option>
-                  <option value="loop">Loop (top bail)</option>
+                  <option value="loop">Loop (hanging ring)</option>
                   <option value="top">Top</option>
                   <option value="bottom">Bottom</option>
                 </select>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
                   Which part of the asset attaches to the strand.{" "}
-                  <span className="font-medium">Loop</span> = top bail (charms);{" "}
+                  <span className="font-medium">Loop</span> = hanging ring (charms);{" "}
                   <span className="font-medium">Center</span> = middle of the asset.
                 </p>
               </Field>
@@ -484,7 +489,7 @@ export function StrandRenderConfigPanel({
                   }
                 >
                   <option value="inline">Inline (on the cord)</option>
-                  <option value="dangling">Dangling (hangs from bail)</option>
+                  <option value="dangling">Dangling (hangs from ring)</option>
                 </select>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
                   <span className="font-medium">Inline</span> = crystal-style on the strand.{" "}
@@ -565,7 +570,7 @@ export function StrandRenderConfigPanel({
             />
             <p className="mt-1 text-[10px] text-muted-foreground">
               Fine radial push as % of bead height (−100 … 100). Prefer Vertical offset first for
-              dangling charms; use this only when the bail still needs a nudge.
+              dangling charms; use this only when the hanging ring still needs a nudge.
             </p>
           </Field>
           <Field label="Rotation (advanced)" source={provenance?.rotationMode} readOnly={readOnly}>

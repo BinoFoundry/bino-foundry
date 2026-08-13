@@ -92,7 +92,7 @@ describe("bead size scaling dynamic", () => {
     const l8 = linear.beads[1]!.renderDim.width;
     const l10 = linear.beads[2]!.renderDim.width;
 
-    // Absolute size at 6mm matches the previous contact-driven render (linear path).
+    // Absolute size at 6mm matches the neutral-contact linear path.
     expect(c6).toBeCloseTo(l6, 4);
     expect(l6).toBeCloseTo(linear.contactArcPx[0]!, 3);
 
@@ -104,15 +104,120 @@ describe("bead size scaling dynamic", () => {
     expect(c10 / c6).toBeLessThan(l10 / l6);
   });
 
-  it("matches previous contact shell size when visualSizeScaling is linear", () => {
+  it("matches neutral contact shell size when visualSizeScaling is linear", () => {
     const linear = layoutFor([6, 8, 10], 1);
     for (let i = 0; i < 3; i++) {
       expect(linear.beads[i]!.renderDim.width).toBeCloseTo(linear.contactArcPx[i]!, 3);
     }
   });
 
-  it("shrinks CSS shells with pack compression so over-capacity mixed sizes do not overlap", () => {
-    // Many large beads on a small wrist → packScale < 1.
+  it("keeps drawn size when occupancy rises above 1", () => {
+    const base = layoutStrandBeadShells({
+      centerX: 200,
+      centerY: 200,
+      radiusPx: 82,
+      wristCircumferenceMm: 160,
+      beads: [
+        {
+          occupancyMm: 8,
+          slotDim: slotForMm(8),
+          profile: mergeStrandRenderProfile({
+            visualSizeScaling: 1,
+            visualScale: 1,
+            layoutScale: 1,
+            contactWidth: 1,
+          }),
+        },
+      ],
+    });
+    const loose = layoutStrandBeadShells({
+      centerX: 200,
+      centerY: 200,
+      radiusPx: 82,
+      wristCircumferenceMm: 160,
+      beads: [
+        {
+          occupancyMm: 8,
+          slotDim: slotForMm(8),
+          profile: mergeStrandRenderProfile({
+            visualSizeScaling: 1,
+            visualScale: 1,
+            layoutScale: 1,
+            contactWidth: 1,
+            contactOffset: 4,
+          }),
+        },
+      ],
+    });
+    expect(loose.contactArcPx[0]!).toBeGreaterThan(base.contactArcPx[0]! * 2);
+    expect(loose.beads[0]!.renderDim.width).toBeCloseTo(base.beads[0]!.renderDim.width, 4);
+  });
+
+  it("does not shrink shells when high occupancy overfills a fixed wrist", () => {
+    const bead = (contactOffset: number) => ({
+      occupancyMm: 8,
+      slotDim: slotForMm(8),
+      profile: mergeStrandRenderProfile({
+        visualSizeScaling: 1,
+        visualScale: 1,
+        layoutScale: 1,
+        contactWidth: 1,
+        contactOffset,
+      }),
+    });
+    const neutral = layoutStrandBeadShells({
+      centerX: 200,
+      centerY: 200,
+      radiusPx: 70,
+      wristCircumferenceMm: 160,
+      beads: Array.from({ length: 8 }, () => bead(0)),
+    });
+    const highOccupancy = layoutStrandBeadShells({
+      centerX: 200,
+      centerY: 200,
+      radiusPx: 70,
+      wristCircumferenceMm: 160,
+      beads: Array.from({ length: 8 }, () => bead(3)),
+    });
+    expect(highOccupancy.isOverCapacity).toBe(true);
+    expect(highOccupancy.beads[0]!.renderDim.width).toBeCloseTo(
+      neutral.beads[0]!.renderDim.width,
+      3,
+    );
+  });
+
+  it("keeps drawn shell size when bead count changes (even with large render size)", () => {
+    const bead = {
+      occupancyMm: 8,
+      slotDim: slotForMm(8),
+      profile: mergeStrandRenderProfile({
+        visualSizeScaling: 1,
+        visualScale: 4,
+        layoutScale: 1,
+        contactWidth: 1,
+      }),
+    };
+    const few = layoutStrandBeadShells({
+      centerX: 200,
+      centerY: 200,
+      radiusPx: 70,
+      wristCircumferenceMm: 160,
+      beads: Array.from({ length: 4 }, () => bead),
+    });
+    const many = layoutStrandBeadShells({
+      centerX: 200,
+      centerY: 200,
+      radiusPx: 70,
+      wristCircumferenceMm: 160,
+      beads: Array.from({ length: 16 }, () => bead),
+    });
+    expect(many.isOverCapacity).toBe(true);
+    expect(many.beads[0]!.renderDim.width).toBeCloseTo(few.beads[0]!.renderDim.width, 4);
+    expect(many.beads[0]!.renderDim.height).toBeCloseTo(few.beads[0]!.renderDim.height, 4);
+  });
+
+  it("allows shell overlap when over-capacity instead of shrinking render size", () => {
+    // Many large beads on a small wrist — centres compress; shells keep absolute size.
     const layout = layoutStrandBeadShells({
       centerX: 200,
       centerY: 200,
@@ -134,18 +239,9 @@ describe("bead size scaling dynamic", () => {
     });
 
     expect(layout.isOverCapacity).toBe(true);
-    // Neighbour centres must leave at least half+half of compressed shell widths.
-    const circumference = 2 * Math.PI * 60;
-    for (let i = 0; i < layout.beads.length; i++) {
-      const a = layout.beads[i]!;
-      const b = layout.beads[(i + 1) % layout.beads.length]!;
-      const dx = b.ringX - a.ringX;
-      const dy = b.ringY - a.ringY;
-      // Chord distance underestimates arc, but shells must still not cross centres.
-      const chord = Math.hypot(dx, dy);
-      const minSeparation = (a.renderDim.width + b.renderDim.width) / 2 - 0.75;
-      expect(chord).toBeGreaterThanOrEqual(minSeparation);
-      void circumference;
-    }
+    const six = layout.beads.find((b) => b.occupancyMm === 6)!;
+    const ten = layout.beads.find((b) => b.occupancyMm === 10)!;
+    expect(six.renderDim.width).toBeGreaterThan(0);
+    expect(ten.renderDim.width).toBeGreaterThan(six.renderDim.width);
   });
 });

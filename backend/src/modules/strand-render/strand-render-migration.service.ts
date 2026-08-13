@@ -236,11 +236,20 @@ export class StrandRenderMigrationService {
       const description = String(typed.description ?? "");
       const nextName = isReplaceableSubBeadTypeName(slug, name) ? copy.suggestedName : name;
       const trimmedDesc = description.trim();
+      const trimmedDescLower = trimmedDesc.toLowerCase();
       const genericDesc =
         trimmedDesc.length === 0 ||
-        ["default grouping for charm", slug, `${slug} charm`, "hanging charm", "drop charm", "fixed charm"].includes(
-          trimmedDesc.toLowerCase(),
-        );
+        [
+          "default grouping for charm",
+          slug,
+          `${slug} charm`,
+          "hanging charm",
+          "drop charm",
+          "fixed charm",
+          // Legacy wording replaced by "hanging ring" client copy.
+          "bail sits on the cord (higher hang).",
+          "bail sits on the cord (higher hang). same hang style as dangling.",
+        ].includes(trimmedDescLower);
       const nextDescription = genericDesc ? copy.description : description;
 
       if (nextName === name && nextDescription === description) {

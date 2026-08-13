@@ -129,6 +129,11 @@ interface SortableCircularStrandProps {
    * Ensures draft Type/Sub edits match Builder transform/sizing without saving first.
    */
   forceStrandRenderProfile?: StrandRenderProfile | null;
+  /**
+   * Admin demo: paint amber contact arcs on the cord so Strand occupancy is visible
+   * (longer arc = higher occupancy claim).
+   */
+  showOccupancyGuides?: boolean;
   /** Disable drag/drop (Admin read-only preview). */
   readOnly?: boolean;
 }
@@ -161,6 +166,26 @@ function beadShellTransform(
   options?: { dragOverlay?: boolean },
 ): string {
   return beadShellCssTransform(rotationDeg, options);
+}
+
+/** SVG arc along the strand ring for occupancy contact guides. */
+function strandContactArcPath(
+  cx: number,
+  cy: number,
+  r: number,
+  startAngle: number,
+  endAngle: number,
+): string {
+  const x0 = cx + r * Math.cos(startAngle);
+  const y0 = cy + r * Math.sin(startAngle);
+  const x1 = cx + r * Math.cos(endAngle);
+  const y1 = cy + r * Math.sin(endAngle);
+  let delta = endAngle - startAngle;
+  while (delta > Math.PI) delta -= 2 * Math.PI;
+  while (delta < -Math.PI) delta += 2 * Math.PI;
+  const large = Math.abs(delta) > Math.PI ? 1 : 0;
+  const sweep = delta >= 0 ? 1 : 0;
+  return `M ${x0} ${y0} A ${r} ${r} 0 ${large} ${sweep} ${x1} ${y1}`;
 }
 
 interface SortableBeadProps {
@@ -461,6 +486,7 @@ const SortableCircularStrand = ({
   size = 320,
   layoutKey = 0,
   forceStrandRenderProfile = null,
+  showOccupancyGuides = false,
   readOnly = false,
 }: SortableCircularStrandProps) => {
   const isMobile = useIsMobile();
@@ -642,6 +668,7 @@ const SortableCircularStrand = ({
       beadSize: number;
       slotDim: BeadSlotDimensions;
       renderDim: BeadSlotDimensions;
+      contactArcPx: number;
       zIndex: number;
       layoutDim: BeadSlotDimensions;
       emptyDim: BeadSlotDimensions;
@@ -810,6 +837,7 @@ const SortableCircularStrand = ({
             beadSize,
             slotDim,
             renderDim: shell.renderDim,
+            contactArcPx: shellLayout.contactArcPx[i] ?? 0,
             // DOM/stacking order follows the sequence exactly; type-level zPriority must
             // never make an earlier charm paint above a later crystal.
             zIndex: 20 + i,
@@ -1222,6 +1250,29 @@ const SortableCircularStrand = ({
               opacity={externalDrag ? 1 : STRAND_CORD.opacity}
               style={{ transition: activeId || externalDrag ? undefined : "r 0.35s ease-out" }}
             />
+            {showOccupancyGuides
+              ? renderSlots.map((slot) => {
+                  const half = Math.max(0, slot.contactArcPx) / 2 / Math.max(radius, 1e-6);
+                  if (half < 1e-4) return null;
+                  return (
+                    <path
+                      key={`occ-${slot.index}`}
+                      d={strandContactArcPath(
+                        center,
+                        center,
+                        radius,
+                        slot.angle - half,
+                        slot.angle + half,
+                      )}
+                      fill="none"
+                      stroke="#d97706"
+                      strokeWidth={Math.max(ringStrokeWidth * 3.5, 8)}
+                      strokeLinecap="butt"
+                      opacity={0.85}
+                    />
+                  );
+                })
+              : null}
           </svg>
 
           <div

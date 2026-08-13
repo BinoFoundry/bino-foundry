@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STRAND_RENDER_PROFILE, mergeStrandRenderProfile } from "@bino-foundry/shared/types";
 
-import { layoutStrandBeadShells } from "./layout-strand-bead-shells";
+import { layoutStrandBeadShells, resolveStrandShellFootprint } from "./layout-strand-bead-shells";
 import { calculateBeadRenderTransform } from "./strand-bead-render-transform";
 import { STRAND_PATH_START_ANGLE } from "./strand-path";
 
@@ -126,6 +126,77 @@ describe("layoutStrandBeadShells", () => {
     expect(loose.occupiedArcPx).toBeGreaterThan(neutral.occupiedArcPx + 1);
     // Tighter contact cannot shrink below the visual shell floor (prevents silhouette overlap).
     expect(tight.occupiedArcPx).toBeLessThanOrEqual(neutral.occupiedArcPx + 1e-6);
+  });
+
+  it("strand occupancy widens gaps without enlarging the drawn shell", () => {
+    const params = {
+      centerX: 120,
+      centerY: 120,
+      radiusPx: 70,
+      wristCircumferenceMm: 160,
+      balanceSpacing: false as const,
+    };
+    // Small visual slot so contact width (not silhouette) drives packing gaps.
+    const bead = (contactWidth: number) => ({
+      occupancyMm: 8,
+      slotDim: { width: 16, height: 16 },
+      profile: mergeStrandRenderProfile({ contactWidth, visualScale: 1, layoutScale: 1 }),
+    });
+    const neutral = layoutStrandBeadShells({
+      ...params,
+      beads: Array.from({ length: 6 }, () => bead(1)),
+    });
+    const loose = layoutStrandBeadShells({
+      ...params,
+      beads: Array.from({ length: 6 }, () => bead(1.25)),
+    });
+
+    expect(loose.occupiedArcPx).toBeGreaterThan(neutral.occupiedArcPx + 1);
+    expect(meanShellSize(loose)).toBeCloseTo(meanShellSize(neutral), 4);
+
+    const extreme = resolveStrandShellFootprint({
+      occupancyMm: 8,
+      slotDim: { width: 28, height: 28 },
+      profile: mergeStrandRenderProfile({ contactWidth: 5, visualScale: 1, layoutScale: 1 }),
+      contactArcPx: 140,
+      naturalContactArcPx: 34,
+    });
+    const baseline = resolveStrandShellFootprint({
+      occupancyMm: 8,
+      slotDim: { width: 28, height: 28 },
+      profile: mergeStrandRenderProfile({ contactWidth: 1, visualScale: 1, layoutScale: 1 }),
+      contactArcPx: 34,
+      naturalContactArcPx: 34,
+    });
+    expect(extreme.packLinearWidth).toBeGreaterThan(baseline.packLinearWidth);
+    expect(extreme.renderDim.width).toBeCloseTo(baseline.renderDim.width, 5);
+    expect(extreme.renderDim.height).toBeCloseTo(baseline.renderDim.height, 5);
+  });
+
+  it("render size scales the drawn shell without changing contact arcs", () => {
+    const params = {
+      centerX: 120,
+      centerY: 120,
+      radiusPx: 70,
+      wristCircumferenceMm: 160,
+      balanceSpacing: false as const,
+    };
+    const bead = (visualScale: number) => ({
+      occupancyMm: 8,
+      slotDim: { width: 28, height: 28 },
+      profile: mergeStrandRenderProfile({ contactWidth: 1, visualScale, layoutScale: 1 }),
+    });
+    const base = layoutStrandBeadShells({
+      ...params,
+      beads: Array.from({ length: 6 }, () => bead(1)),
+    });
+    const bigger = layoutStrandBeadShells({
+      ...params,
+      beads: Array.from({ length: 6 }, () => bead(1.25)),
+    });
+
+    expect(bigger.contactArcPx[0]!).toBeCloseTo(base.contactArcPx[0]!, 5);
+    expect(meanShellSize(bigger)).toBeGreaterThan(meanShellSize(base) * 1.2);
   });
 
   it("keeps clockwise neighbour order equal to array order when a bead is added", () => {

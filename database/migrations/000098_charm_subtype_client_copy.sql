@@ -17,7 +17,7 @@ SET
         'dangling',
         'hanging charm'
       )
-    THEN 'Bail sits on the cord (higher hang).'
+    THEN 'Hanging ring sits on the cord (higher hang).'
     ELSE description
   END,
   updated_at = now()
@@ -37,7 +37,7 @@ SET
         'hanging',
         'hanging charm'
       )
-    THEN 'Bail sits on the cord (higher hang). Same hang style as Dangling.'
+    THEN 'Hanging ring sits on the cord (higher hang). Same hang style as Dangling.'
     ELSE description
   END,
   updated_at = now()

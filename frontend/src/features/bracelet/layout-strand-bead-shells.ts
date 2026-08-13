@@ -59,15 +59,24 @@ export interface StrandBeadShellLayout {
  * Linear (curve-neutral) visual + pack footprint for one bead.
  * Shared by Crystal / Charm / Spacer / Connector / Separator / Accent — profile-driven only.
  *
- * - Tangential pack uses max(contact, visual width) so occupancy spacing stays capacity-correct.
- * - Dangling types (charms) may extend height past the pack width for the CSS shell.
- * - visualSizeScaling is applied once afterward as a uniform factor on the pack box.
+ * - Tangential pack uses max(tuned contact, visual width) so occupancy spacing stays capacity-correct.
+ * - CSS / image shell uses max(natural contact at occupancy 1, visual width) × size curve ×
+ *   visualScale — so absolute size matches the old neutral look, while Strand occupancy
+ *   above/below 1 only changes gaps (not how big the photo looks).
+ * - Dangling types may extend height past the render width for tall charms.
  */
 export function resolveStrandShellFootprint(params: {
   occupancyMm: number;
   slotDim: BeadSlotDimensions;
   profile: StrandRenderProfile;
+  /** Tuned contact arc (includes Strand occupancy) — packing only. */
   contactArcPx: number;
+  /**
+   * Contact arc as if occupancy were neutral (effective width 1).
+   * Drives drawn shell size so occupancy tuning cannot enlarge/shrink the image.
+   * Defaults to `contactArcPx` when omitted (tests / callers without a split).
+   */
+  naturalContactArcPx?: number;
 }): {
   visualWidthLinear: number;
   visualHeightLinear: number;
@@ -75,11 +84,12 @@ export function resolveStrandShellFootprint(params: {
   packLinearHeight: number;
   /** Tangential footprint used for neighbour packing (curve-neutral). */
   packDiameterPx: number;
-  /** CSS shell after size-curve factor (preserves 6mm / linear absolute size). */
+  /** CSS shell after size-curve — independent of occupancy tuning above/below 1. */
   renderDim: BeadSlotDimensions;
   curveFactor: number;
 } {
   const { occupancyMm, slotDim, profile, contactArcPx } = params;
+  const naturalContactArcPx = params.naturalContactArcPx ?? contactArcPx;
   const visualBaseLinear = strandLayoutShellDimensions(
     slotDim,
     {
@@ -97,6 +107,7 @@ export function resolveStrandShellFootprint(params: {
     visualBaseLinear.height,
     profile.layoutScale,
   );
+  // Packing: occupancy/contact may widen gaps, but never shrink below the silhouette.
   const packLinearWidth = Math.max(contactArcPx, visualWidthLinear);
   const packLinearHeight =
     profile.layoutMode === "dangling"
@@ -106,6 +117,12 @@ export function resolveStrandShellFootprint(params: {
     occupancyMm,
     profile.visualSizeScaling ?? 1,
   );
+  // Drawn shell: neutral mm contact floor + visualScale — not tuned occupancy.
+  const renderWidthLinear = Math.max(naturalContactArcPx, visualWidthLinear);
+  const renderHeightLinear =
+    profile.layoutMode === "dangling"
+      ? Math.max(renderWidthLinear, visualHeightLinear)
+      : renderWidthLinear;
   return {
     visualWidthLinear,
     visualHeightLinear,
@@ -113,8 +130,8 @@ export function resolveStrandShellFootprint(params: {
     packLinearHeight,
     packDiameterPx: packLinearWidth,
     renderDim: {
-      width: packLinearWidth * curveFactor,
-      height: packLinearHeight * curveFactor,
+      width: renderWidthLinear * curveFactor,
+      height: renderHeightLinear * curveFactor,
     },
     curveFactor,
   };
@@ -127,11 +144,11 @@ export function resolveStrandShellFootprint(params: {
  * 1. mm occupancy → contact arcs (capacity-consistent; contactWidth/offsets tune span)
  * 2. path packing using max(occupancy, visual shell tangent) so mixed charms/crystals
  *    do not overlap when silhouettes exceed the mm arc
- * 3. per-bead CSS shell = linear pack footprint × size-curve factor
+ * 3. per-bead CSS shell = max(natural contact, visual) × size-curve — absolute render size
+ *    (never shrunk by wrist overfill / bead count)
  *
- * Absolute size at the curve anchor (6mm) and at visualSizeScaling=1 matches the
- * previous contact-driven render. Exponents below 1 only soften jumps for larger mm.
- * Occupancy / spacing stay linear in catalogue mm.
+ * Absolute size at occupancy ≈ 1 matches the previous contact-driven look. Raising or
+ * lowering Strand occupancy only changes neighbour gaps.
  * Works for every dynamic type via {@link StrandRenderProfile} — no category branches.
  */
 export function layoutStrandBeadShells(
@@ -163,6 +180,12 @@ export function layoutStrandBeadShells(
   }
 
   const ringCircumferencePx = 2 * Math.PI * requestedRadius;
+  const NEUTRAL_CONTACT_PROFILE = {
+    contactWidth: 1,
+    contactOffset: 0,
+    spacingAdjustment: 0,
+  } as const;
+
   const contactArcs = beads.map((bead) => {
     const base = contactArcPxFromCapacityMm(
       bead.occupancyMm,
@@ -170,10 +193,26 @@ export function layoutStrandBeadShells(
       ringCircumferencePx,
       bead.profile,
     );
+    const naturalBase = contactArcPxFromCapacityMm(
+      bead.occupancyMm,
+      wristCircumferenceMm,
+      ringCircumferencePx,
+      {
+        ...bead.profile,
+        ...NEUTRAL_CONTACT_PROFILE,
+        // Keep collision padding from the real profile; only neutralize occupancy tuning.
+        collisionPadding: bead.profile.collisionPadding,
+      },
+    );
     // layoutScale calibrates contact diameter without changing capacity mm.
     const contactArcPx = effectiveLayoutDiameterPx(base.contactArcPx, bead.profile.layoutScale);
+    const naturalContactArcPx = effectiveLayoutDiameterPx(
+      naturalBase.contactArcPx,
+      bead.profile.layoutScale,
+    );
     return {
       contactArcPx,
+      naturalContactArcPx,
       leadingOverlapPx: base.leadingOverlapPx,
       trailingOverlapPx: base.trailingOverlapPx,
     };
@@ -185,6 +224,7 @@ export function layoutStrandBeadShells(
       slotDim: bead.slotDim,
       profile: bead.profile,
       contactArcPx: contactArcs[i]!.contactArcPx,
+      naturalContactArcPx: contactArcs[i]!.naturalContactArcPx,
     }),
   );
 
@@ -211,25 +251,17 @@ export function layoutStrandBeadShells(
 
   const radiusPx = sequential.resolvedRadiusPx ?? requestedRadius;
   const pathLayout = sequential.beads;
-  const packScale =
-    Number.isFinite(sequential.packScale) && sequential.packScale > 0
-      ? sequential.packScale
-      : 1;
 
   const laidOut: LaidOutStrandBeadShell[] = pathLayout.map((path) => {
     const input = beads[path.index]!;
     const footprint = footprints[path.index]!;
-    // When the packer compresses centres for over-capacity, shrink CSS shells by the
-    // same factor — otherwise larger compare-size beads overlap their neighbours.
-    const scaledRenderDim = {
-      width: footprint.renderDim.width * packScale,
-      height: footprint.renderDim.height * packScale,
-    };
+    // Render size is absolute — never shrink shells when bead count / occupancy overfills
+    // the fixed wrist. Positions may still compress; oversized strands can overlap.
     const transform = calculateBeadRenderTransform({
       ringX: path.x,
       ringY: path.y,
       angleRad: path.angle,
-      slotDim: scaledRenderDim,
+      slotDim: footprint.renderDim,
       // Neutralise scale fields already baked into renderDim (avoid double application).
       // Keep hangOffset / anchors / layoutMode / orientation for charm dangling placement.
       profile: { ...input.profile, layoutScale: 1, visualScale: 1, visualSizeScaling: 1 },

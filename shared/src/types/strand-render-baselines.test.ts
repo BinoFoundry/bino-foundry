@@ -69,6 +69,7 @@ describe("sensible strand render baselines", () => {
 
   it("exposes client-facing dangling vs drop copy without changing slugs", () => {
     expect(strandSubTypeClientCopy("dangling")?.suggestedName).toBe("Dangling (on cord)");
+    expect(strandSubTypeClientCopy("dangling")?.description).toMatch(/hanging ring/i);
     expect(strandSubTypeClientCopy("drop")?.suggestedName).toBe("Drop (lower hang)");
     expect(strandSubTypeClientCopy("fixed")?.suggestedName).toBe("Fixed (on strand)");
     expect(isReplaceableSubBeadTypeName("dangling", "Dangling")).toBe(true);

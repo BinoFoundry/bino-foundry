@@ -50,7 +50,7 @@ export const STRAND_RENDER_SUBTYPE_RECOMMENDED: Record<string, Partial<StrandRen
     rotationMode: "tangent",
     forceRoundFootprint: true,
   },
-  // Classic hanging charms — loop bail, slight pull onto the cord.
+  // Classic hanging charms — hanging ring (loop), slight pull onto the cord.
   dangling: {
     layoutScale: 1,
     balanceSpacing: true,
@@ -158,12 +158,12 @@ export const STRAND_SUBTYPE_CLIENT_COPY: Record<string, StrandSubTypeClientCopy>
   dangling: {
     suggestedName: "Dangling (on cord)",
     replaceableNames: ["Dangling"],
-    description: "Bail sits on the cord (higher hang).",
+    description: "Hanging ring sits on the cord (higher hang).",
   },
   hanging: {
     suggestedName: "Hanging (on cord)",
     replaceableNames: ["Hanging"],
-    description: "Bail sits on the cord (higher hang). Same hang style as Dangling.",
+    description: "Hanging ring sits on the cord (higher hang). Same hang style as Dangling.",
   },
   drop: {
     suggestedName: "Drop (lower hang)",

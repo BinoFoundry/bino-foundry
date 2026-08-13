@@ -9,6 +9,7 @@ import {
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 import {
   beadLibraryInheritsTypeStrandDefaults,
+  effectiveStrandContactWidth,
   STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM,
 } from "@bino-foundry/shared/types";
 
@@ -429,6 +430,59 @@ export function StrandRenderLivePreview({
 
   /** Default ON so slider drafts update the preview instantly (same math as Builder). */
   const [applyDraft, setApplyDraft] = useState(true);
+  /**
+   * Balance Spacing equalises leftover gaps on a sparse strand, which hides occupancy.
+   * Reveal mode: Natural 1.00 vs *your* Strand occupancy, with amber cord arcs.
+   */
+  const [revealOccupancyGaps, setRevealOccupancyGaps] = useState(false);
+
+  const draftOccupancy = useMemo(
+    () =>
+      effectiveStrandContactWidth({
+        contactWidth: profile.contactWidth,
+        contactOffset: profile.contactOffset,
+        spacingAdjustment: profile.spacingAdjustment,
+      }),
+    [profile.contactWidth, profile.contactOffset, profile.spacingAdjustment],
+  );
+
+  const effectiveProfile = useMemo(
+    () =>
+      revealOccupancyGaps ? { ...profile, balanceSpacing: false } : profile,
+    [profile, revealOccupancyGaps],
+  );
+
+  /** Baseline natural claim (1.00) for comparison. */
+  const occupancyBaselineProfile = useMemo(
+    () => ({
+      ...effectiveProfile,
+      balanceSpacing: false,
+      contactWidth: 1,
+      contactOffset: 0,
+      spacingAdjustment: 0,
+      strandOccupancy: 1,
+    }),
+    [effectiveProfile],
+  );
+
+  /** Live draft occupancy from the Strand occupancy control. */
+  const occupancyDraftProfile = useMemo(
+    () => ({
+      ...effectiveProfile,
+      balanceSpacing: false,
+      contactWidth: 1,
+      contactOffset: draftOccupancy - 1,
+      spacingAdjustment: 0,
+      strandOccupancy: draftOccupancy,
+    }),
+    [effectiveProfile, draftOccupancy],
+  );
+
+  useEffect(() => {
+    if (!revealOccupancyGaps) return;
+    const demoCount = clampPreviewBeadCount(6, wristSizeCm, beadSizeMm);
+    setBeadCount(demoCount);
+  }, [revealOccupancyGaps, wristSizeCm, beadSizeMm]);
 
   const sampleHasBeadOverride =
     sampleBead != null && !beadLibraryInheritsTypeStrandDefaults(sampleBead.metadata ?? null);
@@ -492,22 +546,33 @@ export function StrandRenderLivePreview({
         applyDraft ? "draft" : "catalogue",
         applyDraft
           ? [
-              profile.layoutScale,
-              profile.contactWidth,
-              profile.contactOffset,
-              profile.spacingAdjustment,
-              profile.visualScale,
-              profile.visualSizeScaling,
-              profile.hangOffset,
-              profile.verticalOffset,
-              profile.anchorY,
-              profile.orientationMode,
-              profile.layoutMode,
-              profile.balanceSpacing ? 1 : 0,
+              effectiveProfile.layoutScale,
+              effectiveProfile.contactWidth,
+              effectiveProfile.contactOffset,
+              effectiveProfile.spacingAdjustment,
+              effectiveProfile.visualScale,
+              effectiveProfile.visualSizeScaling,
+              effectiveProfile.hangOffset,
+              effectiveProfile.verticalOffset,
+              effectiveProfile.anchorY,
+              effectiveProfile.orientationMode,
+              effectiveProfile.layoutMode,
+              effectiveProfile.balanceSpacing ? 1 : 0,
+              revealOccupancyGaps ? `reveal-occ:${draftOccupancy}` : "bal",
             ].join(":")
           : "cat",
       ].join("|"),
-    [wristSizeCm, beadSizeMm, placedBeads, compareSizes, compareSizeMms, applyDraft, profile],
+    [
+      wristSizeCm,
+      beadSizeMm,
+      placedBeads,
+      compareSizes,
+      compareSizeMms,
+      applyDraft,
+      effectiveProfile,
+      revealOccupancyGaps,
+      draftOccupancy,
+    ],
   );
 
   const layoutCanvasSize = strandSize;
@@ -661,6 +726,15 @@ export function StrandRenderLivePreview({
             />
             Apply draft settings
           </label>
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              className="size-3.5 rounded border-border"
+              checked={revealOccupancyGaps}
+              onChange={(e) => setRevealOccupancyGaps(e.target.checked)}
+            />
+            Reveal occupancy gaps
+          </label>
           {compareSizesAvailable ? (
             <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
               <input
@@ -678,6 +752,31 @@ export function StrandRenderLivePreview({
               : "Showing saved catalogue resolve (as after Save)."}
           </span>
         </div>
+
+        {revealOccupancyGaps ? (
+          <ol className="list-decimal space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 pl-7 text-[11px] leading-snug text-amber-950 dark:text-amber-100">
+            <li>
+              <span className="font-medium">Amber arcs</span> = cord claimed by Strand occupancy.
+              Change the <span className="font-medium">Strand occupancy</span> field above — the
+              right panel updates to your value (
+              <span className="font-medium tabular-nums">{draftOccupancy.toFixed(2)}</span>).
+            </li>
+            <li>
+              Left = natural <span className="font-medium">1.00</span>. Right ={" "}
+              <span className="font-medium">your setting</span>. Same Render size &amp; bead count.
+            </li>
+            <li>
+              Values below ~1 often look similar to 1.00 (cannot pack tighter than the image). Try{" "}
+              <span className="font-medium">1.5</span> or <span className="font-medium">2.0</span> to
+              see longer amber arcs.
+            </li>
+          </ol>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            Turn on <span className="font-medium text-foreground">Reveal occupancy gaps</span> to
+            compare natural 1.00 vs your Strand occupancy value with amber cord guides.
+          </p>
+        )}
         {compareSizes && compareSizesAvailable ? (
           <p className="text-[11px] text-muted-foreground">
             {isDanglingPreview ? (
@@ -719,8 +818,8 @@ export function StrandRenderLivePreview({
               <span className="font-medium text-foreground">Orientation → Outward</span>.
             </li>
             <li>
-              Tune <span className="font-medium text-foreground">Vertical offset</span> until the bail
-              sits on the cord; use Hang offset only for fine radial push.
+              Tune <span className="font-medium text-foreground">Vertical offset</span> until the
+              hanging ring sits on the cord; use Hang offset only for fine radial push.
             </li>
             <li>
               Turn on <span className="font-medium text-foreground">Compare sizes</span> to see mixed mm
@@ -750,6 +849,58 @@ export function StrandRenderLivePreview({
         ) : null}
       </div>
 
+      {revealOccupancyGaps ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(
+            [
+              {
+                label: "Natural — occupancy 1.00",
+                profile: occupancyBaselineProfile,
+                key: "baseline",
+              },
+              {
+                label: `Your setting — occupancy ${draftOccupancy.toFixed(2)}`,
+                profile: occupancyDraftProfile,
+                key: "draft",
+              },
+            ] as const
+          ).map((side) => (
+            <div key={side.key} className="overflow-hidden rounded-lg border border-border bg-background">
+              <p className="border-b border-border bg-muted/40 px-2 py-1.5 text-[11px] font-medium text-foreground">
+                {side.label}
+              </p>
+              <div className="relative mx-auto" style={{ height: 280, width: "100%" }}>
+                <div className="flex h-full items-center justify-center p-2">
+                  <StrandStage
+                    className="shrink-0"
+                    style={{ width: 240, height: 240, minWidth: 240, minHeight: 240 }}
+                  >
+                    <SortableCircularStrand
+                      key={`${layoutKey}:${side.key}`}
+                      layoutKey={`${layoutKey}:${side.key}`}
+                      placedBeads={placedBeads}
+                      onBeadsReorder={() => {}}
+                      onSlotClick={() => {}}
+                      onBeadRemove={() => {}}
+                      wristSize={wristSizeCm}
+                      wristSizeBounds={
+                        wristSizeBounds.minCm > 0
+                          ? wristSizeBounds
+                          : { minCm: wristSizeCm, maxCm: wristSizeCm }
+                      }
+                      guideSizeMm={beadSizeMm}
+                      size={240}
+                      forceStrandRenderProfile={side.profile}
+                      showOccupancyGuides
+                      readOnly
+                    />
+                  </StrandStage>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div
         className="relative overflow-hidden rounded-lg border border-border bg-background"
         style={{ height: 380 }}
@@ -808,13 +959,14 @@ export function StrandRenderLivePreview({
                   }
                   guideSizeMm={beadSizeMm}
                   size={layoutCanvasSize}
-                  forceStrandRenderProfile={applyDraft ? profile : null}
+                  forceStrandRenderProfile={applyDraft ? effectiveProfile : null}
                 />
               </StrandStage>
             </StrandViewport>
           </BuilderPreviewFitScope>
         </div>
       </div>
+      )}
     </div>
   );
 }

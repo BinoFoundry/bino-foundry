@@ -148,12 +148,21 @@ describe("mixed category strand shells", () => {
       occupancyMm: 10,
       slotDim: danglingCharmSlot(10),
       profile: PROFILES.charm,
-      contactArcPx: 20,
+      contactArcPx: 48,
+      naturalContactArcPx: 20,
     });
-    const linearAspect = footprint.packLinearHeight / footprint.packLinearWidth;
     const renderAspect = footprint.renderDim.height / footprint.renderDim.width;
+    const linearAspect =
+      Math.max(footprint.renderDim.width / footprint.curveFactor, footprint.visualHeightLinear) /
+      Math.max(20, footprint.visualWidthLinear);
     expect(renderAspect).toBeCloseTo(linearAspect, 5);
     expect(footprint.curveFactor).toBeLessThan(1);
+    // Tuned contact may exceed natural for packing without stretching the drawn shell.
+    expect(footprint.packLinearWidth).toBeGreaterThan(20);
+    expect(footprint.renderDim.width).toBeCloseTo(
+      Math.max(20, footprint.visualWidthLinear) * footprint.curveFactor,
+      5,
+    );
   });
 
   it("does not change contact arcs across categories when only the curve changes", () => {
@@ -187,7 +196,7 @@ describe("mixed category strand shells", () => {
     expect(curved.occupiedArcPx).toBeCloseTo(linear.occupiedArcPx, 5);
   });
 
-  it("matches previous pack shell for every category when visualSizeScaling is 1", () => {
+  it("matches natural-contact shell for every category when visualSizeScaling is 1", () => {
     for (const [name, profile] of Object.entries(PROFILES)) {
       const mm = 8;
       const slotDim =
@@ -201,15 +210,22 @@ describe("mixed category strand shells", () => {
         beads: [{ occupancyMm: mm, slotDim, profile: linearProfile }],
       });
       const bead = layout.beads[0]!;
-      const footprint = resolveStrandShellFootprint({
-        occupancyMm: mm,
-        slotDim,
-        profile: linearProfile,
-        contactArcPx: layout.contactArcPx[0]!,
+      // Neutral occupancy profile (width 1) — matches what layout uses for drawn size.
+      const neutralProfile = mergeStrandRenderProfile(linearProfile, {
+        contactWidth: 1,
+        contactOffset: 0,
+        spacingAdjustment: 0,
       });
-      expect(bead.renderDim.width, name).toBeCloseTo(footprint.packLinearWidth, 5);
-      expect(bead.renderDim.height, name).toBeCloseTo(footprint.packLinearHeight, 5);
-      expect(footprint.curveFactor, name).toBeCloseTo(1, 8);
+      const neutralLayout = layoutStrandBeadShells({
+        centerX: 180,
+        centerY: 180,
+        radiusPx: 82,
+        wristCircumferenceMm: 160,
+        beads: [{ occupancyMm: mm, slotDim, profile: neutralProfile }],
+      });
+      // Drawn size follows neutral contact, not the category's tuned occupancy (e.g. connector 0.2).
+      expect(bead.renderDim.width, name).toBeCloseTo(neutralLayout.beads[0]!.renderDim.width, 5);
+      expect(bead.renderDim.height, name).toBeCloseTo(neutralLayout.beads[0]!.renderDim.height, 5);
     }
   });
 
