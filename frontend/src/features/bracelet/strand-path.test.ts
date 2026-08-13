@@ -806,4 +806,25 @@ describe("charm strand presentation", () => {
     expect(pos.top + pos.transformOriginY).toBeCloseTo(ringY, 1);
     expect(pos.left + pos.transformOriginX).toBeCloseTo(ringX, 1);
   });
+
+  it("inline sits on the cord even when hang/vertical leftover from dangling", () => {
+    const dangling = {
+      ...resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE),
+      layoutMode: "dangling" as const,
+      verticalOffset: -25,
+      hangOffset: 0,
+      anchorX: 0.5,
+      anchorY: 0.08,
+    };
+    const inline = { ...dangling, layoutMode: "inline" as const };
+    const dim = { width: 40, height: 80 };
+    const ringX = 100;
+    const ringY = 100;
+    const angle = -Math.PI / 2;
+    const hangPos = computeBeadShellPosition(ringX, ringY, angle, dim, dangling);
+    const sitPos = computeBeadShellPosition(ringX, ringY, angle, dim, inline);
+    expect(sitPos.transformOriginY).toBeCloseTo(dim.height * 0.5, 5);
+    expect(hangPos.transformOriginY).toBeCloseTo(dim.height * 0.08, 5);
+    expect(sitPos.top).not.toBeCloseTo(hangPos.top, 0);
+  });
 });

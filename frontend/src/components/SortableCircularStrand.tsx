@@ -506,8 +506,17 @@ const SortableCircularStrand = ({
       subBeadTypes,
       beadLibraries,
       strandRenderDefaults,
+      forceLayoutMode: forceStrandRenderProfile?.layoutMode,
     }),
-    [beadSizes, beadLibrarySizes, beadTypes, subBeadTypes, beadLibraries, strandRenderDefaults],
+    [
+      beadSizes,
+      beadLibrarySizes,
+      beadTypes,
+      subBeadTypes,
+      beadLibraries,
+      strandRenderDefaults,
+      forceStrandRenderProfile?.layoutMode,
+    ],
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragClientPos, setDragClientPos] = useState<{ x: number; y: number } | null>(null);

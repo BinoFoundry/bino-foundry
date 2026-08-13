@@ -90,11 +90,15 @@ function fieldClass(readOnly: boolean): string {
 function patchForLayoutMode(
   layoutMode: StrandRenderProfile["layoutMode"],
 ): Partial<StrandRenderProfile> {
-  const anchorPreset: StrandAnchorPreset = layoutMode === "dangling" ? "loop" : "center";
+  const dangling = layoutMode === "dangling";
+  const anchorPreset: StrandAnchorPreset = dangling ? "loop" : "center";
   return {
     layoutMode,
     anchorPreset,
     ...anchorCoordsForPreset(anchorPreset),
+    forceRoundFootprint: !dangling,
+    rotationMode: dangling ? "radial-upright" : "tangent",
+    ...(dangling ? {} : { hangOffset: 0 }),
   };
 }
 
@@ -459,9 +463,9 @@ export function StrandRenderConfigPanel({
                   <option value="dangling">Dangling (hangs from ring)</option>
                 </select>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  <span className="font-medium">Inline</span> = sits on the cord (crystal / fixed).{" "}
-                  <span className="font-medium">Dangling</span> = hangs from the hanging ring. Attach
-                  point follows this automatically. Tune height with Vertical offset.
+                  <span className="font-medium">Inline</span> = sits on the cord like a crystal.{" "}
+                  <span className="font-medium">Dangling</span> = hangs outward from the hanging
+                  ring. Vertical offset only applies in Dangling.
                 </p>
               </Field>
             </>

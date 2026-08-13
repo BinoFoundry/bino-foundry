@@ -24,7 +24,8 @@ import {
 import { layoutDiameterPxForMm } from "./canonical-strand-mm-scale";
 import { resolveBeadCropGeometryDebug } from "./crop-geometry-audit";
 import { peekProcessedStrandMetrics } from "./processed-strand-metrics";
-import { resolveStrandRenderProfile } from "./strand-render-profile";
+import { resolveStrandRenderProfile, type StrandRenderCatalogueContext } from "./strand-render-profile";
+import type { StrandRenderProfile } from "@bino-foundry/shared/types";
 
 export interface BeadSlotDimensions {
   width: number;
@@ -35,6 +36,8 @@ export interface BeadSlotSizingCatalogueContext extends StrandRenderCatalogueCon
   beadSizes?: BeadSizeEntry[];
   beadLibrarySizes?: BeadLibrarySizeOffer[];
   beadTypes?: BeadTypeEntry[];
+  /** Live Preview draft — image scale follows Layout even before Save. */
+  forceLayoutMode?: StrandRenderProfile["layoutMode"];
 }
 
 function mmToBasePx(sizeMm: number, scaleFactor: number): number {
@@ -157,6 +160,8 @@ function finalizeLayoutFootprint(
 
 function typeScaleFor(bead: BeadLibraryEntry | null | undefined, catalogue?: StrandRenderCatalogueContext) {
   const profile = resolveStrandRenderProfile(bead ?? null, catalogue);
+  const layoutMode =
+    (catalogue as BeadSlotSizingCatalogueContext | undefined)?.forceLayoutMode ?? profile.layoutMode;
   const meta = strandScaleMeta(bead);
   const widthScale = meta?.strandScale?.width ?? 1;
   const heightScale = meta?.strandScale?.height ?? 1;
@@ -164,7 +169,7 @@ function typeScaleFor(bead: BeadLibraryEntry | null | undefined, catalogue?: Str
   return {
     width: widthScale / maxScale,
     height: heightScale / maxScale,
-    forceRound: profile.forceRoundFootprint,
+    forceRound: layoutMode === "inline" ? true : profile.forceRoundFootprint,
   };
 }
 
@@ -415,7 +420,8 @@ function buildStrandSlotSizingResult(
   const baseTargetDiameterPx = baseTargetDiameterPxForMm(beadSize, scaleFactor);
   const baseDimensions = layoutDimensionsForMm(beadSize, scaleFactor, entry, catalogue);
   const profile = resolveStrandRenderProfile(entry ?? null, catalogue);
-  const scaleToContentWidth = profile.layoutMode === "dangling";
+  const layoutMode = catalogue?.forceLayoutMode ?? profile.layoutMode;
+  const scaleToContentWidth = layoutMode === "dangling";
   const imageLayout = resolveUniformStrandImageLayout(baseDimensions, entry, {
     preferProcessedCanvas: options.preferProcessedCanvas,
     scaleToContentWidth,

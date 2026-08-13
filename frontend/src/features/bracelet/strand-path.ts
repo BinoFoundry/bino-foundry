@@ -808,18 +808,22 @@ export function computeBeadShellPosition(
   sizeMm?: number,
 ): BeadShellPlacement {
   const renderDim = strandLayoutShellDimensions(dim, profile, sizeMm);
-  const hang =
-    profile.hangOffset !== 0
+  const dangling = profile.layoutMode === "dangling";
+  // Inline sits on the cord (centre of the shell). Hang / loop attach are dangling-only —
+  // otherwise toggling Layout looks identical when Vertical offset is leftover from a charm.
+  const hang = dangling
+    ? profile.hangOffset !== 0
       ? profile.hangOffset
-      : verticalOffsetHeightFraction(profile.verticalOffset);
+      : verticalOffsetHeightFraction(profile.verticalOffset)
+    : 0;
   const radial = hang * renderDim.height;
-  const anchorX = ringX + radial * Math.cos(angle);
-  const anchorY = ringY + radial * Math.sin(angle);
-  const originX = profile.anchorX * renderDim.width;
-  const originY = profile.anchorY * renderDim.height;
+  const attachX = ringX + radial * Math.cos(angle);
+  const attachY = ringY + radial * Math.sin(angle);
+  const originX = (dangling ? profile.anchorX : 0.5) * renderDim.width;
+  const originY = (dangling ? profile.anchorY : 0.5) * renderDim.height;
   return {
-    left: anchorX - originX,
-    top: anchorY - originY,
+    left: attachX - originX,
+    top: attachY - originY,
     transformOriginX: originX,
     transformOriginY: originY,
   };
