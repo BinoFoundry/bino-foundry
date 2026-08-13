@@ -732,8 +732,9 @@ const SortableCircularStrand = ({
         // still charges catalogue sizeMm independently.
         const layoutScale =
           renderProfiles[0]?.layoutScale ?? strandRenderDefaults?.layoutScale ?? 1;
-        const balanceSpacing =
-          renderProfiles[0]?.balanceSpacing ?? strandRenderDefaults?.balanceSpacing ?? true;
+        // Builder always equalises leftover gaps. Only Live Preview may pass false via
+        // forceStrandRenderProfile (Reveal occupancy gaps / clustered demo).
+        const balanceSpacing = forceStrandRenderProfile?.balanceSpacing === false ? false : true;
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
 
         // Same pipeline as Admin Live Preview — occupancy → balanced path → shell transforms.
@@ -870,7 +871,7 @@ const SortableCircularStrand = ({
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
     };
-  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing, processedMetricsEpoch, forceStrandRenderProfile]);
+  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, processedMetricsEpoch, forceStrandRenderProfile]);
   const renderCanvasSize = canvasSize;
   const ringStrokeWidth = computeStrandRingStrokePx(scaleFactor);
 

@@ -285,28 +285,11 @@ export function StrandRenderConfigPanel({
         </p>
       ) : null}
 
-      {/* Balance spacing on its own row; main fields in a compact 3-col grid for laptop. */}
+      {/* Main calibration fields — balance spacing is always on in Builder (preview-only override). */}
       <div
         className={inheritedLock ? "pointer-events-none space-y-2 opacity-70" : "space-y-2"}
         aria-disabled={inheritedLock || undefined}
       >
-        <Field label="Balance spacing" source={provenance?.balanceSpacing} readOnly={readOnly}>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              disabled={readOnly}
-              checked={draft.balanceSpacing}
-              onChange={(e) => patchDraft({ balanceSpacing: e.target.checked })}
-            />
-            Equalise leftover empty gaps (keep bead order)
-          </label>
-          <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-            On: leftover cord space is shared evenly between neighbours; beads stay in clockwise
-            sequence (not Top / Right / Bottom / Left). Off: beads pack as a tight cluster — easier
-            to see Strand occupancy. Does not change photo size.
-          </p>
-        </Field>
-
         <div className="grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {mode === "system" ? (
             <Field
@@ -399,9 +382,8 @@ export function StrandRenderConfigPanel({
                   <span className="font-medium">1.00</span> = natural.{" "}
                   <span className="font-medium">Below 1</span> (e.g. 0.85) = tighter;{" "}
                   <span className="font-medium">above 1</span> = more gap. Does not change photo
-                  size. With <span className="font-medium">Balance spacing</span> on and a sparse
-                  strand, gaps look even — use Live Preview →{" "}
-                  <span className="font-medium">Reveal occupancy gaps</span> to demo the effect.
+                  size. Builder always equalises leftover gaps — use Live Preview →{" "}
+                  <span className="font-medium">Reveal occupancy gaps</span> for a clustered demo.
                   Minimum is 0 (use values under 1 to tighten).
                 </p>
                 <FieldError message={fieldErrors.strandOccupancy} />

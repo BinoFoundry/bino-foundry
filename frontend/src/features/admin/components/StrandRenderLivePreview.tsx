@@ -431,8 +431,8 @@ export function StrandRenderLivePreview({
   /** Default ON so slider drafts update the preview instantly (same math as Builder). */
   const [applyDraft, setApplyDraft] = useState(true);
   /**
-   * Balance Spacing equalises leftover gaps on a sparse strand, which hides occupancy.
-   * Reveal mode: Natural 1.00 vs *your* Strand occupancy, with amber cord arcs.
+   * Builder always equalises leftover gaps. Live Preview matches that by default.
+   * Reveal occupancy gaps temporarily clusters beads so cord claim is visible.
    */
   const [revealOccupancyGaps, setRevealOccupancyGaps] = useState(false);
 
@@ -447,8 +447,7 @@ export function StrandRenderLivePreview({
   );
 
   const effectiveProfile = useMemo(
-    () =>
-      revealOccupancyGaps ? { ...profile, balanceSpacing: false } : profile,
+    () => ({ ...profile, balanceSpacing: !revealOccupancyGaps }),
     [profile, revealOccupancyGaps],
   );
 
@@ -748,13 +747,17 @@ export function StrandRenderLivePreview({
           ) : null}
           <span className="text-[11px] text-muted-foreground">
             {applyDraft
-              ? "Unsaved calibration updates the preview immediately."
-              : "Showing saved catalogue resolve (as after Save)."}
+              ? "Unsaved calibration updates the preview immediately. Builder always equalises leftover gaps."
+              : "Showing saved catalogue resolve (as after Save). Builder always equalises leftover gaps."}
           </span>
         </div>
 
         {revealOccupancyGaps ? (
           <ol className="list-decimal space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 pl-7 text-[11px] leading-snug text-amber-950 dark:text-amber-100">
+            <li>
+              Preview-only: beads are <span className="font-medium">clustered</span> (equalise off)
+              so Strand occupancy is visible. Bracelet Builder always keeps equalise on.
+            </li>
             <li>
               <span className="font-medium">Amber arcs</span> = cord claimed by Strand occupancy.
               Change the <span className="font-medium">Strand occupancy</span> field above — the
@@ -773,8 +776,9 @@ export function StrandRenderLivePreview({
           </ol>
         ) : (
           <p className="text-[11px] text-muted-foreground">
-            Turn on <span className="font-medium text-foreground">Reveal occupancy gaps</span> to
-            compare natural 1.00 vs your Strand occupancy value with amber cord guides.
+            Turn on <span className="font-medium text-foreground">Reveal occupancy gaps</span> for a
+            preview-only clustered layout (equalise off) with amber cord guides — Builder stays
+            equalised.
           </p>
         )}
         {compareSizes && compareSizesAvailable ? (

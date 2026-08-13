@@ -115,10 +115,10 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
               <li>
                 <span className="font-medium text-foreground">Strand occupancy (gaps only)</span> —
                 how much space along the cord neighbours leave. Stay near 1.00 unless packing is
-                wrong. Does not change how large the image looks. With Balance spacing on a sparse
-                bracelet, leftover gaps are equalised so occupancy can look inactive — use Live
-                Preview → <span className="font-medium text-foreground">Reveal occupancy gaps</span>{" "}
-                to demonstrate.
+                wrong. Does not change how large the image looks. The Bracelet Builder always
+                equalises leftover gaps; to see occupancy on a sparse strand, use Live Preview →{" "}
+                <span className="font-medium text-foreground">Reveal occupancy gaps</span>{" "}
+                (preview-only clustered layout).
               </li>
             </ul>
           ),
