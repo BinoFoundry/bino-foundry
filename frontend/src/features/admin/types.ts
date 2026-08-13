@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 /** Top-level admin areas (sidebar). */
 export type AdminSection =
   | "dashboard"
+  | "documentation"
   | "users"
   | "orders"
   | "frames"

@@ -34,6 +34,7 @@ import {
   strandRenderStorageMeta,
   beadLibraryInheritsTypeStrandDefaults,
   normalizeBeadLibraryStrandMetadata,
+  resolveSubBeadTypeClientHint,
   type BeadCropConfig,
   type StrandRenderProfile,
 } from "@bino-foundry/shared/types";
@@ -386,6 +387,18 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
     [cat.subBeadTypes, form.beadTypeId],
   );
+  const selectedSubType = useMemo(
+    () => subTypesForSelectedType.find((s) => s.id === form.subBeadTypeId) ?? null,
+    [subTypesForSelectedType, form.subBeadTypeId],
+  );
+  const subTypeClientHint = useMemo(
+    () =>
+      resolveSubBeadTypeClientHint({
+        slug: selectedSubType?.slug,
+        description: selectedSubType?.description,
+      }),
+    [selectedSubType?.slug, selectedSubType?.description],
+  );
 
   const renderCatalogue = useMemo(
     () => ({
@@ -397,7 +410,10 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
     [cat.beadTypes, cat.subBeadTypes, cat.beadLibraries, cat.strandRenderDefaults],
   );
   const resolvedStrand = useMemo(
-    () => resolveStrandRenderConfigForBead(form, renderCatalogue),
+    () =>
+      resolveStrandRenderConfigForBead(form, renderCatalogue, {
+        preferDraftIdentity: true,
+      }),
     [form, renderCatalogue],
   );
   const inheritedSubTypeStrand = useMemo(
@@ -430,12 +446,14 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
               value={form.beadTypeId}
               onChange={(e) => {
                 const nextTypeId = e.target.value;
+                const nextType = cat.beadTypes.find((t) => t.id === nextTypeId);
                 const nextSub =
                   cat.subBeadTypes.find((s) => s.beadTypeId === nextTypeId && s.isActive !== false) ??
                   cat.subBeadTypes.find((s) => s.beadTypeId === nextTypeId);
                 setForm((f) => ({
                   ...f,
                   beadTypeId: nextTypeId,
+                  beadTypeSlug: nextType?.slug ?? f.beadTypeSlug,
                   subBeadTypeId: nextSub?.id ?? f.subBeadTypeId,
                 }));
               }}
@@ -462,6 +480,9 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
                 </option>
               ))}
             </select>
+            {subTypeClientHint ? (
+              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{subTypeClientHint}</p>
+            ) : null}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Display order</label>
@@ -611,12 +632,14 @@ export function BeadForm({ initial, defaultBeadTypeId, defaultSubBeadTypeId, onS
         inheritTypeDefaults={inheritTypeDefaults}
         showAdvanced={showStrandAdvanced}
         previewImageUrl={form.processedImage?.trim() || form.image?.trim() || originalUrl || null}
-        previewSampleBead={form.id ? form : null}
+        previewSampleBead={form}
         previewSizeMms={enabledSizeMms}
         onInheritTypeDefaultsChange={(inherit) =>
           setForm((f) => {
             if (inherit) return setInheritTypeDefaults(f, true);
-            const resolved = resolveStrandRenderConfigForBead(f, renderCatalogue);
+            const resolved = resolveStrandRenderConfigForBead(f, renderCatalogue, {
+              preferDraftIdentity: true,
+            });
             return setInheritTypeDefaults(
               f,
               false,

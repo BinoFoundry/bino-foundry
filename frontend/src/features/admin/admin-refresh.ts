@@ -27,6 +27,11 @@ export function getDefaultSectionRefresh(
           await Promise.all([catalogue.refreshFromApi(), sunglasses.refreshAdminFromApi()]);
         },
       };
+    case "documentation":
+      return {
+        label: "Documentation",
+        action: async () => {},
+      };
     case "users":
       return {
         label: "Refresh users",

@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   CircleDot,
   ClipboardList,
   Gem,
@@ -20,6 +21,13 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Dashboard",
     description: "Overview and quick links",
     icon: LayoutDashboard,
+    group: "overview",
+  },
+  {
+    id: "documentation",
+    label: "Documentation",
+    description: "Guides for every Admin editor",
+    icon: BookOpen,
     group: "overview",
   },
   {

@@ -18,8 +18,11 @@ import { AdminDeferredNumberInput } from "./AdminDeferredNumberInput";
 import {
   buildComparePreviewPlacedBeads,
   buildPreviewPlacedBeads,
+  clampPreviewBeadCount,
+  compareSizesUsesSyntheticFallback,
   pickPreviewSizeOffer,
   previewBeadCount,
+  previewMaxBeadCount,
   previewPlacedBeadFromSample,
   resolveVisualSizeScalingCompareMms,
   StrandRenderLivePreview,
@@ -137,8 +140,42 @@ describe("Admin Live Preview Builder strand parity", () => {
     expect(beads).toHaveLength(partial);
   });
 
-  it("resolves 6/8/10 mm compare sizes when catalogue offers them", () => {
-    expect(resolveVisualSizeScalingCompareMms([6, 8, 10, 12])).toEqual([6, 8, 10]);
+  it("honors an explicit bead count capped by wrist capacity", () => {
+    const sample = { id: "bead-1", name: "Charm" } as BeadLibraryEntry;
+    const max = previewMaxBeadCount(STRAND_RENDER_PREVIEW_WRIST_CM, STRAND_RENDER_PREVIEW_BEAD_MM);
+    expect(clampPreviewBeadCount(1, STRAND_RENDER_PREVIEW_WRIST_CM, STRAND_RENDER_PREVIEW_BEAD_MM)).toBe(1);
+    expect(clampPreviewBeadCount(max + 50, STRAND_RENDER_PREVIEW_WRIST_CM, STRAND_RENDER_PREVIEW_BEAD_MM)).toBe(
+      max,
+    );
+    expect(
+      buildPreviewPlacedBeads(
+        sample,
+        { sizeMm: STRAND_RENDER_PREVIEW_BEAD_MM, label: "8mm", unitPrice: 0, offerKey: "bead-1:8" },
+        STRAND_RENDER_PREVIEW_WRIST_CM,
+        max,
+      ),
+    ).toHaveLength(max);
+    expect(
+      buildPreviewPlacedBeads(
+        sample,
+        { sizeMm: STRAND_RENDER_PREVIEW_BEAD_MM, label: "8mm", unitPrice: 0, offerKey: "bead-1:8" },
+        STRAND_RENDER_PREVIEW_WRIST_CM,
+        3,
+      ),
+    ).toHaveLength(3);
+  });
+
+  it("uses all enabled sizes for compare mode (not a fixed 6/8/10 set)", () => {
+    expect(resolveVisualSizeScalingCompareMms([6, 8, 10, 12])).toEqual([6, 8, 10, 12]);
+    expect(resolveVisualSizeScalingCompareMms([4, 6, 8])).toEqual([4, 6, 8]);
+  });
+
+  it("falls back to the 6/8/10 ladder for single-SKU charms so Compare still works", () => {
+    expect(resolveVisualSizeScalingCompareMms([8])).toEqual([6, 8, 10]);
+    expect(resolveVisualSizeScalingCompareMms([])).toEqual([6, 8, 10]);
+    expect(resolveVisualSizeScalingCompareMms([8], { allowSyntheticFallback: false })).toEqual([]);
+    expect(compareSizesUsesSyntheticFallback([8], [6, 8, 10])).toBe(true);
+    expect(compareSizesUsesSyntheticFallback([6, 8, 10], [6, 8, 10])).toBe(false);
   });
 
   it("builds alternating mm beads for visual size scaling comparison", () => {
@@ -168,5 +205,17 @@ describe("Admin Live Preview Builder strand parity", () => {
     expect(beads[0]!.size.sizeMm).toBe(6);
     expect(beads[1]!.size.sizeMm).toBe(10);
     expect(beads[2]!.size.sizeMm).toBe(6);
+  });
+
+  it("seeds compare sizes within wrist capacity so mixed mm do not overfill", () => {
+    const sample = { id: "bead-1", name: "Crystal" } as BeadLibraryEntry;
+    const wristCm = 18;
+    const wristMm = wristCm * 10;
+    const compareMms = [6, 7, 8, 10];
+    const beads = buildComparePreviewPlacedBeads(sample, [], compareMms, wristCm);
+    const usedMm = beads.reduce((sum, b) => sum + b.size.sizeMm, 0);
+    expect(beads.length).toBeGreaterThanOrEqual(compareMms.length);
+    expect(usedMm).toBeLessThanOrEqual(wristMm * 0.9 + 1e-6);
+    expect(usedMm).toBeLessThanOrEqual(wristMm * 0.5 + Math.max(...compareMms) + 1e-6);
   });
 });

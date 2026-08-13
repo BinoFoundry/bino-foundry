@@ -16,6 +16,7 @@ import { FramesAdminPage } from "./modules/products/FramesAdminPage";
 import { UsersAdminPage } from "./modules/users/UsersAdminPage";
 import { OrdersAdminPage } from "./modules/orders/OrdersAdminPage";
 import { LensRenderingPresetsAdminPage } from "./modules/sunglasses/LensRenderingPresetsAdminPage";
+import { AdminDocumentationPage } from "./modules/documentation/AdminDocumentationPage";
 import { adminSectionPath, isAdminSection, parseAdminSection } from "./routing";
 import type { AdminSection } from "./types";
 
@@ -74,6 +75,7 @@ export function AdminApp() {
     <Routes>
       <Route element={<AdminShellLayout />}>
         <Route index element={<DashboardRoute />} />
+        <Route path="documentation" element={<AdminDocumentationPage />} />
         <Route path="users" element={<UsersAdminPage />} />
         <Route path="users/new" element={<UsersAdminPage />} />
         <Route path="users/:itemId" element={<UsersAdminPage />} />

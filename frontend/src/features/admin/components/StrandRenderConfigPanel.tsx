@@ -117,6 +117,15 @@ export function StrandRenderConfigPanel({
           ? "Sub-type rendering defaults"
           : "Strand appearance";
 
+  const hierarchyHint =
+    mode === "system"
+      ? "DEFAULT for the whole catalogue. Type / sub-type / bead overrides win when set. Saving here never rewrites Custom Override beads."
+      : mode === "beadType"
+        ? "DEFAULT for this type. Sub-types and beads inherit these values unless they use a Custom Override."
+        : mode === "subBeadType"
+          ? "DEFAULT for this sub-type when not using parent calibration. Beads inherit unless they set a Custom Override."
+          : "CUSTOM OVERRIDE for this asset only — does not change type or sub-type defaults.";
+
   /**
    * Local editable draft for EVERY control.
    * Parent/resolved props hydrate into this, but commits update it immediately so selects
@@ -198,15 +207,7 @@ export function StrandRenderConfigPanel({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium">{title}</p>
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            {mode === "system"
-              ? "General defaults. Type, sub-type, and bead settings override these."
-              : mode === "beadType"
-                ? "Overrides General. Inherited by sub-types and beads unless they set their own values."
-                : mode === "subBeadType"
-                  ? "Overrides General and Bead Type when not using parent calibration. Beads inherit unless overridden."
-                  : "Overrides General → Type → Sub-type for this asset only."}
-          </p>
+          <p className="text-[11px] leading-snug text-muted-foreground">{hierarchyHint}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {mode === "bead" && onResetToType ? (
@@ -268,14 +269,19 @@ export function StrandRenderConfigPanel({
           When enabled, this level reuses its parent calibration values. Fields become read-only
           and may show <span className="font-medium">AUTO</span> badges (inherited). Turn it off to
           edit this level’s own settings (<span className="font-medium">Custom Override</span>).
+          {mode === "bead"
+            ? " With Parent on, change Bead type / Sub-type above to preview those defaults (including Layout mode)."
+            : null}
         </p>
       ) : null}
 
       {inheritedLock ? (
         <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
           Controls are locked while <span className="font-medium">Use Parent Calibration</span> is
-          on. Uncheck it to edit Orientation, Anchor Point, and other rendering options for this
-          level.
+          on
+          {mode === "bead"
+            ? " — Layout mode and other fields follow the selected type / sub-type. Change those dropdowns to update Live Preview, or uncheck Parent to edit this bead only."
+            : ". Uncheck it to edit Orientation, Anchor Point, and other rendering options for this level."}
         </p>
       ) : null}
 
@@ -325,10 +331,11 @@ export function StrandRenderConfigPanel({
               />
               <InputExamples examples={["0.50", "0.70", "1.00", "1.25"]} />
               <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                Controls how strongly size jumps between catalogue mm look (6 → 8 → 10&nbsp;mm).{" "}
-                <span className="font-medium">1.00</span> = linear / natural. Lower = subtler
-                differences. {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm stays fixed. Turn on
-                Compare sizes in the preview to see the effect.
+                Controls how strongly size jumps between catalogue mm look (6 → 8 → 10&nbsp;mm) for
+                crystals and charms. <span className="font-medium">1.00</span> = linear / natural.
+                Lower = subtler differences. {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm stays
+                fixed. Turn on Compare sizes in the preview (works for single-SKU dangling charms
+                via a 6/8/10 preview ladder).
               </p>
               <FieldError message={fieldErrors.visualSizeScaling} />
             </Field>
@@ -464,6 +471,28 @@ export function StrandRenderConfigPanel({
                   <span className="font-medium">Inward</span> = toward the centre.
                 </p>
               </Field>
+
+              <Field label="Layout mode" source={provenance?.layoutMode} readOnly={readOnly}>
+                <select
+                  disabled={readOnly}
+                  className={fieldClass(readOnly)}
+                  value={draft.layoutMode}
+                  onChange={(e) =>
+                    patchDraft({
+                      layoutMode: e.target.value as StrandRenderProfile["layoutMode"],
+                    })
+                  }
+                >
+                  <option value="inline">Inline (on the cord)</option>
+                  <option value="dangling">Dangling (hangs from bail)</option>
+                </select>
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  <span className="font-medium">Inline</span> = crystal-style on the strand.{" "}
+                  <span className="font-medium">Dangling</span> = charm hangs from a loop; spacing
+                  uses the attachment point, and height may extend past the cord. Follow the Live
+                  Preview checklist for dangling charms.
+                </p>
+              </Field>
             </>
           )}
         </div>
@@ -535,7 +564,8 @@ export function StrandRenderConfigPanel({
               aria-label="Hang offset percent"
             />
             <p className="mt-1 text-[10px] text-muted-foreground">
-              Percent of bead height (−100 … 100). Supports negative values.
+              Fine radial push as % of bead height (−100 … 100). Prefer Vertical offset first for
+              dangling charms; use this only when the bail still needs a nudge.
             </p>
           </Field>
           <Field label="Rotation (advanced)" source={provenance?.rotationMode} readOnly={readOnly}>
@@ -598,21 +628,23 @@ export function StrandRenderConfigPanel({
               <option value="betweenItems">Between items</option>
             </select>
           </Field>
-          <Field label="Layout mode" source={provenance?.layoutMode} readOnly={readOnly}>
-            <select
-              disabled={readOnly}
-              className={fieldClass(readOnly)}
-              value={draft.layoutMode}
-              onChange={(e) =>
-                patchDraft({
-                  layoutMode: e.target.value as StrandRenderProfile["layoutMode"],
-                })
-              }
-            >
-              <option value="inline">Inline</option>
-              <option value="dangling">Dangling</option>
-            </select>
-          </Field>
+          {mode === "system" ? (
+            <Field label="Layout mode" source={provenance?.layoutMode} readOnly={readOnly}>
+              <select
+                disabled={readOnly}
+                className={fieldClass(readOnly)}
+                value={draft.layoutMode}
+                onChange={(e) =>
+                  patchDraft({
+                    layoutMode: e.target.value as StrandRenderProfile["layoutMode"],
+                  })
+                }
+              >
+                <option value="inline">Inline</option>
+                <option value="dangling">Dangling</option>
+              </select>
+            </Field>
+          ) : null}
         </div>
       ) : null}
 

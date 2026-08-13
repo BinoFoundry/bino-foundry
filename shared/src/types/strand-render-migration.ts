@@ -29,6 +29,188 @@ export const STRAND_RENDER_BEHAVIOR_PRESETS: Record<
   connector: STRAND_RENDER_PRESETS.connector ?? {},
 };
 
+/**
+ * Recommended sub-type baselines (slug → partial).
+ * Used only when initializing missing configs or replacing known experimental fingerprints.
+ * Never applied blindly over carefully tuned sub-type overrides.
+ */
+export const STRAND_RENDER_SUBTYPE_RECOMMENDED: Record<string, Partial<StrandRenderProfile>> = {
+  // Round beads sitting on the cord — match crystal type (prefer inherit when possible).
+  "crystal-general": {
+    layoutScale: 1,
+    balanceSpacing: true,
+    visualScale: 1,
+    contactWidth: 1,
+    contactOffset: 0,
+    layoutMode: "inline",
+    verticalOffset: 0,
+    hangOffset: 0,
+    anchorPreset: "center",
+    orientationMode: "outward",
+    rotationMode: "tangent",
+    forceRoundFootprint: true,
+  },
+  // Classic hanging charms — loop bail, slight pull onto the cord.
+  dangling: {
+    layoutScale: 1,
+    balanceSpacing: true,
+    visualScale: 1,
+    contactWidth: 1,
+    contactOffset: 0,
+    layoutMode: "dangling",
+    verticalOffset: -25,
+    hangOffset: 0,
+    anchorPreset: "loop",
+    orientationMode: "outward",
+    rotationMode: "radial-upright",
+    forceRoundFootprint: false,
+  },
+  hanging: {
+    layoutScale: 1,
+    balanceSpacing: true,
+    visualScale: 1,
+    contactWidth: 1,
+    contactOffset: 0,
+    layoutMode: "dangling",
+    verticalOffset: -25,
+    hangOffset: 0,
+    anchorPreset: "loop",
+    orientationMode: "outward",
+    rotationMode: "radial-upright",
+    forceRoundFootprint: false,
+  },
+  drop: {
+    layoutScale: 1,
+    balanceSpacing: true,
+    visualScale: 1,
+    contactWidth: 1,
+    contactOffset: 0,
+    layoutMode: "dangling",
+    verticalOffset: 15,
+    hangOffset: 0,
+    anchorPreset: "loop",
+    orientationMode: "outward",
+    rotationMode: "radial-upright",
+    forceRoundFootprint: false,
+  },
+  // Fixed ornaments sit on the strand (not hang). Customs consistently use center / 0.
+  fixed: {
+    layoutScale: 1,
+    balanceSpacing: true,
+    visualScale: 1,
+    contactWidth: 1,
+    contactOffset: 0,
+    layoutMode: "inline",
+    verticalOffset: 0,
+    hangOffset: 0,
+    anchorPreset: "center",
+    orientationMode: "outward",
+    rotationMode: "tangent",
+    forceRoundFootprint: false,
+    strandOccupancy: 1,
+  },
+};
+
+/** Detect experimental / non-viable sub-type baselines that block usable out-of-box render. */
+export function isExperimentalSubTypeStrandBaseline(
+  slug: string,
+  override: Partial<StrandRenderProfile> | null | undefined,
+): boolean {
+  if (!override) return false;
+  const s = slug.trim().toLowerCase();
+  if (s === "crystal-general") {
+    return override.layoutScale === 0.4 && override.contactWidth === 1.8;
+  }
+  if (s === "fixed") {
+    return override.visualScale === 5 && override.layoutScale === 0.2;
+  }
+  if (s === "hanging") {
+    const keys = Object.keys(override).filter((k) => k !== "verticalOffsetUnit");
+    return override.contactWidth === -0.5 && keys.length <= 2;
+  }
+  if (s === "drop") {
+    return override.anchorPreset === "center" && override.layoutScale === 0.8;
+  }
+  return false;
+}
+
+export function recommendedSubTypeStrandBaseline(
+  slug: string,
+): Partial<StrandRenderProfile> | null {
+  return STRAND_RENDER_SUBTYPE_RECOMMENDED[slug.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * Client-facing copy for Charm hang-related sub-types.
+ * Slugs stay stable (catalogue data); names/descriptions clarify height difference.
+ * Dangling and Drop both use layoutMode "dangling" — only vertical placement differs.
+ */
+export interface StrandSubTypeClientCopy {
+  /** Display name to use when the catalogue still has the short default name. */
+  suggestedName: string;
+  /** Short default names we may replace (case-insensitive). */
+  replaceableNames: readonly string[];
+  /** Description / form hint. */
+  description: string;
+}
+
+export const STRAND_SUBTYPE_CLIENT_COPY: Record<string, StrandSubTypeClientCopy> = {
+  dangling: {
+    suggestedName: "Dangling (on cord)",
+    replaceableNames: ["Dangling"],
+    description: "Bail sits on the cord (higher hang).",
+  },
+  hanging: {
+    suggestedName: "Hanging (on cord)",
+    replaceableNames: ["Hanging"],
+    description: "Bail sits on the cord (higher hang). Same hang style as Dangling.",
+  },
+  drop: {
+    suggestedName: "Drop (lower hang)",
+    replaceableNames: ["Drop"],
+    description: "Same hang style as Dangling, sits lower under the cord.",
+  },
+  fixed: {
+    suggestedName: "Fixed (on strand)",
+    replaceableNames: ["Fixed"],
+    description: "Sits on the strand (does not hang).",
+  },
+};
+
+export function strandSubTypeClientCopy(
+  slug: string | null | undefined,
+): StrandSubTypeClientCopy | null {
+  if (!slug?.trim()) return null;
+  return STRAND_SUBTYPE_CLIENT_COPY[slug.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * Hint under Sub-type select: prefer catalogue description when meaningful,
+ * else built-in copy for known hang slugs.
+ */
+export function resolveSubBeadTypeClientHint(input: {
+  slug?: string | null;
+  description?: string | null;
+}): string | null {
+  const catalogue = input.description?.trim() ?? "";
+  if (catalogue.length > 0) return catalogue;
+  return strandSubTypeClientCopy(input.slug)?.description ?? null;
+}
+
+/**
+ * Whether a catalogue name is still the short default we may enrich.
+ * Custom client renames are left untouched.
+ */
+export function isReplaceableSubBeadTypeName(
+  slug: string | null | undefined,
+  name: string | null | undefined,
+): boolean {
+  const copy = strandSubTypeClientCopy(slug);
+  if (!copy || !name?.trim()) return false;
+  const n = name.trim().toLowerCase();
+  return copy.replaceableNames.some((r) => r.toLowerCase() === n);
+}
+
 const SLUG_BEHAVIOR_PRESET: Record<string, StrandRenderBehaviorPreset> = {
   crystal: "round-bead",
   gemstone: "round-bead",

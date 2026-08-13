@@ -3,6 +3,11 @@ import { apiRequest } from "./client";
 export interface StrandRenderMigrationStats {
   typesInitialized: number;
   typesSkipped: number;
+  typesKeysFilled?: number;
+  subTypesRepaired?: number;
+  subTypesSkipped?: number;
+  subTypeClientCopyEnriched?: number;
+  subTypeClientCopySkipped?: number;
   librariesCleaned: number;
   librariesSkipped: number;
 }

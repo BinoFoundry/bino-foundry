@@ -34,6 +34,7 @@ export {
   resolveStrandRenderConfigForType,
   buildStrandRenderConfigCache,
   strandRenderCacheVersion,
+  type HydrateBeadLibraryOptions,
   type ResolvedStrandRenderConfig,
   type StrandRenderCatalogueContext,
 } from "./strand-render-profile";

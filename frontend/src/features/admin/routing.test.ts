@@ -35,7 +35,9 @@ describe("admin routing", () => {
 
   it("parses sections and preserves query", () => {
     expect(isAdminSection("beads")).toBe(true);
+    expect(isAdminSection("documentation")).toBe(true);
     expect(parseAdminSection("nope")).toBe("dashboard");
+    expect(adminSectionPath("documentation")).toBe("/admin/documentation");
     expect(withAdminSearch("/admin/beads", "?q=tiger&page=2")).toBe(
       "/admin/beads?q=tiger&page=2",
     );

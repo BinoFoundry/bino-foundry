@@ -123,8 +123,16 @@ function OrderBraceletStrandViewer({
       viewportHeightPx: containerSize.height,
       layoutCanvasSize,
       twinning,
+      contentKey: `${placed.wristSizeCmA}|${placed.wristSizeCmB}|${twinning ? "twin" : "single"}`,
     }),
-    [containerSize.width, containerSize.height, layoutCanvasSize, twinning],
+    [
+      containerSize.width,
+      containerSize.height,
+      layoutCanvasSize,
+      twinning,
+      placed.wristSizeCmA,
+      placed.wristSizeCmB,
+    ],
   );
   const layoutReady =
     containerSize.width > 0 && containerSize.height > 0 && layoutCanvasSize > 0;

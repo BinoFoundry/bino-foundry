@@ -3,6 +3,7 @@ import type { AdminSection } from "./types";
 /** All addressable admin modules (sidebar sections). */
 export const ADMIN_SECTIONS = [
   "dashboard",
+  "documentation",
   "users",
   "orders",
   "frames",

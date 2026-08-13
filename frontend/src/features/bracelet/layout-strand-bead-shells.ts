@@ -211,15 +211,25 @@ export function layoutStrandBeadShells(
 
   const radiusPx = sequential.resolvedRadiusPx ?? requestedRadius;
   const pathLayout = sequential.beads;
+  const packScale =
+    Number.isFinite(sequential.packScale) && sequential.packScale > 0
+      ? sequential.packScale
+      : 1;
 
   const laidOut: LaidOutStrandBeadShell[] = pathLayout.map((path) => {
     const input = beads[path.index]!;
     const footprint = footprints[path.index]!;
+    // When the packer compresses centres for over-capacity, shrink CSS shells by the
+    // same factor — otherwise larger compare-size beads overlap their neighbours.
+    const scaledRenderDim = {
+      width: footprint.renderDim.width * packScale,
+      height: footprint.renderDim.height * packScale,
+    };
     const transform = calculateBeadRenderTransform({
       ringX: path.x,
       ringY: path.y,
       angleRad: path.angle,
-      slotDim: footprint.renderDim,
+      slotDim: scaledRenderDim,
       // Neutralise scale fields already baked into renderDim (avoid double application).
       // Keep hangOffset / anchors / layoutMode / orientation for charm dangling placement.
       profile: { ...input.profile, layoutScale: 1, visualScale: 1, visualSizeScaling: 1 },

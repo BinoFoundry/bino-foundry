@@ -1,4 +1,4 @@
-import { CircleDot, ClipboardList, Gem, Glasses, Ruler, Settings, Settings2, Sun, Users } from "lucide-react";
+import { BookOpen, CircleDot, ClipboardList, Gem, Glasses, Ruler, Settings, Settings2, Sun, Users } from "lucide-react";
 
 import { checkPermission } from "@/lib/permissions";
 import { useAuth } from "@/state/auth/AuthProvider";
@@ -18,6 +18,7 @@ const quickLinks: {
   description: string;
   icon: typeof Glasses;
 }[] = [
+  { section: "documentation", label: "Documentation", description: "Guides for every Admin editor", icon: BookOpen },
   { section: "frames", label: "Frames", description: "Sunglasses frame SKUs", icon: Glasses },
   { section: "beads", label: "Bead library", description: "Unified beads with crop workflow", icon: Gem },
   { section: "bead-types", label: "Bead types", description: "Crystal, charm, spacer categories", icon: Settings2 },

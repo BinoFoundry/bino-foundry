@@ -110,4 +110,42 @@ describe("bead size scaling dynamic", () => {
       expect(linear.beads[i]!.renderDim.width).toBeCloseTo(linear.contactArcPx[i]!, 3);
     }
   });
+
+  it("shrinks CSS shells with pack compression so over-capacity mixed sizes do not overlap", () => {
+    // Many large beads on a small wrist → packScale < 1.
+    const layout = layoutStrandBeadShells({
+      centerX: 200,
+      centerY: 200,
+      radiusPx: 60,
+      wristCircumferenceMm: 140,
+      beads: Array.from({ length: 24 }, (_, i) => {
+        const mm = i % 2 === 0 ? 6 : 10;
+        const d = layoutDiameterPxForMm(mm, 1);
+        return {
+          occupancyMm: mm,
+          slotDim: { width: d, height: d },
+          profile: mergeStrandRenderProfile({
+            visualSizeScaling: 1,
+            visualScale: 1,
+            layoutScale: 1,
+          }),
+        };
+      }),
+    });
+
+    expect(layout.isOverCapacity).toBe(true);
+    // Neighbour centres must leave at least half+half of compressed shell widths.
+    const circumference = 2 * Math.PI * 60;
+    for (let i = 0; i < layout.beads.length; i++) {
+      const a = layout.beads[i]!;
+      const b = layout.beads[(i + 1) % layout.beads.length]!;
+      const dx = b.ringX - a.ringX;
+      const dy = b.ringY - a.ringY;
+      // Chord distance underestimates arc, but shells must still not cross centres.
+      const chord = Math.hypot(dx, dy);
+      const minSeparation = (a.renderDim.width + b.renderDim.width) / 2 - 0.75;
+      expect(chord).toBeGreaterThanOrEqual(minSeparation);
+      void circumference;
+    }
+  });
 });

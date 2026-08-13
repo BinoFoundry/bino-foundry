@@ -162,12 +162,31 @@ function syntheticPreviewOffer(
 }
 
 /**
+ * Full strand capacity for the selected wrist + bead mm (Builder formula).
+ * Live Preview bead count cannot exceed this.
+ */
+export function previewMaxBeadCount(wristSizeCm: number, beadSizeMm: number): number {
+  return calculateBeadCount(wristSizeCm, beadSizeMm);
+}
+
+/**
  * Builder bracelets are rarely jammed full — seed ~55% capacity (min 8)
- * so spacing matches typical live use.
+ * so spacing matches typical live use. Always ≤ {@link previewMaxBeadCount}.
  */
 export function previewBeadCount(wristSizeCm: number, beadSizeMm: number): number {
-  const full = calculateBeadCount(wristSizeCm, beadSizeMm);
+  const full = previewMaxBeadCount(wristSizeCm, beadSizeMm);
   return Math.max(8, Math.min(full, Math.round(full * 0.55)));
+}
+
+/** Clamp a requested preview count into [1, capacity]. */
+export function clampPreviewBeadCount(
+  count: number,
+  wristSizeCm: number,
+  beadSizeMm: number,
+): number {
+  const max = previewMaxBeadCount(wristSizeCm, beadSizeMm);
+  if (!Number.isFinite(count)) return previewBeadCount(wristSizeCm, beadSizeMm);
+  return Math.max(1, Math.min(max, Math.round(count)));
 }
 
 export function buildPreviewPlacedBeads(
@@ -175,14 +194,18 @@ export function buildPreviewPlacedBeads(
   sizeOffer: Pick<BeadLibrarySizeOffer, "sizeMm" | "label" | "unitPrice" | "offerKey"> &
     Partial<BeadLibrarySizeOffer>,
   wristSizeCm = STRAND_RENDER_PREVIEW_WRIST_CM,
+  beadCount?: number,
 ): PlacedBead[] {
-  const count = previewBeadCount(wristSizeCm, sizeOffer.sizeMm);
+  const count =
+    beadCount != null
+      ? clampPreviewBeadCount(beadCount, wristSizeCm, sizeOffer.sizeMm)
+      : previewBeadCount(wristSizeCm, sizeOffer.sizeMm);
   return Array.from({ length: count }, (_, position) =>
     previewPlacedBeadFromSample(sampleBead, sizeOffer, position),
   );
 }
 
-/** Preferred mm sizes for visual-size-scaling comparison (anchor + larger steps). */
+/** Preferred mm sizes kept for docs/tests; compare mode uses enabled sizes instead. */
 export const VISUAL_SIZE_SCALING_COMPARE_MM = [
   STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM,
   8,
@@ -190,27 +213,40 @@ export const VISUAL_SIZE_SCALING_COMPARE_MM = [
 ] as const;
 
 /**
- * Pick catalogue mm values available for a visual-size-scaling A/B preview.
- * Requires at least two distinct sizes above the anchor to show curve compression.
+ * Sizes for the visual-size-scaling A/B preview.
+ * Prefers every enabled size on the bead (≥2). When a charm (or any bead) only
+ * has one enabled SKU, falls back to the 6/8/10 mm ladder so Compare still works.
  */
-export function resolveVisualSizeScalingCompareMms(sizeOptions: number[]): number[] {
+export function resolveVisualSizeScalingCompareMms(
+  sizeOptions: number[],
+  options?: { allowSyntheticFallback?: boolean },
+): number[] {
   const available = normalizePreviewSizeMms(sizeOptions);
-  if (available.length < 2) return [];
-
-  const preferred = VISUAL_SIZE_SCALING_COMPARE_MM.filter((mm) => available.includes(mm));
-  if (preferred.length >= 2) return preferred;
-
-  const anchor =
-    available.find((mm) => mm === STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM) ?? available[0]!;
-  const larger = available.filter((mm) => mm > anchor);
-  if (!larger.length) return [];
-
-  const mid = larger[Math.floor(larger.length / 2)]!;
-  const largest = larger[larger.length - 1]!;
-  return [...new Set([anchor, mid, largest])].sort((a, b) => a - b);
+  if (available.length >= 2) return available;
+  if (options?.allowSyntheticFallback !== false) {
+    return normalizePreviewSizeMms([
+      ...available,
+      ...VISUAL_SIZE_SCALING_COMPARE_MM,
+    ]);
+  }
+  return [];
 }
 
-/** Seed a strand with alternating mm sizes so visualSizeScaling curve is visible. */
+/** True when Compare is using the synthetic 6/8/10 ladder (not only enabled SKUs). */
+export function compareSizesUsesSyntheticFallback(sizeOptions: number[], compareMms: number[]): boolean {
+  const enabled = normalizePreviewSizeMms(sizeOptions);
+  if (enabled.length >= 2) return false;
+  if (compareMms.length < 2) return false;
+  return compareMms.some((mm) => !enabled.includes(mm));
+}
+
+/**
+ * Seed alternating mm sizes for Compare mode without overfilling the wrist.
+ *
+ * Uniform preview counts from the smallest/anchor mm; alternating larger sizes then
+ * push the strand over capacity and the packer compresses centres — historically the
+ * CSS shells stayed full-size and overlapped. Cap the fill from the real size sequence.
+ */
 export function buildComparePreviewPlacedBeads(
   sampleBead: BeadLibraryEntry,
   beadLibrarySizes: BeadLibrarySizeOffer[],
@@ -219,19 +255,35 @@ export function buildComparePreviewPlacedBeads(
 ): PlacedBead[] {
   if (compareMms.length < 2) return [];
 
-  const anchorMm = compareMms[0]!;
-  const count = previewBeadCount(wristSizeCm, anchorMm);
+  const wristMm = Math.max(1, wristSizeCm * 10);
+  // Partial fill like typical Builder use — leave headroom so mixed sizes stay edge-to-edge.
+  const targetFillMm = wristMm * 0.5;
   const catalogueOffers = beadLibrarySizes.filter((o) => o.beadLibraryId === sampleBead.id);
 
-  return Array.from({ length: count }, (_, position) => {
+  const beads: PlacedBead[] = [];
+  let usedMm = 0;
+  let position = 0;
+  // Always show at least one full cycle of compare sizes when they fit.
+  const minCount = compareMms.length;
+  while (true) {
     const sizeMm = compareMms[position % compareMms.length]!;
+    if (beads.length >= minCount && usedMm + sizeMm > targetFillMm) break;
+    // Hard stop: never seed past ~90% wrist — beyond that pack compression is expected.
+    if (usedMm + sizeMm > wristMm * 0.9 && beads.length >= minCount) break;
+
     const offer = catalogueOffers.find((o) => o.sizeMm === sizeMm) ?? null;
-    return previewPlacedBeadFromSample(
-      sampleBead,
-      syntheticPreviewOffer(sampleBead, sizeMm, offer),
-      position,
+    beads.push(
+      previewPlacedBeadFromSample(
+        sampleBead,
+        syntheticPreviewOffer(sampleBead, sizeMm, offer),
+        position,
+      ),
     );
-  });
+    usedMm += sizeMm;
+    position += 1;
+    if (position > 200) break;
+  }
+  return beads;
 }
 
 function useAdminStrandCanvasSize(enabled: boolean) {
@@ -324,16 +376,34 @@ export function StrandRenderLivePreview({
   const beadSizeMm = sizePick.sizeMm;
 
   const compareSizeMms = useMemo(
-    () => resolveVisualSizeScalingCompareMms(sizeOptions),
+    () => resolveVisualSizeScalingCompareMms(sizeOptions, { allowSyntheticFallback: true }),
     [sizeOptions],
   );
   const compareSizesAvailable = compareSizeMms.length >= 2;
+  const compareIsSynthetic = useMemo(
+    () => compareSizesUsesSyntheticFallback(sizeOptions, compareSizeMms),
+    [sizeOptions, compareSizeMms],
+  );
+  const isDanglingPreview = profile.layoutMode === "dangling";
+
+  const maxBeadCount = useMemo(
+    () => previewMaxBeadCount(wristSizeCm, beadSizeMm),
+    [wristSizeCm, beadSizeMm],
+  );
+  const defaultBeadCount = useMemo(
+    () => previewBeadCount(wristSizeCm, beadSizeMm),
+    [wristSizeCm, beadSizeMm],
+  );
+  const [beadCount, setBeadCount] = useState(defaultBeadCount);
+  useEffect(() => {
+    setBeadCount((prev) => clampPreviewBeadCount(prev, wristSizeCm, beadSizeMm));
+  }, [wristSizeCm, beadSizeMm, maxBeadCount]);
 
   const uniformSeedBeads = useMemo(() => {
     if (!sampleBead) return [];
     const offer = syntheticPreviewOffer(sampleBead, beadSizeMm, sizePick.offer);
-    return buildPreviewPlacedBeads(sampleBead, offer, wristSizeCm);
-  }, [sampleBead, sizePick.offer, beadSizeMm, wristSizeCm]);
+    return buildPreviewPlacedBeads(sampleBead, offer, wristSizeCm, beadCount);
+  }, [sampleBead, sizePick.offer, beadSizeMm, wristSizeCm, beadCount]);
 
   const compareSeedBeads = useMemo(() => {
     if (!sampleBead || !compareSizesAvailable) return [];
@@ -368,6 +438,78 @@ export function StrandRenderLivePreview({
   const contentRef = useRef<HTMLDivElement>(null);
   const [panMode, setPanMode] = useState(false);
 
+  const handleReorder = useCallback((fromPosition: number, toPosition: number) => {
+    setPlacedBeads((prev) => {
+      const next = [...prev];
+      const from = next.findIndex((b) => b.position === fromPosition);
+      const to = next.findIndex((b) => b.position === toPosition);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      return next.map((b, i) => ({ ...b, position: i }));
+    });
+  }, []);
+
+  const handleRemove = useCallback((position: number) => {
+    setPlacedBeads((prev) =>
+      prev.filter((b) => b.position !== position).map((b, i) => ({ ...b, position: i })),
+    );
+  }, []);
+
+  const handleResetStrand = useCallback(() => {
+    setBeadCount(defaultBeadCount);
+    setPlacedBeads(
+      compareSizes && compareSizesAvailable
+        ? compareSeedBeads
+        : sampleBead
+          ? buildPreviewPlacedBeads(
+              sampleBead,
+              syntheticPreviewOffer(sampleBead, beadSizeMm, sizePick.offer),
+              wristSizeCm,
+              defaultBeadCount,
+            )
+          : [],
+    );
+  }, [
+    defaultBeadCount,
+    compareSizes,
+    compareSizesAvailable,
+    compareSeedBeads,
+    sampleBead,
+    beadSizeMm,
+    sizePick.offer,
+    wristSizeCm,
+  ]);
+
+  const layoutKey = useMemo(
+    () =>
+      [
+        wristSizeCm,
+        beadSizeMm,
+        placedBeads.map((b) => `${b.position}:${b.size.offerKey}:${b.size.sizeMm}`).join(","),
+        compareSizes ? "compare" : "uniform",
+        compareSizes ? compareSizeMms.join(",") : "",
+        applyDraft ? "draft" : "catalogue",
+        applyDraft
+          ? [
+              profile.layoutScale,
+              profile.contactWidth,
+              profile.contactOffset,
+              profile.spacingAdjustment,
+              profile.visualScale,
+              profile.visualSizeScaling,
+              profile.hangOffset,
+              profile.verticalOffset,
+              profile.anchorY,
+              profile.orientationMode,
+              profile.layoutMode,
+              profile.balanceSpacing ? 1 : 0,
+            ].join(":")
+          : "cat",
+      ].join("|"),
+    [wristSizeCm, beadSizeMm, placedBeads, compareSizes, compareSizeMms, applyDraft, profile],
+  );
+
   const layoutCanvasSize = strandSize;
   const strandZoomLayout = useMemo(
     () => ({
@@ -375,8 +517,9 @@ export function StrandRenderLivePreview({
       viewportHeightPx: containerSize.height,
       layoutCanvasSize,
       twinning: false,
+      contentKey: layoutKey,
     }),
-    [containerSize.width, containerSize.height, layoutCanvasSize],
+    [containerSize.width, containerSize.height, layoutCanvasSize, layoutKey],
   );
   const layoutReady =
     containerSize.width > 0 && containerSize.height > 0 && layoutCanvasSize > 0;
@@ -403,56 +546,6 @@ export function StrandRenderLivePreview({
     },
     strandZoomLayout,
     { panMode, layoutReady },
-  );
-
-  const handleReorder = useCallback((fromPosition: number, toPosition: number) => {
-    setPlacedBeads((prev) => {
-      const next = [...prev];
-      const from = next.findIndex((b) => b.position === fromPosition);
-      const to = next.findIndex((b) => b.position === toPosition);
-      if (from < 0 || to < 0 || from === to) return prev;
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved!);
-      return next.map((b, i) => ({ ...b, position: i }));
-    });
-  }, []);
-
-  const handleRemove = useCallback((position: number) => {
-    setPlacedBeads((prev) =>
-      prev.filter((b) => b.position !== position).map((b, i) => ({ ...b, position: i })),
-    );
-  }, []);
-
-  const handleResetStrand = useCallback(() => {
-    setPlacedBeads(seedBeads);
-  }, [seedBeads]);
-
-  const layoutKey = useMemo(
-    () =>
-      [
-        wristSizeCm,
-        beadSizeMm,
-        placedBeads.map((b) => `${b.position}:${b.size.offerKey}:${b.size.sizeMm}`).join(","),
-        compareSizes ? "compare" : "uniform",
-        compareSizes ? compareSizeMms.join(",") : "",
-        applyDraft ? "draft" : "catalogue",
-        applyDraft
-          ? [
-              profile.layoutScale,
-              profile.contactWidth,
-              profile.contactOffset,
-              profile.spacingAdjustment,
-              profile.visualScale,
-              profile.visualSizeScaling,
-              profile.hangOffset,
-              profile.verticalOffset,
-              profile.anchorY,
-              profile.orientationMode,
-              profile.balanceSpacing ? 1 : 0,
-            ].join(":")
-          : "cat",
-      ].join("|"),
-    [wristSizeCm, beadSizeMm, placedBeads, compareSizes, compareSizeMms, applyDraft, profile],
   );
 
   return (
@@ -518,6 +611,36 @@ export function StrandRenderLivePreview({
               </select>
             </label>
 
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Bead count
+              </span>
+              <div className="flex h-8 items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={maxBeadCount}
+                  step={1}
+                  disabled={!sampleBead || (compareSizes && compareSizesAvailable)}
+                  className={adminFieldClass("h-8 w-[4.5rem] py-1 text-xs tabular-nums")}
+                  value={beadCount}
+                  onChange={(e) => {
+                    const raw = Number(e.target.value);
+                    setBeadCount(clampPreviewBeadCount(raw, wristSizeCm, beadSizeMm));
+                  }}
+                  aria-label="Preview bead count"
+                  title={
+                    compareSizes && compareSizesAvailable
+                      ? "Disabled while Compare sizes is on"
+                      : `Max ${maxBeadCount} for ${wristSizeCm} cm / ${beadSizeMm} mm`
+                  }
+                />
+                <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                  / {maxBeadCount}
+                </span>
+              </div>
+            </label>
+
             <button
               type="button"
               className="h-8 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
@@ -557,15 +680,61 @@ export function StrandRenderLivePreview({
         </div>
         {compareSizes && compareSizesAvailable ? (
           <p className="text-[11px] text-muted-foreground">
-            Visual size scaling changes how {compareSizeMms.filter((mm) => mm !== STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM).join(" / ")}&nbsp;mm
-            look relative to {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm. Lower values compress size jumps;{" "}
-            {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm stays anchored.
+            {isDanglingPreview ? (
+              <>
+                Comparing dangling charm sizes ({compareSizeMms.map((mm) => `${mm} mm`).join(" · ")}
+                ). Width follows catalogue mm; height can hang past the cord. Check the smallest and
+                largest wrist (incl. 20&nbsp;cm) — Fit zooms out so hang is not clipped.
+              </>
+            ) : (
+              <>
+                Comparing sizes ({compareSizeMms.map((mm) => `${mm} mm`).join(" · ")}). Each bead
+                keeps its catalogue mm spacing so neighbours do not overlap. Visual size scaling
+                changes how sizes other than {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm look
+                relative to the {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm anchor — lower values
+                compress size jumps.
+              </>
+            )}
+            {compareIsSynthetic ? (
+              <>
+                {" "}
+                Sizes marked beyond your enabled SKUs are a preview ladder only — enable those mm
+                offers on the bead if customers should buy them.
+              </>
+            ) : null}
           </p>
         ) : compareSizesAvailable ? (
           <p className="text-[11px] text-muted-foreground">
-            To preview visual size scaling, enable Compare sizes — a single {STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM}&nbsp;mm
-            strand will not show curve changes because that size is anchored.
+            {isDanglingPreview
+              ? "Enable Compare sizes to preview how different mm charms hang side by side on the same strand (works for single-SKU charms too)."
+              : `To preview visual size scaling, enable Compare sizes — a single size will not show curve changes as clearly (the ${STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM} mm size stays anchored).`}
           </p>
+        ) : null}
+
+        {isDanglingPreview ? (
+          <ol className="list-decimal space-y-1 rounded-md border border-border/70 bg-muted/30 px-3 py-2 pl-7 text-[11px] leading-snug text-muted-foreground">
+            <li>
+              Set <span className="font-medium text-foreground">Layout mode → Dangling</span>,{" "}
+              <span className="font-medium text-foreground">Anchor → Loop</span>,{" "}
+              <span className="font-medium text-foreground">Orientation → Outward</span>.
+            </li>
+            <li>
+              Tune <span className="font-medium text-foreground">Vertical offset</span> until the bail
+              sits on the cord; use Hang offset only for fine radial push.
+            </li>
+            <li>
+              Turn on <span className="font-medium text-foreground">Compare sizes</span> to see mixed mm
+              charms on one bracelet — occupancy (strand space) and Render size (visual) are separate.
+            </li>
+            <li>
+              Switch <span className="font-medium text-foreground">Wrist</span> to the catalogue max
+              (e.g. 20&nbsp;cm) and confirm hang is fully visible; use Fit / Reset zoom if needed.
+            </li>
+            <li>
+              Save, then open the Bracelet Builder with the same wrist — final result should match this
+              preview.
+            </li>
+          </ol>
         ) : null}
 
         {!sampleBead ? (

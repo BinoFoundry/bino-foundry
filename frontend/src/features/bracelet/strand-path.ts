@@ -61,6 +61,11 @@ export interface SequentialStrandPathLayout {
   /** Linear arc occupied from the first bead's leading edge to the last trailing edge. */
   occupiedArcPx: number;
   isOverCapacity: boolean;
+  /**
+   * When occupancy exceeds the ring, pack positions are scaled by this factor (&lt; 1).
+   * Shells must use the same scale so CSS diameters stay edge-to-edge (no overlap).
+   */
+  packScale: number;
   /** Contact path radius; differs only for calibrated closed-loop tangency. */
   resolvedRadiusPx?: number;
 }
@@ -152,6 +157,7 @@ export function computeSequentialStrandPathLayout(params: {
       insertionAngles: [startAngle],
       occupiedArcPx: 0,
       isOverCapacity: false,
+      packScale: 1,
     };
   }
 
@@ -222,6 +228,7 @@ export function computeSequentialStrandPathLayout(params: {
     insertionAngles,
     occupiedArcPx,
     isOverCapacity: occupiedArcPx > circumferencePx + 1e-6,
+    packScale: 1,
   };
 }
 
@@ -254,6 +261,7 @@ export function computeSymmetricStrandPathLayout(params: {
       insertionAngles: [startAngle],
       occupiedArcPx: 0,
       isOverCapacity: false,
+      packScale: 1,
     };
   }
 
@@ -328,6 +336,7 @@ export function computeSymmetricStrandPathLayout(params: {
     insertionAngles,
     occupiedArcPx,
     isOverCapacity: occupiedArcPx > circumferencePx + 1e-6,
+    packScale: 1,
   };
 }
 
@@ -494,6 +503,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
       insertionAngles: [startAngle],
       occupiedArcPx: 0,
       isOverCapacity: false,
+      packScale: 1,
     };
   }
 
@@ -502,10 +512,10 @@ export function computeBalancedRadialStrandPathLayout(params: {
   const circularGapsPx = beads.length > 1 ? beads.length * gapPx : 0;
   const isOverCapacity = rawOccupiedPx + circularGapsPx > circumferencePx + 1e-6;
   const availableForOccupancyPx = Math.max(0, circumferencePx - circularGapsPx);
-  const scale = isOverCapacity
+  const packScale = isOverCapacity
     ? availableForOccupancyPx / Math.max(rawOccupiedPx, 1e-6)
     : 1;
-  const widthsPx = rawWidthsPx.map((width) => width * scale);
+  const widthsPx = rawWidthsPx.map((width) => width * packScale);
   let positionsPx = new Array<number>(beads.length).fill(0);
 
   if (placement === "physical-contact") {
@@ -675,6 +685,7 @@ export function computeBalancedRadialStrandPathLayout(params: {
     insertionAngles,
     occupiedArcPx,
     isOverCapacity,
+    packScale,
   };
 }
 

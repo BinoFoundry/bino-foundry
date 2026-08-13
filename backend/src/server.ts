@@ -29,9 +29,15 @@ async function bootstrap(): Promise<void> {
     void strandRenderMigrationService
       .runStartupMigration()
       .then((stats) => {
-        if (stats.typesInitialized > 0 || stats.librariesCleaned > 0) {
+        if (
+          stats.typesInitialized > 0 ||
+          stats.typesKeysFilled > 0 ||
+          stats.subTypesRepaired > 0 ||
+          stats.subTypeClientCopyEnriched > 0 ||
+          stats.librariesCleaned > 0
+        ) {
           console.log(
-            `Strand render migration: ${stats.typesInitialized} type(s) initialized, ${stats.librariesCleaned} library override(s) cleaned.`,
+            `Strand render migration: ${stats.typesInitialized} type(s) initialized, ${stats.typesKeysFilled} type key-fill(s), ${stats.subTypesRepaired} sub-type repair(s), ${stats.subTypeClientCopyEnriched} sub-type label(s) enriched, ${stats.librariesCleaned} library override(s) cleaned.`,
           );
         }
       })

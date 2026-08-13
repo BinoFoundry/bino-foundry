@@ -94,6 +94,19 @@ export function StrandRenderDefaultsAdmin({
   return (
     <div className={embedded ? "space-y-4" : "mx-auto max-w-2xl space-y-4 p-4"}>
       {!embedded ? <h2 className="type-h2 text-lg">Bracelet rendering defaults</h2> : null}
+      <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+        <p className="font-medium text-foreground">Default Rendering Configuration</p>
+        <p className="mt-1">
+          These system settings apply when a type, sub-type, or bead does not define its own
+          calibration. Individual assets can still use a{" "}
+          <span className="font-medium text-foreground">Custom Override</span> — saving here does
+          not rewrite those overrides.
+        </p>
+        <p className="mt-1">
+          Inheritance:{" "}
+          <span className="font-medium text-foreground">System → Bead Type → Sub Type → Bead</span>.
+        </p>
+      </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <StrandRenderConfigPanel
         mode="system"

@@ -260,8 +260,10 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
       viewportHeightPx: containerSize.height,
       layoutCanvasSize,
       twinning: showMatchingPairPreview,
+      // Remeasure painted bounds when wrist or beads change (dangling hang).
+      contentKey: layoutKey,
     }),
-    [containerSize.width, containerSize.height, layoutCanvasSize, showMatchingPairPreview],
+    [containerSize.width, containerSize.height, layoutCanvasSize, showMatchingPairPreview, layoutKey],
   );
 
   const layoutReady =

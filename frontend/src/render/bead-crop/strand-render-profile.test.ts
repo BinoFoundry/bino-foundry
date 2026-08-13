@@ -211,6 +211,82 @@ describe("strand render profile", () => {
     expect(profile.provenance.visualScale).toBe("beadType");
   });
 
+  it("preferDraftIdentity keeps unsaved type/sub and override over live catalogue", () => {
+    const catalogue = {
+      ...TEST_STRAND_RENDER_CATALOGUE,
+      beadTypes: [
+        {
+          id: "type-crystal",
+          slug: "crystal",
+          name: "Crystal",
+          description: "",
+          placementMode: "inline" as const,
+          metadata: {
+            strandRender: { layoutMode: "inline", visualScale: 0.9, hangOffset: 0 },
+          },
+        },
+        {
+          id: "type-charm",
+          slug: "charm",
+          name: "Charm",
+          description: "",
+          placementMode: "hanging" as const,
+          metadata: {
+            strandRender: { layoutMode: "dangling", visualScale: 1.2, hangOffset: 0.35 },
+          },
+        },
+      ],
+      beadLibraries: [
+        {
+          id: "bead-1",
+          name: "Saved bead",
+          image: "",
+          beadTypeId: "type-crystal",
+          beadTypeSlug: "crystal",
+          description: "",
+          metadata: { useTypeStrandDefaults: true },
+        },
+      ],
+    };
+
+    const editorDraft = {
+      id: "bead-1",
+      name: "Saved bead",
+      image: "",
+      beadTypeId: "type-charm",
+      beadTypeSlug: "charm",
+      description: "",
+      metadata: { useTypeStrandDefaults: true },
+    };
+
+    const withoutPrefer = resolveStrandRenderConfigForBead(editorDraft, catalogue);
+    expect(withoutPrefer.layoutMode).toBe("inline");
+    expect(withoutPrefer.visualScale).toBe(0.9);
+
+    const withPrefer = resolveStrandRenderConfigForBead(editorDraft, catalogue, {
+      preferDraftIdentity: true,
+    });
+    expect(withPrefer.layoutMode).toBe("dangling");
+    expect(withPrefer.visualScale).toBe(1.2);
+    expect(withPrefer.hangOffset).toBe(0.35);
+    expect(withPrefer.provenance.layoutMode).toBe("beadType");
+
+    const draftOverride = resolveStrandRenderConfigForBead(
+      {
+        ...editorDraft,
+        metadata: {
+          useTypeStrandDefaults: false,
+          strandRenderOverride: { layoutMode: "dangling", hangOffset: 0.5 },
+        },
+      },
+      catalogue,
+      { preferDraftIdentity: true },
+    );
+    expect(draftOverride.layoutMode).toBe("dangling");
+    expect(draftOverride.hangOffset).toBe(0.5);
+    expect(draftOverride.provenance.layoutMode).toBe("beadOverride");
+  });
+
   it("applies live type defaults when bead inherits after catalogue type update", () => {
     const profile = resolveStrandRenderConfigForBead(
       {

@@ -23,6 +23,10 @@ import {
   type RenderCameraLayoutInput,
 } from "../render-camera";
 import { MATCHING_PAIR_CHROME_HEIGHT_PX } from "../strand-camera";
+import {
+  measureStrandContentExtent,
+  sanitizeMeasuredContentExtent,
+} from "../strand-content-extent";
 import { TWIN_STRAND_PREVIEW_GAP_PX } from "../strand-viewport";
 
 export const STRAND_ZOOM_MIN = 0.55;
@@ -53,6 +57,12 @@ export interface StrandZoomLayout {
   viewportHeightPx: number;
   layoutCanvasSize: number;
   twinning: boolean;
+  /**
+   * When wrist size, bead set, or hang calibration changes, bump this so Fit
+   * remeasures painted bounds (dangling charms) without treating it as a
+   * viewport resize that resets zoom.
+   */
+  contentKey?: string;
 }
 
 export interface StrandZoomRefs {
@@ -74,6 +84,10 @@ function clampPan(pan: StrandPan, maxX: number, maxY: number): StrandPan {
 }
 
 function layoutSignature(layout: StrandZoomLayout): string {
+  return `${layout.layoutCanvasSize}|${layout.twinning}|${layout.viewportWidthPx}|${layout.viewportHeightPx}|${layout.contentKey ?? ""}`;
+}
+
+function viewportSignature(layout: StrandZoomLayout): string {
   return `${layout.layoutCanvasSize}|${layout.twinning}|${layout.viewportWidthPx}|${layout.viewportHeightPx}`;
 }
 
@@ -95,17 +109,7 @@ function isLayoutMeasurable(layout: StrandZoomLayout): boolean {
 }
 
 function measureContentExtent(content: HTMLElement) {
-  let width = 0;
-  let height = 0;
-  for (const child of Array.from(content.children)) {
-    if (!(child instanceof HTMLElement)) continue;
-    width = Math.max(width, child.offsetLeft + child.offsetWidth);
-    height = Math.max(height, child.offsetTop + child.offsetHeight);
-  }
-  return {
-    width: width || content.scrollWidth,
-    height: height || content.scrollHeight,
-  };
+  return measureStrandContentExtent(content);
 }
 
 function expectedContentExtent(
@@ -134,7 +138,9 @@ function expectedContentExtent(
  *
  * The viewport uses `overflow-hidden`, so hanging/extended charm visuals can clip when
  * wrist size changes unless we reframe. We recompute only `fitScale` and preserve the
- * user's `camera.zoom`, keeping zoom level independent from wrist-size changes.
+ * user's `camera.zoom`, keeping zoom level independent from wrist-size changes —
+ * except when content itself remounts (layout mode / calibration), where we reset zoom
+ * so the label does not stay at 300% while fitScale is crushed.
  */
 function computeFitScaleFromMeasuredBounds(input: {
   layout: StrandZoomLayout;
@@ -142,16 +148,26 @@ function computeFitScaleFromMeasuredBounds(input: {
   measured: { width: number; height: number };
 }): number | null {
   const { layout, camera, measured } = input;
-  const w = measured.width;
-  const h = measured.height;
+  const sanitized = sanitizeMeasuredContentExtent(measured, layout.layoutCanvasSize);
+  const w = sanitized.width;
+  const h = sanitized.height;
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
 
   const budgetW = layout.viewportWidthPx * RENDER_CAMERA_SAFETY_MARGIN;
   const budgetH = layout.viewportHeightPx * RENDER_CAMERA_SAFETY_MARGIN;
   if (budgetW <= 0 || budgetH <= 0) return null;
 
-  const desiredRenderScale = Math.min(budgetW / w, budgetH / h);
+  let desiredRenderScale = Math.min(budgetW / w, budgetH / h);
   if (!Number.isFinite(desiredRenderScale) || desiredRenderScale <= 0) return null;
+
+  // Never crush below half of a canvas-only fit — keeps the ring readable after bad measures.
+  const canvasFit = Math.min(
+    budgetW / Math.max(1, layout.layoutCanvasSize),
+    budgetH / Math.max(1, layout.layoutCanvasSize + STRAND_CHROME_Y_PX),
+  );
+  if (Number.isFinite(canvasFit) && canvasFit > 0) {
+    desiredRenderScale = Math.max(desiredRenderScale, canvasFit * 0.45);
+  }
 
   const zoom = camera.zoom;
   if (!Number.isFinite(zoom) || zoom <= 0) return null;
@@ -180,6 +196,8 @@ export function useStrandZoom(
   const twinCameraRef = useRef<RenderCamera | null>(null);
   const prevTwinningRef = useRef(layout.twinning);
   const prevLayoutSigRef = useRef("");
+  const prevViewportSigRef = useRef("");
+  const prevContentKeyRef = useRef(layout.contentKey ?? "");
   const initializedRef = useRef(false);
   const swappingRef = useRef(false);
   const debugRef = useRef(isRenderCameraDebugEnabled());
@@ -361,10 +379,27 @@ export function useStrandZoom(
     writeActiveCamera(camera);
     syncRuntimeFromCamera(camera);
     applyTransform();
+    // Reframe to painted bounds (dangling hang) after the canvas-only init zoom.
+    if (contentRef?.current) {
+      const measured = measureContentExtent(contentRef.current);
+      const desiredFitScale = computeFitScaleFromMeasuredBounds({
+        layout: layoutRef.current,
+        camera: activeCameraRef.current,
+        measured,
+      });
+      if (
+        desiredFitScale != null &&
+        Math.abs(desiredFitScale - activeCameraRef.current.fitScale) > 1e-4
+      ) {
+        writeActiveCamera({ ...activeCameraRef.current, fitScale: desiredFitScale });
+        applyTransform();
+      }
+    }
     emitDebug("camera-reset");
-  }, [writeActiveCamera, syncRuntimeFromCamera, applyTransform, emitDebug]);
+  }, [contentRef, writeActiveCamera, syncRuntimeFromCamera, applyTransform, emitDebug]);
 
   const layoutSig = layoutSignature(layout);
+  const viewportSig = viewportSignature(layout);
   const measurable = layoutReady && isLayoutMeasurable(layout);
 
   useLayoutEffect(() => {
@@ -374,6 +409,32 @@ export function useStrandZoom(
     const wasTwinning = prevTwinningRef.current;
     const isTwinning = layout.twinning;
     const layoutChanged = prevLayoutSigRef.current !== layoutSig;
+    const viewportChanged = prevViewportSigRef.current !== viewportSig;
+    const contentKey = layout.contentKey ?? "";
+    const contentChanged = prevContentKeyRef.current !== contentKey;
+
+    const applyMeasuredFit = () => {
+      if (
+        !contentRef?.current ||
+        layout.viewportWidthPx <= 0 ||
+        layout.viewportHeightPx <= 0
+      ) {
+        return;
+      }
+      const measured = measureContentExtent(contentRef.current);
+      const desiredFitScale = computeFitScaleFromMeasuredBounds({
+        layout,
+        camera: activeCameraRef.current,
+        measured,
+      });
+      if (
+        desiredFitScale != null &&
+        Math.abs(desiredFitScale - activeCameraRef.current.fitScale) > 1e-4
+      ) {
+        writeActiveCamera({ ...activeCameraRef.current, fitScale: desiredFitScale });
+        activeCameraRef.current = resolveActiveCamera();
+      }
+    };
 
     if (!initializedRef.current) {
       const camera = initializeBraceletCamera(toLayoutInput(layout));
@@ -381,8 +442,13 @@ export function useStrandZoom(
       syncRuntimeFromCamera(camera);
       initializedRef.current = true;
       prevLayoutSigRef.current = layoutSig;
+      prevViewportSigRef.current = viewportSig;
+      prevContentKeyRef.current = contentKey;
       prevTwinningRef.current = isTwinning;
       activeCameraRef.current = camera;
+      applyTransform();
+      // Canvas-only init zoom; pull out further when dangling shells overhang.
+      applyMeasuredFit();
       applyTransform();
       swappingRef.current = false;
       emitDebug("camera-init");
@@ -409,7 +475,14 @@ export function useStrandZoom(
       const refitted = refitMatchingPairCamera(twinCameraRef.current, toLayoutInput(layout));
       twinCameraRef.current = refitted;
       syncRuntimeFromCamera(refitted);
-    } else if (!isTwinning && layoutChanged && singleCameraRef.current) {
+    } else if (!isTwinning && contentChanged && !viewportChanged) {
+      // Layout mode / wrist / calibration remounts the strand. Reset zoom so we do not
+      // keep a 300% label while fitScale is crushed to fit new shell bounds.
+      const camera = initializeBraceletCamera(toLayoutInput(layout));
+      singleCameraRef.current = camera;
+      syncRuntimeFromCamera(camera);
+      emitDebug("camera-content-refit");
+    } else if (!isTwinning && viewportChanged && singleCameraRef.current) {
       const camera = initializeBraceletCamera(toLayoutInput(layout), {
         preserve: singleCameraRef.current,
       });
@@ -421,42 +494,37 @@ export function useStrandZoom(
     activeCameraRef.current = resolveActiveCamera();
     prevTwinningRef.current = isTwinning;
     prevLayoutSigRef.current = layoutSig;
+    prevViewportSigRef.current = viewportSig;
+    prevContentKeyRef.current = contentKey;
 
-    // Prevent overflow-hidden clipping on layout changes by auto-fitting.
-    // This preserves camera.zoom (user intent) while adjusting fitScale.
-    if (
-      layoutChanged &&
-      initializedRef.current &&
-      contentRef?.current &&
-      layout.viewportWidthPx > 0 &&
-      layout.viewportHeightPx > 0
-    ) {
-      const measured = measureContentExtent(contentRef.current);
-      const desiredFitScale = computeFitScaleFromMeasuredBounds({
-        layout,
-        camera: activeCameraRef.current,
-        measured,
-      });
-
-      if (
-        desiredFitScale != null &&
-        Math.abs(desiredFitScale - activeCameraRef.current.fitScale) > 1e-4
-      ) {
-        writeActiveCamera({ ...activeCameraRef.current, fitScale: desiredFitScale });
-        activeCameraRef.current = resolveActiveCamera();
-      }
+    // Prevent overflow-hidden clipping on layout / wrist / content changes by auto-fitting.
+    if (layoutChanged) {
+      applyMeasuredFit();
     }
 
     applyTransform();
     swappingRef.current = false;
+
+    // Remounted strand slots may not have final offsets in this frame — refit once painted.
+    if (contentChanged && !isTwinning) {
+      const frame = requestAnimationFrame(() => {
+        if (!initializedRef.current || !contentRef?.current) return;
+        applyMeasuredFit();
+        applyTransform();
+      });
+      return () => cancelAnimationFrame(frame);
+    }
   }, [
     measurable,
     layout.twinning,
     layoutSig,
+    viewportSig,
     layout,
+    contentRef,
     syncRuntimeFromCamera,
     resolveActiveCamera,
     applyTransform,
+    writeActiveCamera,
     emitDebug,
   ]);
 

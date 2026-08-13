@@ -30,16 +30,27 @@ export interface StrandRenderCatalogueContext {
   strandRenderDefaults?: StrandRenderProfile | null;
 }
 
+export interface HydrateBeadLibraryOptions {
+  /**
+   * Admin bead editor: keep the form's beadTypeId / subBeadTypeId / metadata.
+   * Default hydrate is for Builder placed-bead snapshots (stale type/override after Admin saves).
+   */
+  preferDraftIdentity?: boolean;
+}
+
 /**
  * Prefer live catalogue metadata (type/sub ids + strand overrides) over a placed snapshot.
  * Visual assets on the placed bead are left unchanged.
- * Skipped when the bead carries a frozen order-time strand profile.
+ * Skipped when the bead carries a frozen order-time strand profile,
+ * or when `preferDraftIdentity` is set (unsaved Admin form).
  */
 export function hydrateBeadLibraryForStrandRender(
   bead: BeadLibraryEntry | null | undefined,
   catalogue?: StrandRenderCatalogueContext,
+  options?: HydrateBeadLibraryOptions,
 ): BeadLibraryEntry | null | undefined {
   if (!bead?.id || !catalogue?.beadLibraries?.length) return bead;
+  if (options?.preferDraftIdentity) return bead;
   if ((bead.metadata as { frozenStrandRenderProfile?: unknown } | undefined)?.frozenStrandRenderProfile) {
     return bead;
   }
@@ -110,6 +121,7 @@ function libraryInheritsSubTypeDefaults(bead: BeadLibraryEntry | null | undefine
 export function resolveStrandRenderConfigForBead(
   bead: BeadLibraryEntry | null | undefined,
   catalogue?: StrandRenderCatalogueContext,
+  options?: HydrateBeadLibraryOptions,
 ): ResolvedStrandRenderConfig {
   const frozenRaw = (bead?.metadata as { frozenStrandRenderProfile?: unknown } | undefined)
     ?.frozenStrandRenderProfile;
@@ -124,7 +136,7 @@ export function resolveStrandRenderConfigForBead(
     return { ...profile, provenance, resolvedRenderScale: profile.visualScale };
   }
 
-  const hydrated = hydrateBeadLibraryForStrandRender(bead, catalogue);
+  const hydrated = hydrateBeadLibraryForStrandRender(bead, catalogue, options);
   const typeEntry = beadTypeFor(hydrated, catalogue);
   const subTypeEntry = subBeadTypeFor(hydrated, catalogue);
 
@@ -142,8 +154,9 @@ export function resolveStrandRenderConfigForBead(
 export function resolveStrandRenderProfile(
   bead: BeadLibraryEntry | null | undefined,
   catalogue?: StrandRenderCatalogueContext,
+  options?: HydrateBeadLibraryOptions,
 ): StrandRenderProfile {
-  return resolveStrandRenderConfigForBead(bead, catalogue);
+  return resolveStrandRenderConfigForBead(bead, catalogue, options);
 }
 
 /** Resolve by type id/slug when only type context is available (layout hints). */

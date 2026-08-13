@@ -23,6 +23,8 @@ export { StrandStage } from "./components/StrandStage";
 export { StrandViewport } from "./components/StrandViewport";
 export { StrandZoomControls } from "./components/StrandZoomControls";
 export { useStrandZoom, STRAND_TWIN_DEFAULT_ZOOM } from "./hooks/useStrandZoom";
+export { measureStrandContentExtent } from "./strand-content-extent";
+export { sanitizeMeasuredContentExtent } from "./strand-content-extent";
 export {
   type RenderCamera,
   type RenderCameraLayoutInput,
