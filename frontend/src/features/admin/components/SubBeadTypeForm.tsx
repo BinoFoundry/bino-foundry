@@ -40,8 +40,12 @@ function subTypeOverrideFromForm(form: SubBeadTypeEntry) {
 function updateSubTypeStrandOverride(
   form: SubBeadTypeEntry,
   patch: Record<string, unknown>,
-  inheritedBeadTypeProfile: ReturnType<typeof resolvedTypeStrandProfile>,
+  _inheritedBeadTypeProfile: ReturnType<typeof resolvedTypeStrandProfile>,
 ): SubBeadTypeEntry {
+  // Ignore field commits that race after parent calibration is turned on.
+  if (subBeadTypeInheritsBeadTypeStrandDefaults(form.metadata)) {
+    return form;
+  }
   const current = subTypeOverrideFromForm(form) ?? {};
   // Keep authored patch keys on the override (including values that match parent) so
   // selects/checkboxes remain editable and persist after blur/save.

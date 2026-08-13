@@ -72,6 +72,11 @@ function updateStrandOverride(
   patch: Record<string, unknown>,
   _inherited: StrandRenderProfile,
 ): BeadLibraryEntry {
+  // Ignore field commits that race after "Use Parent Calibration" is turned on
+  // (e.g. deferred input blur after the checkbox click).
+  if (beadLibraryInheritsTypeStrandDefaults(form.metadata)) {
+    return form;
+  }
   const meta = form.metadata as { strandRenderOverride?: unknown; useTypeStrandDefaults?: boolean } | undefined;
   const current = parseStrandRenderProfile(meta?.strandRenderOverride) ?? {};
   // In custom mode keep authored values (including equals-to-parent) so edits persist after blur.

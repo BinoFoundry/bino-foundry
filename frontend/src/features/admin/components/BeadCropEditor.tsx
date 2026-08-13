@@ -252,23 +252,12 @@ export function BeadCropEditor({
         );
         uploadedUrls.push(webpUp.imageUrl);
 
-        let avifUrl: string | null = null;
-        if (blobs.avif?.size) {
-          try {
-            const avifUp = await uploadApi.uploadImage(
-              new File([blobs.avif], "bead-cropped.avif", { type: "image/avif" }),
-            );
-            avifUrl = avifUp.imageUrl;
-            uploadedUrls.push(avifUp.imageUrl);
-          } catch {
-            // Storage bucket may not allow image/avif — WebP/PNG are sufficient.
-          }
-        }
-
+        // Do not POST image/avif — assets bucket + /api/upload reject it (HTTP 415).
+        // PNG + WebP are enough for delivery.
         const deliveryUrls = deliveryUrlsFromUploads({
           png: pngUp.imageUrl,
           webp: webpUp.imageUrl,
-          avif: avifUrl,
+          avif: null,
         });
 
         const next = {

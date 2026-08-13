@@ -106,8 +106,8 @@ export function FramesAdminPage() {
     }
     const id = editor.itemId;
     let cancelled = false;
+    // Keep the editor mounted across catalogue context updates (same frame id).
     setDetailLoading(true);
-    setDetailReadyId(null);
     void cat
       .ensureFrameDetail(id)
       .then(() => {
@@ -123,7 +123,7 @@ export function FramesAdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [cat, editor.isEditing, editor.itemId]);
+  }, [cat.ensureFrameDetail, editor.isEditing, editor.itemId]);
 
   const duplicateSeed = useMemo(() => {
     if (!editor.isCreating || !dupFromId) return undefined;
@@ -136,7 +136,7 @@ export function FramesAdminPage() {
     void cat.ensureFrameDetail(dupFromId).catch((err) => {
       console.error("Failed to load frame for duplicate:", err);
     });
-  }, [cat, editor.isCreating, dupFromId]);
+  }, [cat.ensureFrameDetail, editor.isCreating, dupFromId]);
 
   useEffect(() => {
     if (editor.isEditing && !editingEntry && frames.length > 0 && !cat.isHydrating && !detailLoading) {
@@ -251,7 +251,7 @@ export function FramesAdminPage() {
           </span>
         }
       >
-        {editor.isEditing && detailLoading ? (
+        {editor.isEditing && detailLoading && detailReadyId !== editor.itemId ? (
           <LoadingState label="Loading frame masks & details…" className="min-h-[240px]" />
         ) : editorDetailReady ? (
           <div className="mx-auto w-full max-w-4xl">

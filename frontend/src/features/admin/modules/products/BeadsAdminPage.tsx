@@ -117,8 +117,9 @@ export function BeadsAdminPage() {
     }
     const id = editor.itemId;
     let cancelled = false;
+    // Do not clear detailReadyId for the same id — that remounts BeadForm and wipes
+    // in-progress edits (e.g. Use Parent Calibration) whenever catalogue context updates.
     setDetailLoading(true);
-    setDetailReadyId(null);
     void cat
       .ensureBeadLibraryDetail(id)
       .then(() => {
@@ -133,7 +134,7 @@ export function BeadsAdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [cat, editor.isEditing, editor.itemId]);
+  }, [cat.ensureBeadLibraryDetail, editor.isEditing, editor.itemId]);
 
   // Invalid deep link → return to list (wait until catalogue has loaded).
   useEffect(() => {
@@ -242,7 +243,7 @@ export function BeadsAdminPage() {
       />
 
       <AdminPage scrollRef={scrollRef} footer={`${filtered.length} bead(s)`}>
-        {editor.isEditing && detailLoading ? (
+        {editor.isEditing && detailLoading && detailReadyId !== editor.itemId ? (
           <LoadingState label="Loading bead crop data…" className="min-h-[240px]" />
         ) : editorDetailReady ? (
           <BeadForm

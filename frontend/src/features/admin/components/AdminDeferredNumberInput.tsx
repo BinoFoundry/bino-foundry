@@ -74,6 +74,11 @@ export function AdminDeferredNumberInput({
   };
 
   const commit = () => {
+    if (disabled) {
+      setDraftBoth(null);
+      onClearError?.();
+      return;
+    }
     const currentDraft = draftRef.current;
     if (currentDraft === null) return;
     const trimmed = currentDraft.trim();
