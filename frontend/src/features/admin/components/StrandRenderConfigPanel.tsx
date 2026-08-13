@@ -86,6 +86,18 @@ function fieldClass(readOnly: boolean): string {
     .join(" ");
 }
 
+/** Layout is the one public control — attach point follows (dangling → hanging ring, inline → center). */
+function patchForLayoutMode(
+  layoutMode: StrandRenderProfile["layoutMode"],
+): Partial<StrandRenderProfile> {
+  const anchorPreset: StrandAnchorPreset = layoutMode === "dangling" ? "loop" : "center";
+  return {
+    layoutMode,
+    anchorPreset,
+    ...anchorCoordsForPreset(anchorPreset),
+  };
+}
+
 export function StrandRenderConfigPanel({
   mode,
   value,
@@ -413,33 +425,6 @@ export function StrandRenderConfigPanel({
                 <FieldError message={fieldErrors.verticalOffset} />
               </Field>
 
-              <Field label="Anchor point" source={provenance?.anchorPreset} readOnly={readOnly}>
-                <select
-                  disabled={readOnly}
-                  className={fieldClass(readOnly)}
-                  value={draft.anchorPreset}
-                  onChange={(e) => {
-                    const anchorPreset = e.target.value as StrandAnchorPreset;
-                    // Always sync coords — overrides often already carry stale anchorX/Y from a
-                    // previous preset, and the live preview reads draft.anchorY directly.
-                    patchDraft({
-                      anchorPreset,
-                      ...anchorCoordsForPreset(anchorPreset),
-                    });
-                  }}
-                >
-                  <option value="center">Center</option>
-                  <option value="loop">Loop (hanging ring)</option>
-                  <option value="top">Top</option>
-                  <option value="bottom">Bottom</option>
-                </select>
-                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  Which part of the asset attaches to the strand.{" "}
-                  <span className="font-medium">Loop</span> = hanging ring (charms);{" "}
-                  <span className="font-medium">Center</span> = middle of the asset.
-                </p>
-              </Field>
-
               <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
                 <select
                   disabled={readOnly}
@@ -465,19 +450,18 @@ export function StrandRenderConfigPanel({
                   className={fieldClass(readOnly)}
                   value={draft.layoutMode}
                   onChange={(e) =>
-                    patchDraft({
-                      layoutMode: e.target.value as StrandRenderProfile["layoutMode"],
-                    })
+                    patchDraft(
+                      patchForLayoutMode(e.target.value as StrandRenderProfile["layoutMode"]),
+                    )
                   }
                 >
                   <option value="inline">Inline (on the cord)</option>
                   <option value="dangling">Dangling (hangs from ring)</option>
                 </select>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  <span className="font-medium">Inline</span> = crystal-style on the strand.{" "}
-                  <span className="font-medium">Dangling</span> = charm hangs from a loop; spacing
-                  uses the attachment point, and height may extend past the cord. Follow the Live
-                  Preview checklist for dangling charms.
+                  <span className="font-medium">Inline</span> = sits on the cord (crystal / fixed).{" "}
+                  <span className="font-medium">Dangling</span> = hangs from the hanging ring. Attach
+                  point follows this automatically. Tune height with Vertical offset.
                 </p>
               </Field>
             </>
@@ -537,6 +521,29 @@ export function StrandRenderConfigPanel({
               decimals={2}
               disabled={readOnly}
             />
+          </Field>
+          <Field label="Attach point (advanced)" source={provenance?.anchorPreset} readOnly={readOnly}>
+            <select
+              disabled={readOnly}
+              className={fieldClass(readOnly)}
+              value={draft.anchorPreset}
+              onChange={(e) => {
+                const anchorPreset = e.target.value as StrandAnchorPreset;
+                patchDraft({
+                  anchorPreset,
+                  ...anchorCoordsForPreset(anchorPreset),
+                });
+              }}
+            >
+              <option value="center">Center</option>
+              <option value="loop">Loop (hanging ring)</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+            </select>
+            <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+              Follows Layout mode by default. Change only for unusual art (pin at the very top or
+              bottom of the photo).
+            </p>
           </Field>
           <Field label="Hang offset" source={provenance?.hangOffset} readOnly={readOnly}>
             <AdminNumberWithSlider
@@ -622,9 +629,9 @@ export function StrandRenderConfigPanel({
                 className={fieldClass(readOnly)}
                 value={draft.layoutMode}
                 onChange={(e) =>
-                  patchDraft({
-                    layoutMode: e.target.value as StrandRenderProfile["layoutMode"],
-                  })
+                  patchDraft(
+                    patchForLayoutMode(e.target.value as StrandRenderProfile["layoutMode"]),
+                  )
                 }
               >
                 <option value="inline">Inline</option>

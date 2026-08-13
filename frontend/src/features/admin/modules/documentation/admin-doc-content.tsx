@@ -180,7 +180,7 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
               </li>
               <li>
                 <span className="font-medium text-foreground">Dangling</span> — hangs from its
-                hanging ring; height may extend past the cord.
+                hanging ring; height may extend past the cord. Attach point follows automatically.
               </li>
             </ul>
           ),
@@ -225,8 +225,8 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
                 away from the cord (% of item height).
               </li>
               <li>
-                <span className="font-medium text-foreground">Anchor point</span> — Center vs Loop
-                (hanging ring).
+                <span className="font-medium text-foreground">Layout mode</span> — Inline (on cord)
+                or Dangling (hangs from ring). Attach point follows this automatically.
               </li>
               <li>
                 <span className="font-medium text-foreground">Orientation</span> — outward or inward
@@ -276,7 +276,7 @@ Not: invent 0.1 / −0.2 values from scratch for every asset.`}
                 These Charm sub-types are catalogue data (keep their slugs). Both{" "}
                 <span className="font-medium text-foreground">Dangling</span> and{" "}
                 <span className="font-medium text-foreground">Drop</span> use the same hang style
-                (Layout mode → Dangling, Anchor → Loop). The difference is height on the cord:
+                (Layout mode → Dangling). The difference is height on the cord:
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-5">
                 <li>
@@ -305,8 +305,9 @@ Not: invent 0.1 / −0.2 values from scratch for every asset.`}
             <ol className="list-decimal space-y-1.5 pl-5">
               <li>
                 Sub-type / type: <span className="font-medium text-foreground">Layout mode →
-                Dangling</span>, <span className="font-medium text-foreground">Anchor → Loop</span>,{" "}
-                <span className="font-medium text-foreground">Orientation → Outward</span>.
+                Dangling</span>,{" "}
+                <span className="font-medium text-foreground">Orientation → Outward</span>. Attach
+                point follows automatically.
               </li>
               <li>
                 Tune <span className="font-medium text-foreground">Vertical offset</span> until the

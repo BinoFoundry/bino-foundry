@@ -817,9 +817,9 @@ export function StrandRenderLivePreview({
         {isDanglingPreview ? (
           <ol className="list-decimal space-y-1 rounded-md border border-border/70 bg-muted/30 px-3 py-2 pl-7 text-[11px] leading-snug text-muted-foreground">
             <li>
-              Set <span className="font-medium text-foreground">Layout mode → Dangling</span>,{" "}
-              <span className="font-medium text-foreground">Anchor → Loop</span>,{" "}
-              <span className="font-medium text-foreground">Orientation → Outward</span>.
+              Set <span className="font-medium text-foreground">Layout mode → Dangling</span> and{" "}
+              <span className="font-medium text-foreground">Orientation → Outward</span>. Attach
+              point follows automatically (hanging ring).
             </li>
             <li>
               Tune <span className="font-medium text-foreground">Vertical offset</span> until the
