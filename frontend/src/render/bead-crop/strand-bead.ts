@@ -113,15 +113,14 @@ export function getStrandBeadImageStyle(
 ): CSSProperties {
   if (sizing?.imageDimensions) {
     const img = sizing.imageDimensions;
-    const off = sizing.imageOffsetPx;
     const usesProcessedLayer =
       sizing.usesProcessedCanvas ?? hasDistinctProcessedAsset(bead);
 
     if (usesProcessedLayer || sizing.sizingPath === "normalizedVisibleDiameter") {
       return {
         position: "absolute",
-        left: off.left,
-        top: off.top,
+        left: 0,
+        top: 0,
         width: img.width,
         height: img.height,
         display: "block",
@@ -134,8 +133,8 @@ export function getStrandBeadImageStyle(
     const visual = resolveBeadVisualBoundsNorm(bead);
     return {
       position: "absolute",
-      left: off.left,
-      top: off.top,
+      left: 0,
+      top: 0,
       width: img.width,
       height: img.height,
       display: "block",

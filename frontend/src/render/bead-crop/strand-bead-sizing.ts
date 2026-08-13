@@ -344,23 +344,10 @@ function resolveUniformStrandImageLayout(
       width: Math.max(1, processedW * scale),
       height: Math.max(1, processedH * scale),
     };
-    // Align painted content to the shell — prefer measured origin so loop-top charms are not clipped.
-    const originX =
-      typeof metrics.visibleOriginXPx === "number" && Number.isFinite(metrics.visibleOriginXPx)
-        ? metrics.visibleOriginXPx
-        : Math.max(0, (processedW - contentWidthPx) / 2);
-    const originY =
-      typeof metrics.visibleOriginYPx === "number" && Number.isFinite(metrics.visibleOriginYPx)
-        ? metrics.visibleOriginYPx
-        : Math.max(0, (processedH - contentHeightPx) / 2);
-    const imageOffsetPx = {
-      left: -originX * scale,
-      top: -originY * scale,
-    };
 
     return {
       imageDimensions,
-      imageOffsetPx,
+      imageOffsetPx: { left: 0, top: 0 },
       imageRenderScale: scale,
       assetVisibleDiameterPx: Math.max(contentWidthPx, contentHeightPx),
       renderResolution,
@@ -394,10 +381,7 @@ function resolveUniformStrandImageLayout(
     scaleReferenceDiameterPx: options.scaleReferenceDiameterPx ?? undefined,
   });
 
-  const imageOffsetPx = {
-    left: (dimensions.width - imageFootprint.width) / 2,
-    top: (dimensions.height - imageFootprint.height) / 2,
-  };
+  const imageOffsetPx = { left: 0, top: 0 };
   const visibleW = visibleFootprint?.width ?? imageFootprint.width;
   const visibleH = visibleFootprint?.height ?? imageFootprint.height;
 

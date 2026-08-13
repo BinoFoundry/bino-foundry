@@ -163,9 +163,9 @@ describe("same-mm visual size from painted content bounds", () => {
     // Painted width = contentW × scale ≈ mm wrapper (not canvas×scale).
     expect(padded.imageRenderScale * contentW).toBeCloseTo(wrapper, 5);
     expect(padded.imageDimensions.width).toBeCloseTo(canvas * (wrapper / contentW), 5);
-    // Origin-aligned: content left edge lands at shell left (not centered pad).
-    expect(padded.imageOffsetPx.left).toBeCloseTo(-160 * (wrapper / contentW), 5);
-    expect(padded.imageOffsetPx.top).toBeCloseTo(-20 * (wrapper / contentW), 5);
+    // Image pins to shell top-left; shell position + transform-origin handle cord alignment.
+    expect(padded.imageOffsetPx.left).toBe(0);
+    expect(padded.imageOffsetPx.top).toBe(0);
     // Tall charm: shell grows in height with content aspect; width stays mm.
     expect(padded.dimensions.height / padded.dimensions.width).toBeCloseTo(contentH / contentW, 5);
     expect(padded.visibleContentWidthPx! / padded.visibleContentHeightPx!).toBeCloseTo(
