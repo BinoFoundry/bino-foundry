@@ -23,15 +23,15 @@ describe("StrandRenderConfigPanel interactivity", () => {
     expect(select).toHaveValue("inward");
   });
 
-  it("keeps Render size locked (visible) while Use Parent Calibration is enabled", () => {
+  it("keeps Render size locked while Parent Calibration is on without customize", () => {
     const onChange = vi.fn();
     render(
       <StrandRenderConfigPanel
         mode="bead"
         value={{ ...DEFAULT_STRAND_RENDER_PROFILE, orientationMode: "outward" }}
         inheritTypeDefaults
-        onInheritTypeDefaultsChange={vi.fn()}
         customizeRenderSize={false}
+        onInheritTypeDefaultsChange={vi.fn()}
         onCustomizeRenderSizeChange={vi.fn()}
         onChange={onChange}
         showLivePreview={false}
@@ -43,30 +43,25 @@ describe("StrandRenderConfigPanel interactivity", () => {
     fireEvent.change(select, { target: { value: "inward" } });
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Render size")).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: /Customize image size/i })).not.toBeChecked();
   });
 
-  it("keeps Render size locked and shows Image size adjust when Customize is on", () => {
+  it("unlocks Render size when Customize render size is on with Parent", () => {
     const onChange = vi.fn();
-    const onImageSizeAdjustChange = vi.fn();
     render(
       <StrandRenderConfigPanel
         mode="bead"
-        value={{ ...DEFAULT_STRAND_RENDER_PROFILE, visualScale: 1 }}
+        value={{ ...DEFAULT_STRAND_RENDER_PROFILE, visualScale: 0.75 }}
         inheritTypeDefaults
-        onInheritTypeDefaultsChange={vi.fn()}
         customizeRenderSize
+        onInheritTypeDefaultsChange={vi.fn()}
         onCustomizeRenderSizeChange={vi.fn()}
-        imageSizeAdjust={1.1}
-        onImageSizeAdjustChange={onImageSizeAdjustChange}
         onChange={onChange}
         showLivePreview={false}
       />,
     );
 
-    expect(screen.getByLabelText("Render size")).toBeDisabled();
+    expect(screen.getByLabelText("Render size")).not.toBeDisabled();
     expect(screen.getByDisplayValue(/Outward/i)).toBeDisabled();
-    expect(screen.getByLabelText("Image size adjust")).not.toBeDisabled();
   });
 
   it("allows Orientation and Render size after unlocking parent calibration", () => {
@@ -88,5 +83,25 @@ describe("StrandRenderConfigPanel interactivity", () => {
     fireEvent.change(select, { target: { value: "inward" } });
     expect(onChange).toHaveBeenCalledWith({ orientationMode: "inward" });
     expect(select).toHaveValue("inward");
+  });
+
+  it("shows range error for Render size below allowed minimum", () => {
+    const onChange = vi.fn();
+    render(
+      <StrandRenderConfigPanel
+        mode="beadType"
+        value={{ ...DEFAULT_STRAND_RENDER_PROFILE, visualScale: 1 }}
+        onChange={onChange}
+        showLivePreview={false}
+      />,
+    );
+
+    const input = screen.getByLabelText("Render size");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "0.05" } });
+    fireEvent.blur(input);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/Must be between/i);
+    expect(input).toHaveValue("0.05");
   });
 });

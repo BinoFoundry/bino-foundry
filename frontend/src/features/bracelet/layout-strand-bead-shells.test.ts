@@ -44,7 +44,6 @@ describe("layoutStrandBeadShells", () => {
         angleRad: bead.angleRad,
         slotDim: bead.renderDim,
         profile: { ...profile, layoutScale: 1, visualScale: 1, visualSizeScaling: 1 },
-        imageSizeAdjust: bead.imageSizeAdjust,
       });
       expect(bead.shellLeft).toBeCloseTo(direct.shellLeft, 8);
       expect(bead.shellTop).toBeCloseTo(direct.shellTop, 8);
@@ -200,52 +199,30 @@ describe("layoutStrandBeadShells", () => {
     expect(meanShellSize(bigger)).toBeGreaterThan(meanShellSize(base) * 1.2);
   });
 
-  it("applies imageSizeAdjust via CSS scale without changing shell footprint", () => {
-    const slotDim = { width: 30, height: 30 };
-    const profileBase = mergeStrandRenderProfile({
-      layoutMode: "dangling",
-      contactWidth: 1,
-      layoutScale: 1,
-      visualScale: 1,
-    });
-
-    const layoutFull = layoutStrandBeadShells({
+  it("render size below 1 shrinks the drawn shell even when contact floor is larger", () => {
+    const params = {
       centerX: 120,
       centerY: 120,
       radiusPx: 70,
       wristCircumferenceMm: 160,
-      balanceSpacing: false,
-      beads: [
-        {
-          occupancyMm: 8,
-          slotDim,
-          profile: profileBase,
-          imageSizeAdjust: 1,
-        },
-      ],
+      balanceSpacing: false as const,
+    };
+    const bead = (visualScale: number) => ({
+      occupancyMm: 8,
+      slotDim: { width: 28, height: 28 },
+      profile: mergeStrandRenderProfile({ contactWidth: 1, visualScale, layoutScale: 1 }),
     });
-    const layoutNudged = layoutStrandBeadShells({
-      centerX: 120,
-      centerY: 120,
-      radiusPx: 70,
-      wristCircumferenceMm: 160,
-      balanceSpacing: false,
-      beads: [
-        {
-          occupancyMm: 8,
-          slotDim,
-          profile: profileBase,
-          imageSizeAdjust: 0.7,
-        },
-      ],
+    const full = layoutStrandBeadShells({
+      ...params,
+      beads: [bead(1)],
+    });
+    const smaller = layoutStrandBeadShells({
+      ...params,
+      beads: [bead(0.5)],
     });
 
-    expect(layoutNudged.beads[0]!.renderDim.width).toBeCloseTo(layoutFull.beads[0]!.renderDim.width, 5);
-    expect(layoutNudged.beads[0]!.shellLeft).toBeCloseTo(layoutFull.beads[0]!.shellLeft, 5);
-    expect(layoutFull.beads[0]!.imageSizeAdjust).toBeCloseTo(1, 5);
-    expect(layoutNudged.beads[0]!.imageSizeAdjust).toBeCloseTo(0.7, 5);
-    expect(layoutNudged.beads[0]!.cssTransform).toMatch(/scale\(0\.7\)/);
-    expect(layoutFull.beads[0]!.cssTransform).not.toMatch(/scale\(/);
+    expect(smaller.contactArcPx[0]!).toBeCloseTo(full.contactArcPx[0]!, 5);
+    expect(meanShellSize(smaller)).toBeLessThan(meanShellSize(full) * 0.55);
   });
 
   it("keeps clockwise neighbour order equal to array order when a bead is added", () => {

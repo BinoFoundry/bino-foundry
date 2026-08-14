@@ -22,10 +22,6 @@ export interface StrandBeadShellLayoutInput {
   /** Physical/layout slot before visualScale (same as Builder prelimDims). */
   slotDim: BeadSlotDimensions;
   profile: StrandRenderProfile;
-  /**
-   * Opt-in photo size nudge (1 = unchanged). Packing / hang / visualScale stay as calibrated.
-   */
-  imageSizeAdjust?: number;
 }
 
 export interface LayoutStrandBeadShellsParams {
@@ -124,8 +120,13 @@ export function resolveStrandShellFootprint(params: {
     occupancyMm,
     profile.visualSizeScaling ?? 1,
   );
-  // Drawn shell: neutral mm contact floor + scaled visual — not tuned occupancy.
-  const renderWidthLinear = Math.max(naturalContactArcPx, visualWidthLinear);
+  const visualScale = Number.isFinite(profile.visualScale) ? profile.visualScale : 1;
+  // At visualScale ≥ 1 keep the neutral contact floor so existing calibrations stay put.
+  // Below 1, honour Render size — the user is explicitly shrinking the photo shell.
+  const renderWidthLinear =
+    visualScale < 1
+      ? visualWidthLinear
+      : Math.max(naturalContactArcPx, visualWidthLinear);
   const renderHeightLinear =
     profile.layoutMode === "dangling"
       ? Math.max(renderWidthLinear, visualHeightLinear)
@@ -151,7 +152,7 @@ export function resolveStrandShellFootprint(params: {
  * 1. mm occupancy → contact arcs (capacity-consistent; contactWidth/offsets tune span)
  * 2. path packing using max(occupancy, visual shell tangent) so mixed charms/crystals
  *    do not overlap when silhouettes exceed the mm arc
- * 3. per-bead CSS shell = max(natural contact, visual) × size-curve — absolute render size
+ * 3. per-bead CSS shell — at visualScale ≥ 1: max(natural contact, visual); below 1: visual only
  *    (never shrunk by wrist overfill / bead count)
  *
  * Absolute size at occupancy ≈ 1 matches the previous contact-driven look. Raising or
@@ -273,7 +274,6 @@ export function layoutStrandBeadShells(
       // Keep hangOffset / anchors / layoutMode / orientation for charm dangling placement.
       profile: { ...input.profile, layoutScale: 1, visualScale: 1, visualSizeScaling: 1 },
       sizeMm: input.occupancyMm,
-      imageSizeAdjust: input.imageSizeAdjust,
     });
     return {
       ...transform,

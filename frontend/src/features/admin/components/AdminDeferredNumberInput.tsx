@@ -148,6 +148,10 @@ export function AdminDeferredNumberInput({
       onFocus={() => {
         focusedRef.current = true;
         onEditingChange?.(true);
+        // Enter draft mode on focus so clearing the field stays empty until blur (no snap-back).
+        if (draftRef.current === null) {
+          setDraftBoth(formatCommitted(scaled, decimals));
+        }
       }}
       onChange={(e) => {
         setDraftBoth(e.target.value);

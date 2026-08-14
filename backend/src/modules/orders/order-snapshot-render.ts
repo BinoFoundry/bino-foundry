@@ -4,8 +4,6 @@ import {
   parseBeadPlacementMode,
   parseStrandRenderProfile,
   resolveStrandRenderConfig,
-  strandCustomizeRenderSizeEnabled,
-  strandImageSizeAdjust,
   subBeadTypeInheritsBeadTypeStrandDefaults,
   type BeadCropConfig,
   type BeadDeliveryUrls,
@@ -102,17 +100,8 @@ function resolveProfileForLibrary(
     inheritBeadFromSubBeadType: beadLibraryInheritsTypeStrandDefaults(libMeta),
   });
 
-  const parentScale = resolved.visualScale;
-  const beadAdjust = strandImageSizeAdjust(libMeta, { parentVisualScale: parentScale });
-  const subAdjust = strandImageSizeAdjust(subMeta, { parentVisualScale: parentScale });
-  const imageSizeAdjust = beadAdjust ?? subAdjust ?? 1;
-
   const { provenance: _p, resolvedRenderScale: _s, imageSizeAdjust: _i, ...profile } = resolved;
-  const frozen = mergeStrandRenderProfile(profile);
-  // Preserve opt-in photo nudge on the frozen blob (not a StrandRenderProfile field).
-  return imageSizeAdjust !== 1
-    ? ({ ...frozen, imageSizeAdjust } as StrandRenderProfile)
-    : frozen;
+  return mergeStrandRenderProfile(profile);
 }
 
 /**

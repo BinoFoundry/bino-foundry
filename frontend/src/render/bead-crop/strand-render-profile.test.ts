@@ -151,7 +151,7 @@ describe("strand render profile", () => {
     expect(profile.provenance.contactOffset).toBe("beadOverride");
   });
 
-  it("keeps parent visualScale and applies imageSizeAdjust when Customize image size is on", () => {
+  it("applies bead render-size-only override while parent inherit stays on", () => {
     const profile = resolveStrandRenderConfigForBead(
       {
         id: "charm-1",
@@ -162,15 +162,13 @@ describe("strand render profile", () => {
         metadata: {
           useTypeStrandDefaults: true,
           customizeRenderSize: true,
-          imageSizeAdjust: 1.2,
-          strandRenderOverride: { visualScale: 2, verticalOffset: 40 },
+          strandRenderOverride: { visualScale: 0.7 },
         },
       },
       TEST_STRAND_RENDER_CATALOGUE,
     );
-    expect(profile.visualScale).toBe(1);
-    expect(profile.provenance.visualScale).toBe("beadType");
-    expect(profile.imageSizeAdjust).toBe(1.2);
+    expect(profile.visualScale).toBe(0.7);
+    expect(profile.provenance.visualScale).toBe("beadOverride");
     expect(profile.verticalOffset).toBe(0);
     expect(profile.layoutMode).toBe("dangling");
   });

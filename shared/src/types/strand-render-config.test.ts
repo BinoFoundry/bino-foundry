@@ -28,42 +28,43 @@ describe("resolveStrandRenderConfig", () => {
     expect(resolved.provenance.visualScale).toBe("beadType");
   });
 
-  it("keeps parent visualScale when inheriting (imageSizeAdjust is separate)", () => {
+  it("keeps parent visualScale when inheriting bead override fields", () => {
     const resolved = resolveStrandRenderConfig({
       systemDefaults: { visualScale: 1 },
       beadTypeDefaults: { visualScale: 1.2, verticalOffset: 0 },
       beadOverride: { visualScale: 2, verticalOffset: 40 },
       inheritTypeDefaults: true,
-      imageSizeAdjustBead: 1.15,
     });
     expect(resolved.visualScale).toBe(1.2);
     expect(resolved.provenance.visualScale).toBe("beadType");
     expect(resolved.verticalOffset).toBe(0);
-    expect(resolved.imageSizeAdjust).toBe(1.15);
-  });
-
-  it("defaults imageSizeAdjust to 1 when unset", () => {
-    const resolved = resolveStrandRenderConfig({
-      beadTypeDefaults: { visualScale: 1.2, layoutMode: "dangling" },
-      beadOverride: { visualScale: 2 },
-      inheritTypeDefaults: true,
-    });
-    expect(resolved.visualScale).toBe(1.2);
     expect(resolved.imageSizeAdjust).toBe(1);
+  });
+
+  it("applies render-size-only override while parent inherit stays on", () => {
+    const resolved = resolveStrandRenderConfig({
+      systemDefaults: { visualScale: 1 },
+      beadTypeDefaults: { visualScale: 1.2, verticalOffset: 0, layoutMode: "dangling" },
+      inheritSubBeadTypeFromBeadType: true,
+      inheritBeadFromSubBeadType: true,
+      beadRenderSizeOnly: { visualScale: 0.65 },
+    });
+    expect(resolved.visualScale).toBe(0.65);
+    expect(resolved.provenance.visualScale).toBe("beadOverride");
+    expect(resolved.verticalOffset).toBe(0);
     expect(resolved.layoutMode).toBe("dangling");
   });
 
-  it("prefers bead imageSizeAdjust over sub-type", () => {
+  it("applies sub-type render-size-only override while inheriting bead type", () => {
     const resolved = resolveStrandRenderConfig({
-      beadTypeDefaults: { visualScale: 1.1, layoutMode: "dangling", verticalOffset: 0 },
+      systemDefaults: { visualScale: 1 },
+      beadTypeDefaults: { visualScale: 1.2, orientationMode: "outward" },
       inheritSubBeadTypeFromBeadType: true,
-      imageSizeAdjustSubBeadType: 0.9,
-      inheritBeadFromSubBeadType: true,
-      imageSizeAdjustBead: 1.25,
+      subBeadTypeRenderSizeOnly: { visualScale: 0.8 },
     });
-    expect(resolved.visualScale).toBe(1.1);
-    expect(resolved.imageSizeAdjust).toBe(1.25);
-    expect(resolved.layoutMode).toBe("dangling");
+    expect(resolved.visualScale).toBe(0.8);
+    expect(resolved.provenance.visualScale).toBe("subBeadType");
+    expect(resolved.orientationMode).toBe("outward");
   });
 
   it("falls back to code defaults when no layers are set", () => {

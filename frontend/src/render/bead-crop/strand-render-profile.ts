@@ -6,10 +6,11 @@ import {
   mergeStrandRenderProfile,
   parseBeadPlacementMode,
   parseStrandRenderProfile,
+  pickStrandRenderSizeOverride,
   resolveStrandRenderConfig,
+  strandCustomizeRenderSizeEnabled,
   subBeadTypeInheritsBeadTypeStrandDefaults,
   subBeadTypesStrandRenderStamp,
-  strandImageSizeAdjust,
   type ResolvedStrandRenderConfig,
   type StrandRenderProfile,
   type StrandRenderConfigSource,
@@ -134,35 +135,27 @@ export function resolveStrandRenderConfigForBead(
     const provenance = Object.fromEntries(
       STRAND_RENDER_PROFILE_KEYS.map((key) => [key, "beadOverride" as StrandRenderConfigSource]),
     ) as Record<StrandRenderProfileKey, StrandRenderConfigSource>;
-    const frozenAdjust = (frozenRaw as { imageSizeAdjust?: unknown }).imageSizeAdjust;
-    const imageSizeAdjust =
-      typeof frozenAdjust === "number" && Number.isFinite(frozenAdjust) && frozenAdjust > 0
-        ? frozenAdjust
-        : 1;
-    return { ...profile, provenance, resolvedRenderScale: profile.visualScale, imageSizeAdjust };
+    return { ...profile, provenance, resolvedRenderScale: profile.visualScale, imageSizeAdjust: 1 };
   }
 
   const hydrated = hydrateBeadLibraryForStrandRender(bead, catalogue, options);
   const typeEntry = beadTypeFor(hydrated, catalogue);
   const subTypeEntry = subBeadTypeFor(hydrated, catalogue);
 
-  const resolved = resolveStrandRenderConfig({
+  return resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
     subBeadTypeOverride: subTypeOverrideFromEntry(subTypeEntry),
     inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subTypeEntry?.metadata),
     beadOverride: libraryOverrideFromEntry(hydrated),
     inheritBeadFromSubBeadType: libraryInheritsSubTypeDefaults(hydrated),
+    subBeadTypeRenderSizeOnly: strandCustomizeRenderSizeEnabled(subTypeEntry?.metadata ?? null)
+      ? pickStrandRenderSizeOverride(subTypeOverrideFromEntry(subTypeEntry))
+      : null,
+    beadRenderSizeOnly: strandCustomizeRenderSizeEnabled(hydrated?.metadata ?? null)
+      ? pickStrandRenderSizeOverride(libraryOverrideFromEntry(hydrated))
+      : null,
   });
-
-  const parentScale = resolved.visualScale;
-  const beadAdjust = strandImageSizeAdjust(hydrated?.metadata ?? null, {
-    parentVisualScale: parentScale,
-  });
-  const subAdjust = strandImageSizeAdjust(subTypeEntry?.metadata ?? null, {
-    parentVisualScale: parentScale,
-  });
-  return { ...resolved, imageSizeAdjust: beadAdjust ?? subAdjust ?? 1 };
 }
 
 /** @deprecated Use resolveStrandRenderConfigForBead */
@@ -196,16 +189,15 @@ export function resolveStrandRenderConfigForSubBeadType(
   const typeEntry =
     catalogue?.beadTypes?.find((t) => t.id === subTypeEntry?.beadTypeId) ?? null;
 
-  const resolved = resolveStrandRenderConfig({
+  return resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
     subBeadTypeOverride: subTypeOverrideFromEntry(subTypeEntry),
     inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subTypeEntry?.metadata),
+    subBeadTypeRenderSizeOnly: strandCustomizeRenderSizeEnabled(subTypeEntry?.metadata ?? null)
+      ? pickStrandRenderSizeOverride(subTypeOverrideFromEntry(subTypeEntry))
+      : null,
   });
-  const subAdjust = strandImageSizeAdjust(subTypeEntry?.metadata ?? null, {
-    parentVisualScale: resolved.visualScale,
-  });
-  return { ...resolved, imageSizeAdjust: subAdjust ?? 1 };
 }
 
 /** @deprecated Use resolveStrandRenderConfigForType with catalogue context */

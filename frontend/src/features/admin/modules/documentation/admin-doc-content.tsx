@@ -214,14 +214,9 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
                 <span className="font-medium text-foreground">Render size (image only)</span> —
-                calibrated photo size from the hierarchy. With Parent on it shows as AUTO /
-                read-only from the parent; edit it on the type, or turn Parent off for a Custom
-                Override.
-              </li>
-              <li>
-                <span className="font-medium text-foreground">Customize image size</span> —
-                optional safe nudge (Image size adjust) while Parent stays on. Scales only the
-                photo; does not rewrite Render size, packing, or hang (default 1.00 = identical).
+                calibrated photo scale (0.10–5.00). With Parent on it follows the parent unless{" "}
+                <span className="font-medium">Customize render size</span> is enabled — then only
+                photo scale can be tuned while hang, layout, and gaps stay inherited.
               </li>
               <li>
                 <span className="font-medium text-foreground">Strand occupancy (gaps only)</span> —

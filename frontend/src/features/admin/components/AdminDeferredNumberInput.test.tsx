@@ -78,4 +78,23 @@ describe("AdminDeferredNumberInput", () => {
     expect(onRangeError).toHaveBeenCalled();
     expect(input).toHaveValue("9");
   });
+
+  it("seeds draft on focus so clearing the field stays empty while typing", () => {
+    render(
+      <AdminDeferredNumberInput
+        value={0.9}
+        onCommit={vi.fn()}
+        min={0.1}
+        max={2}
+        clampOnCommit={false}
+        aria-label="Image size adjust"
+      />,
+    );
+    const input = screen.getByLabelText("Image size adjust");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "" } });
+    expect(input).toHaveValue("");
+    fireEvent.change(input, { target: { value: "1.2" } });
+    expect(input).toHaveValue("1.2");
+  });
 });

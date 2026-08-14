@@ -348,69 +348,49 @@ export function strandRenderOverrideIsEmpty(
 
 export interface BeadLibraryStrandMetadata {
   useTypeStrandDefaults?: boolean;
-  /** Opt-in: keep Parent Calibration but nudge photo size with imageSizeAdjust. */
+  /** Opt-in visualScale-only override while parent calibration stays on. */
   customizeRenderSize?: boolean;
-  /** Photo size nudge when customizeRenderSize is on (1 = unchanged). Not visualScale. */
-  imageSizeAdjust?: number;
   strandRenderOverride?: Partial<StrandRenderProfile>;
 }
 
-/**
- * Opt-in image size nudge while Parent Calibration is on.
- * Explicit false wins; otherwise true when flagged or imageSizeAdjust is stored.
- */
+function stripLegacyImageSizeFields(base: Record<string, unknown>): void {
+  delete base.imageSizeAdjust;
+}
+
+function persistRenderSizeOnlyOverride(
+  base: Record<string, unknown>,
+  rawOverride: Partial<StrandRenderProfile> | null,
+): boolean {
+  const visualScale = rawOverride?.visualScale;
+  if (typeof visualScale !== "number" || !Number.isFinite(visualScale)) {
+    delete base.customizeRenderSize;
+    delete base.strandRenderOverride;
+    return false;
+  }
+  const clamped = mergeStrandRenderProfile({}, { visualScale }).visualScale;
+  base.customizeRenderSize = true;
+  base.strandRenderOverride = {
+    visualScale: clamped,
+    ...strandRenderStorageMeta(),
+  };
+  return true;
+}
+
 export function strandCustomizeRenderSizeEnabled(
   metadata: Record<string, unknown> | null | undefined,
 ): boolean {
-  if (!metadata || typeof metadata !== "object") return false;
-  const meta = metadata as {
-    customizeRenderSize?: unknown;
-    imageSizeAdjust?: unknown;
-  };
-  if (meta.customizeRenderSize === false) return false;
-  if (meta.customizeRenderSize === true) return true;
-  return typeof meta.imageSizeAdjust === "number" && Number.isFinite(meta.imageSizeAdjust);
+  return Boolean(metadata && metadata.customizeRenderSize === true);
 }
 
-/** Read opt-in image size nudge; null when disabled / unset. */
-export function strandImageSizeAdjust(
+/** Resolved visualScale when customize-render-size mode is on; otherwise null. */
+export function strandRenderSizeOnlyOverride(
   metadata: Record<string, unknown> | null | undefined,
-  options?: { parentVisualScale?: number },
 ): number | null {
   if (!strandCustomizeRenderSizeEnabled(metadata)) return null;
-  const raw = (metadata as { imageSizeAdjust?: unknown }).imageSizeAdjust;
-  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
-
-  // Legacy: Customize stored absolute visualScale in strandRenderOverride.
-  // Convert to a relative CSS nudge so packing / hang stay on the parent profile.
-  const override = parseStrandRenderProfile(
-    (metadata as { strandRenderOverride?: unknown }).strandRenderOverride,
-  );
-  if (
-    typeof override?.visualScale === "number" &&
-    Number.isFinite(override.visualScale) &&
-    override.visualScale > 0
-  ) {
-    const parent =
-      typeof options?.parentVisualScale === "number" &&
-      Number.isFinite(options.parentVisualScale) &&
-      options.parentVisualScale > 0
-        ? options.parentVisualScale
-        : 1;
-    return override.visualScale / parent;
-  }
-  return 1;
-}
-
-/** Persist imageSizeAdjust when Parent + Customize; migrate legacy visualScale-only overrides. */
-function persistCustomizeImageSize(
-  base: Record<string, unknown>,
-  inherited: StrandRenderProfile,
-): void {
-  const adjust =
-    strandImageSizeAdjust(base, { parentVisualScale: inherited.visualScale }) ?? 1;
-  base.customizeRenderSize = true;
-  base.imageSizeAdjust = adjust;
+  const visualScale = parseStrandRenderProfile(
+    (metadata as BeadLibraryStrandMetadata)?.strandRenderOverride,
+  )?.visualScale;
+  return typeof visualScale === "number" && Number.isFinite(visualScale) ? visualScale : null;
 }
 
 /** Normalize library metadata — drop empty overrides; honor explicit inherit opt-out. */
@@ -419,30 +399,22 @@ export function normalizeBeadLibraryStrandMetadata(
   inherited: StrandRenderProfile,
 ): Record<string, unknown> {
   const base = { ...(metadata ?? {}) } as Record<string, unknown>;
+  stripLegacyImageSizeFields(base);
   const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
   const explicitOptOut = base.useTypeStrandDefaults === false;
-  const customizeSize = strandCustomizeRenderSizeEnabled(base);
 
-  // Parent on: never keep size-only visualScale overrides — use imageSizeAdjust instead.
   if (base.useTypeStrandDefaults === true) {
-    if (!customizeSize) {
-      delete base.strandRenderOverride;
-      delete base.customizeRenderSize;
-      delete base.imageSizeAdjust;
+    if (base.customizeRenderSize === true) {
+      persistRenderSizeOnlyOverride(base, rawOverride);
     } else {
-      // Migrate legacy visualScale override → imageSizeAdjust before dropping override.
-      persistCustomizeImageSize(base, inherited);
+      delete base.customizeRenderSize;
       delete base.strandRenderOverride;
     }
     base.useTypeStrandDefaults = true;
     return base;
   }
 
-  // Custom mode: keep authored override fields (including values that match parent)
-  // so unticking "Use Parent Calibration" persists after save/reload.
   if (explicitOptOut) {
-    delete base.customizeRenderSize;
-    delete base.imageSizeAdjust;
     if (rawOverride && !strandRenderOverrideIsEmpty(rawOverride)) {
       base.strandRenderOverride = rawOverride;
     } else {
@@ -455,16 +427,12 @@ export function normalizeBeadLibraryStrandMetadata(
   const pruned = pruneStrandRenderOverride(rawOverride, inherited);
   if (strandRenderOverrideIsEmpty(pruned)) {
     delete base.strandRenderOverride;
-    delete base.customizeRenderSize;
-    delete base.imageSizeAdjust;
     base.useTypeStrandDefaults = true;
     return base;
   }
 
   base.strandRenderOverride = pruned;
   base.useTypeStrandDefaults = false;
-  delete base.customizeRenderSize;
-  delete base.imageSizeAdjust;
   return base;
 }
 
@@ -491,10 +459,7 @@ export function beadLibraryInheritsTypeStrandDefaults(
 
 export interface SubBeadTypeStrandMetadata {
   useBeadTypeStrandDefaults?: boolean;
-  /** Opt-in: keep Parent Calibration but nudge photo size with imageSizeAdjust. */
   customizeRenderSize?: boolean;
-  /** Photo size nudge when customizeRenderSize is on (1 = unchanged). Not visualScale. */
-  imageSizeAdjust?: number;
   strandRenderOverride?: Partial<StrandRenderProfile>;
 }
 
@@ -516,29 +481,22 @@ export function normalizeSubBeadTypeStrandMetadata(
   inherited: StrandRenderProfile,
 ): Record<string, unknown> {
   const base = { ...(metadata ?? {}) } as Record<string, unknown>;
+  stripLegacyImageSizeFields(base);
   const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
   const explicitOptOut = base.useBeadTypeStrandDefaults === false;
-  const customizeSize = strandCustomizeRenderSizeEnabled(base);
 
-  // Parent on: never keep size-only visualScale overrides — use imageSizeAdjust instead.
   if (base.useBeadTypeStrandDefaults === true) {
-    if (!customizeSize) {
-      delete base.strandRenderOverride;
-      delete base.customizeRenderSize;
-      delete base.imageSizeAdjust;
+    if (base.customizeRenderSize === true) {
+      persistRenderSizeOnlyOverride(base, rawOverride);
     } else {
-      persistCustomizeImageSize(base, inherited);
+      delete base.customizeRenderSize;
       delete base.strandRenderOverride;
     }
     base.useBeadTypeStrandDefaults = true;
     return base;
   }
 
-  // Custom mode: keep authored override fields (including values that match parent)
-  // so Orientation / Anchor / etc. persist after save/reload.
   if (explicitOptOut) {
-    delete base.customizeRenderSize;
-    delete base.imageSizeAdjust;
     if (rawOverride && !strandRenderOverrideIsEmpty(rawOverride)) {
       base.strandRenderOverride = { ...rawOverride, ...strandRenderStorageMeta() };
     } else {
@@ -551,16 +509,12 @@ export function normalizeSubBeadTypeStrandMetadata(
   const pruned = pruneStrandRenderOverride(rawOverride, inherited);
   if (strandRenderOverrideIsEmpty(pruned)) {
     delete base.strandRenderOverride;
-    delete base.customizeRenderSize;
-    delete base.imageSizeAdjust;
     base.useBeadTypeStrandDefaults = true;
     return base;
   }
 
   base.strandRenderOverride = pruned;
   base.useBeadTypeStrandDefaults = false;
-  delete base.customizeRenderSize;
-  delete base.imageSizeAdjust;
   return base;
 }
 
@@ -582,7 +536,8 @@ export function subBeadTypesStrandRenderStamp(
       const meta = sub.metadata ?? {};
       const override = meta.strandRenderOverride ?? null;
       const inherit = meta.useBeadTypeStrandDefaults ?? null;
-      return `${sub.id}:${inherit}:${JSON.stringify(override)}`;
+      const customize = meta.customizeRenderSize ?? false;
+      return `${sub.id}:${inherit}:${customize}:${JSON.stringify(override)}`;
     })
     .join("|");
 }
@@ -596,7 +551,8 @@ export function beadLibrariesStrandRenderStamp(
       const meta = lib.metadata ?? {};
       const override = meta.strandRenderOverride ?? null;
       const inherit = meta.useTypeStrandDefaults ?? null;
-      return `${lib.id}:${inherit}:${JSON.stringify(override)}`;
+      const customize = meta.customizeRenderSize ?? false;
+      return `${lib.id}:${inherit}:${customize}:${JSON.stringify(override)}`;
     })
     .join("|");
 }

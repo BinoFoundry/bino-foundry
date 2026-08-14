@@ -6,11 +6,11 @@ import {
   DEFAULT_STRAND_RENDER_PROFILE,
   normalizeSubBeadTypeStrandMetadata,
   parseStrandRenderProfile,
+  pickStrandRenderSizeOverride,
   pruneStrandRenderOverride,
   resolvedTypeStrandProfile,
   resolveStrandRenderConfig,
   strandCustomizeRenderSizeEnabled,
-  strandImageSizeAdjust,
   strandRenderOverrideIsEmpty,
   strandRenderStorageMeta,
   subBeadTypeInheritsBeadTypeStrandDefaults,
@@ -39,35 +39,41 @@ function subTypeOverrideFromForm(form: SubBeadTypeEntry) {
   return parseStrandRenderProfile(meta?.strandRenderOverride);
 }
 
-function setCustomizeSubTypeImageSize(
+function setCustomizeRenderSize(
   form: SubBeadTypeEntry,
-  customize: boolean,
-  seedAdjust = 1,
+  enabled: boolean,
+  resolvedVisualScale: number,
 ): SubBeadTypeEntry {
   const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
-  meta.useBeadTypeStrandDefaults = true;
-  // Never rewrite calibrated visualScale / strand overrides for this opt-in.
-  if (!customize) {
+  if (enabled) {
+    const current = parseStrandRenderProfile(meta.strandRenderOverride)?.visualScale;
+    meta.useBeadTypeStrandDefaults = true;
+    meta.customizeRenderSize = true;
+    meta.strandRenderOverride = {
+      visualScale: current ?? resolvedVisualScale,
+      ...strandRenderStorageMeta(),
+    };
+  } else {
     delete meta.customizeRenderSize;
-    delete meta.imageSizeAdjust;
-    return { ...form, metadata: meta };
+    delete meta.strandRenderOverride;
+    meta.useBeadTypeStrandDefaults = true;
   }
-  meta.customizeRenderSize = true;
-  meta.imageSizeAdjust =
-    typeof seedAdjust === "number" && Number.isFinite(seedAdjust) && seedAdjust > 0
-      ? seedAdjust
-      : 1;
   return { ...form, metadata: meta };
 }
 
-function setSubTypeImageSizeAdjust(form: SubBeadTypeEntry, imageSizeAdjust: number): SubBeadTypeEntry {
-  if (!strandCustomizeRenderSizeEnabled(form.metadata)) return form;
-  const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
-  meta.useBeadTypeStrandDefaults = true;
-  meta.customizeRenderSize = true;
-  meta.imageSizeAdjust =
-    Number.isFinite(imageSizeAdjust) && imageSizeAdjust > 0 ? imageSizeAdjust : 1;
-  return { ...form, metadata: meta };
+function updateRenderSizeOnly(form: SubBeadTypeEntry, visualScale: number): SubBeadTypeEntry {
+  return {
+    ...form,
+    metadata: {
+      ...(form.metadata ?? {}),
+      useBeadTypeStrandDefaults: true,
+      customizeRenderSize: true,
+      strandRenderOverride: {
+        visualScale,
+        ...strandRenderStorageMeta(),
+      },
+    },
+  };
 }
 
 function updateSubTypeStrandOverride(
@@ -75,7 +81,6 @@ function updateSubTypeStrandOverride(
   patch: Record<string, unknown>,
   _inheritedBeadTypeProfile: ReturnType<typeof resolvedTypeStrandProfile>,
 ): SubBeadTypeEntry {
-  // Parent on: calibrated fields stay locked — image size uses setSubTypeImageSizeAdjust.
   if (subBeadTypeInheritsBeadTypeStrandDefaults(form.metadata)) {
     return form;
   }
@@ -104,12 +109,10 @@ function setInheritBeadTypeDefaults(
   const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
   if (inherit) {
     meta.useBeadTypeStrandDefaults = true;
+    delete meta.customizeRenderSize;
     delete meta.strandRenderOverride;
-    // Keep imageSizeAdjust if customize stays on — cleared only via the checkbox.
   } else {
     meta.useBeadTypeStrandDefaults = false;
-    delete meta.customizeRenderSize;
-    delete meta.imageSizeAdjust;
     if (seedOverride && !strandRenderOverrideIsEmpty(seedOverride)) {
       meta.strandRenderOverride = seedOverride;
     } else if (!meta.strandRenderOverride) {
@@ -163,7 +166,6 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
 
   const inheritBeadTypeDefaults = subBeadTypeInheritsBeadTypeStrandDefaults(form.metadata);
   const customizeRenderSize = strandCustomizeRenderSizeEnabled(form.metadata);
-  const imageSizeAdjust = strandImageSizeAdjust(form.metadata) ?? 1;
 
   const inheritedBeadTypeProfile = useMemo(() => {
     const typeMeta = beadType.metadata as { strandRender?: unknown } | undefined;
@@ -173,7 +175,6 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
     );
   }, [beadType.metadata, strandRenderDefaults]);
 
-  // Same hierarchy layers the Builder uses for beads that inherit this sub-type.
   const effective = useMemo(() => {
     return resolveStrandRenderConfig({
       systemDefaults: strandRenderDefaults,
@@ -182,9 +183,11 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
       ),
       subBeadTypeOverride: subTypeOverrideFromForm(form),
       inheritSubBeadTypeFromBeadType: inheritBeadTypeDefaults,
-      imageSizeAdjustSubBeadType: strandImageSizeAdjust(form.metadata),
+      subBeadTypeRenderSizeOnly: customizeRenderSize
+        ? pickStrandRenderSizeOverride(subTypeOverrideFromForm(form))
+        : null,
     });
-  }, [form, beadType.metadata, strandRenderDefaults, inheritBeadTypeDefaults]);
+  }, [form, beadType.metadata, strandRenderDefaults, inheritBeadTypeDefaults, customizeRenderSize]);
 
   const previewSampleBead = useMemo(() => {
     const subId = form.id || initial?.id;
@@ -270,11 +273,9 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         provenance={effective.provenance}
         inheritTypeDefaults={inheritBeadTypeDefaults}
         customizeRenderSize={customizeRenderSize}
-        imageSizeAdjust={imageSizeAdjust}
-        onCustomizeRenderSizeChange={(customize) =>
-          setForm((prev) => setCustomizeSubTypeImageSize(prev, customize, 1))
+        onCustomizeRenderSizeChange={(enabled) =>
+          setForm((prev) => setCustomizeRenderSize(prev, enabled, effective.visualScale))
         }
-        onImageSizeAdjustChange={(next) => setForm((prev) => setSubTypeImageSizeAdjust(prev, next))}
         onInheritTypeDefaultsChange={(inherit) =>
           setForm((prev) => {
             if (inherit) {
@@ -291,7 +292,17 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         previewImageUrl={previewImageUrl}
         previewSampleBead={previewSampleBead}
         onChange={(patch) =>
-          setForm((prev) => updateSubTypeStrandOverride(prev, patch, inheritedBeadTypeProfile))
+          setForm((prev) => {
+            if (
+              inheritBeadTypeDefaults &&
+              strandCustomizeRenderSizeEnabled(prev.metadata) &&
+              patch.visualScale !== undefined &&
+              Object.keys(patch).every((key) => key === "visualScale")
+            ) {
+              return updateRenderSizeOnly(prev, patch.visualScale);
+            }
+            return updateSubTypeStrandOverride(prev, patch, inheritedBeadTypeProfile);
+          })
         }
         onResetToType={() => setForm((prev) => setInheritBeadTypeDefaults(prev, true))}
         onResetToSystem={() =>
