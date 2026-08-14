@@ -23,7 +23,7 @@ describe("StrandRenderConfigPanel interactivity", () => {
     expect(select).toHaveValue("inward");
   });
 
-  it("hides Render size while Use Parent Calibration is enabled", () => {
+  it("keeps Render size locked (visible) while Use Parent Calibration is enabled", () => {
     const onChange = vi.fn();
     render(
       <StrandRenderConfigPanel
@@ -42,11 +42,11 @@ describe("StrandRenderConfigPanel interactivity", () => {
     expect(select).toBeDisabled();
     fireEvent.change(select, { target: { value: "inward" } });
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText("Render size")).toBeNull();
+    expect(screen.getByLabelText("Render size")).toBeDisabled();
     expect(screen.getByRole("checkbox", { name: /Customize image size/i })).not.toBeChecked();
   });
 
-  it("shows Image size adjust (not Render size) when Customize is on", () => {
+  it("keeps Render size locked and shows Image size adjust when Customize is on", () => {
     const onChange = vi.fn();
     const onImageSizeAdjustChange = vi.fn();
     render(
@@ -64,12 +64,12 @@ describe("StrandRenderConfigPanel interactivity", () => {
       />,
     );
 
-    expect(screen.queryByLabelText("Render size")).toBeNull();
+    expect(screen.getByLabelText("Render size")).toBeDisabled();
     expect(screen.getByDisplayValue(/Outward/i)).toBeDisabled();
     expect(screen.getByLabelText("Image size adjust")).not.toBeDisabled();
   });
 
-  it("shows editable Render size after unlocking parent calibration", () => {
+  it("allows Orientation and Render size after unlocking parent calibration", () => {
     const onChange = vi.fn();
     render(
       <StrandRenderConfigPanel
