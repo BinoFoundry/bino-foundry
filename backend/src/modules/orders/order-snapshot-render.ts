@@ -3,8 +3,8 @@ import {
   mergeStrandRenderProfile,
   parseBeadPlacementMode,
   parseStrandRenderProfile,
+  partialStrandOverrideFromMetadata,
   resolveStrandRenderConfig,
-  subBeadTypeInheritsBeadTypeStrandDefaults,
   type BeadCropConfig,
   type BeadDeliveryUrls,
   type OrderSnapshotBeadItem,
@@ -94,10 +94,8 @@ function resolveProfileForLibrary(
       ...(parseStrandRenderProfile(typeMeta?.strandRender) ?? {}),
       placementMode: parseBeadPlacementMode(lib.bead_types?.placement_mode),
     },
-    subBeadTypeOverride: parseStrandRenderProfile(subMeta?.strandRenderOverride),
-    inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subMeta),
-    beadOverride: parseStrandRenderProfile(libMeta?.strandRenderOverride),
-    inheritBeadFromSubBeadType: beadLibraryInheritsTypeStrandDefaults(libMeta),
+    subBeadTypePartialOverride: partialStrandOverrideFromMetadata(subMeta),
+    beadPartialOverride: partialStrandOverrideFromMetadata(libMeta),
   });
 
   const { provenance: _p, resolvedRenderScale: _s, imageSizeAdjust: _i, ...profile } = resolved;

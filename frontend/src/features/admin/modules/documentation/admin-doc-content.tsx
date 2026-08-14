@@ -46,8 +46,9 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
               <li>Open the correct Bead type / sub-type (Crystal, Charm → Dangling, etc.).</li>
               <li>Add the bead in Bead library — upload, crop, enable sizes.</li>
               <li>
-                Check Live Preview with <span className="font-medium text-foreground">Use Parent
-                Calibration</span> on first. Only then create a Custom Override if needed.
+                Check Live Preview with all fields inheriting the parent first. Turn{" "}
+                <span className="font-medium text-foreground">Customize</span> on only for columns
+                that need a local value.
               </li>
               <li>Spot-check in the Bracelet Builder at a small and a large wrist (e.g. 14 cm and 20 cm).</li>
             </ol>
@@ -58,8 +59,9 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
           body: (
             <>
               <p>
-                Rendering uses a hierarchy. More specific levels win only when they opt out of
-                parent calibration:
+                Rendering uses a hierarchy. Sub-types and beads inherit every field from the parent
+                tier unless that column’s <span className="font-medium text-foreground">Customize</span>{" "}
+                toggle is on:
               </p>
               <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-muted/40 p-3 text-[11px] leading-relaxed text-foreground">
                 {`System default
@@ -68,11 +70,10 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
       → Individual bead override`}
               </pre>
               <p className="mt-2">
-                Badges such as <span className="font-medium text-foreground">AUTO (Bead Type)</span>{" "}
-                mean the value is inherited.{" "}
-                <span className="font-medium text-foreground">Custom Override</span> means this level
-                owns the value. Saving a type or system default never rewrites existing bead
-                overrides.
+                Badges such as <span className="font-medium text-foreground">From bead type</span>{" "}
+                mean the value is inherited. <span className="font-medium text-foreground">Custom</span>{" "}
+                means this level owns that column. Saving a type or system default never rewrites
+                existing per-field overrides on beads.
               </p>
             </>
           ),
@@ -92,13 +93,13 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
                 follows these enabled sizes.
               </li>
               <li>
-                Leave <span className="font-medium text-foreground">Use Parent Calibration</span> on
-                unless this one asset needs a unique hang, scale, or anchor.
+                Each column has a <span className="font-medium text-foreground">Customize</span>{" "}
+                checkbox. Off = inherit from sub-type / bead type; on = set a local value for that
+                column only.
               </li>
               <li>
-                With Parent on, changing Bead type / Sub-type updates Live Preview immediately
-                (including Layout mode). The Layout mode control itself stays locked until you turn
-                Parent off for a Custom Override.
+                Changing Bead type / Sub-type updates Live Preview immediately for inherited columns.
+                Customized columns keep their local values until you turn Customize off or use Reset.
               </li>
               <li>Save, then verify Live Preview and the Bracelet Builder.</li>
             </ol>
@@ -203,7 +204,7 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
               </li>
               <li>
                 <span className="font-medium text-foreground">Bead library → Strand appearance</span>{" "}
-                — per-asset override when parent calibration is turned off.
+                — per-asset overrides via per-column Customize toggles.
               </li>
             </ul>
           ),
@@ -214,9 +215,8 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
                 <span className="font-medium text-foreground">Render size (image only)</span> —
-                calibrated photo scale (0.10–5.00). With Parent on it follows the parent unless{" "}
-                <span className="font-medium">Customize render size</span> is enabled — then only
-                photo scale can be tuned while hang, layout, and gaps stay inherited.
+                calibrated photo scale (0.10–5.00). Turn Customize on for this column to override
+                while other columns stay inherited.
               </li>
               <li>
                 <span className="font-medium text-foreground">Strand occupancy (gaps only)</span> —

@@ -23,6 +23,7 @@ export * from "./lens-tint-render.js";
 export * from "./strand-contact-geometry.js";
 export * from "./strand-render-profile.js";
 export * from "./strand-render-config.js";
+export * from "./strand-render-field-groups.js";
 export * from "./strand-render-migration.js";
 export * from "./saved-design.js";
 export * from "./rbac.js";

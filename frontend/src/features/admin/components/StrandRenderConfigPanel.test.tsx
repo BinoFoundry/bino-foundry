@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { DEFAULT_STRAND_RENDER_PROFILE } from "@bino-foundry/shared/types";
 
 import { StrandRenderConfigPanel } from "./StrandRenderConfigPanel";
@@ -23,16 +23,14 @@ describe("StrandRenderConfigPanel interactivity", () => {
     expect(select).toHaveValue("inward");
   });
 
-  it("keeps Render size locked while Parent Calibration is on without customize", () => {
+  it("locks fields without Customize on bead mode", () => {
     const onChange = vi.fn();
     render(
       <StrandRenderConfigPanel
         mode="bead"
         value={{ ...DEFAULT_STRAND_RENDER_PROFILE, orientationMode: "outward" }}
-        inheritTypeDefaults
-        customizeRenderSize={false}
-        onInheritTypeDefaultsChange={vi.fn()}
-        onCustomizeRenderSizeChange={vi.fn()}
+        customizedFields={[]}
+        onFieldCustomizeChange={vi.fn()}
         onChange={onChange}
         showLivePreview={false}
       />,
@@ -45,17 +43,14 @@ describe("StrandRenderConfigPanel interactivity", () => {
     expect(screen.getByLabelText("Render size")).toBeDisabled();
   });
 
-  it("unlocks Render size when Customize render size is on with Parent", () => {
-    const onChange = vi.fn();
+  it("unlocks Render size when visualScale is customized", () => {
     render(
       <StrandRenderConfigPanel
         mode="bead"
         value={{ ...DEFAULT_STRAND_RENDER_PROFILE, visualScale: 0.75 }}
-        inheritTypeDefaults
-        customizeRenderSize
-        onInheritTypeDefaultsChange={vi.fn()}
-        onCustomizeRenderSizeChange={vi.fn()}
-        onChange={onChange}
+        customizedFields={["visualScale"]}
+        onFieldCustomizeChange={vi.fn()}
+        onChange={vi.fn()}
         showLivePreview={false}
       />,
     );
@@ -64,14 +59,14 @@ describe("StrandRenderConfigPanel interactivity", () => {
     expect(screen.getByDisplayValue(/Outward/i)).toBeDisabled();
   });
 
-  it("allows Orientation and Render size after unlocking parent calibration", () => {
+  it("allows Orientation and Render size when both groups are customized", () => {
     const onChange = vi.fn();
     render(
       <StrandRenderConfigPanel
         mode="bead"
         value={{ ...DEFAULT_STRAND_RENDER_PROFILE, orientationMode: "outward", visualScale: 1 }}
-        inheritTypeDefaults={false}
-        onInheritTypeDefaultsChange={vi.fn()}
+        customizedFields={["visualScale", "orientationMode"]}
+        onFieldCustomizeChange={vi.fn()}
         onChange={onChange}
         showLivePreview={false}
       />,
@@ -83,6 +78,60 @@ describe("StrandRenderConfigPanel interactivity", () => {
     fireEvent.change(select, { target: { value: "inward" } });
     expect(onChange).toHaveBeenCalledWith({ orientationMode: "inward" });
     expect(select).toHaveValue("inward");
+  });
+
+  it("shows full inheritance chain for partial modes", () => {
+    render(
+      <StrandRenderConfigPanel
+        mode="subBeadType"
+        value={DEFAULT_STRAND_RENDER_PROFILE}
+        customizedFields={[]}
+        onFieldCustomizeChange={vi.fn()}
+        onChange={vi.fn()}
+        showLivePreview={false}
+      />,
+    );
+
+    const note = screen.getByRole("note", { name: /how column inheritance works/i });
+    expect(within(note).getByText(/Inheritance order/i)).toBeInTheDocument();
+    expect(
+      within(note).getByText(/Read left to right/i),
+    ).toBeInTheDocument();
+    expect(
+      within(note).getByText(/the bead type for that column, or system defaults if the bead type did not set it/i),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Inherited/i).length).toBeGreaterThan(0);
+  });
+
+  it("shows bead inheritance chain including sub-type tier", () => {
+    render(
+      <StrandRenderConfigPanel
+        mode="bead"
+        value={DEFAULT_STRAND_RENDER_PROFILE}
+        customizedFields={[]}
+        onFieldCustomizeChange={vi.fn()}
+        onChange={vi.fn()}
+        showLivePreview={false}
+      />,
+    );
+
+    const note = screen.getByRole("note", { name: /how column inheritance works/i });
+    expect(
+      within(note).getByText(/the sub-type, then the bead type, then system defaults — whichever is the nearest level above/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows orientation field help", () => {
+    render(
+      <StrandRenderConfigPanel
+        mode="beadType"
+        value={{ ...DEFAULT_STRAND_RENDER_PROFILE, orientationMode: "outward" }}
+        onChange={vi.fn()}
+        showLivePreview={false}
+      />,
+    );
+
+    expect(screen.getByText(/Which way the asset faces on the bracelet/i)).toBeInTheDocument();
   });
 
   it("shows range error for Render size below allowed minimum", () => {

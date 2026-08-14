@@ -17,7 +17,7 @@ describe("resolveStrandRenderConfig", () => {
     expect(resolved.imageSizeAdjust).toBe(1);
   });
 
-  it("inherits type when bead inherit flag is true", () => {
+  it("inherits type when bead has no partial override", () => {
     const resolved = resolveStrandRenderConfig({
       systemDefaults: { strandOccupancy: 1, visualScale: 1 },
       beadTypeDefaults: { visualScale: 1.1, orientationMode: "outward" },
@@ -28,26 +28,24 @@ describe("resolveStrandRenderConfig", () => {
     expect(resolved.provenance.visualScale).toBe("beadType");
   });
 
-  it("keeps parent visualScale when inheriting bead override fields", () => {
+  it("applies only customized bead fields via partial override", () => {
     const resolved = resolveStrandRenderConfig({
       systemDefaults: { visualScale: 1 },
       beadTypeDefaults: { visualScale: 1.2, verticalOffset: 0 },
-      beadOverride: { visualScale: 2, verticalOffset: 40 },
-      inheritTypeDefaults: true,
+      beadPartialOverride: { verticalOffset: 40 },
     });
     expect(resolved.visualScale).toBe(1.2);
     expect(resolved.provenance.visualScale).toBe("beadType");
-    expect(resolved.verticalOffset).toBe(0);
+    expect(resolved.verticalOffset).toBe(40);
+    expect(resolved.provenance.verticalOffset).toBe("beadOverride");
     expect(resolved.imageSizeAdjust).toBe(1);
   });
 
-  it("applies render-size-only override while parent inherit stays on", () => {
+  it("applies visualScale partial override while other fields inherit", () => {
     const resolved = resolveStrandRenderConfig({
       systemDefaults: { visualScale: 1 },
       beadTypeDefaults: { visualScale: 1.2, verticalOffset: 0, layoutMode: "dangling" },
-      inheritSubBeadTypeFromBeadType: true,
-      inheritBeadFromSubBeadType: true,
-      beadRenderSizeOnly: { visualScale: 0.65 },
+      beadPartialOverride: { visualScale: 0.65 },
     });
     expect(resolved.visualScale).toBe(0.65);
     expect(resolved.provenance.visualScale).toBe("beadOverride");
@@ -55,12 +53,11 @@ describe("resolveStrandRenderConfig", () => {
     expect(resolved.layoutMode).toBe("dangling");
   });
 
-  it("applies sub-type render-size-only override while inheriting bead type", () => {
+  it("applies sub-type partial visualScale while inheriting bead type orientation", () => {
     const resolved = resolveStrandRenderConfig({
       systemDefaults: { visualScale: 1 },
       beadTypeDefaults: { visualScale: 1.2, orientationMode: "outward" },
-      inheritSubBeadTypeFromBeadType: true,
-      subBeadTypeRenderSizeOnly: { visualScale: 0.8 },
+      subBeadTypePartialOverride: { visualScale: 0.8 },
     });
     expect(resolved.visualScale).toBe(0.8);
     expect(resolved.provenance.visualScale).toBe("subBeadType");

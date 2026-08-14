@@ -19,6 +19,7 @@ import {
   STRAND_VISUAL_SIZE_SCALING_STEP,
   STRAND_VISUAL_SIZE_SCALING_ANCHOR_MM,
   strandRenderSourceLabel,
+  type StrandRenderFieldGroup,
   type StrandAnchorPreset,
   type StrandOrientationMode,
   type StrandRenderConfigSource,
@@ -41,18 +42,47 @@ type CalibrationFieldKey =
   | "visualSizeScaling"
   | "verticalOffset";
 
+function partialInheritGuide(mode: "bead" | "subBeadType") {
+  const systemLabel = "System defaults (General settings → Strand defaults)";
+  if (mode === "subBeadType") {
+    return {
+      chain: [systemLabel, "Bead type", "This sub-type"],
+      customizeOffDetail:
+        "the bead type for that column, or system defaults if the bead type did not set it",
+      customizeOnDetail: "the bead type (or system defaults for columns the type did not set)",
+    };
+  }
+  return {
+    chain: [systemLabel, "Bead type", "Sub-type", "This bead"],
+    customizeOffDetail:
+      "the sub-type, then the bead type, then system defaults — whichever is the nearest level above",
+    customizeOnDetail:
+      "the sub-type, bead type, or system defaults for columns you did not customize here",
+  };
+}
+
+function InheritanceChain({ steps }: { steps: string[] }) {
+  return (
+    <p className="font-mono text-xs leading-relaxed text-foreground sm:text-sm">
+      {steps.map((step, index) => (
+        <span key={step}>
+          {index > 0 ? <span className="text-muted-foreground"> → </span> : null}
+          <span className={index === steps.length - 1 ? "font-semibold" : undefined}>{step}</span>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 export interface StrandRenderConfigPanelProps {
   mode: StrandRenderConfigPanelMode;
   /** Effective values shown in the form. */
   value: StrandRenderProfile;
   /** Per-field provenance (bead mode only). */
   provenance?: Partial<Record<StrandRenderProfileKey, StrandRenderConfigSource>>;
-  /** Bead / sub-type: inherit all values from parent tier. */
-  inheritTypeDefaults?: boolean;
-  onInheritTypeDefaultsChange?: (inherit: boolean) => void;
-  /** Parent on: opt-in visualScale-only override for this bead / sub-type. */
-  customizeRenderSize?: boolean;
-  onCustomizeRenderSizeChange?: (enabled: boolean) => void;
+  /** Per-field customize groups (bead / sub-type only). */
+  customizedFields?: StrandRenderFieldGroup[];
+  onFieldCustomizeChange?: (group: StrandRenderFieldGroup, enabled: boolean) => void;
   onChange: (patch: Partial<StrandRenderProfile>) => void;
   onResetToType?: () => void;
   onResetToSystem?: () => void;
@@ -109,10 +139,8 @@ export function StrandRenderConfigPanel({
   mode,
   value,
   provenance,
-  inheritTypeDefaults = true,
-  onInheritTypeDefaultsChange,
-  customizeRenderSize = false,
-  onCustomizeRenderSizeChange,
+  customizedFields = [],
+  onFieldCustomizeChange,
   onChange,
   onResetToType,
   onResetToSystem,
@@ -123,11 +151,11 @@ export function StrandRenderConfigPanel({
   previewSizeMms,
   showLivePreview,
 }: StrandRenderConfigPanelProps) {
-  const inheritedLock =
-    (mode === "bead" || mode === "subBeadType") && inheritTypeDefaults;
-  const readOnly = disabled || inheritedLock;
-  const renderSizeReadOnly = disabled || (inheritedLock && !customizeRenderSize);
-  const otherFieldsLocked = inheritedLock;
+  const supportsPartial = mode === "bead" || mode === "subBeadType";
+  const isGroupCustomized = (group: StrandRenderFieldGroup) =>
+    !supportsPartial || customizedFields.includes(group);
+  const isGroupEditable = (group: StrandRenderFieldGroup) =>
+    !disabled && isGroupCustomized(group);
   const livePreview =
     showLivePreview ??
     (mode === "beadType" || mode === "subBeadType" || mode === "bead" || mode === "system");
@@ -142,12 +170,14 @@ export function StrandRenderConfigPanel({
 
   const hierarchyHint =
     mode === "system"
-      ? "DEFAULT for the whole catalogue. Type / sub-type / bead overrides win when set. Saving here never rewrites Custom Override beads."
+      ? "Platform-wide baseline. Bead type, sub-type, and bead overrides apply only where Customize is enabled."
       : mode === "beadType"
-        ? "DEFAULT for this type. Sub-types and beads inherit these values unless they use a Custom Override."
+        ? "Baseline for this bead type. Sub-types and beads inherit these values unless they customize a column."
         : mode === "subBeadType"
-          ? "DEFAULT for this sub-type. With Parent on, hang and layout follow the bead type; enable Customize render size to tune photo scale only."
-          : "With Parent on, hang and layout follow the parent. Enable Customize render size to tune photo scale only, or turn Parent off for a full Custom Override.";
+          ? "Each column inherits from the bead type, then system defaults. Turn Customize on only where this sub-type should differ."
+          : "Each column inherits from the sub-type, then bead type, then system defaults. Turn Customize on only where this bead should differ.";
+
+  const inheritGuide = supportsPartial ? partialInheritGuide(mode) : null;
 
   /**
    * Local editable draft for EVERY control.
@@ -200,15 +230,9 @@ export function StrandRenderConfigPanel({
     });
   };
 
-  const patchDraft = (patch: Partial<StrandRenderProfile>) => {
+  const patchDraft = (patch: Partial<StrandRenderProfile>, group?: StrandRenderFieldGroup) => {
     if (disabled) return;
-    const keys = Object.keys(patch) as (keyof StrandRenderProfile)[];
-    const renderSizeOnlyPatch =
-      inheritedLock &&
-      customizeRenderSize &&
-      keys.length > 0 &&
-      keys.every((key) => key === "visualScale");
-    if (readOnly && !renderSizeOnlyPatch) return;
+    if (supportsPartial && group && !isGroupCustomized(group)) return;
     for (const key of Object.keys(patch) as (keyof StrandRenderProfile)[]) {
       pendingCommitsRef.current[key] = patch[key];
     }
@@ -216,8 +240,8 @@ export function StrandRenderConfigPanel({
     onChange(patch);
   };
 
-  const commitCalibration = (key: CalibrationFieldKey, next: number) => {
-    patchDraft({ [key]: next });
+  const commitCalibration = (key: CalibrationFieldKey, next: number, group?: StrandRenderFieldGroup) => {
+    patchDraft({ [key]: next }, group);
   };
 
   const setFieldEditing = (key: CalibrationFieldKey, editing: boolean) => {
@@ -230,6 +254,11 @@ export function StrandRenderConfigPanel({
     editingFieldsRef.current.clear();
   };
 
+  const handleFieldCustomizeChange = (group: StrandRenderFieldGroup, enabled: boolean) => {
+    discardLocalEdits();
+    onFieldCustomizeChange?.(group, enabled);
+  };
+
   const previewProfile = useMemo(() => draft, [draft]);
 
   return (
@@ -237,7 +266,7 @@ export function StrandRenderConfigPanel({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium">{title}</p>
-          <p className="text-[11px] leading-snug text-muted-foreground">{hierarchyHint}</p>
+          <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{hierarchyHint}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {mode === "bead" && onResetToType ? (
@@ -279,67 +308,51 @@ export function StrandRenderConfigPanel({
         </div>
       </div>
 
-      {(mode === "bead" || mode === "subBeadType") && onInheritTypeDefaultsChange ? (
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-0.5 py-2 text-sm leading-snug">
-          <input
-            type="checkbox"
-            className="h-5 w-5 shrink-0 rounded border border-border accent-foreground"
-            checked={inheritTypeDefaults}
-            onChange={(e) => {
-              discardLocalEdits();
-              onInheritTypeDefaultsChange(e.target.checked);
-            }}
-          />
-          <span className="select-none">Use Parent Calibration</span>
-        </label>
-      ) : null}
+      {inheritGuide ? (
+        <div
+          className="space-y-3 rounded-lg border border-border bg-muted/40 px-4 py-3"
+          role="note"
+          aria-label="How column inheritance works"
+        >
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">How each column works</p>
+            <p className="text-sm leading-snug text-muted-foreground">
+              When <span className="font-medium text-foreground">Customize</span> is off, values
+              come from the nearest level above — not stored on this {mode === "bead" ? "bead" : "sub-type"}.
+            </p>
+          </div>
 
-      {(mode === "bead" || mode === "subBeadType") && onInheritTypeDefaultsChange ? (
-        <p className="mt-0 text-[10px] leading-snug text-muted-foreground">
-          When enabled, this level reuses parent hang, occupancy, and layout. Render size follows
-          the parent too unless <span className="font-medium">Customize render size</span> is on.
-          Turn Parent off to edit everything as a{" "}
-          <span className="font-medium">Custom Override</span>.
-          {mode === "bead"
-            ? " With Parent on, change Bead type / Sub-type above to preview those defaults (including Layout mode)."
-            : null}
-        </p>
-      ) : null}
+          <div className="space-y-1.5 rounded-md border border-border/60 bg-background/60 px-3 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Inheritance order
+            </p>
+            <InheritanceChain steps={inheritGuide.chain} />
+            <p className="text-xs leading-snug text-muted-foreground">
+              Read left to right. If a level did not customize a column, the next level to the left
+              supplies the value.
+            </p>
+          </div>
 
-      {inheritedLock ? (
-        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-          Hang, occupancy, and layout follow the parent while{" "}
-          <span className="font-medium">Use Parent Calibration</span> is on.
-          {customizeRenderSize
-            ? " Render size uses your custom value; other fields stay locked."
-            : mode === "bead"
-              ? " Enable Customize render size to edit photo scale only, or uncheck Parent for a full override."
-              : " Enable Customize render size to edit photo scale only, or uncheck Parent for a full override."}
-        </p>
-      ) : null}
-
-      {(mode === "bead" || mode === "subBeadType") &&
-      inheritedLock &&
-      onCustomizeRenderSizeChange ? (
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-border/60 bg-background/60 px-3 py-2 text-sm leading-snug">
-          <input
-            type="checkbox"
-            className="h-5 w-5 shrink-0 rounded border border-border accent-foreground"
-            checked={customizeRenderSize}
-            onChange={(e) => {
-              discardLocalEdits();
-              onCustomizeRenderSizeChange(e.target.checked);
-            }}
-            aria-label="Customize render size"
-          />
-          <span className="select-none">
-            Customize render size
-            <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground">
-              Tune photo scale only while Parent Calibration stays on. Hang, layout, and gaps stay
-              inherited.
-            </span>
-          </span>
-        </label>
+          <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
+            <li>
+              <span className="font-medium text-foreground">Customize off</span> — uses{" "}
+              {inheritGuide.customizeOffDetail}. The field is greyed out and read-only.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">Customize on</span> — you set a local
+              value for that column only. Other columns still follow{" "}
+              {inheritGuide.customizeOnDetail}.
+            </li>
+            <li>
+              Example: turn Customize on for{" "}
+              <span className="font-medium text-foreground">Render size</span> to shrink one photo,
+              while layout, gaps, orientation, and hang stay inherited.
+            </li>
+            <li>
+              Uncheck Customize to drop the local value and follow the inheritance chain again.
+            </li>
+          </ul>
+        </div>
       ) : null}
 
       <div className="space-y-2">
@@ -348,7 +361,6 @@ export function StrandRenderConfigPanel({
             <Field
               label="Visual size scaling"
               source={provenance?.visualSizeScaling}
-              readOnly={readOnly}
             >
               <AdminDeferredNumberInput
                 value={draft.visualSizeScaling}
@@ -360,7 +372,7 @@ export function StrandRenderConfigPanel({
                 max={STRAND_VISUAL_SIZE_SCALING_MAX}
                 step={STRAND_VISUAL_SIZE_SCALING_STEP}
                 decimals={2}
-                disabled={readOnly}
+                disabled={disabled}
                 aria-label="Visual size scaling"
                 clampOnCommit={false}
                 onRangeError={(message) => setFieldError("visualSizeScaling", message)}
@@ -378,55 +390,46 @@ export function StrandRenderConfigPanel({
             </Field>
           ) : (
             <>
-              <div
-                className={
-                  renderSizeReadOnly && inheritedLock
-                    ? "min-w-0 opacity-70"
-                    : "min-w-0"
-                }
+              <FieldGroupCell
+                group="visualScale"
+                supportsPartial={supportsPartial}
+                customized={isGroupCustomized("visualScale")}
+                onCustomizeChange={handleFieldCustomizeChange}
+                label={`Render size (image only) (${STRAND_VISUAL_SCALE_MIN.toFixed(2)}–${STRAND_VISUAL_SCALE_MAX.toFixed(2)})`}
+                source={provenance?.visualScale}
               >
-                <Field
-                  label={`Render size (image only) (${STRAND_VISUAL_SCALE_MIN.toFixed(2)}–${STRAND_VISUAL_SCALE_MAX.toFixed(2)})`}
-                  source={provenance?.visualScale}
-                  readOnly={renderSizeReadOnly}
-                >
-                  <AdminDeferredNumberInput
-                    value={draft.visualScale}
-                    onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
-                    onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
-                    min={STRAND_VISUAL_SCALE_MIN}
-                    max={STRAND_VISUAL_SCALE_MAX}
-                    step={STRAND_VISUAL_SCALE_STEP}
-                    decimals={2}
-                    disabled={renderSizeReadOnly}
-                    aria-label="Render size"
-                    clampOnCommit={false}
-                    onRangeError={(message) => setFieldError("visualScale", message)}
-                    onClearError={() => setFieldError("visualScale", null)}
-                  />
-                  <InputExamples examples={["0.10", "0.50", "1.00", "1.25"]} />
-                  <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                    How large the photo looks in the calibrated shell.{" "}
-                    <span className="font-medium">Higher</span> = visually bigger;{" "}
-                    <span className="font-medium">lower</span> = visually smaller. Allowed{" "}
-                    {STRAND_VISUAL_SCALE_MIN.toFixed(2)}–{STRAND_VISUAL_SCALE_MAX.toFixed(2)}. Does
-                    not change gaps along the cord.
-                    {inheritedLock && !customizeRenderSize
-                      ? " Follows the parent — enable Customize render size to edit."
-                      : null}
-                  </p>
-                  <FieldError message={fieldErrors.visualScale} />
-                </Field>
-              </div>
+                <AdminDeferredNumberInput
+                  value={draft.visualScale}
+                  onCommit={(visualScale) =>
+                    commitCalibration("visualScale", visualScale, "visualScale")
+                  }
+                  onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
+                  min={STRAND_VISUAL_SCALE_MIN}
+                  max={STRAND_VISUAL_SCALE_MAX}
+                  step={STRAND_VISUAL_SCALE_STEP}
+                  decimals={2}
+                  disabled={!isGroupEditable("visualScale")}
+                  aria-label="Render size"
+                  clampOnCommit={false}
+                  onRangeError={(message) => setFieldError("visualScale", message)}
+                  onClearError={() => setFieldError("visualScale", null)}
+                />
+                <InputExamples examples={["0.10", "0.50", "1.00", "1.25"]} />
+                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  How large the photo looks in the calibrated shell. Does not change gaps along the
+                  cord.
+                </p>
+                <FieldError message={fieldErrors.visualScale} />
+              </FieldGroupCell>
 
-              <div
-                className={
-                  otherFieldsLocked
-                    ? "min-w-0 pointer-events-none opacity-70"
-                    : "min-w-0"
-                }
+              <FieldGroupCell
+                group="strandOccupancy"
+                supportsPartial={supportsPartial}
+                customized={isGroupCustomized("strandOccupancy")}
+                onCustomizeChange={handleFieldCustomizeChange}
+                label="Strand occupancy (gaps only)"
+                source={provenance?.contactWidth}
               >
-                <Field label="Strand occupancy (gaps only)" source={provenance?.contactWidth} readOnly={readOnly}>
                 <AdminDeferredNumberInput
                   value={effectiveStrandContactWidth({
                     contactWidth: draft.contactWidth,
@@ -434,19 +437,22 @@ export function StrandRenderConfigPanel({
                     spacingAdjustment: draft.spacingAdjustment,
                   })}
                   onCommit={(strandOccupancy) => {
-                    patchDraft({
-                      strandOccupancy,
-                      contactWidth: 1,
-                      contactOffset: strandOccupancy - 1,
-                      spacingAdjustment: 0,
-                    });
+                    patchDraft(
+                      {
+                        strandOccupancy,
+                        contactWidth: 1,
+                        contactOffset: strandOccupancy - 1,
+                        spacingAdjustment: 0,
+                      },
+                      "strandOccupancy",
+                    );
                   }}
                   onEditingChange={(editing) => setFieldEditing("strandOccupancy", editing)}
                   min={0}
                   max={STRAND_CONTACT_SPACING_MAX}
                   step={STRAND_CONTACT_SPACING_STEP}
                   decimals={2}
-                  disabled={readOnly}
+                  disabled={!isGroupEditable("strandOccupancy")}
                   aria-label="Strand occupancy"
                   clampOnCommit={false}
                   onRangeError={(message) => setFieldError("strandOccupancy", message)}
@@ -454,35 +460,30 @@ export function StrandRenderConfigPanel({
                 />
                 <InputExamples examples={["0.70", "0.85", "1.00", "1.15"]} />
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  Cord space relative to catalogue mm.{" "}
-                  <span className="font-medium">1.00</span> = natural.{" "}
-                  <span className="font-medium">Below 1</span> (e.g. 0.85) = tighter;{" "}
-                  <span className="font-medium">above 1</span> = more gap. Does not change photo
-                  size. Builder always equalises leftover gaps — use Live Preview →{" "}
-                  <span className="font-medium">Reveal occupancy gaps</span> for a clustered demo.
-                  Minimum is 0 (use values under 1 to tighten).
+                  Cord space relative to catalogue mm. Does not change photo size.
                 </p>
                 <FieldError message={fieldErrors.strandOccupancy} />
-              </Field>
-              </div>
+              </FieldGroupCell>
 
-              <div
-                className={
-                  otherFieldsLocked
-                    ? "min-w-0 pointer-events-none opacity-70"
-                    : "min-w-0"
-                }
+              <FieldGroupCell
+                group="verticalOffset"
+                supportsPartial={supportsPartial}
+                customized={isGroupCustomized("verticalOffset")}
+                onCustomizeChange={handleFieldCustomizeChange}
+                label="Vertical offset"
+                source={provenance?.verticalOffset}
               >
-              <Field label="Vertical offset" source={provenance?.verticalOffset} readOnly={readOnly}>
                 <AdminDeferredNumberInput
                   value={draft.verticalOffset}
-                  onCommit={(verticalOffset) => commitCalibration("verticalOffset", verticalOffset)}
+                  onCommit={(verticalOffset) =>
+                    commitCalibration("verticalOffset", verticalOffset, "verticalOffset")
+                  }
                   onEditingChange={(editing) => setFieldEditing("verticalOffset", editing)}
                   min={STRAND_VERTICAL_OFFSET_MIN}
                   max={STRAND_VERTICAL_OFFSET_MAX}
                   step={STRAND_VERTICAL_OFFSET_STEP}
                   decimals={1}
-                  disabled={readOnly}
+                  disabled={!isGroupEditable("verticalOffset")}
                   aria-label="Vertical offset"
                   clampOnCommit={false}
                   onRangeError={(message) => setFieldError("verticalOffset", message)}
@@ -490,56 +491,57 @@ export function StrandRenderConfigPanel({
                 />
                 <InputExamples examples={["-5", "0", "5", "10"]} />
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  Moves the asset toward or away from the cord (% of item height).{" "}
-                  <span className="font-medium">Positive</span> = hangs farther out;{" "}
-                  <span className="font-medium">negative</span> = pulls closer to the strand.
+                  Moves the asset toward or away from the cord (% of item height).
                 </p>
                 <FieldError message={fieldErrors.verticalOffset} />
-              </Field>
-              </div>
+              </FieldGroupCell>
 
-              <div
-                className={
-                  otherFieldsLocked
-                    ? "min-w-0 pointer-events-none opacity-70"
-                    : "min-w-0"
-                }
+              <FieldGroupCell
+                group="orientationMode"
+                supportsPartial={supportsPartial}
+                customized={isGroupCustomized("orientationMode")}
+                onCustomizeChange={handleFieldCustomizeChange}
+                label="Orientation"
+                source={provenance?.orientationMode}
               >
-              <Field label="Orientation" source={provenance?.orientationMode} readOnly={readOnly}>
                 <select
-                  disabled={readOnly}
-                  className={fieldClass(readOnly)}
+                  disabled={!isGroupEditable("orientationMode")}
+                  className={fieldClass(!isGroupEditable("orientationMode"))}
                   value={draft.orientationMode}
                   onChange={(e) =>
-                    patchDraft({ orientationMode: e.target.value as StrandOrientationMode })
+                    patchDraft(
+                      { orientationMode: e.target.value as StrandOrientationMode },
+                      "orientationMode",
+                    )
                   }
                 >
                   <option value="outward">Outward (away from centre)</option>
                   <option value="inward">Inward (toward centre)</option>
                 </select>
-                <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  Which way the asset faces around the bracelet.{" "}
-                  <span className="font-medium">Outward</span> = away from the centre;{" "}
+                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                  Which way the asset faces on the bracelet.{" "}
+                  <span className="font-medium">Outward</span> = decorative side points away from
+                  the wrist centre (typical for crystals and charms).{" "}
                   <span className="font-medium">Inward</span> = toward the centre.
                 </p>
-              </Field>
-              </div>
+              </FieldGroupCell>
 
-              <div
-                className={
-                  otherFieldsLocked
-                    ? "min-w-0 pointer-events-none opacity-70"
-                    : "min-w-0"
-                }
+              <FieldGroupCell
+                group="layoutMode"
+                supportsPartial={supportsPartial}
+                customized={isGroupCustomized("layoutMode")}
+                onCustomizeChange={handleFieldCustomizeChange}
+                label="Layout mode"
+                source={provenance?.layoutMode}
               >
-              <Field label="Layout mode" source={provenance?.layoutMode} readOnly={readOnly}>
                 <select
-                  disabled={readOnly}
-                  className={fieldClass(readOnly)}
+                  disabled={!isGroupEditable("layoutMode")}
+                  className={fieldClass(!isGroupEditable("layoutMode"))}
                   value={draft.layoutMode}
                   onChange={(e) =>
                     patchDraft(
                       patchForLayoutMode(e.target.value as StrandRenderProfile["layoutMode"]),
+                      "layoutMode",
                     )
                   }
                 >
@@ -547,81 +549,97 @@ export function StrandRenderConfigPanel({
                   <option value="dangling">Dangling (hangs from ring)</option>
                 </select>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  <span className="font-medium">Inline</span> = sits on the cord like a crystal.{" "}
-                  <span className="font-medium">Dangling</span> = hangs outward from the hanging
-                  ring. Vertical offset only applies in Dangling.
+                  Inline = on cord. Dangling = hangs from ring.
                 </p>
-              </Field>
-              </div>
+              </FieldGroupCell>
             </>
           )}
         </div>
       </div>
 
       {showAdvanced ? (
-        <div
-          className={
-            inheritedLock
-              ? "pointer-events-none grid gap-3 border-t border-border pt-3 opacity-70 sm:grid-cols-2"
-              : "grid gap-3 border-t border-border pt-3 sm:grid-cols-2"
-          }
-        >
+        <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
           <SectionHeading title="Advanced" />
-          <Field label="Layout scale" source={provenance?.layoutScale} readOnly={readOnly}>
+          <FieldGroupCell
+            group="layoutScale"
+            supportsPartial={supportsPartial}
+            customized={isGroupCustomized("layoutScale")}
+            onCustomizeChange={handleFieldCustomizeChange}
+            label="Layout scale"
+            source={provenance?.layoutScale}
+          >
             <AdminDeferredNumberInput
               value={draft.layoutScale}
-              onCommit={(layoutScale) => commitCalibration("layoutScale", layoutScale)}
+              onCommit={(layoutScale) =>
+                commitCalibration("layoutScale", layoutScale, "layoutScale")
+              }
               onEditingChange={(editing) => setFieldEditing("layoutScale", editing)}
               min={STRAND_LAYOUT_SCALE_MIN}
               max={STRAND_LAYOUT_SCALE_MAX}
               step={STRAND_LAYOUT_SCALE_STEP}
               decimals={2}
-              disabled={readOnly}
+              disabled={!isGroupEditable("layoutScale")}
               aria-label="Layout scale"
               clampOnCommit={false}
               onRangeError={(message) => setFieldError("layoutScale", message)}
               onClearError={() => setFieldError("layoutScale", null)}
             />
-            <InputExamples examples={["1.00"]} />
-            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-              Rarely needed — keep at 1.00 unless support asks you to change it. Affects layout footprint
-              and shell together; prefer Render size and Strand occupancy instead.
-            </p>
             <FieldError message={fieldErrors.layoutScale} />
-          </Field>
-          <Field label="Leading overlap" source={provenance?.leadingOverlap} readOnly={readOnly}>
+          </FieldGroupCell>
+          <FieldGroupCell
+            group="leadingOverlap"
+            supportsPartial={supportsPartial}
+            customized={isGroupCustomized("leadingOverlap")}
+            onCustomizeChange={handleFieldCustomizeChange}
+            label="Leading overlap"
+            source={provenance?.leadingOverlap}
+          >
             <AdminDeferredNumberInput
               value={draft.leadingOverlap}
-              onCommit={(leadingOverlap) => patchDraft({ leadingOverlap })}
+              onCommit={(leadingOverlap) => patchDraft({ leadingOverlap }, "leadingOverlap")}
               min={0}
               max={0.5}
               step={0.01}
               decimals={2}
-              disabled={readOnly}
+              disabled={!isGroupEditable("leadingOverlap")}
             />
-          </Field>
-          <Field label="Trailing overlap" source={provenance?.trailingOverlap} readOnly={readOnly}>
+          </FieldGroupCell>
+          <FieldGroupCell
+            group="trailingOverlap"
+            supportsPartial={supportsPartial}
+            customized={isGroupCustomized("trailingOverlap")}
+            onCustomizeChange={handleFieldCustomizeChange}
+            label="Trailing overlap"
+            source={provenance?.trailingOverlap}
+          >
             <AdminDeferredNumberInput
               value={draft.trailingOverlap}
-              onCommit={(trailingOverlap) => patchDraft({ trailingOverlap })}
+              onCommit={(trailingOverlap) => patchDraft({ trailingOverlap }, "trailingOverlap")}
               min={0}
               max={0.5}
               step={0.01}
               decimals={2}
-              disabled={readOnly}
+              disabled={!isGroupEditable("trailingOverlap")}
             />
-          </Field>
-          <Field label="Attach point (advanced)" source={provenance?.anchorPreset} readOnly={readOnly}>
+          </FieldGroupCell>
+          <FieldGroupCell
+            group="anchorPreset"
+            supportsPartial={supportsPartial}
+            customized={isGroupCustomized("anchorPreset")}
+            onCustomizeChange={handleFieldCustomizeChange}
+            label="Attach point (advanced)"
+            source={provenance?.anchorPreset}
+          >
             <select
-              disabled={readOnly}
-              className={fieldClass(readOnly)}
+              disabled={!isGroupEditable("anchorPreset")}
+              className={fieldClass(!isGroupEditable("anchorPreset"))}
               value={draft.anchorPreset}
               onChange={(e) => {
                 const anchorPreset = e.target.value as StrandAnchorPreset;
-                patchDraft({
-                  anchorPreset,
-                  ...anchorCoordsForPreset(anchorPreset),
-                });
+                patchDraft(
+                  { anchorPreset, ...anchorCoordsForPreset(anchorPreset) },
+                  "anchorPreset",
+                );
               }}
             >
               <option value="center">Center</option>
@@ -629,98 +647,35 @@ export function StrandRenderConfigPanel({
               <option value="top">Top</option>
               <option value="bottom">Bottom</option>
             </select>
-            <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-              Follows Layout mode by default. Change only for unusual art (pin at the very top or
-              bottom of the photo).
-            </p>
-          </Field>
-          <Field label="Hang offset" source={provenance?.hangOffset} readOnly={readOnly}>
+          </FieldGroupCell>
+          <FieldGroupCell
+            group="hangOffset"
+            supportsPartial={supportsPartial}
+            customized={isGroupCustomized("hangOffset")}
+            onCustomizeChange={handleFieldCustomizeChange}
+            label="Hang offset"
+            source={provenance?.hangOffset}
+          >
             <AdminNumberWithSlider
               value={draft.hangOffset}
-              onCommit={(hangOffset) => patchDraft({ hangOffset })}
+              onCommit={(hangOffset) => patchDraft({ hangOffset }, "hangOffset")}
               min={-1}
               max={1}
               step={0.01}
               displayScale={100}
               decimals={0}
-              disabled={readOnly}
+              disabled={!isGroupEditable("hangOffset")}
               aria-label="Hang offset percent"
             />
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Fine radial push as % of bead height (−100 … 100). Prefer Vertical offset first for
-              dangling charms; use this only when the hanging ring still needs a nudge.
-            </p>
-          </Field>
-          <Field label="Rotation (advanced)" source={provenance?.rotationMode} readOnly={readOnly}>
-            <select
-              disabled={readOnly}
-              className={fieldClass(readOnly)}
-              value={draft.rotationMode}
-              onChange={(e) =>
-                patchDraft({ rotationMode: e.target.value as StrandRotationMode })
-              }
-            >
-              <option value="tangent">Rotate with strand (legacy)</option>
-              <option value="radial-upright">Radial upright (legacy)</option>
-              <option value="fixed-upright">Stay upright</option>
-              <option value="none">No rotation</option>
-            </select>
-          </Field>
-          <Field
-            label="Collision padding (px)"
-            source={provenance?.collisionPadding}
-            readOnly={readOnly}
-          >
-            <AdminDeferredNumberInput
-              value={draft.collisionPadding}
-              onCommit={(collisionPadding) => patchDraft({ collisionPadding })}
-              min={0}
-              max={20}
-              step={0.5}
-              decimals={1}
-              disabled={readOnly}
-            />
-          </Field>
-          <Field
-            label="String occlusion (0–1)"
-            source={provenance?.stringOcclusion}
-            readOnly={readOnly}
-          >
-            <AdminDeferredNumberInput
-              value={draft.stringOcclusion}
-              onCommit={(stringOcclusion) => patchDraft({ stringOcclusion })}
-              min={0}
-              max={1}
-              step={0.05}
-              decimals={2}
-              disabled={readOnly}
-            />
-          </Field>
-          <Field label="Attachment style" source={provenance?.attachmentStyle} readOnly={readOnly}>
-            <select
-              disabled={readOnly}
-              className={fieldClass(readOnly)}
-              value={draft.attachmentStyle}
-              onChange={(e) =>
-                patchDraft({
-                  attachmentStyle: e.target.value as StrandRenderProfile["attachmentStyle"],
-                })
-              }
-            >
-              <option value="inline">Inline</option>
-              <option value="betweenItems">Between items</option>
-            </select>
-          </Field>
+          </FieldGroupCell>
           {mode === "system" ? (
-            <Field label="Layout mode" source={provenance?.layoutMode} readOnly={readOnly}>
+            <Field label="Layout mode" source={provenance?.layoutMode}>
               <select
-                disabled={readOnly}
-                className={fieldClass(readOnly)}
+                disabled={disabled}
+                className={fieldClass(disabled)}
                 value={draft.layoutMode}
                 onChange={(e) =>
-                  patchDraft(
-                    patchForLayoutMode(e.target.value as StrandRenderProfile["layoutMode"]),
-                  )
+                  patchDraft(patchForLayoutMode(e.target.value as StrandRenderProfile["layoutMode"]))
                 }
               >
                 <option value="inline">Inline</option>
@@ -729,13 +684,6 @@ export function StrandRenderConfigPanel({
             </Field>
           ) : null}
         </div>
-      ) : null}
-
-      {mode === "bead" && inheritTypeDefaults ? (
-        <p className="text-xs text-muted-foreground">
-          Using parent calibration ({strandRenderSourceLabel("subBeadType")} /{" "}
-          {strandRenderSourceLabel("beadType")}).
-        </p>
       ) : null}
 
       {livePreview ? (
@@ -748,6 +696,54 @@ export function StrandRenderConfigPanel({
         />
       ) : null}
     </section>
+  );
+}
+
+function FieldGroupCell({
+  group,
+  supportsPartial,
+  customized,
+  onCustomizeChange,
+  label,
+  source,
+  children,
+}: {
+  group: StrandRenderFieldGroup;
+  supportsPartial: boolean;
+  customized: boolean;
+  onCustomizeChange?: (group: StrandRenderFieldGroup, enabled: boolean) => void;
+  label: string;
+  source?: StrandRenderConfigSource;
+  children: ReactNode;
+}) {
+  const locked = supportsPartial && !customized;
+  return (
+    <div className={locked ? "min-w-0 rounded-md border border-transparent opacity-75" : "min-w-0"}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <label className="text-xs font-medium text-foreground">{label}</label>
+        <div className="flex shrink-0 items-center gap-2">
+          {supportsPartial && onCustomizeChange ? (
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-foreground">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border border-border accent-foreground"
+                checked={customized}
+                onChange={(e) => onCustomizeChange(group, e.target.checked)}
+                aria-label={`Customize ${label}`}
+              />
+              Customize
+            </label>
+          ) : null}
+          {supportsPartial && !customized ? (
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Inherited
+            </span>
+          ) : null}
+          {source ? <SourceBadge source={source} /> : null}
+        </div>
+      </div>
+      <div className={locked ? "pointer-events-none" : undefined}>{children}</div>
+    </div>
   );
 }
 

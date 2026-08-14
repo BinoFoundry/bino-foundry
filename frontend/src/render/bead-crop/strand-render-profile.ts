@@ -1,15 +1,12 @@
 import type { BeadLibraryEntry, BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import {
   beadLibrariesStrandRenderStamp,
-  beadLibraryInheritsTypeStrandDefaults,
   DEFAULT_STRAND_RENDER_PROFILE,
   mergeStrandRenderProfile,
   parseBeadPlacementMode,
   parseStrandRenderProfile,
-  pickStrandRenderSizeOverride,
+  partialStrandOverrideFromMetadata,
   resolveStrandRenderConfig,
-  strandCustomizeRenderSizeEnabled,
-  subBeadTypeInheritsBeadTypeStrandDefaults,
   subBeadTypesStrandRenderStamp,
   type ResolvedStrandRenderConfig,
   type StrandRenderProfile,
@@ -23,29 +20,14 @@ export type { ResolvedStrandRenderConfig, StrandRenderProfile };
 export interface StrandRenderCatalogueContext {
   beadTypes?: BeadTypeEntry[];
   subBeadTypes?: SubBeadTypeEntry[];
-  /**
-   * Live catalogue libraries — preferred source for inherit flags + bead overrides.
-   * Placed-strand snapshots can be stale after Admin saves.
-   */
   beadLibraries?: BeadLibraryEntry[];
-  /** Platform defaults from config_kv — loaded once with catalogue. */
   strandRenderDefaults?: StrandRenderProfile | null;
 }
 
 export interface HydrateBeadLibraryOptions {
-  /**
-   * Admin bead editor: keep the form's beadTypeId / subBeadTypeId / metadata.
-   * Default hydrate is for Builder placed-bead snapshots (stale type/override after Admin saves).
-   */
   preferDraftIdentity?: boolean;
 }
 
-/**
- * Prefer live catalogue metadata (type/sub ids + strand overrides) over a placed snapshot.
- * Visual assets on the placed bead are left unchanged.
- * Skipped when the bead carries a frozen order-time strand profile,
- * or when `preferDraftIdentity` is set (unsaved Admin form).
- */
 export function hydrateBeadLibraryForStrandRender(
   bead: BeadLibraryEntry | null | undefined,
   catalogue?: StrandRenderCatalogueContext,
@@ -91,32 +73,8 @@ function typeDefaultsFromEntry(type: BeadTypeEntry | null): Partial<StrandRender
   if (!type) return null;
   const meta = type.metadata as { strandRender?: unknown } | undefined;
   const fromMeta = parseStrandRenderProfile(meta?.strandRender);
-  // Column is canonical — never infer from category names / slug.
   const placementMode = parseBeadPlacementMode(type.placementMode);
   return { ...(fromMeta ?? {}), placementMode };
-}
-
-function subTypeOverrideFromEntry(
-  subType: SubBeadTypeEntry | null | undefined,
-): Partial<StrandRenderProfile> | null {
-  if (!subType) return null;
-  const meta = subType.metadata as { strandRenderOverride?: unknown } | undefined;
-  return parseStrandRenderProfile(meta?.strandRenderOverride);
-}
-
-function libraryOverrideFromEntry(
-  bead: BeadLibraryEntry | null | undefined,
-): Partial<StrandRenderProfile> | null {
-  if (!bead) return null;
-  const meta = bead.metadata as {
-    strandRenderOverride?: unknown;
-    useTypeStrandDefaults?: boolean;
-  } | undefined;
-  return parseStrandRenderProfile(meta?.strandRenderOverride);
-}
-
-function libraryInheritsSubTypeDefaults(bead: BeadLibraryEntry | null | undefined): boolean {
-  return beadLibraryInheritsTypeStrandDefaults(bead?.metadata ?? null);
 }
 
 /** Resolve hierarchical config for one bead library entry. */
@@ -145,16 +103,8 @@ export function resolveStrandRenderConfigForBead(
   return resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
-    subBeadTypeOverride: subTypeOverrideFromEntry(subTypeEntry),
-    inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subTypeEntry?.metadata),
-    beadOverride: libraryOverrideFromEntry(hydrated),
-    inheritBeadFromSubBeadType: libraryInheritsSubTypeDefaults(hydrated),
-    subBeadTypeRenderSizeOnly: strandCustomizeRenderSizeEnabled(subTypeEntry?.metadata ?? null)
-      ? pickStrandRenderSizeOverride(subTypeOverrideFromEntry(subTypeEntry))
-      : null,
-    beadRenderSizeOnly: strandCustomizeRenderSizeEnabled(hydrated?.metadata ?? null)
-      ? pickStrandRenderSizeOverride(libraryOverrideFromEntry(hydrated))
-      : null,
+    subBeadTypePartialOverride: partialStrandOverrideFromMetadata(subTypeEntry?.metadata ?? null),
+    beadPartialOverride: partialStrandOverrideFromMetadata(hydrated?.metadata ?? null),
   });
 }
 
@@ -167,7 +117,6 @@ export function resolveStrandRenderProfile(
   return resolveStrandRenderConfigForBead(bead, catalogue, options);
 }
 
-/** Resolve by type id/slug when only type context is available (layout hints). */
 export function resolveStrandRenderConfigForType(
   typeIdOrSlug: string | undefined,
   catalogue?: StrandRenderCatalogueContext,
@@ -180,7 +129,6 @@ export function resolveStrandRenderConfigForType(
   });
 }
 
-/** Resolve by sub-type id when sub-type context is available. */
 export function resolveStrandRenderConfigForSubBeadType(
   subTypeId: string | undefined,
   catalogue?: StrandRenderCatalogueContext,
@@ -192,11 +140,7 @@ export function resolveStrandRenderConfigForSubBeadType(
   return resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
-    subBeadTypeOverride: subTypeOverrideFromEntry(subTypeEntry),
-    inheritSubBeadTypeFromBeadType: subBeadTypeInheritsBeadTypeStrandDefaults(subTypeEntry?.metadata),
-    subBeadTypeRenderSizeOnly: strandCustomizeRenderSizeEnabled(subTypeEntry?.metadata ?? null)
-      ? pickStrandRenderSizeOverride(subTypeOverrideFromEntry(subTypeEntry))
-      : null,
+    subBeadTypePartialOverride: partialStrandOverrideFromMetadata(subTypeEntry?.metadata ?? null),
   });
 }
 

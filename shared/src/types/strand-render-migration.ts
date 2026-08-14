@@ -10,6 +10,17 @@ import {
   STRAND_RENDER_PROFILE_KEYS,
   type StrandRenderProfileKey,
 } from "./strand-render-config.js";
+import {
+  partialStrandOverrideFromMetadata,
+  pickProfileGroups,
+  profileKeysForGroups,
+  removeGroupsFromOverride,
+  isStrandFieldGroupCustomized,
+  strandRenderCustomizedFields,
+  strandRenderHasCustomFields,
+  type StrandRenderFieldGroup,
+  type StrandRenderPartialMetadata,
+} from "./strand-render-field-groups.js";
 
 /** Behaviour presets — not tied to business category slugs. */
 export type StrandRenderBehaviorPreset =
@@ -346,94 +357,125 @@ export function strandRenderOverrideIsEmpty(
   );
 }
 
-export interface BeadLibraryStrandMetadata {
+export interface BeadLibraryStrandMetadata extends StrandRenderPartialMetadata {
   useTypeStrandDefaults?: boolean;
-  /** Opt-in visualScale-only override while parent calibration stays on. */
   customizeRenderSize?: boolean;
   strandRenderOverride?: Partial<StrandRenderProfile>;
 }
 
-function stripLegacyImageSizeFields(base: Record<string, unknown>): void {
+function stripLegacyStrandFlags(base: Record<string, unknown>): void {
   delete base.imageSizeAdjust;
+  delete base.customizeRenderSize;
+  delete base.useTypeStrandDefaults;
+  delete base.useBeadTypeStrandDefaults;
 }
 
-function persistRenderSizeOnlyOverride(
-  base: Record<string, unknown>,
-  rawOverride: Partial<StrandRenderProfile> | null,
-): boolean {
-  const visualScale = rawOverride?.visualScale;
-  if (typeof visualScale !== "number" || !Number.isFinite(visualScale)) {
-    delete base.customizeRenderSize;
+function normalizePartialStrandMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const base = { ...(metadata ?? {}) } as Record<string, unknown>;
+  stripLegacyStrandFlags(base);
+  const groups = strandRenderCustomizedFields(metadata);
+  if (!groups.length) {
     delete base.strandRenderOverride;
-    return false;
+    delete base.strandRenderCustomizedFields;
+    return base;
   }
-  const clamped = mergeStrandRenderProfile({}, { visualScale }).visualScale;
-  base.customizeRenderSize = true;
-  base.strandRenderOverride = {
-    visualScale: clamped,
-    ...strandRenderStorageMeta(),
-  };
-  return true;
+  const raw = parseStrandRenderProfile(base.strandRenderOverride) ?? {};
+  const keys = profileKeysForGroups(groups);
+  const override: Partial<StrandRenderProfile> = {};
+  for (const key of keys) {
+    if (raw[key] !== undefined) {
+      (override as Record<string, unknown>)[key] = raw[key];
+    }
+  }
+  if (Object.keys(override).length === 0) {
+    delete base.strandRenderOverride;
+    delete base.strandRenderCustomizedFields;
+    return base;
+  }
+  base.strandRenderCustomizedFields = groups;
+  base.strandRenderOverride = { ...override, ...strandRenderStorageMeta() };
+  return base;
 }
 
+/** @deprecated Use strandRenderHasCustomFields. */
 export function strandCustomizeRenderSizeEnabled(
   metadata: Record<string, unknown> | null | undefined,
 ): boolean {
-  return Boolean(metadata && metadata.customizeRenderSize === true);
+  return isStrandFieldGroupCustomized(metadata, "visualScale");
 }
 
-/** Resolved visualScale when customize-render-size mode is on; otherwise null. */
+/** @deprecated Use partialStrandOverrideFromMetadata. */
 export function strandRenderSizeOnlyOverride(
   metadata: Record<string, unknown> | null | undefined,
 ): number | null {
-  if (!strandCustomizeRenderSizeEnabled(metadata)) return null;
-  const visualScale = parseStrandRenderProfile(
-    (metadata as BeadLibraryStrandMetadata)?.strandRenderOverride,
-  )?.visualScale;
+  const partial = partialStrandOverrideFromMetadata(metadata);
+  const visualScale = partial?.visualScale;
   return typeof visualScale === "number" && Number.isFinite(visualScale) ? visualScale : null;
 }
 
-/** Normalize library metadata — drop empty overrides; honor explicit inherit opt-out. */
-export function normalizeBeadLibraryStrandMetadata(
+export function setStrandFieldGroupCustomized(
   metadata: Record<string, unknown> | null | undefined,
-  inherited: StrandRenderProfile,
+  group: StrandRenderFieldGroup,
+  enabled: boolean,
+  seedProfile: StrandRenderProfile,
 ): Record<string, unknown> {
   const base = { ...(metadata ?? {}) } as Record<string, unknown>;
-  stripLegacyImageSizeFields(base);
-  const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
-  const explicitOptOut = base.useTypeStrandDefaults === false;
+  let groups = strandRenderCustomizedFields(base);
+  let override = {
+    ...(parseStrandRenderProfile(base.strandRenderOverride) ?? {}),
+  } as Partial<StrandRenderProfile>;
 
-  if (base.useTypeStrandDefaults === true) {
-    if (base.customizeRenderSize === true) {
-      persistRenderSizeOnlyOverride(base, rawOverride);
-    } else {
-      delete base.customizeRenderSize;
-      delete base.strandRenderOverride;
-    }
-    base.useTypeStrandDefaults = true;
-    return base;
+  if (enabled) {
+    if (!groups.includes(group)) groups = [...groups, group];
+    override = { ...override, ...pickProfileGroups(seedProfile, [group]) };
+  } else {
+    groups = groups.filter((g) => g !== group);
+    override = removeGroupsFromOverride(override, [group]);
   }
 
-  if (explicitOptOut) {
-    if (rawOverride && !strandRenderOverrideIsEmpty(rawOverride)) {
-      base.strandRenderOverride = rawOverride;
-    } else {
-      delete base.strandRenderOverride;
-    }
-    base.useTypeStrandDefaults = false;
-    return base;
-  }
-
-  const pruned = pruneStrandRenderOverride(rawOverride, inherited);
-  if (strandRenderOverrideIsEmpty(pruned)) {
+  if (!groups.length) {
     delete base.strandRenderOverride;
-    base.useTypeStrandDefaults = true;
-    return base;
+    delete base.strandRenderCustomizedFields;
+  } else {
+    base.strandRenderCustomizedFields = groups;
+    base.strandRenderOverride = { ...override, ...strandRenderStorageMeta() };
   }
-
-  base.strandRenderOverride = pruned;
-  base.useTypeStrandDefaults = false;
+  stripLegacyStrandFlags(base);
   return base;
+}
+
+export function patchStrandCustomizedFields(
+  metadata: Record<string, unknown> | null | undefined,
+  patch: Partial<StrandRenderProfile>,
+): Record<string, unknown> {
+  const base = { ...(metadata ?? {}) } as Record<string, unknown>;
+  const groups = strandRenderCustomizedFields(base);
+  if (!groups.length) return base;
+  const current = parseStrandRenderProfile(base.strandRenderOverride) ?? {};
+  const allowed = new Set(profileKeysForGroups(groups));
+  const next = { ...current } as Partial<StrandRenderProfile>;
+  for (const [key, value] of Object.entries(patch) as [StrandRenderProfileKey, unknown][]) {
+    if (allowed.has(key)) {
+      (next as Record<string, unknown>)[key] = value;
+    }
+  }
+  base.strandRenderOverride = { ...next, ...strandRenderStorageMeta() };
+  base.strandRenderCustomizedFields = groups;
+  stripLegacyStrandFlags(base);
+  return base;
+}
+
+export { strandRenderHasCustomFields, strandRenderCustomizedFields, partialStrandOverrideFromMetadata };
+export type { StrandRenderFieldGroup };
+
+/** Normalize library metadata — keep only per-field customized overrides. */
+export function normalizeBeadLibraryStrandMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  _inherited: StrandRenderProfile,
+): Record<string, unknown> {
+  return normalizePartialStrandMetadata(metadata);
 }
 
 export function mergeLazyStrandRenderOverride(
@@ -448,16 +490,10 @@ export function mergeLazyStrandRenderOverride(
 export function beadLibraryInheritsTypeStrandDefaults(
   metadata: Record<string, unknown> | null | undefined,
 ): boolean {
-  if (!metadata || typeof metadata !== "object") return true;
-  const meta = metadata as BeadLibraryStrandMetadata & Record<string, unknown>;
-  // Explicit false must win — never treat it as inherit via empty-override fallback.
-  if (meta.useTypeStrandDefaults === false) return false;
-  if (meta.useTypeStrandDefaults === true) return true;
-  if (meta.strandRenderOverride == null) return true;
-  return strandRenderOverrideIsEmpty(parseStrandRenderProfile(meta.strandRenderOverride));
+  return !strandRenderHasCustomFields(metadata);
 }
 
-export interface SubBeadTypeStrandMetadata {
+export interface SubBeadTypeStrandMetadata extends StrandRenderPartialMetadata {
   useBeadTypeStrandDefaults?: boolean;
   customizeRenderSize?: boolean;
   strandRenderOverride?: Partial<StrandRenderProfile>;
@@ -466,56 +502,15 @@ export interface SubBeadTypeStrandMetadata {
 export function subBeadTypeInheritsBeadTypeStrandDefaults(
   metadata: Record<string, unknown> | null | undefined,
 ): boolean {
-  if (!metadata || typeof metadata !== "object") return true;
-  const meta = metadata as SubBeadTypeStrandMetadata & Record<string, unknown>;
-  // Explicit false must win — empty override alone must not force inherit back on.
-  if (meta.useBeadTypeStrandDefaults === false) return false;
-  if (meta.useBeadTypeStrandDefaults === true) return true;
-  if (meta.strandRenderOverride == null) return true;
-  return strandRenderOverrideIsEmpty(parseStrandRenderProfile(meta.strandRenderOverride));
+  return !strandRenderHasCustomFields(metadata);
 }
 
-/** Normalize sub-type metadata — drop empty overrides; honor explicit inherit opt-out. */
+/** Normalize sub-type metadata — keep only per-field customized overrides. */
 export function normalizeSubBeadTypeStrandMetadata(
   metadata: Record<string, unknown> | null | undefined,
-  inherited: StrandRenderProfile,
+  _inherited: StrandRenderProfile,
 ): Record<string, unknown> {
-  const base = { ...(metadata ?? {}) } as Record<string, unknown>;
-  stripLegacyImageSizeFields(base);
-  const rawOverride = parseStrandRenderProfile(base.strandRenderOverride);
-  const explicitOptOut = base.useBeadTypeStrandDefaults === false;
-
-  if (base.useBeadTypeStrandDefaults === true) {
-    if (base.customizeRenderSize === true) {
-      persistRenderSizeOnlyOverride(base, rawOverride);
-    } else {
-      delete base.customizeRenderSize;
-      delete base.strandRenderOverride;
-    }
-    base.useBeadTypeStrandDefaults = true;
-    return base;
-  }
-
-  if (explicitOptOut) {
-    if (rawOverride && !strandRenderOverrideIsEmpty(rawOverride)) {
-      base.strandRenderOverride = { ...rawOverride, ...strandRenderStorageMeta() };
-    } else {
-      delete base.strandRenderOverride;
-    }
-    base.useBeadTypeStrandDefaults = false;
-    return base;
-  }
-
-  const pruned = pruneStrandRenderOverride(rawOverride, inherited);
-  if (strandRenderOverrideIsEmpty(pruned)) {
-    delete base.strandRenderOverride;
-    base.useBeadTypeStrandDefaults = true;
-    return base;
-  }
-
-  base.strandRenderOverride = pruned;
-  base.useBeadTypeStrandDefaults = false;
-  return base;
+  return normalizePartialStrandMetadata(metadata);
 }
 
 /** Resolved sub-type tier profile for diffing bead overrides. */
@@ -534,10 +529,9 @@ export function subBeadTypesStrandRenderStamp(
   return subTypes
     .map((sub) => {
       const meta = sub.metadata ?? {};
+      const fields = JSON.stringify(meta.strandRenderCustomizedFields ?? []);
       const override = meta.strandRenderOverride ?? null;
-      const inherit = meta.useBeadTypeStrandDefaults ?? null;
-      const customize = meta.customizeRenderSize ?? false;
-      return `${sub.id}:${inherit}:${customize}:${JSON.stringify(override)}`;
+      return `${sub.id}:${fields}:${JSON.stringify(override)}`;
     })
     .join("|");
 }
@@ -549,10 +543,9 @@ export function beadLibrariesStrandRenderStamp(
   return libraries
     .map((lib) => {
       const meta = lib.metadata ?? {};
+      const fields = JSON.stringify(meta.strandRenderCustomizedFields ?? []);
       const override = meta.strandRenderOverride ?? null;
-      const inherit = meta.useTypeStrandDefaults ?? null;
-      const customize = meta.customizeRenderSize ?? false;
-      return `${lib.id}:${inherit}:${customize}:${JSON.stringify(override)}`;
+      return `${lib.id}:${fields}:${JSON.stringify(override)}`;
     })
     .join("|");
 }

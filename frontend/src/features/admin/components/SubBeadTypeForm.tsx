@@ -3,18 +3,15 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { BeadTypeEntry, SubBeadTypeEntry } from "@/types/beads";
 import {
-  DEFAULT_STRAND_RENDER_PROFILE,
   normalizeSubBeadTypeStrandMetadata,
-  parseStrandRenderProfile,
-  pickStrandRenderSizeOverride,
-  pruneStrandRenderOverride,
-  resolvedTypeStrandProfile,
+  partialStrandOverrideFromMetadata,
+  patchStrandCustomizedFields,
   resolveStrandRenderConfig,
-  strandCustomizeRenderSizeEnabled,
-  strandRenderOverrideIsEmpty,
-  strandRenderStorageMeta,
-  subBeadTypeInheritsBeadTypeStrandDefaults,
-  type StrandRenderProfile,
+  resolvedTypeStrandProfile,
+  setStrandFieldGroupCustomized,
+  strandRenderCustomizedFields,
+  parseStrandRenderProfile,
+  type StrandRenderFieldGroup,
 } from "@bino-foundry/shared/types";
 import { useCatalogue } from "@/state/catalogue";
 
@@ -34,114 +31,11 @@ interface SubBeadTypeFormProps {
   onCancel: () => void;
 }
 
-function subTypeOverrideFromForm(form: SubBeadTypeEntry) {
-  const meta = form.metadata as { strandRenderOverride?: unknown } | undefined;
-  return parseStrandRenderProfile(meta?.strandRenderOverride);
-}
-
-function setCustomizeRenderSize(
-  form: SubBeadTypeEntry,
-  enabled: boolean,
-  resolvedVisualScale: number,
-): SubBeadTypeEntry {
+function clearStrandCustomizations(form: SubBeadTypeEntry): SubBeadTypeEntry {
   const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
-  if (enabled) {
-    const current = parseStrandRenderProfile(meta.strandRenderOverride)?.visualScale;
-    meta.useBeadTypeStrandDefaults = true;
-    meta.customizeRenderSize = true;
-    meta.strandRenderOverride = {
-      visualScale: current ?? resolvedVisualScale,
-      ...strandRenderStorageMeta(),
-    };
-  } else {
-    delete meta.customizeRenderSize;
-    delete meta.strandRenderOverride;
-    meta.useBeadTypeStrandDefaults = true;
-  }
+  delete meta.strandRenderCustomizedFields;
+  delete meta.strandRenderOverride;
   return { ...form, metadata: meta };
-}
-
-function updateRenderSizeOnly(form: SubBeadTypeEntry, visualScale: number): SubBeadTypeEntry {
-  return {
-    ...form,
-    metadata: {
-      ...(form.metadata ?? {}),
-      useBeadTypeStrandDefaults: true,
-      customizeRenderSize: true,
-      strandRenderOverride: {
-        visualScale,
-        ...strandRenderStorageMeta(),
-      },
-    },
-  };
-}
-
-function updateSubTypeStrandOverride(
-  form: SubBeadTypeEntry,
-  patch: Record<string, unknown>,
-  _inheritedBeadTypeProfile: ReturnType<typeof resolvedTypeStrandProfile>,
-): SubBeadTypeEntry {
-  if (subBeadTypeInheritsBeadTypeStrandDefaults(form.metadata)) {
-    return form;
-  }
-  const current = subTypeOverrideFromForm(form) ?? {};
-  const next = {
-    ...current,
-    ...patch,
-    ...strandRenderStorageMeta(),
-  } as Partial<StrandRenderProfile>;
-  return {
-    ...form,
-    metadata: {
-      ...(form.metadata ?? {}),
-      useBeadTypeStrandDefaults: false,
-      strandRenderOverride: next,
-    },
-  };
-}
-
-function setInheritBeadTypeDefaults(
-  form: SubBeadTypeEntry,
-  inherit: boolean,
-  seedOverride?: Partial<StrandRenderProfile> | null,
-  _inherited?: StrandRenderProfile,
-): SubBeadTypeEntry {
-  const meta = { ...(form.metadata ?? {}) } as Record<string, unknown>;
-  if (inherit) {
-    meta.useBeadTypeStrandDefaults = true;
-    delete meta.customizeRenderSize;
-    delete meta.strandRenderOverride;
-  } else {
-    meta.useBeadTypeStrandDefaults = false;
-    if (seedOverride && !strandRenderOverrideIsEmpty(seedOverride)) {
-      meta.strandRenderOverride = seedOverride;
-    } else if (!meta.strandRenderOverride) {
-      meta.strandRenderOverride = { ...strandRenderStorageMeta() };
-    }
-  }
-  return { ...form, metadata: meta };
-}
-
-/** Seed durable custom-mode fields when unlocking parent calibration. */
-function seedSubTypeStrandOverride(
-  resolved: StrandRenderProfile,
-  inherited: StrandRenderProfile,
-): Partial<StrandRenderProfile> {
-  const pruned = pruneStrandRenderOverride(resolved, inherited) ?? {};
-  return {
-    ...pruned,
-    ...strandRenderStorageMeta(),
-    layoutScale: resolved.layoutScale,
-    contactWidth: resolved.contactWidth,
-    contactOffset: resolved.contactOffset,
-    visualScale: resolved.visualScale,
-    verticalOffset: resolved.verticalOffset,
-    orientationMode: resolved.orientationMode,
-    anchorPreset: resolved.anchorPreset,
-    attachmentStyle: resolved.attachmentStyle,
-    layoutMode: resolved.layoutMode,
-    rotationMode: resolved.rotationMode,
-  };
 }
 
 export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBeadTypeFormProps) {
@@ -154,7 +48,7 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
     description: "",
     displayOrder: 0,
     isActive: true,
-    metadata: { useBeadTypeStrandDefaults: true },
+    metadata: {},
   };
   const [form, setForm] = useState<SubBeadTypeEntry>(initial ?? blank);
   const [saving, setSaving] = useState(false);
@@ -164,8 +58,7 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
   const { isDirty, markClean } = useDirtySnapshot(dirtySnapshot, initial?.id ?? "new");
   const { confirmLeave, clearDirtySync } = useUnsavedChangesGuard(isDirty);
 
-  const inheritBeadTypeDefaults = subBeadTypeInheritsBeadTypeStrandDefaults(form.metadata);
-  const customizeRenderSize = strandCustomizeRenderSizeEnabled(form.metadata);
+  const customizedFields = strandRenderCustomizedFields(form.metadata);
 
   const inheritedBeadTypeProfile = useMemo(() => {
     const typeMeta = beadType.metadata as { strandRender?: unknown } | undefined;
@@ -181,13 +74,9 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
       beadTypeDefaults: parseStrandRenderProfile(
         (beadType.metadata as { strandRender?: unknown } | undefined)?.strandRender,
       ),
-      subBeadTypeOverride: subTypeOverrideFromForm(form),
-      inheritSubBeadTypeFromBeadType: inheritBeadTypeDefaults,
-      subBeadTypeRenderSizeOnly: customizeRenderSize
-        ? pickStrandRenderSizeOverride(subTypeOverrideFromForm(form))
-        : null,
+      subBeadTypePartialOverride: partialStrandOverrideFromMetadata(form.metadata),
     });
-  }, [form, beadType.metadata, strandRenderDefaults, inheritBeadTypeDefaults, customizeRenderSize]);
+  }, [form.metadata, beadType.metadata, strandRenderDefaults]);
 
   const previewSampleBead = useMemo(() => {
     const subId = form.id || initial?.id;
@@ -271,57 +160,29 @@ export function SubBeadTypeForm({ beadType, initial, onSave, onCancel }: SubBead
         mode="subBeadType"
         value={effective}
         provenance={effective.provenance}
-        inheritTypeDefaults={inheritBeadTypeDefaults}
-        customizeRenderSize={customizeRenderSize}
-        onCustomizeRenderSizeChange={(enabled) =>
-          setForm((prev) => setCustomizeRenderSize(prev, enabled, effective.visualScale))
-        }
-        onInheritTypeDefaultsChange={(inherit) =>
-          setForm((prev) => {
-            if (inherit) {
-              return setInheritBeadTypeDefaults(prev, true, undefined, inheritedBeadTypeProfile);
-            }
-            return setInheritBeadTypeDefaults(
-              prev,
-              false,
-              seedSubTypeStrandOverride(effective, inheritedBeadTypeProfile),
-            );
-          })
+        customizedFields={customizedFields}
+        onFieldCustomizeChange={(group: StrandRenderFieldGroup, enabled: boolean) =>
+          setForm((prev) => ({
+            ...prev,
+            metadata: setStrandFieldGroupCustomized(
+              prev.metadata,
+              group,
+              enabled,
+              effective,
+            ),
+          }))
         }
         showAdvanced={showAdvanced}
         previewImageUrl={previewImageUrl}
         previewSampleBead={previewSampleBead}
         onChange={(patch) =>
-          setForm((prev) => {
-            if (
-              inheritBeadTypeDefaults &&
-              strandCustomizeRenderSizeEnabled(prev.metadata) &&
-              patch.visualScale !== undefined &&
-              Object.keys(patch).every((key) => key === "visualScale")
-            ) {
-              return updateRenderSizeOnly(prev, patch.visualScale);
-            }
-            return updateSubTypeStrandOverride(prev, patch, inheritedBeadTypeProfile);
-          })
+          setForm((prev) => ({
+            ...prev,
+            metadata: patchStrandCustomizedFields(prev.metadata, patch),
+          }))
         }
-        onResetToType={() => setForm((prev) => setInheritBeadTypeDefaults(prev, true))}
-        onResetToSystem={() =>
-          setForm((prev) => {
-            const system = strandRenderDefaults ?? DEFAULT_STRAND_RENDER_PROFILE;
-            const override = pruneStrandRenderOverride(subTypeOverrideFromForm(prev) ?? {}, system);
-            if (strandRenderOverrideIsEmpty(override)) {
-              return setInheritBeadTypeDefaults(prev, true);
-            }
-            return {
-              ...prev,
-              metadata: {
-                ...(prev.metadata ?? {}),
-                useBeadTypeStrandDefaults: false,
-                strandRenderOverride: override,
-              },
-            };
-          })
-        }
+        onResetToType={() => setForm((prev) => clearStrandCustomizations(prev))}
+        onResetToSystem={() => setForm((prev) => clearStrandCustomizations(prev))}
       />
 
       <label className="flex items-center gap-2 text-xs text-muted-foreground">

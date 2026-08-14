@@ -57,22 +57,25 @@ export const STRAND_RENDER_PROFILE_KEYS = [
 export interface StrandRenderConfigLayers {
   systemDefaults?: Partial<StrandRenderProfile> | null;
   beadTypeDefaults?: Partial<StrandRenderProfile> | null;
-  /** Partial override when sub type does not fully inherit bead type. */
+  /** Partial per-field overrides from sub-type metadata. */
+  subBeadTypePartialOverride?: Partial<StrandRenderProfile> | null;
+  /** Partial per-field overrides from bead library metadata. */
+  beadPartialOverride?: Partial<StrandRenderProfile> | null;
+  /**
+   * @deprecated Legacy full override — use subBeadTypePartialOverride.
+   */
   subBeadTypeOverride?: Partial<StrandRenderProfile> | null;
-  /** When true (default), sub type inherits bead type tier. */
-  inheritSubBeadTypeFromBeadType?: boolean;
+  /** @deprecated Legacy full override — use beadPartialOverride. */
   beadOverride?: Partial<StrandRenderProfile> | null;
-  /** When true (default), bead inherits sub bead type tier. */
+  /** @deprecated Ignored — partial overrides replace inherit flags. */
+  inheritSubBeadTypeFromBeadType?: boolean;
+  /** @deprecated Ignored — partial overrides replace inherit flags. */
   inheritBeadFromSubBeadType?: boolean;
-  /**
-   * @deprecated Use inheritBeadFromSubBeadType. Kept for backward compatibility.
-   * When set, overrides inheritBeadFromSubBeadType.
-   */
+  /** @deprecated Ignored — partial overrides replace inherit flags. */
   inheritTypeDefaults?: boolean;
-  /**
-   * When parent inherit is on: opt-in visualScale-only override (bead / sub-type editors).
-   */
+  /** @deprecated Use beadPartialOverride. */
   beadRenderSizeOnly?: Partial<Pick<StrandRenderProfile, "visualScale">> | null;
+  /** @deprecated Use subBeadTypePartialOverride. */
   subBeadTypeRenderSizeOnly?: Partial<Pick<StrandRenderProfile, "visualScale">> | null;
 }
 
@@ -95,17 +98,21 @@ function applyLayer(
   return next;
 }
 
-function beadInheritsSubType(layers: StrandRenderConfigLayers): boolean {
-  if (layers.inheritTypeDefaults !== undefined) {
-    return layers.inheritTypeDefaults !== false;
-  }
-  return layers.inheritBeadFromSubBeadType !== false;
+function coalescePartial(
+  primary: Partial<StrandRenderProfile> | null | undefined,
+  legacyFull: Partial<StrandRenderProfile> | null | undefined,
+  legacySizeOnly: Partial<Pick<StrandRenderProfile, "visualScale">> | null | undefined,
+): Partial<StrandRenderProfile> | null {
+  if (primary && explicitKeys(primary).length > 0) return primary;
+  if (legacySizeOnly?.visualScale != null) return { visualScale: legacySizeOnly.visualScale };
+  if (legacyFull && explicitKeys(legacyFull).length > 0) return legacyFull;
+  return null;
 }
 
 /**
  * Resolve strand rendering config:
- * system → bead type → sub bead type → bead override.
- * Renderer consumes only the returned profile fields; provenance is for admin UI.
+ * system → bead type → sub-type partial → bead partial.
+ * Un customized fields inherit from the parent tier automatically.
  */
 export function resolveStrandRenderConfig(layers: StrandRenderConfigLayers): ResolvedStrandRenderConfig {
   const provenance = Object.fromEntries(
@@ -116,30 +123,21 @@ export function resolveStrandRenderConfig(layers: StrandRenderConfigLayers): Res
   profile = applyLayer(profile, layers.systemDefaults, "system", provenance);
   profile = applyLayer(profile, layers.beadTypeDefaults, "beadType", provenance);
 
-  const inheritSubFromType = layers.inheritSubBeadTypeFromBeadType !== false;
-  if (!inheritSubFromType) {
-    profile = applyLayer(profile, layers.subBeadTypeOverride, "subBeadType", provenance);
-  }
+  const subPartial = coalescePartial(
+    layers.subBeadTypePartialOverride,
+    layers.inheritSubBeadTypeFromBeadType === false ? layers.subBeadTypeOverride : null,
+    layers.subBeadTypeRenderSizeOnly,
+  );
+  profile = applyLayer(profile, subPartial, "subBeadType", provenance);
 
-  if (!beadInheritsSubType(layers)) {
-    profile = applyLayer(profile, layers.beadOverride, "beadOverride", provenance);
-  }
-
-  if (inheritSubFromType) {
-    const subSizeOnly = layers.subBeadTypeRenderSizeOnly?.visualScale;
-    if (typeof subSizeOnly === "number" && Number.isFinite(subSizeOnly)) {
-      profile = mergeStrandRenderProfile(profile, { visualScale: subSizeOnly });
-      provenance.visualScale = "subBeadType";
-    }
-  }
-
-  if (beadInheritsSubType(layers)) {
-    const beadSizeOnly = layers.beadRenderSizeOnly?.visualScale;
-    if (typeof beadSizeOnly === "number" && Number.isFinite(beadSizeOnly)) {
-      profile = mergeStrandRenderProfile(profile, { visualScale: beadSizeOnly });
-      provenance.visualScale = "beadOverride";
-    }
-  }
+  const beadPartial = coalescePartial(
+    layers.beadPartialOverride,
+    layers.inheritBeadFromSubBeadType === false || layers.inheritTypeDefaults === false
+      ? layers.beadOverride
+      : null,
+    layers.beadRenderSizeOnly,
+  );
+  profile = applyLayer(profile, beadPartial, "beadOverride", provenance);
 
   return { ...profile, provenance, resolvedRenderScale: profile.visualScale, imageSizeAdjust: 1 };
 }
@@ -164,14 +162,14 @@ export function parseStrandRenderConfigFromMetadata(
 export function strandRenderSourceLabel(source: StrandRenderConfigSource): string {
   switch (source) {
     case "beadOverride":
-      return "Custom Override";
+      return "Custom";
     case "subBeadType":
-      return "AUTO (Sub Bead Type)";
+      return "Custom";
     case "beadType":
-      return "AUTO (Bead Type)";
+      return "From bead type";
     case "system":
     default:
-      return "AUTO (System Default)";
+      return "From system";
   }
 }
 
