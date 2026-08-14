@@ -22,7 +22,7 @@ import {
   resolveBeadVisibleDiameterPx,
 } from "@bino-foundry/shared/types/bead-crop";
 import { layoutDiameterPxForMm } from "./canonical-strand-mm-scale";
-import { resolveBeadCropGeometryDebug } from "./crop-geometry-audit";
+import { resolveBeadCropGeometryDebug, type BeadCropGeometryDebug } from "./crop-geometry-audit";
 import { peekProcessedStrandMetrics } from "./processed-strand-metrics";
 import { resolveStrandRenderProfile, type StrandRenderCatalogueContext } from "./strand-render-profile";
 import type { StrandRenderProfile } from "@bino-foundry/shared/types";
@@ -127,6 +127,11 @@ export interface BeadSlotSizingResult {
   polygonBoundingHeightPx: number | null;
   polygonDiameterPx: number | null;
   imageRenderScale: number | null;
+  /**
+   * Dangling baseline: CSS contain + top-center inside the mm square.
+   * Avoids per-asset metric offsets so same mm + same profile look consistent.
+   */
+  strandImageFit: "offset" | "contain-top";
   cropGeometry: BeadCropGeometryDebug;
 }
 
@@ -169,7 +174,11 @@ function typeScaleFor(bead: BeadLibraryEntry | null | undefined, catalogue?: Str
   return {
     width: widthScale / maxScale,
     height: heightScale / maxScale,
-    forceRound: layoutMode === "inline" ? true : profile.forceRoundFootprint,
+    // Dangling uses a catalogue-mm square so hang + size match across charms.
+    forceRound:
+      layoutMode === "inline" || layoutMode === "dangling"
+        ? true
+        : profile.forceRoundFootprint,
   };
 }
 
@@ -208,6 +217,7 @@ interface UniformStrandImageLayout {
   exportFillRatio: number | null;
   /** When dangling scale expands the shell beyond the mm square. */
   shellDimensions?: BeadSlotDimensions;
+  strandImageFit?: "offset" | "contain-top";
 }
 
 /**
@@ -296,8 +306,8 @@ function resolveUniformStrandImageLayout(
     preferProcessedCanvas: boolean;
     scaleReferenceDiameterPx?: number | null;
     /**
-     * When true (dangling / non-round charms), match catalogue mm to content WIDTH
-     * so tall dangles extend naturally instead of shrinking the charm body.
+     * When true (dangling / non-round charms), match catalogue mm to the longest
+     * painted edge so skinny vs wide charms at the same mm stay comparable.
      */
     scaleToContentWidth?: boolean;
   },
@@ -326,45 +336,45 @@ function resolveUniformStrandImageLayout(
     visibleContentDiameterPx: boundsVisibleDiameter,
     actualVisibleDiameterPx: boundsVisibleDiameter,
     exportFillRatio: null,
+    strandImageFit: "offset",
   };
+
+  // ── Dangling baseline: catalogue-mm square + CSS contain (top-center).
+  // Independent of per-asset metrics — same mm + same profile → same box & hang.
+  if (options.scaleToContentWidth) {
+    const contentShell = {
+      width: wrapperDiameter,
+      height: wrapperDiameter,
+    };
+    const metrics = renderResolution?.metrics;
+    const longest = metrics
+      ? Math.max(
+          resolveDanglingContentSizePx(metrics).contentWidthPx,
+          resolveDanglingContentSizePx(metrics).contentHeightPx,
+          1,
+        )
+      : wrapperDiameter;
+
+    return {
+      imageDimensions: contentShell,
+      imageOffsetPx: { left: 0, top: 0 },
+      imageRenderScale: 1,
+      assetVisibleDiameterPx: longest > 0 ? longest : wrapperDiameter,
+      renderResolution,
+      visibleContentWidthPx: contentShell.width,
+      visibleContentHeightPx: contentShell.height,
+      visibleContentDiameterPx: wrapperDiameter,
+      actualVisibleDiameterPx: wrapperDiameter,
+      exportFillRatio: metrics ? beadExportSilhouetteFillRatio(metrics) : null,
+      shellDimensions: contentShell,
+      strandImageFit: "contain-top",
+    };
+  }
 
   if (!renderResolution?.metrics) return fallback;
 
   const metrics = renderResolution.metrics;
   const visibleDiameter = resolveBeadVisibleDiameterPx(metrics);
-
-  // ── Dangling: mm maps to painted WIDTH; shell follows content aspect (not pad). ──
-  if (options.scaleToContentWidth) {
-    const { contentWidthPx, contentHeightPx } = resolveDanglingContentSizePx(metrics);
-    const scale = contentWidthPx > 0 ? wrapperDiameter / contentWidthPx : 1;
-    const contentShell = {
-      width: wrapperDiameter,
-      height: Math.max(wrapperDiameter, contentHeightPx * scale),
-    };
-
-    const processedW = metrics.processedWidthPx ?? contentWidthPx;
-    const processedH = metrics.processedHeightPx ?? contentHeightPx;
-    // Image layer = full processed canvas at content-width scale (pad hangs outside content shell).
-    const imageDimensions = {
-      width: Math.max(1, processedW * scale),
-      height: Math.max(1, processedH * scale),
-    };
-
-    return {
-      imageDimensions,
-      imageOffsetPx: { left: 0, top: 0 },
-      imageRenderScale: scale,
-      assetVisibleDiameterPx: Math.max(contentWidthPx, contentHeightPx),
-      renderResolution,
-      visibleContentWidthPx: contentShell.width,
-      visibleContentHeightPx: contentShell.height,
-      visibleContentDiameterPx: Math.max(contentShell.width, contentShell.height),
-      actualVisibleDiameterPx: Math.max(contentShell.width, contentShell.height),
-      exportFillRatio: beadExportSilhouetteFillRatio(metrics),
-      // Packing / CSS shell use the content box (mm × proportional height) — never the pad canvas.
-      shellDimensions: contentShell,
-    };
-  }
 
   // ── Inline / round: mm maps to visible diameter (max edge). ──
   const scaleDenom =
@@ -401,6 +411,7 @@ function resolveUniformStrandImageLayout(
     visibleContentDiameterPx: Math.max(visibleW, visibleH),
     actualVisibleDiameterPx: Math.max(visibleW, visibleH),
     exportFillRatio: beadExportSilhouetteFillRatio(metrics),
+    strandImageFit: "offset",
   };
 }
 
@@ -489,6 +500,7 @@ function buildStrandSlotSizingResult(
         ? Math.max(cropGeometry.clipPathBoundsWidthPx, cropGeometry.clipPathBoundsHeightPx)
         : null,
     imageRenderScale: imageLayout.imageRenderScale,
+    strandImageFit: imageLayout.strandImageFit ?? "offset",
     cropGeometry,
   };
 }

@@ -82,30 +82,28 @@ describe("same-mm visual size from painted content bounds", () => {
     expect(metrics.processedHeightPx).toBe(500);
   });
 
-  it("without live alpha metrics, inflated mask does not use full canvas as scale denom", () => {
+  it("without live alpha metrics, dangling still uses mm square + contain-top", () => {
     const wrapper = layoutDiameterPxForMm(8, 1);
-    // Mask = full 500px square on 540 canvas — previously used as scale denom → speck.
+    // Mask = full 500px square on 540 canvas — must not change shell or fit mode.
     const padded = resolveBeadSlotSizing(
       placed("padded", PROCESSED_A, { w: 500, h: 500 }, { w: 540, h: 540 }),
       8,
       1,
       TEST_STRAND_RENDER_CATALOGUE,
     );
-    // Content shell stays mm-wide (packing footprint), not padded-canvas-wide.
     expect(padded.dimensions.width).toBeCloseTo(wrapper, 5);
-    // Image layer is larger than the shell (pad hangs outside; overflow clips it).
-    expect(padded.imageDimensions.width).toBeGreaterThan(wrapper * 1.05);
-    // Scale denom recovered below full canvas (~0.7 assumed fill → scale > W/540).
-    expect(padded.imageRenderScale).toBeGreaterThan(wrapper / 540);
+    expect(padded.dimensions.height).toBeCloseTo(wrapper, 5);
+    expect(padded.strandImageFit).toBe("contain-top");
+    expect(padded.imageOffsetPx).toEqual({ left: 0, top: 0 });
+    expect(padded.imageDimensions).toEqual(padded.dimensions);
   });
 
-  it("live processed alpha metrics paint dangling WIDTH to the mm wrapper", () => {
+  it("dangling charms share a catalogue-mm square with contain-top fit", () => {
     const wrapper = layoutDiameterPxForMm(8, 1);
     const contentW = 220;
     const contentH = 380;
     const canvas = 540;
 
-    // Padded tall charm: mask claimed 500×500; painted content 220×380 on 540 canvas.
     seedProcessedStrandMetrics(PROCESSED_A, {
       visibleWidthPx: contentW,
       visibleHeightPx: contentH,
@@ -116,7 +114,6 @@ describe("same-mm visual size from painted content bounds", () => {
       visibleOriginXPx: 160,
       visibleOriginYPx: 20,
     });
-    // Tight square charm: content fills mask.
     seedProcessedStrandMetrics(PROCESSED_B, {
       visibleWidthPx: 450,
       visibleHeightPx: 450,
@@ -125,7 +122,6 @@ describe("same-mm visual size from painted content bounds", () => {
       processedWidthPx: 486,
       processedHeightPx: 486,
     });
-    // Round-ish dangling asset.
     seedProcessedStrandMetrics(PROCESSED_C, {
       visibleWidthPx: 400,
       visibleHeightPx: 400,
@@ -154,30 +150,18 @@ describe("same-mm visual size from painted content bounds", () => {
       TEST_STRAND_RENDER_CATALOGUE,
     );
 
-    // Content shell width = catalogue mm (what packing / CSS shell use).
+    // Identical mm → identical shell + contain-top (no per-asset image offsets).
     expect(padded.dimensions.width).toBeCloseTo(wrapper, 5);
-    expect(tight.dimensions.width).toBeCloseTo(wrapper, 5);
+    expect(padded.dimensions.height).toBeCloseTo(wrapper, 5);
+    expect(tight.dimensions).toEqual(padded.dimensions);
     expect(round.dimensions.width).toBeCloseTo(wrapper, 5);
-    expect(padded.visibleContentWidthPx).toBeCloseTo(wrapper, 5);
-
-    // Painted width = contentW × scale ≈ mm wrapper (not canvas×scale).
-    expect(padded.imageRenderScale * contentW).toBeCloseTo(wrapper, 5);
-    expect(padded.imageDimensions.width).toBeCloseTo(canvas * (wrapper / contentW), 5);
-    // Image pins to shell top-left; shell position + transform-origin handle cord alignment.
-    expect(padded.imageOffsetPx.left).toBe(0);
-    expect(padded.imageOffsetPx.top).toBe(0);
-    // Tall charm: shell grows in height with content aspect; width stays mm.
-    expect(padded.dimensions.height / padded.dimensions.width).toBeCloseTo(contentH / contentW, 5);
-    expect(padded.visibleContentWidthPx! / padded.visibleContentHeightPx!).toBeCloseTo(
-      contentW / contentH,
-      5,
-    );
-
-    // Live metrics override inflated mask diameter.
-    expect(padded.assetVisibleDiameterPx).toBe(contentH);
+    expect(padded.strandImageFit).toBe("contain-top");
+    expect(tight.strandImageFit).toBe("contain-top");
+    expect(padded.imageOffsetPx).toEqual({ left: 0, top: 0 });
+    expect(padded.imageDimensions).toEqual(padded.dimensions);
   });
 
-  it("same mm: dangling charm painted width matches crystal shell width", () => {
+  it("same mm: dangling charm square matches crystal wrapper", () => {
     const wrapper = layoutDiameterPxForMm(8, 1);
     const charmContentW = 220;
     const charmCanvas = 540;
@@ -221,13 +205,10 @@ describe("same-mm visual size from painted content bounds", () => {
       TEST_STRAND_RENDER_CATALOGUE,
     );
 
-    // Both occupy the same mm wrapper for their primary visual axis.
     expect(charm.dimensions.width).toBeCloseTo(wrapper, 5);
+    expect(charm.dimensions.height).toBeCloseTo(wrapper, 5);
     expect(crystal.wrapperDiameterPx).toBeCloseTo(wrapper, 5);
-    expect(charm.imageRenderScale * charmContentW).toBeCloseTo(crystal.wrapperDiameterPx, 5);
-    // Charm must not look like a speck vs crystal (ratio was historically ~0.4).
-    const paintedCharmWidth = charm.imageRenderScale * charmContentW;
-    expect(paintedCharmWidth / crystal.wrapperDiameterPx).toBeGreaterThan(0.95);
+    expect(charm.strandImageFit).toBe("contain-top");
   });
 
   it("different mm sizes still scale proportionally with live metrics", () => {
@@ -259,15 +240,11 @@ describe("same-mm visual size from painted content bounds", () => {
       TEST_STRAND_RENDER_CATALOGUE,
     );
 
-    // Dangling width-match: content width tracks catalogue mm.
-    expect(six.visibleContentWidthPx).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
-    expect(eight.visibleContentWidthPx).toBeCloseTo(layoutDiameterPxForMm(8, 1), 5);
-    expect(twelve.visibleContentWidthPx).toBeCloseTo(layoutDiameterPxForMm(12, 1), 5);
-    expect(six.imageRenderScale * 220).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
-    expect(eight.imageRenderScale * 220).toBeCloseTo(layoutDiameterPxForMm(8, 1), 5);
-    expect(twelve.imageRenderScale * 220).toBeCloseTo(layoutDiameterPxForMm(12, 1), 5);
-    expect(six.visibleContentWidthPx!).toBeLessThan(eight.visibleContentWidthPx!);
-    expect(eight.visibleContentWidthPx!).toBeLessThan(twelve.visibleContentWidthPx!);
+    expect(six.dimensions.width).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
+    expect(six.dimensions.height).toBeCloseTo(layoutDiameterPxForMm(6, 1), 5);
+    expect(eight.dimensions.width).toBeCloseTo(layoutDiameterPxForMm(8, 1), 5);
+    expect(twelve.dimensions.width).toBeCloseTo(layoutDiameterPxForMm(12, 1), 5);
+    expect(six.strandImageFit).toBe("contain-top");
     expect(six.wrapperDiameterPx).toBeLessThan(eight.wrapperDiameterPx);
     expect(eight.wrapperDiameterPx).toBeLessThan(twelve.wrapperDiameterPx);
   });

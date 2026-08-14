@@ -827,4 +827,48 @@ describe("charm strand presentation", () => {
     expect(hangPos.transformOriginY).toBeCloseTo(dim.height * 0.08, 5);
     expect(sitPos.top).not.toBeCloseTo(hangPos.top, 0);
   });
+
+  it("same vertical offset hangs the same px for tall vs wide dangling shells", () => {
+    const compact = {
+      ...resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE),
+      layoutMode: "dangling" as const,
+      verticalOffset: 12,
+      hangOffset: 0,
+      anchorX: 0.5,
+      anchorY: 0.08,
+    };
+    const ringX = 100;
+    const ringY = 100;
+    const angle = -Math.PI / 2;
+    // Tall vs wide shells at the same max edge — attach distance must match.
+    const tallShell = computeBeadShellPosition(ringX, ringY, angle, { width: 22, height: 40 }, compact);
+    const wideShell = computeBeadShellPosition(ringX, ringY, angle, { width: 40, height: 22 }, compact);
+    const tallAttach = tallShell.top + tallShell.transformOriginY;
+    const wideAttach = wideShell.top + wideShell.transformOriginY;
+    expect(tallAttach).toBeCloseTo(wideAttach, 5);
+    expect(tallShell.transformOriginY).toBeCloseTo(wideShell.transformOriginY, 5);
+  });
+
+  it("identical dangling profiles place the same attach for identical mm squares", () => {
+    const profile = {
+      ...resolveStrandRenderConfigForType("charm", TEST_STRAND_RENDER_CATALOGUE),
+      layoutMode: "dangling" as const,
+      verticalOffset: 0,
+      hangOffset: 0,
+      anchorPreset: "loop" as const,
+      anchorX: 0.5,
+      anchorY: 0.08,
+    };
+    const ringX = 200;
+    const ringY = 200;
+    const angle = -Math.PI / 2;
+    const dim = { width: 48, height: 48 };
+    const a = computeBeadShellPosition(ringX, ringY, angle, dim, profile);
+    const b = computeBeadShellPosition(ringX, ringY, angle, dim, profile);
+    expect(a.left).toBeCloseTo(b.left, 5);
+    expect(a.top).toBeCloseTo(b.top, 5);
+    expect(a.transformOriginX).toBeCloseTo(dim.width * 0.5, 5);
+    expect(a.transformOriginY).toBeCloseTo(dim.height * 0.08, 5);
+    expect(a.top + a.transformOriginY).toBeCloseTo(ringY, 5);
+  });
 });

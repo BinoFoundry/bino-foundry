@@ -816,11 +816,16 @@ export function computeBeadShellPosition(
       ? profile.hangOffset
       : verticalOffsetHeightFraction(profile.verticalOffset)
     : 0;
-  const radial = hang * renderDim.height;
+  // Hang is a fraction of catalogue mm (longest shell edge), not painted height —
+  // otherwise tall charms jump farther from the cord than compact ones at the same offset.
+  const hangBasisPx = Math.max(renderDim.width, renderDim.height);
+  const radial = hang * hangBasisPx;
   const attachX = ringX + radial * Math.cos(angle);
   const attachY = ringY + radial * Math.sin(angle);
-  const originX = (dangling ? profile.anchorX : 0.5) * renderDim.width;
-  const originY = (dangling ? profile.anchorY : 0.5) * renderDim.height;
+  // Dangling attach uses the mm box (hangBasis), not content aspect height —
+  // otherwise tall charms float farther from the cord than wide ones at the same % offset.
+  const originX = dangling ? profile.anchorX * hangBasisPx : 0.5 * renderDim.width;
+  const originY = dangling ? profile.anchorY * hangBasisPx : 0.5 * renderDim.height;
   return {
     left: attachX - originX,
     top: attachY - originY,

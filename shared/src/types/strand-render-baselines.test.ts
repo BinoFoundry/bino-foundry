@@ -56,6 +56,13 @@ describe("sensible strand render baselines", () => {
         verticalOffset: -25,
         anchorPreset: "loop",
       }),
+    ).toBe(true);
+    expect(
+      isExperimentalSubTypeStrandBaseline("dangling", {
+        layoutMode: "dangling",
+        verticalOffset: 0,
+        anchorPreset: "loop",
+      }),
     ).toBe(false);
   });
 
@@ -63,7 +70,7 @@ describe("sensible strand render baselines", () => {
     expect(recommendedSubTypeStrandBaseline("fixed")?.layoutMode).toBe("inline");
     expect(recommendedSubTypeStrandBaseline("fixed")?.anchorPreset).toBe("center");
     expect(recommendedSubTypeStrandBaseline("dangling")?.layoutMode).toBe("dangling");
-    expect(recommendedSubTypeStrandBaseline("dangling")?.verticalOffset).toBe(-25);
+    expect(recommendedSubTypeStrandBaseline("dangling")?.verticalOffset).toBe(0);
     expect(STRAND_RENDER_SUBTYPE_RECOMMENDED.drop?.anchorPreset).toBe("loop");
   });
 

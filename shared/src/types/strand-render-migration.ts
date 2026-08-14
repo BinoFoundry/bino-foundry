@@ -58,7 +58,8 @@ export const STRAND_RENDER_SUBTYPE_RECOMMENDED: Record<string, Partial<StrandRen
     contactWidth: 1,
     contactOffset: 0,
     layoutMode: "dangling",
-    verticalOffset: -25,
+    // Loop attach on the mm box — leave Vertical at 0 for a usable out-of-box hang.
+    verticalOffset: 0,
     hangOffset: 0,
     anchorPreset: "loop",
     orientationMode: "outward",
@@ -72,7 +73,7 @@ export const STRAND_RENDER_SUBTYPE_RECOMMENDED: Record<string, Partial<StrandRen
     contactWidth: 1,
     contactOffset: 0,
     layoutMode: "dangling",
-    verticalOffset: -25,
+    verticalOffset: 0,
     hangOffset: 0,
     anchorPreset: "loop",
     orientationMode: "outward",
@@ -86,7 +87,8 @@ export const STRAND_RENDER_SUBTYPE_RECOMMENDED: Record<string, Partial<StrandRen
     contactWidth: 1,
     contactOffset: 0,
     layoutMode: "dangling",
-    verticalOffset: 15,
+    // Slightly lower than Dangling — same hang style, different height only.
+    verticalOffset: 12,
     hangOffset: 0,
     anchorPreset: "loop",
     orientationMode: "outward",
@@ -126,10 +128,17 @@ export function isExperimentalSubTypeStrandBaseline(
   }
   if (s === "hanging") {
     const keys = Object.keys(override).filter((k) => k !== "verticalOffsetUnit");
-    return override.contactWidth === -0.5 && keys.length <= 2;
+    if (override.contactWidth === -0.5 && keys.length <= 2) return true;
+    // Old recommended −25 fights mm-square hang; treat as stale baseline.
+    return override.layoutMode === "dangling" && override.verticalOffset === -25;
+  }
+  if (s === "dangling") {
+    return override.layoutMode === "dangling" && override.verticalOffset === -25;
   }
   if (s === "drop") {
-    return override.anchorPreset === "center" && override.layoutScale === 0.8;
+    if (override.anchorPreset === "center" && override.layoutScale === 0.8) return true;
+    // Old recommended 15 → now 12 for a gentler lower hang.
+    return override.layoutMode === "dangling" && override.verticalOffset === 15;
   }
   return false;
 }

@@ -109,18 +109,35 @@ export function getStrandBeadImageStyle(
     | "sizingPath"
     | "imageDimensions"
     | "imageOffsetPx"
+    | "strandImageFit"
   > | null,
 ): CSSProperties {
+  // Dangling baseline: fill the mm square with contain/top — same box for every charm.
+  if (sizing?.strandImageFit === "contain-top") {
+    return {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: "100%",
+      height: "100%",
+      display: "block",
+      objectFit: "contain",
+      objectPosition: "top center",
+      background: "transparent",
+    };
+  }
+
   if (sizing?.imageDimensions) {
     const img = sizing.imageDimensions;
+    const off = sizing.imageOffsetPx;
     const usesProcessedLayer =
       sizing.usesProcessedCanvas ?? hasDistinctProcessedAsset(bead);
 
     if (usesProcessedLayer || sizing.sizingPath === "normalizedVisibleDiameter") {
       return {
         position: "absolute",
-        left: 0,
-        top: 0,
+        left: off.left,
+        top: off.top,
         width: img.width,
         height: img.height,
         display: "block",
@@ -133,8 +150,8 @@ export function getStrandBeadImageStyle(
     const visual = resolveBeadVisualBoundsNorm(bead);
     return {
       position: "absolute",
-      left: 0,
-      top: 0,
+      left: off.left,
+      top: off.top,
       width: img.width,
       height: img.height,
       display: "block",

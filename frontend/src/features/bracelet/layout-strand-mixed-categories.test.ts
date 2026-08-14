@@ -99,10 +99,8 @@ describe("mixed category strand shells", () => {
     expect(layout.contactArcPx).toHaveLength(7);
     expect(layout.occupiedArcPx).toBeGreaterThan(0);
 
-    // Charm keeps dangling taller-than-wide shell.
+    // Charm dangling: hang attach near the top of the shell (hanging ring), not centre.
     const charm = layout.beads[1]!;
-    expect(charm.renderDim.height).toBeGreaterThan(charm.renderDim.width);
-    // Hang/anchor still applied (shell not centered on ring like inline beads).
     expect(charm.transformOriginY).toBeLessThan(charm.renderDim.height * 0.25);
 
     // Connector with narrow contact still gets a positive shell.
