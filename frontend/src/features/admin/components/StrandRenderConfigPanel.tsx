@@ -50,6 +50,15 @@ export interface StrandRenderConfigPanelProps {
   /** Bead mode: inherit all values from bead type. */
   inheritTypeDefaults?: boolean;
   onInheritTypeDefaultsChange?: (inherit: boolean) => void;
+  /**
+   * Opt-in photo size nudge while Parent Calibration is on (bead / sub-type).
+   * Does not change Render size (visualScale), packing, or hang.
+   */
+  customizeRenderSize?: boolean;
+  onCustomizeRenderSizeChange?: (customize: boolean) => void;
+  /** Photo size nudge when customize is on (1 = unchanged). */
+  imageSizeAdjust?: number;
+  onImageSizeAdjustChange?: (adjust: number) => void;
   onChange: (patch: Partial<StrandRenderProfile>) => void;
   onResetToType?: () => void;
   onResetToSystem?: () => void;
@@ -108,6 +117,10 @@ export function StrandRenderConfigPanel({
   provenance,
   inheritTypeDefaults = true,
   onInheritTypeDefaultsChange,
+  customizeRenderSize = false,
+  onCustomizeRenderSizeChange,
+  imageSizeAdjust = 1,
+  onImageSizeAdjustChange,
   onChange,
   onResetToType,
   onResetToSystem,
@@ -121,6 +134,8 @@ export function StrandRenderConfigPanel({
   const inheritedLock =
     (mode === "bead" || mode === "subBeadType") && inheritTypeDefaults;
   const readOnly = disabled || inheritedLock;
+  const renderSizeReadOnly = disabled || inheritedLock;
+  const imageAdjustReadOnly = disabled || !customizeRenderSize || !inheritedLock;
   const livePreview =
     showLivePreview ??
     (mode === "beadType" || mode === "subBeadType" || mode === "bead" || mode === "system");
@@ -139,8 +154,8 @@ export function StrandRenderConfigPanel({
       : mode === "beadType"
         ? "DEFAULT for this type. Sub-types and beads inherit these values unless they use a Custom Override."
         : mode === "subBeadType"
-          ? "DEFAULT for this sub-type when not using parent calibration. Beads inherit unless they set a Custom Override."
-          : "CUSTOM OVERRIDE for this asset only — does not change type or sub-type defaults.";
+          ? "DEFAULT for this sub-type. With Parent on, hang and layout follow the type; turn on Customize image size only if this sub-type needs a photo size nudge."
+          : "With Parent on, hang and layout follow the parent. Turn on Customize image size only if this bead needs a photo size nudge.";
 
   /**
    * Local editable draft for EVERY control.
@@ -194,6 +209,8 @@ export function StrandRenderConfigPanel({
   };
 
   const patchDraft = (patch: Partial<StrandRenderProfile>) => {
+    if (disabled) return;
+    // Parent on: calibrated profile fields stay locked (use Image size adjust instead).
     if (readOnly) return;
     for (const key of Object.keys(patch) as (keyof StrandRenderProfile)[]) {
       pendingCommitsRef.current[key] = patch[key];
@@ -216,7 +233,14 @@ export function StrandRenderConfigPanel({
     editingFieldsRef.current.clear();
   };
 
-  const previewProfile = useMemo(() => draft, [draft]);
+  const previewProfile = useMemo(
+    () =>
+      ({
+        ...draft,
+        ...(inheritedLock && customizeRenderSize ? { imageSizeAdjust } : {}),
+      }) as StrandRenderProfile & { imageSizeAdjust?: number },
+    [draft, inheritedLock, customizeRenderSize, imageSizeAdjust],
+  );
 
   return (
     <section className="space-y-2 rounded-xl border border-border bg-muted/15 p-3 sm:p-4">
@@ -282,9 +306,10 @@ export function StrandRenderConfigPanel({
 
       {(mode === "bead" || mode === "subBeadType") && onInheritTypeDefaultsChange ? (
         <p className="mt-0 text-[10px] leading-snug text-muted-foreground">
-          When enabled, this level reuses its parent calibration values. Fields become read-only
-          and may show <span className="font-medium">AUTO</span> badges (inherited). Turn it off to
-          edit this level’s own settings (<span className="font-medium">Custom Override</span>).
+          When enabled, hang, occupancy, layout, and render size follow the parent.
+          Use <span className="font-medium">Customize image size</span> below only if the photo
+          should look larger/smaller — packing and hang stay identical. Turn Parent off only to
+          edit hang / layout as a <span className="font-medium">Custom Override</span>.
           {mode === "bead"
             ? " With Parent on, change Bead type / Sub-type above to preview those defaults (including Layout mode)."
             : null}
@@ -293,19 +318,36 @@ export function StrandRenderConfigPanel({
 
       {inheritedLock ? (
         <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-          Controls are locked while <span className="font-medium">Use Parent Calibration</span> is
-          on
+          Calibration follows the parent while{" "}
+          <span className="font-medium">Use Parent Calibration</span> is on
+          {customizeRenderSize
+            ? " — Image size adjust below nudges only the photo."
+            : ". Turn on Customize image size only if this photo needs a different size."}
           {mode === "bead"
-            ? " — Layout mode and other fields follow the selected type / sub-type. Change those dropdowns to update Live Preview, or uncheck Parent to edit this bead only."
-            : ". Uncheck it to edit Orientation, Anchor Point, and other rendering options for this level."}
+            ? " Uncheck Parent only to edit hang or layout for this bead."
+            : " Uncheck Parent only to edit Orientation, Anchor Point, and other hang options."}
         </p>
       ) : null}
 
-      {/* Main calibration fields — balance spacing is always on in Builder (preview-only override). */}
-      <div
-        className={inheritedLock ? "pointer-events-none space-y-2 opacity-70" : "space-y-2"}
-        aria-disabled={inheritedLock || undefined}
-      >
+      {/* Parent on: only Customize image size. Render size stays on type / Custom Override. */}
+      <div className="space-y-2">
+        {(mode === "bead" || mode === "subBeadType") &&
+        inheritTypeDefaults &&
+        onCustomizeRenderSizeChange ? (
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-0.5 py-1 text-sm leading-snug">
+            <input
+              type="checkbox"
+              className="h-5 w-5 shrink-0 rounded border border-border accent-foreground"
+              checked={customizeRenderSize}
+              disabled={disabled}
+              onChange={(e) => {
+                discardLocalEdits();
+                onCustomizeRenderSizeChange(e.target.checked);
+              }}
+            />
+            <span className="select-none">Customize image size</span>
+          </label>
+        ) : null}
         <div className="grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {mode === "system" ? (
             <Field
@@ -339,33 +381,67 @@ export function StrandRenderConfigPanel({
               </p>
               <FieldError message={fieldErrors.visualSizeScaling} />
             </Field>
-          ) : (
-            <>
-              <Field label="Render size (image only)" source={provenance?.visualScale} readOnly={readOnly}>
+          ) : inheritedLock ? (
+            customizeRenderSize && onImageSizeAdjustChange ? (
+              <Field label="Image size adjust" readOnly={imageAdjustReadOnly}>
                 <AdminDeferredNumberInput
-                  value={draft.visualScale}
-                  onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
-                  onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
-                  min={STRAND_VISUAL_SCALE_MIN}
-                  max={STRAND_VISUAL_SCALE_MAX}
-                  step={STRAND_VISUAL_SCALE_STEP}
+                  value={imageSizeAdjust}
+                  onCommit={(next) => onImageSizeAdjustChange(next)}
+                  min={0.5}
+                  max={1.5}
+                  step={0.01}
                   decimals={2}
-                  disabled={readOnly}
-                  aria-label="Render size"
+                  disabled={imageAdjustReadOnly}
+                  aria-label="Image size adjust"
                   clampOnCommit={false}
-                  onRangeError={(message) => setFieldError("visualScale", message)}
-                  onClearError={() => setFieldError("visualScale", null)}
                 />
-                <InputExamples examples={["0.90", "1.00", "1.10", "1.25"]} />
+                <InputExamples examples={["0.85", "1.00", "1.10", "1.20"]} />
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  How large the photo looks.{" "}
-                  <span className="font-medium">Higher</span> = visually bigger;{" "}
-                  <span className="font-medium">lower</span> = visually smaller. Does not change
-                  gaps along the cord.
+                  Scales only the photo around the attach point.{" "}
+                  <span className="font-medium">1.00</span> = identical to parent. Does not change
+                  gaps, hang, or parent Render size.
                 </p>
-                <FieldError message={fieldErrors.visualScale} />
               </Field>
+            ) : null
+          ) : (
+            <Field
+              label="Render size (image only)"
+              source={provenance?.visualScale}
+              readOnly={renderSizeReadOnly}
+            >
+              <AdminDeferredNumberInput
+                value={draft.visualScale}
+                onCommit={(visualScale) => commitCalibration("visualScale", visualScale)}
+                onEditingChange={(editing) => setFieldEditing("visualScale", editing)}
+                min={STRAND_VISUAL_SCALE_MIN}
+                max={STRAND_VISUAL_SCALE_MAX}
+                step={STRAND_VISUAL_SCALE_STEP}
+                decimals={2}
+                disabled={renderSizeReadOnly}
+                aria-label="Render size"
+                clampOnCommit={false}
+                onRangeError={(message) => setFieldError("visualScale", message)}
+                onClearError={() => setFieldError("visualScale", null)}
+              />
+              <InputExamples examples={["0.90", "1.00", "1.10", "1.25"]} />
+              <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                How large the photo looks in the calibrated shell.{" "}
+                <span className="font-medium">Higher</span> = visually bigger;{" "}
+                <span className="font-medium">lower</span> = visually smaller. Does not change
+                gaps along the cord.
+              </p>
+              <FieldError message={fieldErrors.visualScale} />
+            </Field>
+          )}
+        </div>
+      </div>
 
+      <div
+        className={inheritedLock ? "pointer-events-none space-y-2 opacity-70" : "space-y-2"}
+        aria-disabled={inheritedLock || undefined}
+      >
+        {mode !== "system" ? (
+        <div className="grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Strand occupancy (gaps only)" source={provenance?.contactWidth} readOnly={readOnly}>
                 <AdminDeferredNumberInput
                   value={effectiveStrandContactWidth({
@@ -468,9 +544,8 @@ export function StrandRenderConfigPanel({
                   ring. Vertical offset only applies in Dangling.
                 </p>
               </Field>
-            </>
-          )}
         </div>
+        ) : null}
       </div>
 
       {showAdvanced ? (

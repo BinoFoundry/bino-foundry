@@ -163,7 +163,7 @@ function computeBeadOutwardOffset(
 
 function beadShellTransform(
   rotationDeg: number,
-  options?: { dragOverlay?: boolean },
+  options?: { dragOverlay?: boolean; imageSizeAdjust?: number },
 ): string {
   return beadShellCssTransform(rotationDeg, options);
 }
@@ -198,6 +198,8 @@ interface SortableBeadProps {
   rotationDeg: number;
   slotDim: BeadSlotDimensions;
   renderDim: BeadSlotDimensions;
+  /** Opt-in photo size nudge (1 = unchanged). */
+  imageSizeAdjust?: number;
   zIndex: number;
   onSlotClick: (position: number) => void;
   onBeadRemove?: (position: number) => void;
@@ -225,6 +227,7 @@ function SortableBeadInner({
   rotationDeg,
   slotDim,
   renderDim,
+  imageSizeAdjust = 1,
   zIndex,
   onSlotClick,
   onBeadRemove,
@@ -282,7 +285,10 @@ function SortableBeadInner({
     zIndex: isEmptySlot && libraryDragActive ? 35 : zIndex,
     pointerEvents: isDragging ? "none" : bead && libraryDragActive ? "none" : "auto",
     transformOrigin: `${transformOriginX}px ${transformOriginY}px`,
-    transform: beadShellTransform(rotationDeg, { dragOverlay: isDragging }),
+    transform: beadShellTransform(rotationDeg, {
+      dragOverlay: isDragging,
+      imageSizeAdjust,
+    }),
     boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.12)" : shell.boxShadow,
     // The mm/contact shell is used for positioning/spacing; the visual raster asset must
     // be allowed to extend beyond it (dangling/outward assets, transparent padding, etc.).
@@ -452,6 +458,7 @@ const SortableBead = memo(SortableBeadInner, (prev, next) =>
   prev.slotDim.height === next.slotDim.height &&
   prev.renderDim.width === next.renderDim.width &&
   prev.renderDim.height === next.renderDim.height &&
+  prev.imageSizeAdjust === next.imageSizeAdjust &&
   prev.zIndex === next.zIndex &&
   prev.isDragActive === next.isDragActive &&
   prev.emptyGuideMode === next.emptyGuideMode &&
@@ -621,9 +628,19 @@ const SortableCircularStrand = ({
   });
   const forcedResolved = useMemo(() => {
     if (!forceStrandRenderProfile) return null;
+    const forced = forceStrandRenderProfile as StrandRenderProfile & {
+      imageSizeAdjust?: number;
+    };
+    const adjust =
+      typeof forced.imageSizeAdjust === "number" &&
+      Number.isFinite(forced.imageSizeAdjust) &&
+      forced.imageSizeAdjust > 0
+        ? forced.imageSizeAdjust
+        : null;
     return resolveStrandRenderConfig({
       beadOverride: forceStrandRenderProfile,
       inheritBeadFromSubBeadType: false,
+      imageSizeAdjustBead: adjust,
     });
   }, [forceStrandRenderProfile]);
   const getForBead = useMemo(() => {
@@ -682,6 +699,7 @@ const SortableCircularStrand = ({
       layoutDim: BeadSlotDimensions;
       emptyDim: BeadSlotDimensions;
       isInsertionSlot: boolean;
+      imageSizeAdjust: number;
     };
 
     const buildLayout = () => {
@@ -758,6 +776,7 @@ const SortableCircularStrand = ({
             occupancyMm: occupancyMm[i]!,
             slotDim: prelimDims[i]!,
             profile: renderProfiles[i]!,
+            imageSizeAdjust: renderProfiles[i]!.imageSizeAdjust,
           })),
         });
         radius = shellLayout.radiusPx;
@@ -854,6 +873,7 @@ const SortableCircularStrand = ({
             layoutDim: slotDim,
             emptyDim: slotDim,
             isInsertionSlot: false,
+            imageSizeAdjust: shell.imageSizeAdjust,
           };
         });
       }
@@ -1153,6 +1173,9 @@ const SortableCircularStrand = ({
   const activeRotationDeg = activeBead
     ? (renderSlots.find((s) => s.index === activeBead.position)?.rotationDeg ?? 0)
     : 0;
+  const activeImageSizeAdjust = activeBead
+    ? (renderSlots.find((s) => s.index === activeBead.position)?.imageSizeAdjust ?? 1)
+    : 1;
 
   const externalDrag = libraryDragActive || isLibraryDragOver;
   const dropZoneInteractive = externalDrag || activeId === null;
@@ -1221,7 +1244,10 @@ const SortableCircularStrand = ({
                   ...getPlacedBeadShellStyle(activeRenderDim, hasImage),
                   opacity: 0.94,
                   transformOrigin: "center center",
-                  transform: beadShellTransform(activeRotationDeg, { dragOverlay: true }),
+                  transform: beadShellTransform(activeRotationDeg, {
+                    dragOverlay: true,
+                    imageSizeAdjust: activeImageSizeAdjust,
+                  }),
                 }}
               >
                 {hasImage ? (
@@ -1311,6 +1337,7 @@ const SortableCircularStrand = ({
                 rotationDeg={slot.rotationDeg}
                 slotDim={slot.slotDim}
                 renderDim={slot.renderDim}
+                imageSizeAdjust={slot.imageSizeAdjust}
                 zIndex={slot.zIndex}
                 onSlotClick={onSlotClick}
                 onBeadRemove={onBeadRemove}

@@ -151,7 +151,7 @@ describe("strand render profile", () => {
     expect(profile.provenance.contactOffset).toBe("beadOverride");
   });
 
-  it("ignores bead override when inheriting type defaults", () => {
+  it("keeps parent visualScale and applies imageSizeAdjust when Customize image size is on", () => {
     const profile = resolveStrandRenderConfigForBead(
       {
         id: "charm-1",
@@ -159,12 +159,41 @@ describe("strand render profile", () => {
         image: "",
         beadTypeSlug: "charm",
         description: "",
-        metadata: { useTypeStrandDefaults: true, strandRenderOverride: { visualScale: 2 } },
+        metadata: {
+          useTypeStrandDefaults: true,
+          customizeRenderSize: true,
+          imageSizeAdjust: 1.2,
+          strandRenderOverride: { visualScale: 2, verticalOffset: 40 },
+        },
       },
       TEST_STRAND_RENDER_CATALOGUE,
     );
     expect(profile.visualScale).toBe(1);
     expect(profile.provenance.visualScale).toBe("beadType");
+    expect(profile.imageSizeAdjust).toBe(1.2);
+    expect(profile.verticalOffset).toBe(0);
+    expect(profile.layoutMode).toBe("dangling");
+  });
+
+  it("follows parent with imageSizeAdjust 1 when customize option is off", () => {
+    const profile = resolveStrandRenderConfigForBead(
+      {
+        id: "charm-1",
+        name: "Charm",
+        image: "",
+        beadTypeSlug: "charm",
+        description: "",
+        metadata: {
+          useTypeStrandDefaults: true,
+          customizeRenderSize: false,
+          strandRenderOverride: { visualScale: 2 },
+        },
+      },
+      TEST_STRAND_RENDER_CATALOGUE,
+    );
+    expect(profile.visualScale).toBe(1);
+    expect(profile.provenance.visualScale).toBe("beadType");
+    expect(profile.imageSizeAdjust).toBe(1);
   });
 
   it("hydrates stale placed snapshot from live catalogue library metadata", () => {

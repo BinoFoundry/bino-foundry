@@ -22,6 +22,10 @@ export interface StrandBeadShellLayoutInput {
   /** Physical/layout slot before visualScale (same as Builder prelimDims). */
   slotDim: BeadSlotDimensions;
   profile: StrandRenderProfile;
+  /**
+   * Opt-in photo size nudge (1 = unchanged). Packing / hang / visualScale stay as calibrated.
+   */
+  imageSizeAdjust?: number;
 }
 
 export interface LayoutStrandBeadShellsParams {
@@ -60,10 +64,13 @@ export interface StrandBeadShellLayout {
  * Shared by Crystal / Charm / Spacer / Connector / Separator / Accent — profile-driven only.
  *
  * - Tangential pack uses max(tuned contact, visual width) so occupancy spacing stays capacity-correct.
- * - CSS / image shell uses max(natural contact at occupancy 1, visual width) × size curve ×
- *   visualScale — so absolute size matches the old neutral look, while Strand occupancy
- *   above/below 1 only changes gaps (not how big the photo looks).
+ * - CSS / image shell uses max(natural contact at occupancy 1, visual width) × size curve —
+ *   Strand occupancy above/below 1 only changes gaps (not how big the photo looks).
  * - Dangling types may extend height past the render width for tall charms.
+ *
+ * Note: Render size (visualScale) is already baked into `visual width` via
+ * strandLayoutShellDimensions. The natural-contact floor preserves calibrated looks —
+ * do not multiply visualScale again after this max(), or existing catalogues shift.
  */
 export function resolveStrandShellFootprint(params: {
   occupancyMm: number;
@@ -117,7 +124,7 @@ export function resolveStrandShellFootprint(params: {
     occupancyMm,
     profile.visualSizeScaling ?? 1,
   );
-  // Drawn shell: neutral mm contact floor + visualScale — not tuned occupancy.
+  // Drawn shell: neutral mm contact floor + scaled visual — not tuned occupancy.
   const renderWidthLinear = Math.max(naturalContactArcPx, visualWidthLinear);
   const renderHeightLinear =
     profile.layoutMode === "dangling"
@@ -266,6 +273,7 @@ export function layoutStrandBeadShells(
       // Keep hangOffset / anchors / layoutMode / orientation for charm dangling placement.
       profile: { ...input.profile, layoutScale: 1, visualScale: 1, visualSizeScaling: 1 },
       sizeMm: input.occupancyMm,
+      imageSizeAdjust: input.imageSizeAdjust,
     });
     return {
       ...transform,

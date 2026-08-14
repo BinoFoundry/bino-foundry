@@ -20,6 +20,11 @@ export interface ResolvedStrandRenderConfig extends StrandRenderProfile {
    * Alias of {@link StrandRenderProfile.visualScale} — renderer should use this only.
    */
   resolvedRenderScale: number;
+  /**
+   * Opt-in photo size nudge (1 = unchanged). Independent of visualScale / packing / hang.
+   * Only set when Customize image size is enabled on that catalogue level.
+   */
+  imageSizeAdjust: number;
 }
 
 export const STRAND_RENDER_PROFILE_KEYS = [
@@ -57,9 +62,13 @@ export interface StrandRenderConfigLayers {
   subBeadTypeOverride?: Partial<StrandRenderProfile> | null;
   /** When true (default), sub type inherits bead type tier. */
   inheritSubBeadTypeFromBeadType?: boolean;
+  /** Opt-in image size nudge for this sub-type (1 = off / unchanged). */
+  imageSizeAdjustSubBeadType?: number | null;
   beadOverride?: Partial<StrandRenderProfile> | null;
   /** When true (default), bead inherits sub bead type tier. */
   inheritBeadFromSubBeadType?: boolean;
+  /** Opt-in image size nudge for this bead (1 = off / unchanged). Wins over sub-type. */
+  imageSizeAdjustBead?: number | null;
   /**
    * @deprecated Use inheritBeadFromSubBeadType. Kept for backward compatibility.
    * When set, overrides inheritBeadFromSubBeadType.
@@ -93,10 +102,16 @@ function beadInheritsSubType(layers: StrandRenderConfigLayers): boolean {
   return layers.inheritBeadFromSubBeadType !== false;
 }
 
+function normalizeImageSizeAdjust(raw: number | null | undefined): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return null;
+  return raw;
+}
+
 /**
  * Resolve strand rendering config:
  * system → bead type → sub bead type → bead override.
  * Renderer consumes only the returned profile fields; provenance is for admin UI.
+ * imageSizeAdjust is opt-in and never rewrites visualScale / hang / occupancy.
  */
 export function resolveStrandRenderConfig(layers: StrandRenderConfigLayers): ResolvedStrandRenderConfig {
   const provenance = Object.fromEntries(
@@ -116,7 +131,21 @@ export function resolveStrandRenderConfig(layers: StrandRenderConfigLayers): Res
     profile = applyLayer(profile, layers.beadOverride, "beadOverride", provenance);
   }
 
-  return { ...profile, provenance, resolvedRenderScale: profile.visualScale };
+  const subAdjust = normalizeImageSizeAdjust(layers.imageSizeAdjustSubBeadType);
+  const beadAdjust = normalizeImageSizeAdjust(layers.imageSizeAdjustBead);
+  const imageSizeAdjust = beadAdjust ?? subAdjust ?? 1;
+
+  return { ...profile, provenance, resolvedRenderScale: profile.visualScale, imageSizeAdjust };
+}
+
+/** @deprecated Kept for callers that still import the old helper name. */
+export function pickStrandRenderSizeOverride(
+  override: Partial<StrandRenderProfile> | null | undefined,
+): Partial<StrandRenderProfile> | null {
+  if (typeof override?.visualScale !== "number" || !Number.isFinite(override.visualScale)) {
+    return null;
+  }
+  return { visualScale: override.visualScale };
 }
 
 export function parseStrandRenderConfigFromMetadata(

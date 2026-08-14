@@ -214,7 +214,13 @@ export function getAdminDocSections(topic: AdminDocTopicId): AdminDocSection[] {
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
                 <span className="font-medium text-foreground">Render size (image only)</span> —
-                visual scale of the asset.
+                set on bead type, or on a bead/sub-type only when Parent Calibration is off
+                (Custom Override).
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Customize image size</span> —
+                with Parent on, the only size nudge: scales the photo without changing packing or
+                hang (default 1.00 = identical to parent).
               </li>
               <li>
                 <span className="font-medium text-foreground">Strand occupancy (gaps only)</span> —

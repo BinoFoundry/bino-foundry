@@ -103,6 +103,65 @@ describe("strand render migration helpers", () => {
     expect(subBeadTypeInheritsBeadTypeStrandDefaults(subType)).toBe(false);
   });
 
+  it("preserves parent inherit with imageSizeAdjust (not visualScale override)", () => {
+    const inherited = inferStrandRenderDefaultsForType({ slug: "charm" });
+    const library = normalizeBeadLibraryStrandMetadata(
+      {
+        useTypeStrandDefaults: true,
+        customizeRenderSize: true,
+        imageSizeAdjust: 1.15,
+        strandRenderOverride: { visualScale: 1.15, verticalOffset: 12, layoutMode: "inline" },
+      },
+      inherited,
+    );
+    expect(library.useTypeStrandDefaults).toBe(true);
+    expect(library.customizeRenderSize).toBe(true);
+    expect(library.imageSizeAdjust).toBe(1.15);
+    expect(beadLibraryInheritsTypeStrandDefaults(library)).toBe(true);
+    expect(library.strandRenderOverride).toBeUndefined();
+
+    const fromLegacyVisualScale = normalizeBeadLibraryStrandMetadata(
+      {
+        useTypeStrandDefaults: true,
+        customizeRenderSize: true,
+        strandRenderOverride: { visualScale: 1.15 },
+      },
+      inherited,
+    );
+    expect(fromLegacyVisualScale.customizeRenderSize).toBe(true);
+    expect(fromLegacyVisualScale.imageSizeAdjust).toBeCloseTo(
+      1.15 / (inherited.visualScale || 1),
+      5,
+    );
+    expect(fromLegacyVisualScale.strandRenderOverride).toBeUndefined();
+
+    const followParent = normalizeBeadLibraryStrandMetadata(
+      {
+        useTypeStrandDefaults: true,
+        customizeRenderSize: false,
+        strandRenderOverride: { visualScale: 1.15 },
+      },
+      inherited,
+    );
+    expect(followParent.customizeRenderSize).toBeUndefined();
+    expect(followParent.imageSizeAdjust).toBeUndefined();
+    expect(followParent.strandRenderOverride).toBeUndefined();
+
+    const subType = normalizeSubBeadTypeStrandMetadata(
+      {
+        useBeadTypeStrandDefaults: true,
+        customizeRenderSize: true,
+        strandRenderOverride: { visualScale: 0.85, hangOffset: 0.4 },
+      },
+      inherited,
+    );
+    expect(subType.useBeadTypeStrandDefaults).toBe(true);
+    expect(subType.customizeRenderSize).toBe(true);
+    expect(subType.imageSizeAdjust).toBeCloseTo(0.85 / (inherited.visualScale || 1), 5);
+    expect(subBeadTypeInheritsBeadTypeStrandDefaults(subType)).toBe(true);
+    expect(subType.strandRenderOverride).toBeUndefined();
+  });
+
   it("honours explicit false on sub bead type inherit helpers", () => {
     expect(
       subBeadTypeInheritsBeadTypeStrandDefaults({ useBeadTypeStrandDefaults: false }),

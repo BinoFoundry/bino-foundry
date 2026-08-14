@@ -104,12 +104,17 @@ describe("sensible strand render baselines", () => {
     const inheritAll = resolveStrandRenderConfig({
       systemDefaults: { visualScale: 1, layoutMode: "inline" },
       beadTypeDefaults: { visualScale: 1, contactWidth: 1 },
-      subBeadTypeOverride: { visualScale: 5 },
+      subBeadTypeOverride: { visualScale: 0.8 },
       inheritSubBeadTypeFromBeadType: true,
-      beadOverride: { visualScale: 9 },
+      imageSizeAdjustSubBeadType: 0.9,
+      beadOverride: { visualScale: 1.4 },
       inheritBeadFromSubBeadType: true,
+      imageSizeAdjustBead: 1.15,
     });
     expect(inheritAll.visualScale).toBe(1);
     expect(inheritAll.provenance.visualScale).toBe("beadType");
+    expect(inheritAll.imageSizeAdjust).toBe(1.15);
+    expect(inheritAll.contactWidth).toBe(1);
+    expect(inheritAll.provenance.contactWidth).toBe("beadType");
   });
 });
