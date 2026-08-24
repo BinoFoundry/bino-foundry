@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 import AdvancedSunglassesBuilder from "@/components/AdvancedSunglassesBuilder";
 import BraceletBuilder from "@/components/BraceletBuilder";
@@ -10,25 +10,30 @@ import { CUSTOMER_COPY } from "@/lib/customer-copy";
 import { AppShell, BuilderViewport, type AppModule } from "@/layouts";
 import { useAuth } from "@/state/auth/AuthProvider";
 import { useCatalogue } from "@/state/catalogue";
+import NotFound from "./NotFound";
 
 const AdminApp = lazy(() =>
   import("@/features/admin").then((m) => ({ default: m.AdminApp })),
 );
 
-function parseModule(raw: string | undefined, pathname: string): AppModule {
+function resolveModule(pathname: string): AppModule | null {
   if (pathname.startsWith("/admin")) return "admin";
-  if (raw === "bracelet" || raw === "sunglasses" || raw === "admin") return raw;
-  return "bracelet";
+  if (pathname === "/bracelet") return "bracelet";
+  if (pathname === "/sunglasses") return "sunglasses";
+  return null;
 }
 
 const Index = () => {
-  const { module } = useParams<{ module: string }>();
   const { pathname } = useLocation();
-  const activeModule = parseModule(module, pathname);
+  const activeModule = resolveModule(pathname);
   const catalogue = useCatalogue();
   const { user, isLoading: authLoading, hasPermission } = useAuth();
   const onBraceletPriceChange = useCallback((_p: number) => {}, []);
   const onSunglassesPriceChange = useCallback((_p: number) => {}, []);
+
+  if (!activeModule) {
+    return <NotFound />;
+  }
 
   if (activeModule === "admin") {
     if (authLoading) {

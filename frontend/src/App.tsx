@@ -25,8 +25,10 @@ export const appRouter = createBrowserRouter(
         }
       />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/bracelet" element={<Index />} />
+      <Route path="/sunglasses" element={<Index />} />
       <Route path="/admin/*" element={<Index />} />
-      <Route path="/:module" element={<Index />} />
+      {/* Unknown paths (e.g. /handover) → 404; do not fall back to the bracelet home */}
       <Route path="*" element={<NotFound />} />
     </Route>,
   ),
