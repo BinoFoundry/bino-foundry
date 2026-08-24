@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bino Foundry — Project handover</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <p class="kicker">Project handover</p>
+        <h1>Bino Foundry</h1>
+        <p class="lede">
+          This package explains how to configure, deploy, and take ownership of the project.
+          Use the tabs below. It is written for a technical successor who did not build the original stack.
+        </p>
+        <div class="meta">
+          <span class="chip ok">1. Code merged to main</span>
+          <span class="chip ok">dev branch kept</span>
+          <span class="chip warn">3–7: use these tabs</span>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="Handover sections">
+        <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
+        <button class="tab" type="button" data-tab="configuration">3. Configuration</button>
+        <button class="tab" type="button" data-tab="deployment">4. Deployment</button>
+        <button class="tab" type="button" data-tab="access">5. Access</button>
+        <button class="tab" type="button" data-tab="notes">7. Development notes</button>
+      </nav>
+
+      <section class="panel active" data-panel="overview">
+        <h2>What this handover covers</h2>
+        <p>
+          Bino Foundry is a monorepo for a jewellery customiser: a crystal bracelet builder, a
+          sunglasses customiser, and an admin catalogue. The browser talks to an Express API.
+          Supabase holds Postgres and file storage only. Email is sent through SMTP settings stored
+          in the application (currently the outgoing developer mailbox until you replace it).
+        </p>
+        <div class="note ok">
+          <strong>Already done.</strong> Source code is in your GitHub repository. The current
+          <code>dev</code> work is merged into <code>main</code>. Keep <code>dev</code> as a working
+          branch. CI on GitHub Actions builds and tests on every push to <code>main</code>.
+        </div>
+
+        <h3>Status of the original 7 points</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Meaning</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1. Code</td>
+              <td>GitHub, <code>main</code> + <code>dev</code></td>
+              <td>Complete</td>
+            </tr>
+            <tr>
+              <td>2. Database and assets</td>
+              <td>Transfer the Supabase project (database, storage, configs, builder data)</td>
+              <td>Operational — confirm ownership, buckets, and new API keys</td>
+            </tr>
+            <tr>
+              <td>3. Configuration</td>
+              <td>Environment variables for API, SPA, Supabase, email</td>
+              <td>This guide (tab 3)</td>
+            </tr>
+            <tr>
+              <td>4. Deployment</td>
+              <td>How the app is built, hosted, and kept running</td>
+              <td>This guide (tab 4)</td>
+            </tr>
+            <tr>
+              <td>5. Access</td>
+              <td>Admin, GitHub, and removal of developer access after handover</td>
+              <td>This guide (tab 5)</td>
+            </tr>
+            <tr>
+              <td>6. Development site</td>
+              <td>Move from temukreatif.id to binofoundry.builtbyroni.com for 30 days</td>
+              <td>Operational — DNS / VPS, not this folder</td>
+            </tr>
+            <tr>
+              <td>7. Development notes</td>
+              <td>Done, unfinished, and follow-up work</td>
+              <td>This guide (tab 7)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>How to use these pages</h3>
+        <div class="toc">
+          <a href="#configuration">Configuration — env vars, secrets, email, local run</a>
+          <a href="#deployment">Deployment — full first-time VPS setup (nginx, PM2, SSL)</a>
+          <a href="#access">Access — GitHub, admin users, Supabase, revoke developer access</a>
+          <a href="#notes">Development notes — completed work and remaining gaps</a>
+        </div>
+        <p class="footer">Open locally: <code>handover/index.html</code>. No npm build required.</p>
+      </section>
+
+      <section class="panel" data-panel="configuration">
+        <h2>3. Configuration</h2>
+        <p>
+          Think of configuration as three places, not one <code>.env</code> dump. Backend secrets stay
+          on the server. Frontend env is baked into the browser bundle at build time. Email SMTP is
+          not in env files at all — it is saved in the admin website.
+        </p>
+        <div class="legend">
+          <span class="loc be">Backend env</span>
+          <span class="loc fe">Frontend env</span>
+          <span class="loc web">Admin website</span>
+          <span class="loc cloud">Third-party dashboard</span>
+        </div>
+        <div class="callout warn">
+          <strong>Never commit real keys.</strong> Copy the example files, fill values privately,
+          and never put <code>SUPABASE_SERVICE_ROLE_KEY</code> in a frontend file. Anything starting
+          with <code>VITE_</code> is visible in the built JavaScript.
+        </div>
+
+        <h3>Where each setting lives</h3>
+        <p>Always ask: is this a <strong>file in the repo / on the server</strong>, or a <strong>screen in the admin website</strong>?</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Layer</th>
+              <th>Exact location</th>
+              <th>Used by</th>
+              <th>What belongs here</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="loc be">Code / server</span></td>
+              <td>
+                <strong>Repo root</strong> (same folder as <code>package.json</code>):
+                <span class="path">.env</span> (local),
+                <span class="path">.env.production</span> (VPS).<br />
+                Templates:
+                <span class="path">.env.example</span>,
+                <span class="path">deploy/env/.env.production.example</span>.<br />
+                <em>Ignore</em> <span class="path">backend/.env.example</span> except as a pointer to root.
+              </td>
+              <td>Express API (<span class="path">backend/</span> code, root env files)</td>
+              <td>Supabase URL + service role, JWT, CORS, admin API key, encryption key. Never commit filled secrets.</td>
+            </tr>
+            <tr>
+              <td><span class="loc fe">Code / build</span></td>
+              <td>
+                Folder <span class="path">frontend/</span>:
+                <span class="path">frontend/.env.development.local</span> (local),
+                <span class="path">frontend/.env.production</span> (production build).<br />
+                Template: <span class="path">frontend/.env.example</span>.
+              </td>
+              <td>Vite SPA (browser bundle)</td>
+              <td>Only <code>VITE_*</code>: API URL and matching admin write key. Baked in at build time.</td>
+            </tr>
+            <tr>
+              <td><span class="loc web">Website UI</span></td>
+              <td>
+                Open the live site → log in → left nav <strong>General settings</strong>.<br />
+                URL path: <span class="path">/admin/general-settings</span><br />
+                Local: <span class="path">http://localhost:8080/admin/general-settings</span>
+              </td>
+              <td>Saved in the database (not Git)</td>
+              <td>SMTP host/user/password, sender email, currency, strand render defaults.</td>
+            </tr>
+            <tr>
+              <td><span class="loc cloud">Third party</span></td>
+              <td>Supabase dashboard + your mail provider’s console</td>
+              <td>You copy values into root <code>.env</code> or into the admin SMTP form</td>
+              <td>Project URL, service role key, SMTP credentials.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Which env files are real? (root vs backend vs frontend)</h3>
+        <div class="callout ok">
+          <strong>Yes — the API uses the repo-root <code>.env</code>.</strong>
+          The file <span class="path">backend/.env.example</span> is only a short reminder. It is
+          <em>not</em> where production secrets live. Fill
+          <span class="path">.env</span> (or <span class="path">.env.production</span>) next to the
+          root <span class="path">package.json</span>. That is what Express loads.
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>File you see in the repo</th>
+              <th>Is it used?</th>
+              <th>Who reads it?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="path">.env.example</span> (repo root)</td>
+              <td>Template only — copy to <span class="path">.env</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><span class="path">.env</span> (repo root, gitignored)</td>
+              <td><strong>Yes — primary for local API</strong></td>
+              <td><span class="loc be">Backend</span> via <span class="path">backend/src/config/load-env.ts</span></td>
+            </tr>
+            <tr>
+              <td><span class="path">.env.production</span> (repo root, on VPS)</td>
+              <td><strong>Yes — primary for production API</strong></td>
+              <td>Same backend loader when <code>APP_ENV=production</code></td>
+            </tr>
+            <tr>
+              <td><span class="path">deploy/env/.env.production.example</span></td>
+              <td>Template for VPS — copy to root <span class="path">.env.production</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><span class="path">backend/.env.example</span></td>
+              <td><strong>Not the real config</strong> — says “read from repo root”</td>
+              <td>Optional only if you create <span class="path">backend/.env</span> for overrides</td>
+            </tr>
+            <tr>
+              <td><span class="path">frontend/.env.example</span></td>
+              <td>Template — copy to a mode file below</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><span class="path">frontend/.env.development.local</span> etc.</td>
+              <td>Yes for SPA <code>VITE_*</code> (see matrix below)</td>
+              <td><span class="loc fe">Frontend / Vite</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Backend search order (later files win; shell exports always win): root
+          <span class="path">.env</span> → <span class="path">.env.local</span> →
+          <span class="path">.env.{APP_ENV}</span> → <span class="path">.env.{APP_ENV}.local</span>,
+          also checked under <span class="path">deploy/env/</span> and optionally
+          <span class="path">backend/</span>. Code:
+          <span class="path">backend/src/config/load-env.ts</span>.
+        </p>
+
+        <h3>Frontend: which file for local / staging / production?</h3>
+        <p>
+          Vite picks files by <strong>mode</strong> (from the npm script). It loads both
+          <strong>repo root</strong> and <strong>frontend/</strong>, then merges.
+          Values in <span class="path">frontend/</span> win over the same key in the root.
+          If <code>VITE_ADMIN_API_KEY</code> is empty, Vite copies root
+          <code>ADMIN_API_KEY</code> automatically.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>When you run…</th>
+              <th>Vite mode</th>
+              <th>Create / edit these files</th>
+              <th>Typical purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>npm run dev</code> (SPA) + <code>npm run dev:backend</code></td>
+              <td><code>development</code></td>
+              <td>
+                Root: <span class="path">.env</span> (Supabase, JWT, <code>ADMIN_API_KEY</code>, …)<br />
+                Frontend: <span class="path">frontend/.env.development.local</span>
+                (copy from <span class="path">frontend/.env.example</span>)<br />
+                Set <code>VITE_API_BASE_URL=http://localhost:5050</code>
+              </td>
+              <td>Daily local work on your laptop</td>
+            </tr>
+            <tr>
+              <td><code>npm run build:staging</code> (or <code>build:staging</code> at root)</td>
+              <td><code>staging</code></td>
+              <td>
+                Root: <span class="path">.env.staging</span> (API secrets) and/or deploy template<br />
+                Frontend: <span class="path">frontend/.env.staging</span>
+                (copy from <span class="path">frontend/.env.staging.example</span>)<br />
+                Point <code>VITE_API_BASE_URL</code> at the staging API if SPA and API are on different hosts
+              </td>
+              <td>Pre-production build</td>
+            </tr>
+            <tr>
+              <td><code>npm run build</code> / <code>npm run build:all</code> on the VPS</td>
+              <td><code>production</code></td>
+              <td>
+                Root: <span class="path">.env.production</span> (API — required)<br />
+                Frontend: <span class="path">frontend/.env.production</span>
+                (copy from <span class="path">frontend/.env.production.example</span>)<br />
+                Same-host nginx: leave <code>VITE_API_BASE_URL</code> empty; set
+                <code>VITE_ADMIN_API_KEY</code> = same as root <code>ADMIN_API_KEY</code>
+              </td>
+              <td>Live / handover host</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout warn">
+          <strong>Do not confuse templates with live files.</strong>
+          Anything ending in <code>.example</code> is documentation only. The running API will not
+          read <span class="path">backend/.env.example</span>. If only frontend env files are filled
+          and root <span class="path">.env</span> is empty, the backend has no Supabase keys and the
+          API will fail in staging/production.
+        </div>
+        <p>
+          Merge logic: <span class="path">frontend/vite-resolve-env.ts</span> +
+          <span class="path">frontend/src/config/vite-env-merge.ts</span>.
+        </p>
+
+        <h3>How root + frontend work together</h3>
+        <p>
+          The browser never talks to Supabase with the service role. The SPA calls
+          <code>/api/…</code> on your backend. The backend uses root-env
+          <code>SUPABASE_URL</code> + <code>SUPABASE_SERVICE_ROLE_KEY</code> to read/write Postgres
+          and Storage.
+        </p>
+        <ul class="guide">
+          <li>
+            Local: put secrets in root <span class="path">.env</span>; put
+            <code>VITE_API_BASE_URL=http://localhost:5050</code> in
+            <span class="path">frontend/.env.development.local</span>.
+          </li>
+          <li>
+            Single VPS (nginx): secrets in root <span class="path">.env.production</span>; leave
+            <code>VITE_API_BASE_URL</code> empty in <span class="path">frontend/.env.production</span>
+            so the SPA uses same-origin <code>/api</code>.
+          </li>
+          <li>
+            <code>ADMIN_API_KEY</code> (root / backend) and <code>VITE_ADMIN_API_KEY</code> (frontend)
+            must be the <strong>same string</strong>. The admin UI sends it as
+            <code>x-api-key</code> on create/update/delete. If you omit the Vite variable, the build
+            copies root <code>ADMIN_API_KEY</code> automatically.
+          </li>
+        </ul>
+
+        <h3>Where to get third-party credentials</h3>
+        <div class="svc-grid">
+          <div class="svc">
+            <h4>Supabase <span class="loc cloud">Dashboard</span></h4>
+            <p>
+              Database (Postgres) and file storage for frames, beads, and uploads. App login is
+              <strong>not</strong> Supabase Auth — users live in the <code>users</code> table and
+              the API issues JWTs.
+            </p>
+            <ol>
+              <li>Open <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">supabase.com/dashboard</a> and select the transferred project.</li>
+              <li>Go to <strong>Project Settings → API</strong>.</li>
+              <li>Copy <strong>Project URL</strong> → paste as <code>SUPABASE_URL</code> in root <code>.env</code>.</li>
+              <li>Copy <strong>service_role</strong> (secret) → <code>SUPABASE_SERVICE_ROLE_KEY</code> in the same file. Never expose this in the browser.</li>
+              <li>Anon / publishable key is optional leftover (<code>SUPABASE_ANON_KEY</code>). You can leave it empty.</li>
+              <li>Confirm Storage buckets still exist (catalogue images). If the site shows broken images, buckets or policies did not transfer.</li>
+            </ol>
+          </div>
+          <div class="svc">
+            <h4>Email SMTP <span class="loc web">Admin UI</span></h4>
+            <p>
+              Not an env variable. Credentials are stored in the database, encrypted with
+              <code>SETTINGS_ENCRYPTION_KEY</code>.
+            </p>
+            <ol>
+              <li>Create a mailbox at Google Workspace, Amazon SES, Postmark, Resend SMTP, or similar.</li>
+              <li>From that provider, copy host, port (often 587), username, password, and from-address.</li>
+              <li>
+                In the website UI: open <span class="path">/admin</span> → left nav
+                <strong>General settings</strong> → scroll to <strong>SMTP configuration</strong>
+                (URL <span class="path">/admin/general-settings</span>).
+              </li>
+              <li>Fill SMTP, enable it, save, then use <strong>Test SMTP connection</strong>.</li>
+              <li>
+                In code/server env (repo root <span class="path">.env.production</span>), set
+                <code>PUBLIC_APP_URL</code> to the public site URL so reset/verify links are correct.
+              </li>
+            </ol>
+          </div>
+          <div class="svc">
+            <h4>Secrets you generate yourself</h4>
+            <p><code>JWT_SECRET</code>, <code>SETTINGS_ENCRYPTION_KEY</code>, and <code>ADMIN_API_KEY</code> are not from a vendor. Generate them once and store in a password manager.</p>
+            <pre>node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# SETTINGS_ENCRYPTION_KEY: use that base64 output
+# JWT_SECRET and ADMIN_API_KEY: another long random string each (min 32 chars for JWT)</pre>
+            <p>If you rotate <code>SETTINGS_ENCRYPTION_KEY</code>, open admin and re-save SMTP (old ciphertext cannot be decrypted).</p>
+          </div>
+        </div>
+
+        <h3>Backend variables (in root <span class="path">.env</span>, not <span class="path">backend/.env.example</span>)</h3>
+        <p>
+          Copy <span class="path">.env.example</span> → <span class="path">.env</span> (local) or
+          <span class="path">deploy/env/.env.production.example</span> → root
+          <span class="path">.env.production</span> (VPS). The Express process reads these via
+          <span class="path">backend/src/config/load-env.ts</span>. Check with
+          <code>npm run env:check</code>.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Get it from</th>
+              <th>Put it in</th>
+              <th>What it is used for</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>APP_ENV</code></td>
+              <td>You set it</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td><code>development</code> / <code>staging</code> / <code>production</code>. Staging and production require Supabase, CORS, JWT, admin key, and encryption key.</td>
+            </tr>
+            <tr>
+              <td><code>NODE_ENV</code></td>
+              <td>You set it</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Usually <code>production</code> on the server. Node runtime mode, not the same as <code>APP_ENV</code>.</td>
+            </tr>
+            <tr>
+              <td><code>PORT</code></td>
+              <td>You set it</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Port the API listens on. Default <code>5050</code> (macOS often blocks 5000 for AirPlay). Nginx proxies <code>/api</code> here.</td>
+            </tr>
+            <tr>
+              <td><code>TRUST_PROXY</code></td>
+              <td>You set it</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Set <code>1</code> behind nginx/Caddy so HTTPS and client IP are trusted. Local: <code>0</code>.</td>
+            </tr>
+            <tr>
+              <td><code>SUPABASE_URL</code></td>
+              <td><span class="loc cloud">Supabase → Settings → API → Project URL</span></td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Base URL of the Postgres + Storage project, e.g. <code>https://xxxx.supabase.co</code>. Required for catalogue, uploads, and saved designs.</td>
+            </tr>
+            <tr>
+              <td><code>SUPABASE_SERVICE_ROLE_KEY</code></td>
+              <td><span class="loc cloud">Supabase → Settings → API → service_role</span></td>
+              <td><span class="loc be">Backend .env</span> never frontend</td>
+              <td>Server key that bypasses row-level security. The API uses it for all DB and storage work. If this is wrong, admin saves and images fail.</td>
+            </tr>
+            <tr>
+              <td><code>SUPABASE_ANON_KEY</code></td>
+              <td><span class="loc cloud">Supabase anon key (optional)</span></td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Legacy. Not used for login. Safe to leave blank.</td>
+            </tr>
+            <tr>
+              <td><code>PUBLIC_APP_URL</code></td>
+              <td>Your public website URL</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Origin used in password-reset and email-verification links. Example: <code>https://binofoundry.builtbyroni.com</code>. Defaults to the first CORS origin if empty.</td>
+            </tr>
+            <tr>
+              <td><code>CORS_ORIGINS</code></td>
+              <td>You set it (your SPA URL)</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Comma-separated browser origins allowed to call the API. No trailing slash. Must match the real site URL or the browser blocks requests. Local dev still allows localhost even if this lists only production.</td>
+            </tr>
+            <tr>
+              <td><code>JWT_SECRET</code></td>
+              <td>You generate it (32+ chars)</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Signs login tokens. Changing it logs everyone out. Keep it secret and stable in production.</td>
+            </tr>
+            <tr>
+              <td><code>SETTINGS_ENCRYPTION_KEY</code></td>
+              <td>You generate it (base64 32 bytes)</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Encrypts SMTP passwords in the database. Required or admin cannot store mail credentials.</td>
+            </tr>
+            <tr>
+              <td><code>JWT_ACCESS_TTL_SECONDS</code></td>
+              <td>You set it</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Access token lifetime. Default 900 (15 minutes).</td>
+            </tr>
+            <tr>
+              <td><code>JWT_REFRESH_TTL_DAYS</code></td>
+              <td>You set it</td>
+              <td><span class="loc be">Backend .env</span></td>
+              <td>Refresh token lifetime. Default 30 days.</td>
+            </tr>
+            <tr>
+              <td><code>ADMIN_API_KEY</code></td>
+              <td>You generate it</td>
+              <td><span class="loc be">Backend .env</span> + same value on frontend</td>
+              <td>Required for catalogue create/update/delete. Staff still log in with email/password; this key is an extra guard on write APIs. Must match <code>VITE_ADMIN_API_KEY</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Frontend variables (<code>VITE_*</code> only)</h3>
+        <p>
+          Use the mode matrix above. Prefer
+          <span class="path">frontend/.env.development.local</span> for laptop work and
+          <span class="path">frontend/.env.production</span> on the VPS. Templates:
+          <span class="path">frontend/.env.example</span>,
+          <span class="path">frontend/.env.staging.example</span>,
+          <span class="path">frontend/.env.production.example</span>.
+          After changing these, rebuild the SPA.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Get it from</th>
+              <th>Put it in</th>
+              <th>What it is used for</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>VITE_API_BASE_URL</code></td>
+              <td>Your API public origin</td>
+              <td><span class="loc fe">frontend/.env*</span></td>
+              <td>
+                Where the browser sends API calls. Local: <code>http://localhost:5050</code>.
+                Same-host VPS: leave empty so requests go to <code>/api</code> on the same domain.
+                No trailing slash.
+              </td>
+            </tr>
+            <tr>
+              <td><code>VITE_API_PREFIX</code></td>
+              <td>You set it (usually leave default)</td>
+              <td><span class="loc fe">frontend/.env*</span></td>
+              <td>API path prefix. Default <code>/api</code>. Must match nginx and the backend mount.</td>
+            </tr>
+            <tr>
+              <td><code>VITE_ADMIN_API_KEY</code></td>
+              <td>Same value as backend <code>ADMIN_API_KEY</code></td>
+              <td><span class="loc fe">frontend/.env*</span></td>
+              <td>
+                Sent as <code>x-api-key</code> from the admin UI on writes. If omitted, the Vite
+                build copies root <code>ADMIN_API_KEY</code>. If they differ, saving frames/beads fails
+                with 401.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout warn">
+          There is no <code>VITE_SUPABASE_…</code> in this project. The SPA does not use the
+          service role. If images fail, check backend Supabase keys and Storage buckets, not frontend env.
+        </div>
+
+        <h3>Settings on the website <span class="loc web">Admin UI</span></h3>
+        <p>
+          These are <strong>not</strong> in any <code>.env</code> file. Edit them in the running product:
+        </p>
+        <ol class="guide">
+          <li>Open the site (local <span class="path">http://localhost:8080</span> or your domain).</li>
+          <li>Go to <span class="path">/admin</span> and sign in with an admin user.</li>
+          <li>In the left sidebar click <strong>General settings</strong> (route <span class="path">/admin/general-settings</span>).</li>
+          <li>Scroll to the <strong>SMTP configuration</strong> card for email; currency and strand defaults are on the same page.</li>
+        </ol>
+        <table>
+          <thead>
+            <tr>
+              <th>Label on screen</th>
+              <th>Get it from</th>
+              <th>What it is used for</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Currency / site general</td>
+              <td>You</td>
+              <td>Display currency in builders and admin.</td>
+            </tr>
+            <tr>
+              <td>SMTP host, port, encryption, username, password, from name, from email</td>
+              <td><span class="loc cloud">Your mail provider</span></td>
+              <td>Registration, email verification, password reset. Stored encrypted using backend <code>SETTINGS_ENCRYPTION_KEY</code>.</td>
+            </tr>
+            <tr>
+              <td>Enable SMTP + Test SMTP connection</td>
+              <td>—</td>
+              <td>Turns mail on and proves delivery before go-live.</td>
+            </tr>
+            <tr>
+              <td>Email diagnostics (same page, below SMTP)</td>
+              <td>—</td>
+              <td>Log of sent/failed auth emails.</td>
+            </tr>
+            <tr>
+              <td>Strand rendering defaults (same page)</td>
+              <td>You (product team)</td>
+              <td>Default bracelet/bead render calibration for the catalogue.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Local run after files are filled</h3>
+        <pre>npm ci
+cp .env.example .env
+# fill SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (and local JWT/admin keys)
+cp frontend/.env.example frontend/.env.development.local
+# VITE_API_BASE_URL=http://localhost:5050
+npm run env:check
+npm run dev:backend    # API  http://localhost:5050
+npm run dev            # SPA  http://localhost:8080</pre>
+        <p>
+          Admin: <span class="path">http://localhost:8080/admin</span> ·
+          SMTP screen: <span class="path">http://localhost:8080/admin/general-settings</span> ·
+          API health: <span class="path">http://localhost:5050/api/status</span> ·
+          OpenAPI: <span class="path">http://localhost:5050/api/docs</span>.
+        </p>
+        <p>Longer reference in the repo: <span class="path">docs/environment/README.md</span>.</p>
+      </section>
+
+      <section class="panel" data-panel="deployment">
+        <h2>4. Deployment</h2>
+        <p>
+          Full first-time setup on <strong>one Ubuntu VPS</strong>: nginx serves the SPA from
+          <span class="path">/var/www/bino-foundry</span>, proxies <code>/api</code> to Node on
+          <span class="path">127.0.0.1:5050</span>, and the Git repo lives under
+          <span class="path">/opt/bino-foundry</span>. Supabase stays in the cloud.
+        </p>
+        <div class="note">
+          Examples below use hostname <code>binofoundry.builtbyroni.com</code> (30-day handover host).
+          Repo templates still say <code>binofoundry.temukreatif.id</code> — replace that string
+          everywhere when you copy nginx configs. There is <strong>no application cron</strong>;
+          CI runs on push to <code>main</code> only.
+        </div>
+
+        <h3>What you need before starting</h3>
+        <ul class="guide">
+          <li>Ubuntu 22.04 or 24.04 VPS (2 GB RAM recommended; 1 GB needs swap for builds).</li>
+          <li>SSH access (root or sudo).</li>
+          <li>DNS <strong>A record</strong> for your hostname → VPS public IPv4.</li>
+          <li>Supabase Project URL + <code>service_role</code> key (see Configuration).</li>
+          <li>Git clone access to this repository.</li>
+        </ul>
+
+        <h3>Server layout</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Path on VPS</th>
+              <th>Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="path">/opt/bino-foundry</span></td>
+              <td>Git clone, source, <span class="path">.env.production</span>, Node API (not public)</td>
+            </tr>
+            <tr>
+              <td><span class="path">/var/www/bino-foundry</span></td>
+              <td>Published SPA only (synced from <span class="path">frontend/dist</span>)</td>
+            </tr>
+            <tr>
+              <td><span class="path">127.0.0.1:5050</span></td>
+              <td>API process (PM2), proxied at <code>/api</code></td>
+            </tr>
+            <tr>
+              <td><span class="path">deploy/nginx/</span> (in repo)</td>
+              <td>nginx site templates — copy to <span class="path">/etc/nginx/sites-available/</span></td>
+            </tr>
+            <tr>
+              <td><span class="path">deploy/pm2/ecosystem.config.cjs</span></td>
+              <td>PM2 process definition for the API</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Step 1 — Packages, firewall, Node, PM2</h3>
+        <pre>ssh root@YOUR_VPS_IP
+
+apt update && apt upgrade -y
+apt install -y git nginx certbot python3-certbot-nginx ufw
+
+ufw allow OpenSSH
+ufw allow 'Nginx Full'
+ufw --force enable
+
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+node -v   # v20.x
+npm install -g pm2</pre>
+
+        <h3>Step 2 — Clone repo and web root</h3>
+        <pre>mkdir -p /opt
+cd /opt
+git clone YOUR_REPO_URL bino-foundry
+cd bino-foundry
+git checkout main
+
+sudo mkdir -p /var/www/bino-foundry</pre>
+
+        <h3>Step 3 — Backend env (repo root)</h3>
+        <p>
+          File on server: <span class="path">/opt/bino-foundry/.env.production</span>
+          (template in repo: <span class="path">deploy/env/.env.production.example</span>).
+        </p>
+        <pre>cd /opt/bino-foundry
+cp deploy/env/.env.production.example .env.production
+nano .env.production</pre>
+        <pre>APP_ENV=production
+NODE_ENV=production
+PORT=5050
+TRUST_PROXY=1
+
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+PUBLIC_APP_URL=https://binofoundry.builtbyroni.com
+CORS_ORIGINS=https://binofoundry.builtbyroni.com
+
+JWT_SECRET=generate_a_long_random_string_min_32_chars
+SETTINGS_ENCRYPTION_KEY=paste_base64_32_byte_key_here
+ADMIN_API_KEY=choose_a_long_random_secret</pre>
+        <p>Validate: <code>APP_ENV=production npm run env:check</code>.</p>
+
+        <h3>Step 4 — Frontend env (folder <span class="path">frontend/</span>)</h3>
+        <p>
+          File: <span class="path">/opt/bino-foundry/frontend/.env.production</span>.
+          Leave <code>VITE_API_BASE_URL</code> empty for same-origin <code>/api</code> via nginx.
+        </p>
+        <pre>cat > frontend/.env.production &lt;&lt;'EOF'
+VITE_API_BASE_URL=
+VITE_API_PREFIX=/api
+VITE_ADMIN_API_KEY=same_value_as_ADMIN_API_KEY
+EOF</pre>
+
+        <h3>Step 5 — Build (add swap on small VPS)</h3>
+        <pre># One-time 2G swap if the VPS has ≤2 GB RAM
+sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+cd /opt/bino-foundry
+npm ci
+npm run build:all
+# outputs: backend/dist/  and  frontend/dist/</pre>
+        <p>Or: <code>npm run deploy:build</code> (helper that manages PM2/swap when available).</p>
+
+        <h3>Step 6 — Publish SPA to nginx root</h3>
+        <pre>cd /opt/bino-foundry
+sudo npm run deploy:web
+# syncs frontend/dist → /var/www/bino-foundry</pre>
+
+        <h3>Step 7 — Start the API with PM2</h3>
+        <p>Config file in repo: <span class="path">deploy/pm2/ecosystem.config.cjs</span>.</p>
+        <pre>cd /opt/bino-foundry
+pm2 start deploy/pm2/ecosystem.config.cjs --env production
+pm2 save
+pm2 startup
+pm2 status
+pm2 logs bino-foundry-api</pre>
+        <p>Alternative: systemd unit at <span class="path">deploy/systemd/bino-foundry-api.service</span>.</p>
+
+        <h3>Step 8 — nginx (HTTP first)</h3>
+        <p>
+          Templates in repo: <span class="path">deploy/nginx/binofoundry.temukreatif.id.conf</span>
+          (HTTP) and <span class="path">deploy/nginx/binofoundry.temukreatif.id.https.conf</span>
+          (full HTTPS + SPA <code>try_files</code>).
+          Copy, rename, and replace every hostname with yours.
+        </p>
+        <pre>cd /opt/bino-foundry
+# Example: adapt the HTTP template
+sudo cp deploy/nginx/binofoundry.temukreatif.id.conf \
+  /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf
+
+# Edit server_name to binofoundry.builtbyroni.com
+sudo nano /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf
+
+sudo ln -sf /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf \
+  /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx</pre>
+        <p>
+          The HTTP config must include: <code>root /var/www/bino-foundry</code>,
+          <code>location /api/</code> → <code>127.0.0.1:5050</code>, and
+          <code>try_files $uri $uri/ /index.html;</code> for SPA routes.
+        </p>
+
+        <h3>Step 9 — HTTPS (Let’s Encrypt)</h3>
+        <pre>sudo certbot --nginx -d binofoundry.builtbyroni.com
+sudo certbot renew --dry-run</pre>
+        <p>
+          After certbot, prefer installing the repo HTTPS template (with hostname edited) so
+          <code>try_files</code> is not lost on port 443:
+        </p>
+        <pre>sudo cp deploy/nginx/binofoundry.temukreatif.id.https.conf \
+  /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf
+# edit server_name + ssl_certificate paths for your domain
+sudo nginx -t && sudo systemctl reload nginx</pre>
+
+        <h3>Step 10 — Smoke test</h3>
+        <ul class="guide">
+          <li><span class="path">https://binofoundry.builtbyroni.com/</span> — site loads</li>
+          <li><span class="path">https://binofoundry.builtbyroni.com/api/status</span> — JSON health</li>
+          <li><span class="path">https://binofoundry.builtbyroni.com/api/health</span> — ok</li>
+          <li><span class="path">https://binofoundry.builtbyroni.com/admin</span> — admin login</li>
+          <li>Refresh <span class="path">/bracelet</span> — must stay on the app (SPA <code>try_files</code>)</li>
+          <li>Admin → General settings — set SMTP and send a test</li>
+        </ul>
+
+        <h3>Update after a git pull</h3>
+        <pre>cd /opt/bino-foundry
+git pull origin main
+npm ci
+npm run build:all
+sudo npm run deploy:web
+pm2 restart bino-foundry-api</pre>
+        <p>If you change any <code>VITE_*</code> value, rebuild is required — those values are baked into <span class="path">frontend/dist</span>.</p>
+
+        <h3>Other hosting options</h3>
+        <ul class="guide">
+          <li><strong>Vercel SPA + VPS API:</strong> Vercel project root = <span class="path">frontend</span>; set <code>VITE_API_BASE_URL</code> to the API host; set backend <code>CORS_ORIGINS</code> to the Vercel URL.</li>
+          <li><strong>Docker Compose:</strong> fill root <span class="path">.env</span>, then <code>docker compose up -d --build</code>.</li>
+        </ul>
+        <p>Longer copy in the repo: <span class="path">deploy/VPS_SETUP.md</span>, <span class="path">deploy/README.md</span>.</p>
+      </section>
+
+      <section class="panel" data-panel="access">
+        <h2>5. Access</h2>
+        <p>
+          After handover, you should be able to run the product without the original developer.
+          Grant yourself owner access first, verify it, then revoke the developer.
+        </p>
+
+        <h3>GitHub</h3>
+        <ol class="guide">
+          <li>Confirm you own or are admin on the repository (example remote: <code>BinoFoundry/bino-foundry</code>).</li>
+          <li>Keep branches <code>main</code> (release) and <code>dev</code> (ongoing work).</li>
+          <li>Add your deploy keys or GitHub Actions secrets if the VPS pulls privately.</li>
+          <li>After you can clone, push, and see green CI, remove the developer as collaborator.</li>
+        </ol>
+
+        <h3>Supabase</h3>
+        <ol class="guide">
+          <li>You should be <strong>Owner</strong> of the transferred project.</li>
+          <li>Copy the new Project URL and service role key into production <code>.env</code>.</li>
+          <li>Confirm Storage buckets and catalogue images still load in the builders.</li>
+          <li>Remove the developer from the org once the live site uses your project keys.</li>
+        </ol>
+
+        <h3>Application admin</h3>
+        <p>
+          Staff login is application JWT against the <code>users</code> table, not Supabase Auth.
+          Catalogue writes also need <code>ADMIN_API_KEY</code> / <code>VITE_ADMIN_API_KEY</code>.
+        </p>
+        <ol class="guide">
+          <li>Create or promote an admin user you control.</li>
+          <li>Sign in at <code>/admin</code> and save a harmless catalogue change.</li>
+          <li>Rotate <code>ADMIN_API_KEY</code> if it was shared during development; rebuild the SPA if the Vite key is baked in.</li>
+          <li>Disable or delete the developer admin account.</li>
+        </ol>
+
+        <h3>VPS / domain / email</h3>
+        <ul class="guide">
+          <li>SSH user on the VPS, plus DNS for the 30-day host and any future production domain.</li>
+          <li>Let’s Encrypt renewal (certbot timer is enough; no extra app cron).</li>
+          <li>Replace SMTP with your mailbox (see Configuration).</li>
+        </ul>
+        <div class="callout warn">
+          <strong>Revoke last.</strong> Do not remove developer access until GitHub, Supabase, admin
+          login, and a production (or 30-day) site all work with your credentials.
+        </div>
+      </section>
+
+      <section class="panel" data-panel="notes">
+        <h2>7. Development notes</h2>
+        <p>
+          Milestone 1 foundations are signed off. Milestone 2 delivered the contracted builders and
+          admin catalogue, plus a large amount of render/calibration work on <code>dev</code> that is
+          now on <code>main</code>. This is not a finished e-commerce shop.
+        </p>
+
+        <h3>Completed</h3>
+        <ul class="guide">
+          <li>Monorepo: Vite/React SPA, Express API, shared types, SQL migrations, deploy configs.</li>
+          <li>Supabase as Postgres + Storage only; business logic in Express.</li>
+          <li>Sunglasses customiser: frames, lenses, tints, 2D layered preview, clip pipeline.</li>
+          <li>Crystal bracelet builder: libraries, sizing, occupancy, mobile layout, zoom.</li>
+          <li>Admin dashboard: frames, tints, beads/charms, pricing-related settings, media.</li>
+          <li>Application auth (JWT), SMTP settings, site settings, order-related tables exist in migrations.</li>
+          <li>
+            Strand / bead calibration: per-field Customize (render size, occupancy, vertical offset,
+            orientation, layout mode, advanced). Parent calibration is inherited unless a column is customized.
+            Render size may be below 1.0.
+          </li>
+        </ul>
+
+        <h3>Unfinished or out of original polish scope</h3>
+        <ul class="guide">
+          <li>
+            <strong>Pre-built / ready-made bracelets (additional request — not built):</strong>
+            customers should be able to pick a finished bracelet from a catalogue without using the
+            strand builder. Today the customer path is still “build your own” in the bracelet builder.
+            Needs: admin way to publish curated designs, a customer browse/select UI, and checkout
+            wiring for those SKUs. <em>Not started.</em>
+          </li>
+          <li><strong>Full checkout / payment:</strong> Stripe (or similar), webhooks, refunds — not a complete storefront.</li>
+          <li><strong>3D / WebGL:</strong> explicitly out of scope unless the contract is amended.</li>
+          <li><strong>Commerce checklist</strong> in <span class="path">docs/MILESTONE2_COMMERCE_CHECKLIST.md</span> still lists tax, shipping, and payment as TBD.</li>
+          <li><strong>Email:</strong> still on the previous developer SMTP until you replace it in Admin → General settings.</li>
+          <li><strong>Hostnames in repo templates:</strong> nginx files under <span class="path">deploy/nginx/</span> still say temukreatif.id; rename when you freeze production.</li>
+          <li>Further visual polish, marketing pages, and legal copy (terms/privacy) may still need client content.</li>
+        </ul>
+
+        <h3>What to verify after handover</h3>
+        <ol class="guide">
+          <li>Bracelet: change wrist size, add beads, confirm occupancy and preview.</li>
+          <li>Sunglasses: change frame, tint, and lens; confirm clip and price.</li>
+          <li>Admin: edit a bead render size with Customize on one column only; confirm inherit vs override.</li>
+          <li>Auth: register, verify email (after SMTP is yours), reset password.</li>
+          <li>CI: push a trivial commit to <code>dev</code> or a PR into <code>main</code> and wait for green.</li>
+        </ol>
+
+        <h3>Where to read next in the repo</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Topic</th>
+              <th>Path</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Getting started</td>
+              <td><code>docs/setup/GETTING_STARTED.md</code></td>
+            </tr>
+            <tr>
+              <td>Architecture</td>
+              <td><code>docs/architecture/OVERVIEW.md</code></td>
+            </tr>
+            <tr>
+              <td>Environment</td>
+              <td><code>docs/environment/README.md</code></td>
+            </tr>
+            <tr>
+              <td>Deploy</td>
+              <td><code>deploy/README.md</code>, <code>deploy/VPS_SETUP.md</code></td>
+            </tr>
+            <tr>
+              <td>Milestone 1</td>
+              <td><code>docs/MILESTONE1_SIGNOFF.md</code></td>
+            </tr>
+            <tr>
+              <td>Milestone 2</td>
+              <td><code>docs/MILESTONE2_OVERVIEW.md</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="footer">Handover site: items 3, 4, 5, and 7. Item 6 (30-day demo host) is a DNS/VPS task.</p>
+      </section>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
