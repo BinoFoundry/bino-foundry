@@ -154,6 +154,28 @@ export function getAuthUserId(req: Request): string | undefined {
   return req.auth?.scheme === "jwt" ? req.auth.userId : undefined;
 }
 
+/**
+ * Require matching `x-api-key` (ADMIN_API_KEY). Used for private ops endpoints
+ * such as `/health` in staging/production.
+ */
+export function requireAdminApiKey(req: Request, _res: Response, next: NextFunction): void {
+  const adminKey = getEnv().ADMIN_API_KEY?.trim();
+  const providedKey = normalizeApiKey(req);
+
+  if (adminKey && providedKey === adminKey) {
+    req.auth = { scheme: "api-key" };
+    next();
+    return;
+  }
+
+  if (!adminKey && !isProductionLike()) {
+    next();
+    return;
+  }
+
+  next(new UnauthorizedError("Authentication required"));
+}
+
 function normalizeApiKey(req: Request): string | undefined {
   const raw = typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : undefined;
   if (raw?.startsWith("Bearer ")) {

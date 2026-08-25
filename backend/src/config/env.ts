@@ -41,6 +41,17 @@ const envSchema = z
     TRUST_PROXY: z
       .preprocess((v) => v === "1" || v === "true" || v === true, z.boolean())
       .default(false),
+    /**
+     * Swagger UI + `/openapi.json`. Default: on in development/test, off in staging/production.
+     * Set `1`/`true` only for temporary private debugging (still avoid exposing publicly).
+     */
+    ENABLE_API_DOCS: z
+      .preprocess((v) => {
+        if (v === undefined || v === "") return undefined;
+        if (v === "1" || v === "true" || v === true) return true;
+        if (v === "0" || v === "false" || v === false) return false;
+        return undefined;
+      }, z.boolean().optional()),
   })
   .superRefine((data, ctx) => {
     const needsSupabase = data.APP_ENV === "staging" || data.APP_ENV === "production";
@@ -105,6 +116,13 @@ export function getEnv(): BackendEnv {
 export function isProductionLike(): boolean {
   const env = getEnv().APP_ENV;
   return env === "production" || env === "staging";
+}
+
+/** OpenAPI UI/spec — private by default outside local development. */
+export function areApiDocsEnabled(): boolean {
+  const env = getEnv();
+  if (env.ENABLE_API_DOCS !== undefined) return env.ENABLE_API_DOCS;
+  return env.APP_ENV === "development" || env.APP_ENV === "test";
 }
 
 /** Where Express listens. Production/staging default 127.0.0.1 (matches nginx upstream). */

@@ -81,8 +81,8 @@
             </tr>
             <tr>
               <td>6. Development site</td>
-              <td>Move from temukreatif.id to binofoundry.builtbyroni.com for 30 days</td>
-              <td>Operational — DNS / VPS, not this folder</td>
+              <td>A live reference host for ~30 days (your domain / VPS)</td>
+              <td>Operational — use tab 4 to stand up a new VPS if needed</td>
             </tr>
             <tr>
               <td>7. Development notes</td>
@@ -225,12 +225,61 @@
               <td>—</td>
             </tr>
             <tr>
-              <td><span class="path">frontend/.env.development.local</span> etc.</td>
-              <td>Yes for SPA <code>VITE_*</code> (see matrix below)</td>
-              <td><span class="loc fe">Frontend / Vite</span></td>
+              <td><span class="path">frontend/.env.development.local</span></td>
+              <td>Yes — local SPA (<code>npm run dev</code>)</td>
+              <td><span class="loc fe">Frontend / Vite</span> mode <code>development</code></td>
+            </tr>
+            <tr>
+              <td><span class="path">frontend/.env.staging</span></td>
+              <td>Yes — staging SPA build</td>
+              <td>Vite mode <code>staging</code> (<code>npm run build:staging</code>)</td>
+            </tr>
+            <tr>
+              <td>
+                <span class="path">frontend/.env.staging.example</span>
+              </td>
+              <td>Template — copy to <span class="path">frontend/.env.staging</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><span class="path">frontend/.env.production</span></td>
+              <td>
+                <strong>Yes — production SPA build</strong> (<code>VITE_*</code> baked in at
+                <code>npm run build</code> / <code>build:all</code>)
+              </td>
+              <td><span class="loc fe">Frontend / Vite</span> mode <code>production</code></td>
+            </tr>
+            <tr>
+              <td>
+                <span class="path">frontend/.env.production.example</span>
+              </td>
+              <td>
+                Template — copy to <span class="path">frontend/.env.production</span> on the VPS
+                (or set the same keys in the host CI / Vercel env)
+              </td>
+              <td>—</td>
             </tr>
           </tbody>
         </table>
+        <div class="callout">
+          <strong>Two different <code>.env.production</code> files — do not mix them up.</strong>
+          <ul>
+            <li>
+              <span class="path">.env.production</span> (repo <strong>root</strong>) — Express API
+              secrets (<code>SUPABASE_*</code>, <code>JWT_SECRET</code>, <code>ADMIN_API_KEY</code>,
+              <code>CORS_ORIGINS</code>, …). Template:
+              <span class="path">deploy/env/.env.production.example</span>.
+            </li>
+            <li>
+              <span class="path">frontend/.env.production</span> — SPA only
+              (<code>VITE_API_BASE_URL</code>, optional <code>VITE_ADMIN_API_KEY</code>,
+              <code>VITE_API_PREFIX</code>). Template:
+              <span class="path">frontend/.env.production.example</span>.
+              On a single-VPS nginx setup, leave <code>VITE_API_BASE_URL</code> empty so the
+              browser calls same-origin <code>/api</code>.
+            </li>
+          </ul>
+        </div>
         <p>
           Backend search order (later files win; shell exports always win): root
           <span class="path">.env</span> → <span class="path">.env.local</span> →
@@ -607,23 +656,25 @@ npm run dev            # SPA  http://localhost:8080</pre>
       <section class="panel" data-panel="deployment">
         <h2>4. Deployment</h2>
         <p>
-          Full first-time setup on <strong>one Ubuntu VPS</strong>: nginx serves the SPA from
+          This tab is a <strong>first-time deploy onto a new Ubuntu VPS</strong> (not a domain
+          migration). One server runs everything: nginx serves the SPA from
           <span class="path">/var/www/bino-foundry</span>, proxies <code>/api</code> to Node on
           <span class="path">127.0.0.1:5050</span>, and the Git repo lives under
           <span class="path">/opt/bino-foundry</span>. Supabase stays in the cloud.
         </p>
         <div class="note">
-          Examples below use hostname <code>binofoundry.builtbyroni.com</code> (30-day handover host).
-          Repo templates still say <code>binofoundry.temukreatif.id</code> — replace that string
-          everywhere when you copy nginx configs. There is <strong>no application cron</strong>;
-          CI runs on push to <code>main</code> only.
+          Replace every <code>YOUR_DOMAIN</code> below with your real hostname
+          (e.g. <code>shop.example.com</code>). Repo nginx templates may still contain an old
+          example hostname — always edit <code>server_name</code> and certificate paths to match
+          <strong>your</strong> domain. There is <strong>no application cron</strong>; CI runs on
+          push to <code>main</code> only.
         </div>
 
         <h3>What you need before starting</h3>
         <ul class="guide">
-          <li>Ubuntu 22.04 or 24.04 VPS (2 GB RAM recommended; 1 GB needs swap for builds).</li>
+          <li>A <strong>new</strong> Ubuntu 22.04 or 24.04 VPS (2 GB RAM recommended; 1 GB needs swap for builds).</li>
           <li>SSH access (root or sudo).</li>
-          <li>DNS <strong>A record</strong> for your hostname → VPS public IPv4.</li>
+          <li>DNS <strong>A record</strong>: <code>YOUR_DOMAIN</code> → this VPS public IPv4 (propagate before certbot).</li>
           <li>Supabase Project URL + <code>service_role</code> key (see Configuration).</li>
           <li>Git clone access to this repository.</li>
         </ul>
@@ -647,7 +698,7 @@ npm run dev            # SPA  http://localhost:8080</pre>
             </tr>
             <tr>
               <td><span class="path">127.0.0.1:5050</span></td>
-              <td>API process (PM2), proxied at <code>/api</code></td>
+              <td>API process (PM2 or systemd), proxied at <code>/api</code></td>
             </tr>
             <tr>
               <td><span class="path">deploy/nginx/</span> (in repo)</td>
@@ -655,7 +706,11 @@ npm run dev            # SPA  http://localhost:8080</pre>
             </tr>
             <tr>
               <td><span class="path">deploy/pm2/ecosystem.config.cjs</span></td>
-              <td>PM2 process definition for the API</td>
+              <td>Recommended: PM2 process definition for the API</td>
+            </tr>
+            <tr>
+              <td><span class="path">deploy/systemd/bino-foundry-api.service</span></td>
+              <td>Optional alternative to PM2 (systemd unit)</td>
             </tr>
           </tbody>
         </table>
@@ -700,8 +755,8 @@ TRUST_PROXY=1
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
-PUBLIC_APP_URL=https://binofoundry.builtbyroni.com
-CORS_ORIGINS=https://binofoundry.builtbyroni.com
+PUBLIC_APP_URL=https://YOUR_DOMAIN
+CORS_ORIGINS=https://YOUR_DOMAIN
 
 JWT_SECRET=generate_a_long_random_string_min_32_chars
 SETTINGS_ENCRYPTION_KEY=paste_base64_32_byte_key_here
@@ -719,7 +774,11 @@ VITE_API_PREFIX=/api
 VITE_ADMIN_API_KEY=same_value_as_ADMIN_API_KEY
 EOF</pre>
 
-        <h3>Step 5 — Build (add swap on small VPS)</h3>
+        <h3>Step 5 — Build</h3>
+        <p>
+          Small VPS builds often fail with exit <code>137</code> (out of memory). Add swap once,
+          then build.
+        </p>
         <pre># One-time 2G swap if the VPS has ≤2 GB RAM
 sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
 sudo chmod 600 /swapfile
@@ -730,14 +789,25 @@ cd /opt/bino-foundry
 npm ci
 npm run build:all
 # outputs: backend/dist/  and  frontend/dist/</pre>
-        <p>Or: <code>npm run deploy:build</code> (helper that manages PM2/swap when available).</p>
+        <div class="callout">
+          <strong><code>npm run deploy:build</code> — optional helper.</strong>
+          Same outcome as <code>npm ci</code> + <code>npm run build:all</code>, plus extras when
+          available on the VPS:
+          <ul>
+            <li>Creates a temporary 2G swapfile if none exists (needs root).</li>
+            <li>If PM2 already runs <code>bino-foundry-api</code>, stops it during the Vite build
+              to free RAM, then restarts it afterward.</li>
+          </ul>
+          Prefer this on a small VPS after the first deploy. For a brand-new VPS (API not running
+          yet), <code>npm run build:all</code> is enough once swap exists.
+        </div>
 
         <h3>Step 6 — Publish SPA to nginx root</h3>
         <pre>cd /opt/bino-foundry
 sudo npm run deploy:web
 # syncs frontend/dist → /var/www/bino-foundry</pre>
 
-        <h3>Step 7 — Start the API with PM2</h3>
+        <h3>Step 7 — Start the API (PM2 recommended)</h3>
         <p>Config file in repo: <span class="path">deploy/pm2/ecosystem.config.cjs</span>.</p>
         <pre>cd /opt/bino-foundry
 pm2 start deploy/pm2/ecosystem.config.cjs --env production
@@ -745,51 +815,69 @@ pm2 save
 pm2 startup
 pm2 status
 pm2 logs bino-foundry-api</pre>
-        <p>Alternative: systemd unit at <span class="path">deploy/systemd/bino-foundry-api.service</span>.</p>
+        <div class="callout">
+          <strong>Alternative: systemd</strong>
+          (<span class="path">deploy/systemd/bino-foundry-api.service</span>).
+          Use this if you prefer OS-level process management instead of PM2. The unit runs
+          <code>node backend/dist/server.js</code> from <span class="path">/opt/bino-foundry</span>,
+          loads <span class="path">.env.production</span>, and restarts on failure.
+          <pre>sudo cp deploy/systemd/bino-foundry-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now bino-foundry-api
+sudo systemctl status bino-foundry-api</pre>
+          Do <strong>not</strong> run PM2 and systemd for the same API at once (port conflict).
+          Pick one. This guide’s later steps assume PM2 unless you switched.
+        </div>
 
         <h3>Step 8 — nginx (HTTP first)</h3>
         <p>
-          Templates in repo: <span class="path">deploy/nginx/binofoundry.temukreatif.id.conf</span>
-          (HTTP) and <span class="path">deploy/nginx/binofoundry.temukreatif.id.https.conf</span>
-          (full HTTPS + SPA <code>try_files</code>).
-          Copy, rename, and replace every hostname with yours.
+          Vendor-neutral starter: <span class="path">deploy/nginx/bino-foundry.conf</span>.
+          Or copy a full example from <span class="path">deploy/nginx/</span> and replace every
+          hostname with <code>YOUR_DOMAIN</code>. The site must include:
+          <code>root /var/www/bino-foundry</code>,
+          <code>location /api/</code> → <code>127.0.0.1:5050</code>, and
+          <code>try_files $uri $uri/ /index.html;</code> for SPA routes
+          (<code>/bracelet</code>, <code>/admin</code>, …).
         </p>
         <pre>cd /opt/bino-foundry
-# Example: adapt the HTTP template
-sudo cp deploy/nginx/binofoundry.temukreatif.id.conf \
-  /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf
+sudo cp deploy/nginx/bino-foundry.conf \
+  /etc/nginx/sites-available/YOUR_DOMAIN.conf
 
-# Edit server_name to binofoundry.builtbyroni.com
-sudo nano /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf
+# Edit server_name to YOUR_DOMAIN
+sudo nano /etc/nginx/sites-available/YOUR_DOMAIN.conf
 
-sudo ln -sf /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf \
+sudo ln -sf /etc/nginx/sites-available/YOUR_DOMAIN.conf \
   /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx</pre>
-        <p>
-          The HTTP config must include: <code>root /var/www/bino-foundry</code>,
-          <code>location /api/</code> → <code>127.0.0.1:5050</code>, and
-          <code>try_files $uri $uri/ /index.html;</code> for SPA routes.
-        </p>
 
         <h3>Step 9 — HTTPS (Let’s Encrypt)</h3>
-        <pre>sudo certbot --nginx -d binofoundry.builtbyroni.com
+        <pre>sudo certbot --nginx -d YOUR_DOMAIN
 sudo certbot renew --dry-run</pre>
-        <p>
-          After certbot, prefer installing the repo HTTPS template (with hostname edited) so
-          <code>try_files</code> is not lost on port 443:
-        </p>
-        <pre>sudo cp deploy/nginx/binofoundry.temukreatif.id.https.conf \
-  /etc/nginx/sites-available/binofoundry.builtbyroni.com.conf
-# edit server_name + ssl_certificate paths for your domain
+        <div class="callout warn">
+          <strong>After certbot — re-apply the repo HTTPS template.</strong>
+          Certbot often rewrites the nginx site and can drop SPA
+          <code>try_files</code> on port 443. If that happens, refreshing
+          <code>/bracelet</code> returns nginx 404 instead of the React app.
+          Prefer installing the repo HTTPS example (edit hostname + certificate paths to
+          <code>YOUR_DOMAIN</code>), then reload nginx:
+          <pre>sudo cp deploy/nginx/binofoundry.temukreatif.id.https.conf \
+  /etc/nginx/sites-available/YOUR_DOMAIN.conf
+# replace every old hostname with YOUR_DOMAIN
+# ssl paths become /etc/letsencrypt/live/YOUR_DOMAIN/...
+sudo nano /etc/nginx/sites-available/YOUR_DOMAIN.conf
 sudo nginx -t && sudo systemctl reload nginx</pre>
+          Keep: HTTP→HTTPS redirect, <code>/api/</code> proxy, and
+          <code>try_files $uri $uri/ /index.html;</code> on 443.
+        </div>
 
         <h3>Step 10 — Smoke test</h3>
         <ul class="guide">
-          <li><span class="path">https://binofoundry.builtbyroni.com/</span> — site loads</li>
-          <li><span class="path">https://binofoundry.builtbyroni.com/api/status</span> — JSON health</li>
-          <li><span class="path">https://binofoundry.builtbyroni.com/api/health</span> — ok</li>
-          <li><span class="path">https://binofoundry.builtbyroni.com/admin</span> — admin login</li>
+          <li><span class="path">https://YOUR_DOMAIN/</span> — site loads</li>
+          <li><span class="path">https://YOUR_DOMAIN/api/status</span> — public liveness JSON</li>
+          <li><span class="path">/api/health</span> — detailed checks; requires <code>x-api-key</code> in production</li>
+          <li><span class="path">/api/docs</span> — Swagger; <strong>disabled</strong> in production (local only unless <code>ENABLE_API_DOCS=1</code>)</li>
+          <li><span class="path">https://YOUR_DOMAIN/admin</span> — admin login</li>
           <li>Refresh <span class="path">/bracelet</span> — must stay on the app (SPA <code>try_files</code>)</li>
           <li>Admin → General settings — set SMTP and send a test</li>
         </ul>
@@ -797,17 +885,12 @@ sudo nginx -t && sudo systemctl reload nginx</pre>
         <h3>Update after a git pull</h3>
         <pre>cd /opt/bino-foundry
 git pull origin main
-npm ci
-npm run build:all
+npm run deploy:build   # or: npm ci && npm run build:all
 sudo npm run deploy:web
-pm2 restart bino-foundry-api</pre>
+pm2 restart bino-foundry-api
+# if using systemd instead: sudo systemctl restart bino-foundry-api</pre>
         <p>If you change any <code>VITE_*</code> value, rebuild is required — those values are baked into <span class="path">frontend/dist</span>.</p>
 
-        <h3>Other hosting options</h3>
-        <ul class="guide">
-          <li><strong>Vercel SPA + VPS API:</strong> Vercel project root = <span class="path">frontend</span>; set <code>VITE_API_BASE_URL</code> to the API host; set backend <code>CORS_ORIGINS</code> to the Vercel URL.</li>
-          <li><strong>Docker Compose:</strong> fill root <span class="path">.env</span>, then <code>docker compose up -d --build</code>.</li>
-        </ul>
         <p>Longer copy in the repo: <span class="path">deploy/VPS_SETUP.md</span>, <span class="path">deploy/README.md</span>.</p>
       </section>
 
@@ -848,7 +931,7 @@ pm2 restart bino-foundry-api</pre>
 
         <h3>VPS / domain / email</h3>
         <ul class="guide">
-          <li>SSH user on the VPS, plus DNS for the 30-day host and any future production domain.</li>
+          <li>SSH on the production VPS, plus DNS A record for your live hostname.</li>
           <li>Let’s Encrypt renewal (certbot timer is enough; no extra app cron).</li>
           <li>Replace SMTP with your mailbox (see Configuration).</li>
         </ul>
@@ -873,7 +956,11 @@ pm2 restart bino-foundry-api</pre>
           <li>Sunglasses customiser: frames, lenses, tints, 2D layered preview, clip pipeline.</li>
           <li>Crystal bracelet builder: libraries, sizing, occupancy, mobile layout, zoom.</li>
           <li>Admin dashboard: frames, tints, beads/charms, pricing-related settings, media.</li>
-          <li>Application auth (JWT), SMTP settings, site settings, order-related tables exist in migrations.</li>
+          <li>
+            Application auth (JWT), SMTP settings, site settings, and the <strong>order request</strong>
+            flow (customer submit → admin Orders UI, snapshots). Payment gateway (Stripe etc.) is
+            <em>not</em> included — see unfinished below.
+          </li>
           <li>
             Strand / bead calibration: per-field Customize (render size, occupancy, vertical offset,
             orientation, layout mode, advanced). Parent calibration is inherited unless a column is customized.
@@ -890,11 +977,14 @@ pm2 restart bino-foundry-api</pre>
             Needs: admin way to publish curated designs, a customer browse/select UI, and checkout
             wiring for those SKUs. <em>Not started.</em>
           </li>
-          <li><strong>Full checkout / payment:</strong> Stripe (or similar), webhooks, refunds — not a complete storefront.</li>
+          <li>
+            <strong>Payment / paid checkout:</strong> order <em>requests</em> already work in-app
+            (no card charge). For remaining commerce gaps, open
+            <span class="path">docs/MILESTONE2_COMMERCE_CHECKLIST.md</span>.
+          </li>
           <li><strong>3D / WebGL:</strong> explicitly out of scope unless the contract is amended.</li>
-          <li><strong>Commerce checklist</strong> in <span class="path">docs/MILESTONE2_COMMERCE_CHECKLIST.md</span> still lists tax, shipping, and payment as TBD.</li>
           <li><strong>Email:</strong> still on the previous developer SMTP until you replace it in Admin → General settings.</li>
-          <li><strong>Hostnames in repo templates:</strong> nginx files under <span class="path">deploy/nginx/</span> still say temukreatif.id; rename when you freeze production.</li>
+          <li><strong>Hostnames in repo templates:</strong> some files under <span class="path">deploy/nginx/</span> still use an old example hostname; always replace with <code>YOUR_DOMAIN</code> on a new VPS.</li>
           <li>Further visual polish, marketing pages, and legal copy (terms/privacy) may still need client content.</li>
         </ul>
 

@@ -1,9 +1,10 @@
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 
-import { getEnv } from "../config/env.js";
+import { getEnv, isProductionLike } from "../config/env.js";
 import { sendJson } from "../lib/http-response.js";
 import { verifySupabaseCatalogReady } from "../infra/supabase/verify-catalog.js";
 import { getSupabaseServiceRole } from "../infra/supabase/adminClient.js";
+import { requireAdminApiKey } from "../middleware/auth-mutations.js";
 
 async function checkDatabase(): Promise<{ ok: boolean; message?: string }> {
   try {
@@ -29,9 +30,26 @@ async function checkStorage(): Promise<{ ok: boolean; message?: string }> {
   }
 }
 
+async function healthHandler(_req: Request, res: Response): Promise<void> {
+  const [db, storage] = await Promise.all([checkDatabase(), checkStorage()]);
+  const ok = db.ok && storage.ok;
+  sendJson(
+    res,
+    {
+      status: ok ? "ok" : "degraded",
+      checks: {
+        database: db,
+        storage,
+      },
+    },
+    ok ? 200 : 503,
+  );
+}
+
 export function createMonitoringRoutes(): Router {
   const router = Router();
 
+  /** Public liveness — no secrets, safe for uptime checks. */
   router.get("/status", (_req, res) => {
     const env = getEnv();
     sendJson(res, {
@@ -42,21 +60,11 @@ export function createMonitoringRoutes(): Router {
     });
   });
 
-  router.get("/health", async (_req, res) => {
-    const [db, storage] = await Promise.all([checkDatabase(), checkStorage()]);
-    const ok = db.ok && storage.ok;
-    sendJson(
-      res,
-      {
-        status: ok ? "ok" : "degraded",
-        checks: {
-          database: db,
-          storage,
-        },
-      },
-      ok ? 200 : 503,
-    );
-  });
+  /** Detailed checks — private in staging/production (requires x-api-key). */
+  const healthStack: Array<(req: Request, res: Response, next: NextFunction) => void | Promise<void>> =
+    isProductionLike() ? [requireAdminApiKey, healthHandler] : [healthHandler];
+
+  router.get("/health", ...healthStack);
 
   return router;
 }

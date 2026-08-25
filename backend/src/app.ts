@@ -1,7 +1,7 @@
 import cors from "cors";
 import express, { type Application } from "express";
 
-import { corsOriginAllowlist, getEnv } from "./config/env.js";
+import { areApiDocsEnabled, corsOriginAllowlist, getEnv } from "./config/env.js";
 import { NotFoundError } from "./lib/errors.js";
 import { createErrorHandler } from "./middleware/error-handler.js";
 import { logger } from "./lib/logger.js";
@@ -44,6 +44,7 @@ function buildCorsConfiguration(): cors.CorsOptions {
 export function createApplication(): Application {
   const app = express();
   const { TRUST_PROXY } = getEnv();
+  const docsEnabled = areApiDocsEnabled();
 
   app.disable("x-powered-by");
   if (TRUST_PROXY) {
@@ -58,24 +59,29 @@ export function createApplication(): Application {
 
   const monitoring = createMonitoringRoutes();
   const catalogue = createCatalogRoutes();
-  const docs = createDocsRoutes();
+  const docs = docsEnabled ? createDocsRoutes() : null;
 
   for (const base of API_PREFIXES) {
-    app.get(`${base}/openapi.json`, (_req, res) => {
-      res.json(openApiDocument);
-    });
+    if (docs) {
+      app.get(`${base}/openapi.json`, (_req, res) => {
+        res.json(openApiDocument);
+      });
+      app.use(`${base}/docs`, docs);
+    }
     app.use(`${base}/auth`, createAuthRoutes());
     app.use(`${base}/users`, createUsersRoutes());
     app.use(base, monitoring);
-    app.use(`${base}/docs`, docs);
     app.use(base, catalogue);
   }
 
   app.get("/", (_req, res) => {
-    const links = API_PREFIXES.map(
-      (p) =>
-        `<a href="${p}/status">${p}/status</a> · <a href="${p}/docs">${p}/docs</a> (Swagger)`,
-    ).join("<br/>");
+    const links = API_PREFIXES.map((p) => {
+      const parts = [`<a href="${p}/status">${p}/status</a>`];
+      if (docsEnabled) {
+        parts.push(`<a href="${p}/docs">${p}/docs</a> (Swagger)`);
+      }
+      return parts.join(" · ");
+    }).join("<br/>");
     res.send(
       `Bino Foundry Backend API — ${links}<br/><small>Set ADMIN_API_KEY to require <code>x-api-key</code> on mutations.</small>`,
     );

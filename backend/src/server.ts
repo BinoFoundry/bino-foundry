@@ -4,7 +4,7 @@ import { createApplication } from "./app.js";
 import { configureCloudinary } from "./infra/cloudinary.js";
 import { verifySupabaseCatalogReady } from "./infra/supabase/verify-catalog.js";
 import { strandRenderMigrationService } from "./modules/strand-render/strand-render-migration.service.js";
-import { getEnv, resolveListenHost } from "./config/env.js";
+import { getEnv, areApiDocsEnabled, resolveListenHost } from "./config/env.js";
 
 async function bootstrap(): Promise<void> {
   configureCloudinary();
@@ -20,8 +20,12 @@ async function bootstrap(): Promise<void> {
     const where = host ? `${host}:${port}` : `port ${port}`;
     console.log(`Bino Foundry API listening on ${where} (${APP_ENV})`);
     console.log(`Catalogue prefixes: /api · /api/v1`);
-    console.log(`Health: /api/status · /api/health`);
-    console.log(`Docs:   /api/docs (Swagger UI) · /api/openapi.json`);
+    console.log(`Health: /api/status (public) · /api/health (keyed in staging/production)`);
+    if (areApiDocsEnabled()) {
+      console.log(`Docs:   /api/docs (Swagger UI) · /api/openapi.json`);
+    } else {
+      console.log("Docs:   disabled (set ENABLE_API_DOCS=1 to enable temporarily)");
+    }
     if (APP_ENV === "development") {
       console.log("Mutations guarded when ADMIN_API_KEY is set.");
     }

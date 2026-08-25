@@ -4,8 +4,8 @@ import swaggerUi from "swagger-ui-express";
 import { openApiDocument } from "../openapi/document.js";
 
 /**
- * OpenAPI spec + Swagger UI (no API key required).
- * Mount at `/api/docs` and `/api/v1/docs` via app.ts.
+ * OpenAPI spec + Swagger UI.
+ * Mounted only when `areApiDocsEnabled()` is true (local by default; off in staging/production).
  */
 export function createDocsRoutes(): Router {
   const router = Router();

@@ -1,6 +1,10 @@
 # Swagger / OpenAPI
 
-Interactive API documentation is served by the backend (no separate doc server).
+Swagger UI is available in **local development** only by default (`APP_ENV=development`).
+In **staging/production** `/api/docs` and `/api/openapi.json` are **disabled** (404).
+Override only for temporary debugging with `ENABLE_API_DOCS=1` — do not leave that on a public host.
+
+`/api/status` stays public (liveness). `/api/health` requires `x-api-key` in staging/production.
 
 ## URLs (local dev)
 
@@ -10,7 +14,7 @@ Interactive API documentation is served by the backend (no separate doc server).
 | **OpenAPI JSON** | http://localhost:5050/api/openapi.json |
 | Versioned prefix | http://localhost:5050/api/v1/docs · `/api/v1/openapi.json` |
 
-Swagger UI is **public** (no key required to view). Use **Authorize** to set `x-api-key` for mutation requests.
+In local dev, Swagger UI needs no key to **view**. Use **Authorize** to set `x-api-key` for mutation requests.
 
 ## Tags (spec groups)
 
