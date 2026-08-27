@@ -92,15 +92,29 @@ if (errors.length) {
 }
 
 // Backend Zod parse via compiled path — run typecheck import
+// Run tsx's own entry with this Node binary rather than going through `npx`.
+// On Windows `npx` resolves to npx.cmd, which spawnSync rejects with ENOENT
+// (no extension) or EINVAL (Node >= 20 refuses .cmd without a shell) — and
+// `shell: true` would mangle the quotes and semicolons in the inline script.
+const tsxCli = path.join(ROOT, "node_modules", "tsx", "dist", "cli.mjs");
 const result = spawnSync(
-  "npx",
-  ["tsx", "-e", "import './backend/src/config/load-env.ts'; import { getEnv } from './backend/src/config/env.ts'; console.log(JSON.stringify(getEnv()));"],
+  process.execPath,
+  [tsxCli, "-e", "import './backend/src/config/load-env.ts'; import { getEnv } from './backend/src/config/env.ts'; console.log(JSON.stringify(getEnv()));"],
   { cwd: ROOT, encoding: "utf8", env: { ...process.env, APP_ENV: appEnv } },
 );
 
+if (result.error) {
+  // Spawn itself failed: status and stderr are null, so the check below would
+  // print "undefined" and hide the real cause.
+  console.error("\nCould not run the backend env schema check:");
+  console.error(result.error.message);
+  if (!fs.existsSync(tsxCli)) console.error(`tsx not found at ${tsxCli} — run \`npm ci\` first.`);
+  process.exit(1);
+}
+
 if (result.status !== 0) {
   console.error("\nBackend env schema validation failed:");
-  console.error(result.stderr || result.stdout);
+  console.error(result.stderr || result.stdout || `${npxBin} exited with status ${result.status}`);
   process.exit(1);
 }
 
