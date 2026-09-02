@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 
 import { AnnouncementBar } from "./AnnouncementBar";
+import { BuilderSubNav } from "./BuilderSubNav";
 import { GlobalHeader } from "./GlobalHeader";
 import type { AppModule } from "./types";
 
@@ -15,6 +16,7 @@ export function AppShell({ children }: AppShellProps) {
     <div className="surface-page flex h-[100dvh] flex-col overflow-hidden">
       <AnnouncementBar />
       <GlobalHeader />
+      <BuilderSubNav />
       <main className="layout-main relative min-h-0 flex-1 overflow-hidden">{children}</main>
     </div>
   );

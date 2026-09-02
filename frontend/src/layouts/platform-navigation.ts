@@ -14,6 +14,8 @@ export type PlatformArea = "storefront" | "account" | "admin";
 
 export interface NavLinkItem {
   id: string;
+  /** Renders as the active item without matching the SPA route (storefront links). */
+  current?: boolean;
   label: string;
   href: string;
   icon?: LucideIcon;
@@ -29,9 +31,12 @@ export interface NavLinkItem {
  * no way back to the shop.
  */
 export const STOREFRONT_NAV: NavLinkItem[] = [
-  // Title Case, matching the storefront's own nav labels exactly.
+  // The storefront's own nav, reproduced exactly and in the same order, so the
+  // header does not change when a customer crosses into the builder. "Design
+  // Your Own" is the entry that brought them here, so it renders as active.
   { id: "story", label: "Our Story", href: "/#story" },
   { id: "shop", label: "Shop", href: "/shop" },
+  { id: "design", label: "Design Your Own", href: "/design", current: true },
   { id: "services", label: "Services", href: "/services" },
 ];
 

@@ -40,27 +40,22 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
       {/* px-12 / gap-10 mirror the storefront nav: 48px page padding and 40px
           between the wordmark and the first link. */}
       <div className="layout-header flex items-center gap-3 px-4 py-3 sm:gap-10 sm:px-12 sm:py-4">
-        {/* New Chapter is the brand a customer recognises; Bino Foundry is the
-            tech arm powering the builder, credited beneath. A plain <a> rather
-            than a Link — "/" leaves the SPA for the storefront. */}
-        <a href="/" className="shrink-0 leading-tight">
-          {/* 22px/600 matches .nav-logo on the storefront exactly, so the name
-              reads the same size on both halves of the site. Inline, because
-              .type-feature sets font-size and weight from CSS variables and
-              beats the utility classes. */}
-          <span
-            className="type-feature block whitespace-nowrap text-foreground transition-colors hover:text-primary"
-            style={{ fontSize: "22px", fontWeight: 600 }}
-          >
-            New Chapter
-          </span>
-          <span className="hidden whitespace-nowrap text-[11px] italic text-muted-foreground sm:block">
-            powered by <span className="text-primary">Bino Foundry</span>
-          </span>
+        {/* Single-line wordmark, as on the storefront. The Bino Foundry credit
+            moved to BuilderSubNav so this header stays a faithful copy — a
+            customer crossing from the shop shouldn't see it change at all.
+            22px/600 matches .nav-logo; set inline because .type-feature drives
+            font-size and weight from CSS variables and beats the utilities. */}
+        <a
+          href="/"
+          className="type-feature shrink-0 whitespace-nowrap text-foreground transition-colors hover:text-primary"
+          style={{ fontSize: "22px", fontWeight: 600 }}
+        >
+          New Chapter
         </a>
 
-        {/* Left-aligned beside the wordmark, as on the storefront — centring it
-            was the main reason the header read as a different site. */}
+        {/* The storefront's nav, reproduced — same links, same order, with
+            "Design Your Own" active because that's what brought them here.
+            Builder-specific navigation lives in BuilderSubNav below. */}
         <nav
           className="hidden min-w-0 flex-1 items-center justify-start gap-[18px] lg:flex"
           aria-label="Main"
@@ -69,49 +64,34 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
             <a
               key={item.id}
               href={item.href}
+              aria-current={item.current ? "page" : undefined}
               // 13.5px / .04em tracking matches the storefront's .nav-links a.
-              className="rounded-md px-1.5 py-2 text-[13.5px] tracking-[0.04em] text-muted-foreground transition-colors hover:text-foreground"
+              className={cn(
+                "rounded-md px-1.5 py-2 text-[13.5px] tracking-[0.04em] transition-colors hover:text-foreground",
+                item.current ? "font-medium text-foreground" : "text-muted-foreground",
+              )}
             >
               {item.label}
             </a>
-          ))}
-          <span aria-hidden="true" className="mx-1 h-4 w-px bg-border" />
-          {PRIMARY_NAV.map((item) => (
-            <PrimaryNavLink
-              key={item.id}
-              item={item}
-              pathname={location.pathname}
-              search={location.search}
-            />
           ))}
         </nav>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {isAdmin ? <AdminMenu pathname={location.pathname} search={location.search} /> : null}
 
+          {/* Signed-in customers get their account menu here; the "Sign in"
+              prompt lives in BuilderSubNav instead, so a signed-out visitor
+              sees exactly the storefront header. */}
           {user ? (
             <AccountMenu
               pathname={location.pathname}
               onSignOut={() => void signOut()}
             />
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="hidden gap-1.5 text-muted-foreground sm:inline-flex"
-              onClick={() => openAuth({ mode: "sign-in" })}
-            >
-              Sign in
-            </Button>
-          )}
+          ) : null}
 
-          {/* The storefront's own DM-to-order button, repeated here so the
-              right-hand corner matches across the crossing. Values copied from
-              the storefront's `.ig-btn` rule rather than this app's tokens.
-              Replaces a Cart button that only raised a "coming soon" toast when
-              signed out; signed-in users still reach orders via the account
-              menu, so nothing is lost. */}
+          {/* The storefront's own DM-to-order button. Values copied from its
+              `.ig-btn` rule rather than this app's tokens, so the two can't
+              drift apart. */}
           <a
             href={STOREFRONT_DM_URL}
             target="_blank"
@@ -229,34 +209,6 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
         </div>
       ) : null}
     </header>
-  );
-}
-
-function PrimaryNavLink({
-  item,
-  pathname,
-  search,
-}: {
-  item: NavLinkItem;
-  pathname: string;
-  search: string;
-}) {
-  const active = isNavLinkActive(item, pathname, search);
-
-  return (
-    <Link
-      to={item.href}
-      // Matches the storefront's .nav-links: 13.5px, .04em tracking, and an
-      // active state that darkens and bolds rather than filling a pill. The
-      // pill was the heaviest visual difference between the two headers.
-      className={cn(
-        "rounded-md px-1.5 py-2 text-[13.5px] tracking-[0.04em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
-      )}
-      aria-current={active ? "page" : undefined}
-    >
-      {item.label}
-    </Link>
   );
 }
 
