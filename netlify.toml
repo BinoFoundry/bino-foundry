@@ -12,6 +12,9 @@
   # gained in 22. On 20 every database route failed with
   # "Node.js 20 detected without native WebSocket support".
   NODE_VERSION = "22"
+  # NODE_VERSION only sets the *build* runtime. Functions run on their own
+  # Lambda runtime, which stayed on 20 and kept failing, so pin it too.
+  AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"
   # The app needs NODE_ENV=production at runtime, but npm reads the same
   # variable at install time and skips devDependencies — which is where
   # typescript and vite live, so the build died with `tsc: not found`.
