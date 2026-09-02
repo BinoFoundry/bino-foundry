@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 import { getEnv } from "../../config/env.js";
 
@@ -18,6 +19,13 @@ export function getSupabaseServiceRole(): SupabaseClient {
     }
     singleton = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
+      // supabase-js constructs a Realtime client eagerly even though this
+      // backend only makes REST calls. Node gained a global WebSocket in 22, so
+      // on anything older that constructor throws and every database route
+      // 500s — which is exactly what Netlify Functions did on Node 20.
+      // Supplying a transport satisfies it on any runtime and costs nothing,
+      // because no channel is ever subscribed.
+      realtime: { transport: WebSocket as unknown as never },
     });
   }
 
