@@ -20,8 +20,8 @@ import {
   ACCOUNT_MENU,
   ADMIN_MENU,
   PRIMARY_NAV,
+  STOREFRONT_NAV,
   isNavLinkActive,
-  logoHref,
   type NavLinkItem,
 } from "./platform-navigation";
 
@@ -39,17 +39,32 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
   return (
     <header className={cn("shrink-0 border-b border-border/60 bg-background/92 backdrop-blur-sm", className)}>
       <div className="layout-header flex items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
-        <Link
-          to={logoHref(Boolean(user), isAdmin)}
-          className="type-feature shrink-0 whitespace-nowrap text-foreground transition-colors hover:text-primary sm:text-h2"
-        >
-          <span className="text-primary">Bino</span> Foundry
-        </Link>
+        {/* New Chapter is the brand a customer recognises; Bino Foundry is the
+            tech arm powering the builder, credited beneath. A plain <a> rather
+            than a Link — "/" leaves the SPA for the storefront. */}
+        <a href="/" className="shrink-0 leading-tight">
+          <span className="type-feature block whitespace-nowrap text-foreground transition-colors hover:text-primary sm:text-h2">
+            New Chapter
+          </span>
+          <span className="hidden whitespace-nowrap text-[11px] text-muted-foreground sm:block">
+            powered by <span className="text-primary">Bino Foundry</span>
+          </span>
+        </a>
 
         <nav
           className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
           aria-label="Main"
         >
+          {STOREFRONT_NAV.map((item) => (
+            <a
+              key={item.id}
+              href={item.href}
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {item.label}
+            </a>
+          ))}
+          <span aria-hidden="true" className="mx-1 h-4 w-px bg-border" />
           {PRIMARY_NAV.map((item) => (
             <PrimaryNavLink
               key={item.id}
@@ -76,7 +91,7 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
               className="hidden gap-1.5 text-muted-foreground sm:inline-flex"
               onClick={() => openAuth({ mode: "sign-in" })}
             >
-              Login
+              Sign in
             </Button>
           )}
 
@@ -121,6 +136,17 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
       {mobileOpen ? (
         <div className="motion-safe-animate border-t border-border bg-background/95 px-2 py-2 backdrop-blur-sm lg:hidden">
           <nav className="flex flex-col gap-1" aria-label="Mobile">
+            {STOREFRONT_NAV.map((item) => (
+              <a
+                key={item.id}
+                href={item.href}
+                onClick={closeMobile}
+                className="type-nav rounded-md px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                {item.label}
+              </a>
+            ))}
+            <span aria-hidden="true" className="my-1 h-px bg-border" />
             {PRIMARY_NAV.map((item) => (
               <MobileNavLink
                 key={item.id}
@@ -166,7 +192,7 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
                     void signOut();
                   }}
                 >
-                  Logout
+                  Sign out
                 </button>
               </>
             ) : (
@@ -178,7 +204,7 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
                   openAuth({ mode: "sign-in" });
                 }}
               >
-                Login
+                Sign in
               </button>
             )}
           </nav>
@@ -329,7 +355,7 @@ function AccountMenu({
           );
         })}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onSignOut}>Logout</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onSignOut}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

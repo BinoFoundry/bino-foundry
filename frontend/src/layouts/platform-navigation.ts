@@ -20,6 +20,20 @@ export interface NavLinkItem {
   matchPrefix?: string;
 }
 
+/**
+ * Links back out to the New Chapter storefront that hosts this builder.
+ *
+ * Plain hrefs, never react-router `Link`s — these leave the SPA. The builder is
+ * served under /design on thenewchapterstudio.com, so a root-relative href
+ * lands on the storefront. Without them a customer who reaches the builder has
+ * no way back to the shop.
+ */
+export const STOREFRONT_NAV: NavLinkItem[] = [
+  { id: "story", label: "Our story", href: "/#story" },
+  { id: "shop", label: "Shop", href: "/shop" },
+  { id: "services", label: "Services", href: "/services" },
+];
+
 /** Always visible primary navigation in the global header. */
 export const PRIMARY_NAV: NavLinkItem[] = [
   { id: "bracelet", label: "Bracelet Builder", href: "/bracelet", icon: Gem, matchPrefix: "/bracelet" },
