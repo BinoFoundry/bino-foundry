@@ -37,7 +37,9 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
 
   return (
     <header className={cn("shrink-0 border-b border-border/60 bg-background/92 backdrop-blur-sm", className)}>
-      <div className="layout-header flex items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
+      {/* px-12 / gap-10 mirror the storefront nav: 48px page padding and 40px
+          between the wordmark and the first link. */}
+      <div className="layout-header flex items-center gap-3 px-4 py-3 sm:gap-10 sm:px-12 sm:py-4">
         {/* New Chapter is the brand a customer recognises; Bino Foundry is the
             tech arm powering the builder, credited beneath. A plain <a> rather
             than a Link — "/" leaves the SPA for the storefront. */}
@@ -57,15 +59,18 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
           </span>
         </a>
 
+        {/* Left-aligned beside the wordmark, as on the storefront — centring it
+            was the main reason the header read as a different site. */}
         <nav
-          className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
+          className="hidden min-w-0 flex-1 items-center justify-start gap-[18px] lg:flex"
           aria-label="Main"
         >
           {STOREFRONT_NAV.map((item) => (
             <a
               key={item.id}
               href={item.href}
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              // 13.5px / .04em tracking matches the storefront's .nav-links a.
+              className="rounded-md px-1.5 py-2 text-[13.5px] tracking-[0.04em] text-muted-foreground transition-colors hover:text-foreground"
             >
               {item.label}
             </a>
@@ -241,11 +246,12 @@ function PrimaryNavLink({
   return (
     <Link
       to={item.href}
+      // Matches the storefront's .nav-links: 13.5px, .04em tracking, and an
+      // active state that darkens and bolds rather than filling a pill. The
+      // pill was the heaviest visual difference between the two headers.
       className={cn(
-        "type-nav rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:text-foreground",
+        "rounded-md px-1.5 py-2 text-[13.5px] tracking-[0.04em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
       aria-current={active ? "page" : undefined}
     >
