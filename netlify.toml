@@ -9,6 +9,10 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # The app needs NODE_ENV=production at runtime, but npm reads the same
+  # variable at install time and skips devDependencies — which is where
+  # typescript and vite live, so the build died with `tsc: not found`.
+  NPM_FLAGS = "--include=dev"
   # ADMIN_API_KEY is intentionally compiled into the SPA — the admin UI sends it
   # as `x-api-key` on catalogue writes, so it is a guard rather than a secret.
   # Without this exemption Netlify's secret scanner finds it in the bundle and
