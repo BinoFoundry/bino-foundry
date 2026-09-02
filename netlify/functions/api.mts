@@ -9,8 +9,14 @@
  * cannot be bundled. It is used only by the sunglasses frame-crop export.
  */
 import serverless from "serverless-http";
-import "../../backend/src/config/load-env.js";
 import { createApplication } from "../../backend/src/app.js";
+
+// Deliberately NOT importing backend/src/config/load-env.js here. It reads .env
+// files off disk via fileURLToPath(import.meta.url), which is undefined once
+// esbuild bundles this function — it threw
+// `TypeError: The "path" argument must be of type string` on every request.
+// Netlify injects environment variables into process.env directly, and
+// config/env.ts reads process.env, so there is nothing to load.
 
 const inner = serverless(createApplication());
 
