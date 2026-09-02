@@ -32,4 +32,11 @@ export const appRouter = createBrowserRouter(
       <Route path="*" element={<NotFound />} />
     </Route>,
   ),
+  {
+    // Vite sets BASE_URL from `base` in vite.config.ts — "/" locally, "/design/"
+    // when the New Chapter storefront serves this app under that path. Without
+    // a matching basename every internal link would navigate to /bracelet on
+    // the storefront's domain and hit its 404. Router wants no trailing slash.
+    basename: import.meta.env.BASE_URL.replace(/\/+$/, "") || "/",
+  },
 );

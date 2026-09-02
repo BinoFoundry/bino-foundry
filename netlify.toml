@@ -12,6 +12,10 @@
   # gained in 22. On 20 every database route failed with
   # "Node.js 20 detected without native WebSocket support".
   NODE_VERSION = "22"
+  # Served under /design on the New Chapter storefront, so assets must be
+  # requested from there rather than colliding with the storefront own /assets.
+  # vite.config.ts reads this; App.tsx mirrors it as the router basename.
+  BASE_PATH = "/design/"
   # NODE_VERSION only sets the *build* runtime. Functions run on their own
   # Lambda runtime, which stayed on 20 and kept failing, so pin it too.
   AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"

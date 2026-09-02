@@ -18,7 +18,17 @@ export default defineConfig(({ mode }) => {
     );
   }
 
+  // Where the SPA is served from. Default "/" keeps local dev and any
+  // root-hosted deploy working. The New Chapter storefront serves this app
+  // under /design/, and sets BASE_PATH so assets are requested from there
+  // rather than colliding with the storefront's own /assets. App.tsx reads the
+  // same value back via import.meta.env.BASE_URL for the router basename — the
+  // two must always agree or navigation breaks.
+  const rawBase = process.env.BASE_PATH?.trim() || "/";
+  const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
+
   return {
+    base,
     // Root remains the primary envDir (ADMIN_API_KEY + shared VITE_* live there).
     // Additional frontend/.env* values are merged in resolveFrontendViteEnv.
     envDir: repoRoot,
