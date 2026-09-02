@@ -48,7 +48,10 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
         <a
           href="/"
           className="type-feature shrink-0 whitespace-nowrap text-foreground transition-colors hover:text-primary"
-          style={{ fontSize: "22px", fontWeight: 600 }}
+          // .01em tracking as well as size and weight — .type-feature applies a
+          // wider display tracking, which made the wordmark 6px narrower and
+          // pulled the whole nav row left of the storefront's.
+          style={{ fontSize: "22px", fontWeight: 600, letterSpacing: "0.01em" }}
         >
           New Chapter
         </a>
@@ -56,8 +59,10 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
         {/* The storefront's nav, reproduced — same links, same order, with
             "Design Your Own" active because that's what brought them here.
             Builder-specific navigation lives in BuilderSubNav below. */}
+        {/* gap-[30px] with no horizontal padding, exactly like the storefront's
+            .nav-links. Padding on the links shifted the whole row 6px left. */}
         <nav
-          className="hidden min-w-0 flex-1 items-center justify-start gap-[18px] lg:flex"
+          className="hidden min-w-0 flex-1 items-center justify-start gap-[30px] lg:flex"
           aria-label="Main"
         >
           {STOREFRONT_NAV.map((item) => (
@@ -67,7 +72,7 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
               aria-current={item.current ? "page" : undefined}
               // 13.5px / .04em tracking matches the storefront's .nav-links a.
               className={cn(
-                "rounded-md px-1.5 py-2 text-[13.5px] tracking-[0.04em] transition-colors hover:text-foreground",
+                "text-[13.5px] tracking-[0.04em] transition-colors hover:text-foreground",
                 item.current ? "font-medium text-foreground" : "text-muted-foreground",
               )}
             >

@@ -15,6 +15,10 @@ export function AnnouncementBar() {
         fontSize: "12.5px",
         letterSpacing: "0.14em",
         padding: "9px 20px",
+        // The storefront's .announce inherits `normal`; this app sets a line
+        // height on body, which made the bar 5px taller and pushed the whole
+        // header down relative to the storefront.
+        lineHeight: "normal",
       }}
     >
       Limited stock · DM to order
