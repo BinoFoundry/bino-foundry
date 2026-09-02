@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { AnnouncementBar } from "@/layouts/AnnouncementBar";
 import { GlobalHeader } from "@/layouts/GlobalHeader";
 import { RequireCustomerAuth } from "@/features/auth/RequireCustomerAuth";
 
@@ -13,6 +14,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 export default function CustomerPortalApp() {
   return (
     <div className="surface-page min-h-[100dvh]">
+      <AnnouncementBar />
       <GlobalHeader />
       <RequireCustomerAuth>
         <CustomerPortalLayout>

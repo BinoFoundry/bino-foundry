@@ -13,7 +13,7 @@
 @layer base {
   :root {
     /* ── Brand palette (raw) ── */
-    --brand-warm-white: 34 41% 93%; /* #F5EFE7 — primary page surface */
+    --brand-warm-white: 42 55.6% 96.5%; /* #FBF8F1 — matches the New Chapter storefront page background exactly, so crossing between the two does not change shade */
     --brand-canvas-warm: 24 28% 93%; /* #F2ECE8 — builder canvas */
     --brand-border-soft: 34 32% 86%; /* #E6DCCF — dividers & outlines */
     --brand-cream: 37 74% 88%; /* #F7E6CA — accent only, never page fill */
