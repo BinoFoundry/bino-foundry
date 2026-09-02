@@ -1,4 +1,8 @@
 [build]
+  # Netlify auto-detected a monorepo and tried building inside frontend/, where
+  # the npm workspace commands below don't resolve. Pin the base to the repo
+  # root. If Netlify's UI "package directory" still wins, clear it there.
+  base = ""
   command = "npm run build -w @bino-foundry/shared && npm run build -w @bino-foundry/frontend"
   publish = "frontend/dist"
   functions = "netlify/functions"
