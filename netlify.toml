@@ -1,0 +1,39 @@
+[build]
+  command = "npm run build -w @bino-foundry/shared && npm run build -w @bino-foundry/frontend"
+  publish = "frontend/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  node_bundler = "esbuild"
+  # sharp ships native binaries that cannot be bundled; Netlify installs it
+  # alongside the function instead. Used only by the frame-crop export.
+  external_node_modules = ["sharp"]
+  included_files = ["backend/src/**"]
+
+# The SPA calls same-origin /api/*, which lands here rather than on a server.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# Client-side routes (/bracelet, /admin, …) must serve index.html, not 404.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Hashed build assets never change content, so cache them hard.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

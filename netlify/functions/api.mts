@@ -1,0 +1,44 @@
+/**
+ * The whole Express API as a single Netlify Function.
+ *
+ * `createApplication()` is deliberately separate from `app.listen()` in
+ * server.ts, so the same app object that runs on a server also runs here
+ * unchanged. netlify.toml routes /api/* here.
+ *
+ * `sharp` is declared external in netlify.toml — it ships native binaries that
+ * cannot be bundled. It is used only by the sunglasses frame-crop export.
+ */
+import serverless from "serverless-http";
+import "../../backend/src/config/load-env.js";
+import { createApplication } from "../../backend/src/app.js";
+
+const inner = serverless(createApplication());
+
+const FUNCTION_PREFIX = "/.netlify/functions/api";
+
+/**
+ * Normalise the request path before Express sees it.
+ *
+ * Depending on how the redirect resolves, Netlify delivers either the original
+ * `/api/bead-types` or the rewritten `/.netlify/functions/api/bead-types`.
+ * Express mounts its routes under `/api`, so the second form would 404. Rather
+ * than depend on which arrives, strip the function prefix and guarantee exactly
+ * one leading `/api`.
+ */
+export function normalisePath(path: string): string {
+  let next = path.startsWith(FUNCTION_PREFIX) ? path.slice(FUNCTION_PREFIX.length) : path;
+  if (!next.startsWith("/")) next = `/${next}`;
+  if (next === "/") return "/api";
+  return next === "/api" || next.startsWith("/api/") ? next : `/api${next}`;
+}
+
+export const handler = async (event: Record<string, unknown>, context: unknown) => {
+  const original = typeof event.path === "string" ? event.path : "/";
+  const path = normalisePath(original);
+  const rawUrl = typeof event.rawUrl === "string" ? event.rawUrl : undefined;
+
+  return inner(
+    { ...event, path, rawUrl: rawUrl ? rawUrl.replace(original, path) : undefined },
+    context,
+  );
+};
