@@ -29,10 +29,14 @@ export interface NavLinkItem {
  * no way back to the shop.
  */
 export const STOREFRONT_NAV: NavLinkItem[] = [
-  { id: "story", label: "Our story", href: "/#story" },
+  // Title Case, matching the storefront's own nav labels exactly.
+  { id: "story", label: "Our Story", href: "/#story" },
   { id: "shop", label: "Shop", href: "/shop" },
   { id: "services", label: "Services", href: "/services" },
 ];
+
+/** The storefront's Instagram ordering link, repeated in the builder header. */
+export const STOREFRONT_DM_URL = "https://ig.me/m/thenewchapter.co";
 
 /** Always visible primary navigation in the global header. */
 export const PRIMARY_NAV: NavLinkItem[] = [

@@ -1,7 +1,6 @@
-import { ChevronDown, Menu, ShoppingBag, User, X } from "lucide-react";
+import { ChevronDown, Mail, Menu, User, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,11 +14,11 @@ import { cn } from "@/lib/utils";
 import { isAdminUser } from "@/lib/auth-landing";
 import { useAuth } from "@/state/auth/AuthProvider";
 
-import { BUILDER_COPY } from "./builder-copy";
 import {
   ACCOUNT_MENU,
   ADMIN_MENU,
   PRIMARY_NAV,
+  STOREFRONT_DM_URL,
   STOREFRONT_NAV,
   isNavLinkActive,
   type NavLinkItem,
@@ -102,31 +101,29 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
             </Button>
           )}
 
-          {user ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground"
-              asChild
-            >
-              <Link to="/account/orders">
-                <ShoppingBag className="h-4 w-4" />
-                <span className="hidden sm:inline">Orders</span>
-              </Link>
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground"
-              onClick={() => toast.message(BUILDER_COPY.cartComingSoon)}
-            >
-              <ShoppingBag className="h-4 w-4" />
-              <span className="hidden sm:inline">{BUILDER_COPY.cart}</span>
-            </Button>
-          )}
+          {/* The storefront's own DM-to-order button, repeated here so the
+              right-hand corner matches across the crossing. Values copied from
+              the storefront's `.ig-btn` rule rather than this app's tokens.
+              Replaces a Cart button that only raised a "coming soon" toast when
+              signed out; signed-in users still reach orders via the account
+              menu, so nothing is lost. */}
+          <a
+            href={STOREFRONT_DM_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden items-center gap-2 font-medium uppercase transition-opacity hover:opacity-90 sm:inline-flex"
+            style={{
+              background: "#404225",
+              color: "#F7E6CA",
+              fontSize: "11.5px",
+              letterSpacing: "1.15px",
+              padding: "10px 18px",
+              borderRadius: "2px",
+            }}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            DM to order
+          </a>
 
           <button
             type="button"
@@ -153,6 +150,15 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
                 {item.label}
               </a>
             ))}
+            <a
+              href={STOREFRONT_DM_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={closeMobile}
+              className="type-nav rounded-md px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              DM to order
+            </a>
             <span aria-hidden="true" className="my-1 h-px bg-border" />
             {PRIMARY_NAV.map((item) => (
               <MobileNavLink
