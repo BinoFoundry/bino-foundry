@@ -43,10 +43,17 @@ export function GlobalHeader({ className }: GlobalHeaderProps) {
             tech arm powering the builder, credited beneath. A plain <a> rather
             than a Link — "/" leaves the SPA for the storefront. */}
         <a href="/" className="shrink-0 leading-tight">
-          <span className="type-feature block whitespace-nowrap text-foreground transition-colors hover:text-primary sm:text-h2">
+          {/* 22px/600 matches .nav-logo on the storefront exactly, so the name
+              reads the same size on both halves of the site. Inline, because
+              .type-feature sets font-size and weight from CSS variables and
+              beats the utility classes. */}
+          <span
+            className="type-feature block whitespace-nowrap text-foreground transition-colors hover:text-primary"
+            style={{ fontSize: "22px", fontWeight: 600 }}
+          >
             New Chapter
           </span>
-          <span className="hidden whitespace-nowrap text-[11px] text-muted-foreground sm:block">
+          <span className="hidden whitespace-nowrap text-[11px] italic text-muted-foreground sm:block">
             powered by <span className="text-primary">Bino Foundry</span>
           </span>
         </a>
