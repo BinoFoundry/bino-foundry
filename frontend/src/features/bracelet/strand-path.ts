@@ -1038,7 +1038,9 @@ function angularDistance(a: number, b: number): number {
 
 export type StrandDropTarget =
   | { mode: "insert"; index: number; /** First-bead anchor on empty strand (radians). */ anchorAngleRad?: number }
-  | { mode: "replace"; index: number };
+  | { mode: "replace"; index: number }
+  /** Halo dropped onto the bead at `index`; -1 when it missed every bead. */
+  | { mode: "frame"; index: number };
 
 /** Distinguish gap insertion vs bead replacement from pointer angle. */
 export function resolveStrandDropTarget(

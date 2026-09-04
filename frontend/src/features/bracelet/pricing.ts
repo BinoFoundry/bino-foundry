@@ -73,6 +73,23 @@ export function buildBraceletPricing(
       unitPrice: unit,
       lineTotal: unit,
     });
+
+    // A halo is billed as its own line: it is a separate piece the customer
+    // pays for, even though it shares a slot with the bead it wraps.
+    if (placed.frame) {
+      const frameUnit = placed.frame.size.unitPrice;
+      rawItems.push({
+        beadLibraryId: placed.frame.bead.id,
+        beadSizeMm: placed.frame.size.sizeMm as BraceletBeadSizeMm,
+        offerKey: placed.frame.size.offerKey,
+        beadName: placed.frame.bead.name,
+        sizeLabel: displayBeadSizeLabel(placed.frame.size.sizeMm, placed.frame.size.label),
+        beadTypeSlug: placed.frame.bead.beadTypeSlug ?? "crystal",
+        quantity: 1,
+        unitPrice: frameUnit,
+        lineTotal: frameUnit,
+      });
+    }
   }
 
   const lineItems = aggregateLineItems(rawItems);

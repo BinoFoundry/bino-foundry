@@ -1,5 +1,6 @@
 import type {
   OrderSnapshotBeadItem,
+  OrderSnapshotBeadRender,
   OrderSnapshotBracelet,
 } from "@bino-foundry/shared/types";
 
@@ -15,8 +16,22 @@ import {
 } from "./load-saved-bracelet";
 import { createUnavailablePlacedBead } from "./unavailable-bead";
 
-function placedFromFrozenItem(item: OrderSnapshotBeadItem): PlacedBead {
-  const render = item.render!;
+/** Identity fields shared by a placed bead and by a frame attached to one. */
+interface FrozenIdentity {
+  beadLibraryId: string;
+  beadName: string;
+  beadTypeSlug?: string;
+  beadSizeMm: number;
+  sizeLabel: string;
+  unitPrice: number;
+  offerKey?: string;
+}
+
+/** Rebuild a catalogue entry + size offer purely from the frozen order payload. */
+function frozenBeadAndSize(
+  item: FrozenIdentity,
+  render: OrderSnapshotBeadRender,
+): { bead: BeadLibraryEntry; size: BeadLibrarySizeOffer } {
   const metadata: Record<string, unknown> = {
     ...(render.metadata ?? {}),
   };
@@ -56,7 +71,16 @@ function placedFromFrozenItem(item: OrderSnapshotBeadItem): PlacedBead {
     normalizedVisibleDiameterPx: render.normalizedVisibleDiameterPx,
   };
 
-  return { position: item.slotPosition, bead, size };
+  return { bead, size };
+}
+
+function placedFromFrozenItem(item: OrderSnapshotBeadItem): PlacedBead {
+  const { bead, size } = frozenBeadAndSize(item, item.render!);
+  // The halo is frozen alongside its bead, so it replays without the catalogue.
+  const frame = item.frame?.render
+    ? frozenBeadAndSize(item.frame, item.frame.render)
+    : undefined;
+  return { position: item.slotPosition, bead, size, ...(frame ? { frame } : {}) };
 }
 
 function buildStrandFromFrozen(items: OrderSnapshotBeadItem[], strandIndex: 0 | 1): PlacedBead[] {
@@ -138,6 +162,15 @@ export function buildPlacedFromOrderBracelet(
       beadSizeMm: item.beadSizeMm,
       offerKey: item.offerKey,
       unitPrice: item.unitPrice,
+      ...(item.frame
+        ? {
+            frame: {
+              beadLibraryId: item.frame.beadLibraryId,
+              beadSizeMm: item.frame.beadSizeMm,
+              offerKey: item.frame.offerKey,
+            },
+          }
+        : {}),
     })),
   };
 

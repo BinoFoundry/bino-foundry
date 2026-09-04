@@ -4,12 +4,22 @@ import { beadSizeMmSchema } from "../../lib/bead-size-mm.js";
 
 const beadSizeMm = beadSizeMmSchema;
 
+/**
+ * A halo attached to the bead rather than occupying a slot of its own — it has
+ * no slotPosition and never affects capacity. Optional so older clients pass.
+ */
+const braceletConfigFrameDto = z.object({
+  beadLibraryId: z.string().min(1),
+  beadSizeMm: beadSizeMm,
+});
+
 export const braceletConfigItemDto = z
   .object({
     strandIndex: z.union([z.literal(0), z.literal(1)]),
     slotPosition: z.number().int().min(0),
     beadLibraryId: z.string().min(1),
     beadSizeMm: beadSizeMm,
+    frame: braceletConfigFrameDto.optional(),
     /** @deprecated Use beadLibraryId + beadSizeMm — accepted for older clients. */
     beadVariantId: z.string().min(1).optional(),
   })

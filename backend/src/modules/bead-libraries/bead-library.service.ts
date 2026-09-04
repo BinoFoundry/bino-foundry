@@ -390,15 +390,16 @@ export class BeadLibraryService {
     const { data: libRefs, error: libRefErr } = await supabase
       .from("bracelet_configuration_items")
       .select("configuration_id")
-      .eq("bead_library_id", libraryUuid);
+      .or(`bead_library_id.eq.${libraryUuid},frame_bead_library_id.eq.${libraryUuid}`);
     assertNoDbError(libRefErr);
 
     let sizeRefs: { configuration_id: string }[] = [];
     if (sizeIds.length) {
+      const list = sizeIds.join(",");
       const { data, error: sizeRefErr } = await supabase
         .from("bracelet_configuration_items")
         .select("configuration_id")
-        .in("bead_library_size_id", sizeIds);
+        .or(`bead_library_size_id.in.(${list}),frame_bead_library_size_id.in.(${list})`);
       assertNoDbError(sizeRefErr);
       sizeRefs = (data ?? []) as { configuration_id: string }[];
     }
@@ -432,7 +433,7 @@ export class BeadLibraryService {
     const { count: libraryRefCount, error: libraryRefErr } = await supabase
       .from("bracelet_configuration_items")
       .select("id", { count: "exact", head: true })
-      .eq("bead_library_id", libraryUuid);
+      .or(`bead_library_id.eq.${libraryUuid},frame_bead_library_id.eq.${libraryUuid}`);
     assertNoDbError(libraryRefErr);
 
     const { data: sizeRows, error: sizesErr } = await supabase
@@ -444,10 +445,11 @@ export class BeadLibraryService {
     const sizeIds = (sizeRows ?? []).map((row) => String((row as { id: string }).id));
     let sizeRefCount = 0;
     if (sizeIds.length) {
+      const list = sizeIds.join(",");
       const { count, error: sizeRefErr } = await supabase
         .from("bracelet_configuration_items")
         .select("id", { count: "exact", head: true })
-        .in("bead_library_size_id", sizeIds);
+        .or(`bead_library_size_id.in.(${list}),frame_bead_library_size_id.in.(${list})`);
       assertNoDbError(sizeRefErr);
       sizeRefCount = count ?? 0;
     }

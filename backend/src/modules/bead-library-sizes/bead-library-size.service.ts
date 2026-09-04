@@ -93,27 +93,32 @@ export class BeadLibrarySizeService {
     const counts = new Map<string, number>();
     if (!sizeIds.length) return counts;
     const supabase = getSupabaseServiceRole();
+    const list = sizeIds.join(",");
     const { data, error } = await supabase
       .from("bracelet_configuration_items")
-      .select("bead_library_size_id, configuration_id")
-      .in("bead_library_size_id", sizeIds);
+      .select("bead_library_size_id, frame_bead_library_size_id, configuration_id")
+      .or(`bead_library_size_id.in.(${list}),frame_bead_library_size_id.in.(${list})`);
     assertNoDbError(error);
 
+    const wanted = new Set(sizeIds);
     const configsBySize = new Map<string, Set<string>>();
     for (const raw of data ?? []) {
       const row = raw as {
         bead_library_size_id?: string;
+        frame_bead_library_size_id?: string;
         configuration_id?: string;
       };
-      const sizeId = row.bead_library_size_id;
       const configId = row.configuration_id;
-      if (!sizeId || !configId) continue;
-      let set = configsBySize.get(sizeId);
-      if (!set) {
-        set = new Set();
-        configsBySize.set(sizeId, set);
+      if (!configId) continue;
+      for (const sizeId of [row.bead_library_size_id, row.frame_bead_library_size_id]) {
+        if (!sizeId || !wanted.has(sizeId)) continue;
+        let set = configsBySize.get(sizeId);
+        if (!set) {
+          set = new Set();
+          configsBySize.set(sizeId, set);
+        }
+        set.add(configId);
       }
-      set.add(configId);
     }
     for (const [sizeId, configs] of configsBySize) {
       counts.set(sizeId, configs.size);

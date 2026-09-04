@@ -5,6 +5,8 @@ export const BRACELET_COPY = {
   wristStepTitle: "Choose Your Wrist Size",
   dropReplaceHint: "Release to replace this bead",
   dropInsertHint: "Release to insert between beads",
+  dropFrameHint: "Release to set this bead in the frame",
+  dropFrameMissHint: "Drop a frame onto a bead to set it",
   /** @deprecated Prefer dropInsertHint — placement is no longer charm-specific. */
   dropCharmInsertHint: "Release to insert between beads",
   dropReorderHint: "Release to swap positions",

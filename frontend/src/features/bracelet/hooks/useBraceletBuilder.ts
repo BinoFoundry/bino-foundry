@@ -388,6 +388,32 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     [placedBeadsA, placedBeadsB, placeAt, bumpLayout, wristCmFor, publishCapacityNotice],
   );
 
+  /**
+   * Attach a halo to the bead at `index`, replacing any halo already there.
+   *
+   * A frame wraps its bead instead of taking a slot, so it adds nothing to the
+   * strand length — there is deliberately no capacity check here.
+   */
+  const frameAt = useCallback(
+    (
+      bracelet: "A" | "B",
+      index: number,
+      bead: BeadLibraryEntry,
+      size: BeadLibrarySizeOffer,
+    ) => {
+      const placed = bracelet === "A" ? placedBeadsA : placedBeadsB;
+      const target = getBeadAtIndex(placed, index);
+      if (!target) return false;
+
+      const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
+      setPlaced(replaceBeadAt(placed, index, { ...target, frame: { bead, size } }));
+      setCapacityNotice(null);
+      bumpLayout();
+      return true;
+    },
+    [placedBeadsA, placedBeadsB, bumpLayout],
+  );
+
   const handleSlotClick = useCallback(
     (bracelet: "A" | "B", position: number) => {
       setActivePlacementStrand(bracelet);
@@ -435,7 +461,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const handleBeadDrop = useCallback(
     (
       bracelet: "A" | "B",
-      target: { mode: "insert" | "replace"; index: number; anchorAngleRad?: number },
+      target: { mode: "insert" | "replace" | "frame"; index: number; anchorAngleRad?: number },
       data: { bead?: BeadLibraryEntry; variantId?: string; sizeOfferKey?: string; beadSizeMm?: number },
     ) => {
       setActivePlacementStrand(bracelet);
@@ -457,6 +483,14 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         return;
       }
 
+      // index -1 means the frame was released in open space, not over a bead:
+      // there is nothing to wrap, so the drop is simply ignored.
+      if (target.mode === "frame") {
+        if (target.index >= 0) frameAt(bracelet, target.index, bead, size);
+        setHoverSlot(null);
+        return;
+      }
+
       if (wasEmpty && target.anchorAngleRad !== undefined) {
         const setAnchor = bracelet === "A" ? setStrandAnchorAngleA : setStrandAnchorAngleB;
         setAnchor(target.anchorAngleRad);
@@ -465,7 +499,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       placeAt(bracelet, target.index, bead, size);
       setHoverSlot(null);
     },
-    [beadLibrarySizes, activeSizeOffer, placeAt, replaceAt, placedBeadsA, placedBeadsB],
+    [beadLibrarySizes, activeSizeOffer, placeAt, replaceAt, frameAt, placedBeadsA, placedBeadsB],
   );
 
   const handleBeadsReorder = useCallback(

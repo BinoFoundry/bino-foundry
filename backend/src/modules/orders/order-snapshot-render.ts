@@ -114,7 +114,11 @@ export async function enrichOrderSnapshotItemsWithRender(
   hasRenderFreeze: boolean;
 }> {
   const systemDefaults = await settingsService.getStrandRenderDefaults();
-  const libraryIds = [...new Set(items.map((i) => i.beadLibraryId).filter(Boolean))];
+  const libraryIds = [
+    ...new Set(
+      items.flatMap((i) => [i.beadLibraryId, i.frame?.beadLibraryId]).filter(Boolean) as string[],
+    ),
+  ];
   if (!libraryIds.length) {
     return { items, strandRenderDefaults: systemDefaults, hasRenderFreeze: false };
   }
@@ -150,23 +154,25 @@ export async function enrichOrderSnapshotItemsWithRender(
     }
   }
 
-  let hasRenderFreeze = false;
-  const enriched = items.map((item) => {
-    const lib = libById.get(item.beadLibraryId);
-    if (!lib) return item;
-
-    const offer = offerByKey.get(`${item.beadLibraryId}:${item.beadSizeMm}`);
+  /** Freeze one library item at one size. Used for placed beads and for frames. */
+  const buildRender = (
+    lib: LibraryRow,
+    publicId: string,
+    sizeMm: number,
+    fallbackTypeSlug?: string,
+  ): OrderSnapshotBeadRender => {
+    const offer = offerByKey.get(`${publicId}:${sizeMm}`);
     const images = displayImages(lib);
     const profile = resolveProfileForLibrary(lib, systemDefaults);
-    const offerKey = `${item.beadLibraryId}-${item.beadSizeMm}`;
+    const offerKey = `${publicId}-${sizeMm}`;
 
-    const render: OrderSnapshotBeadRender = {
+    return {
       offerKey,
       image: images.image,
       originalImage: images.originalImage,
       processedImage: images.processedImage,
       beadTypeId: lib.bead_type_id ?? lib.bead_types?.id ?? undefined,
-      beadTypeSlug: lib.bead_types?.slug ?? item.beadTypeSlug,
+      beadTypeSlug: lib.bead_types?.slug ?? fallbackTypeSlug,
       subBeadTypeId: lib.sub_bead_type_id ?? lib.sub_bead_types?.id ?? undefined,
       subBeadTypeSlug: lib.sub_bead_types?.slug ?? undefined,
       cropConfig: lib.crop_config ?? null,
@@ -193,6 +199,27 @@ export async function enrichOrderSnapshotItemsWithRender(
           : null,
       strandRenderProfile: profile,
     };
+  };
+
+  let hasRenderFreeze = false;
+  const enriched = items.map((item) => {
+    const lib = libById.get(item.beadLibraryId);
+    if (!lib) return item;
+
+    const offerKey = `${item.beadLibraryId}-${item.beadSizeMm}`;
+    const render = buildRender(lib, item.beadLibraryId, item.beadSizeMm, item.beadTypeSlug);
+
+    // A frame whose library row has gone keeps its price and name; only the
+    // frozen visual is missing, and replay falls back to the live catalogue.
+    const frameLib = item.frame ? libById.get(item.frame.beadLibraryId) : undefined;
+    const frame =
+      item.frame && frameLib
+        ? {
+            ...item.frame,
+            offerKey: `${item.frame.beadLibraryId}-${item.frame.beadSizeMm}`,
+            render: buildRender(frameLib, item.frame.beadLibraryId, item.frame.beadSizeMm),
+          }
+        : item.frame;
 
     hasRenderFreeze = true;
     return {
@@ -200,6 +227,7 @@ export async function enrichOrderSnapshotItemsWithRender(
       offerKey,
       beadTypeSlug: render.beadTypeSlug ?? item.beadTypeSlug,
       render,
+      ...(frame ? { frame } : {}),
     };
   });
 

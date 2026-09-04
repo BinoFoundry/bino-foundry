@@ -78,51 +78,67 @@ export class BraceletService {
     }
   }
 
-  async createConfiguration(dto: CreateBraceletConfigDTO, ownerUserId?: string) {
-    if (!dto.items.length) {
-      throw new ValidationError("At least one bead must be placed to save a configuration");
-    }
-
-    const supabase = getSupabaseServiceRole();
-    const siteSettings = await settingsService.getGeneralSettings();
-    const resolveKeys = dto.items.map((i) => ({
-      beadLibraryId: i.beadLibraryId,
-      beadSizeMm: i.beadSizeMm!,
-    }));
+  /**
+   * Resolve every placed item against the catalogue and shape it into DB rows.
+   *
+   * A frame resolves through exactly the same lookups as a bead — it is an
+   * ordinary library item that happens to ride on a bead instead of a slot —
+   * so it is validated and priced identically, and its cost is folded into the
+   * same subtotal.
+   */
+  private async buildItemRows(dto: CreateBraceletConfigDTO) {
+    const resolveKeys = dto.items.flatMap((i) => [
+      { beadLibraryId: i.beadLibraryId, beadSizeMm: i.beadSizeMm! },
+      ...(i.frame
+        ? [{ beadLibraryId: i.frame.beadLibraryId, beadSizeMm: i.frame.beadSizeMm }]
+        : []),
+    ]);
     const sizeByKey = await beadLibrarySizeService.resolveForConfiguration(resolveKeys);
-    const publicIds = [...new Set(dto.items.map((i) => i.beadLibraryId))];
+    const publicIds = [...new Set(resolveKeys.map((k) => k.beadLibraryId))];
     const beadByPublicId = await this.resolveBeads(publicIds);
     this.validateItemsAgainstCatalog(publicIds, beadByPublicId);
 
     const missingSizes: string[] = [];
     const unavailableSizes: string[] = [];
     let subtotal = 0;
-    const itemRows = dto.items.map((item) => {
-      const bead = beadByPublicId.get(item.beadLibraryId)!;
-      const key = `${item.beadLibraryId}:${item.beadSizeMm}`;
-      const offer = sizeByKey.get(key);
-      if (!offer) {
-        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
-        return null;
-      }
-      if (offer.libraryUuid !== bead.id) {
-        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
+
+    const resolveOffer = (beadPublicId: string, sizeMm: number) => {
+      const bead = beadByPublicId.get(beadPublicId)!;
+      const offer = sizeByKey.get(`${beadPublicId}:${sizeMm}`);
+      if (!offer || offer.libraryUuid !== bead.id) {
+        missingSizes.push(`${beadPublicId} @ ${sizeMm}mm`);
         return null;
       }
       if (offer.availableForNew === false) {
         unavailableSizes.push(`${bead.name} (${offer.sizeMm} mm)`);
         return null;
       }
-      const unit = offer.unitPrice;
-      subtotal += unit;
+      return { bead, offer };
+    };
+
+    const itemRows = dto.items.map((item) => {
+      const placed = resolveOffer(item.beadLibraryId, item.beadSizeMm!);
+      const frame = item.frame
+        ? resolveOffer(item.frame.beadLibraryId, item.frame.beadSizeMm)
+        : null;
+      // An unresolvable frame fails the whole item: silently dropping it would
+      // change the design the customer saved without telling them.
+      if (!placed || (item.frame && !frame)) return null;
+
+      subtotal += placed.offer.unitPrice + (frame?.offer.unitPrice ?? 0);
       return {
         strand_index: item.strandIndex,
         slot_position: item.slotPosition,
-        bead_library_id: bead.id,
-        bead_library_size_id: offer.id,
-        bead_size_mm: offer.sizeMm,
-        unit_price_snapshot: unit,
+        bead_library_id: placed.bead.id,
+        bead_library_size_id: placed.offer.id,
+        bead_size_mm: placed.offer.sizeMm,
+        unit_price_snapshot: placed.offer.unitPrice,
         bead_library_public_id_snapshot: item.beadLibraryId,
+        frame_bead_library_id: frame?.bead.id ?? null,
+        frame_bead_library_size_id: frame?.offer.id ?? null,
+        frame_bead_size_mm: frame?.offer.sizeMm ?? null,
+        frame_unit_price_snapshot: frame?.offer.unitPrice ?? null,
+        frame_bead_library_public_id_snapshot: item.frame?.beadLibraryId ?? null,
       };
     });
 
@@ -137,7 +153,21 @@ export class BraceletService {
         `Some bead sizes in this design are no longer available: ${[...new Set(missingSizes)].join(", ")}. Please replace them before saving.`,
       );
     }
-    const rows = itemRows.filter((r): r is NonNullable<typeof r> => r !== null);
+
+    return {
+      rows: itemRows.filter((r): r is NonNullable<typeof r> => r !== null),
+      subtotal,
+    };
+  }
+
+  async createConfiguration(dto: CreateBraceletConfigDTO, ownerUserId?: string) {
+    if (!dto.items.length) {
+      throw new ValidationError("At least one bead must be placed to save a configuration");
+    }
+
+    const supabase = getSupabaseServiceRole();
+    const siteSettings = await settingsService.getGeneralSettings();
+    const { rows, subtotal } = await this.buildItemRows(dto);
 
     const publicId = newPublicId();
     const { data: config, error: configErr } = await supabase
@@ -187,59 +217,7 @@ export class BraceletService {
 
     const configId = (existing as { id: string }).id;
     const siteSettings = await settingsService.getGeneralSettings();
-    const resolveKeys = dto.items.map((i) => ({
-      beadLibraryId: i.beadLibraryId,
-      beadSizeMm: i.beadSizeMm!,
-    }));
-    const sizeByKey = await beadLibrarySizeService.resolveForConfiguration(resolveKeys);
-    const publicIds = [...new Set(dto.items.map((i) => i.beadLibraryId))];
-    const beadByPublicId = await this.resolveBeads(publicIds);
-    this.validateItemsAgainstCatalog(publicIds, beadByPublicId);
-
-    const missingSizes: string[] = [];
-    const unavailableSizes: string[] = [];
-    let subtotal = 0;
-    const itemRows = dto.items.map((item) => {
-      const bead = beadByPublicId.get(item.beadLibraryId)!;
-      const key = `${item.beadLibraryId}:${item.beadSizeMm}`;
-      const offer = sizeByKey.get(key);
-      if (!offer) {
-        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
-        return null;
-      }
-      if (offer.libraryUuid !== bead.id) {
-        missingSizes.push(`${item.beadLibraryId} @ ${item.beadSizeMm}mm`);
-        return null;
-      }
-      if (offer.availableForNew === false) {
-        unavailableSizes.push(`${bead.name} (${offer.sizeMm} mm)`);
-        return null;
-      }
-      const unit = offer.unitPrice;
-      subtotal += unit;
-      return {
-        strand_index: item.strandIndex,
-        slot_position: item.slotPosition,
-        bead_library_id: bead.id,
-        bead_library_size_id: offer.id,
-        bead_size_mm: offer.sizeMm,
-        unit_price_snapshot: unit,
-        bead_library_public_id_snapshot: item.beadLibraryId,
-      };
-    });
-
-    if (unavailableSizes.length) {
-      throw new ValidationError(
-        "Some items in this design are no longer available. Please replace them before saving your design.",
-        { unavailableSizes: [...new Set(unavailableSizes)] },
-      );
-    }
-    if (missingSizes.length) {
-      throw new ValidationError(
-        `Some bead sizes in this design are no longer available: ${[...new Set(missingSizes)].join(", ")}. Please replace them before saving.`,
-      );
-    }
-    const rows = itemRows.filter((r): r is NonNullable<typeof itemRows[number]> => r !== null);
+    const { rows, subtotal } = await this.buildItemRows(dto);
 
     const { error: deleteErr } = await supabase
       .from("bracelet_configuration_items")
@@ -289,7 +267,7 @@ export class BraceletService {
     const { data: items, error: itemsErr } = await supabase
       .from("bracelet_configuration_items")
       .select(
-        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, bead_library_sizes(unit_price, available_for_new, bead_sizes(size_mm, label)), bead_libraries(public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs, label))",
+        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, frame_bead_size_mm, frame_unit_price_snapshot, frame_bead_library_public_id_snapshot, bead_library_sizes!bead_library_size_id(unit_price, available_for_new, bead_sizes(size_mm, label)), bead_libraries!bead_library_id(public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs, label)), frame_library:bead_libraries!frame_bead_library_id(public_id, name), frame_size:bead_library_sizes!frame_bead_library_size_id(bead_sizes(label))",
       )
       .eq("configuration_id", configId)
       .order("strand_index")
@@ -319,6 +297,28 @@ export class BraceletService {
         : !allowNewDesigns || !sizeAvailableForNew
           ? "unavailable"
           : null;
+
+      // A halo attached to this bead. Identified by snapshot id so it survives
+      // a force-deleted catalogue row, exactly like the bead itself.
+      const frameLib = r.frame_library as Record<string, unknown> | null;
+      const frameSizeRow = (r.frame_size as Record<string, unknown> | null)?.bead_sizes as
+        | { label?: string }
+        | null;
+      const frameSizeMm = r.frame_bead_size_mm == null ? null : Number(r.frame_bead_size_mm);
+      const frameSnapshotId = String(r.frame_bead_library_public_id_snapshot ?? "").trim();
+      const framePublicId = String(frameLib?.public_id ?? frameSnapshotId).trim();
+      const frame =
+        framePublicId && frameSizeMm
+          ? {
+              beadLibraryId: framePublicId,
+              beadSizeMm: frameSizeMm,
+              offerKey: `${framePublicId}-${frameSizeMm}`,
+              beadName: frameLib?.name ? String(frameLib.name) : undefined,
+              sizeLabel: frameSizeRow?.label ?? `${frameSizeMm} mm`,
+              unitPrice: Number(r.frame_unit_price_snapshot ?? 0),
+            }
+          : undefined;
+
       return {
         strandIndex: r.strand_index,
         slotPosition: r.slot_position,
@@ -333,6 +333,7 @@ export class BraceletService {
         catalogIssue,
         availabilityStatusCode: lib ? String(lib.availability_status_code ?? "ACTIVE") : null,
         availabilityStatusLabel: status?.label ?? null,
+        ...(frame ? { frame } : {}),
       };
     });
 

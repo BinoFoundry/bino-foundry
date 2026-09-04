@@ -1379,9 +1379,13 @@ const SortableCircularStrand = ({
             <p className="text-muted-foreground">{BRACELET_COPY.dropReorderHint}</p>
           ) : libraryDropHover ? (
             <p className="text-muted-foreground">
-              {libraryDropHover.mode === "replace"
-                ? BRACELET_COPY.dropReplaceHint
-                : BRACELET_COPY.dropInsertHint}
+              {libraryDropHover.mode === "frame"
+                ? libraryDropHover.index >= 0
+                  ? BRACELET_COPY.dropFrameHint
+                  : BRACELET_COPY.dropFrameMissHint
+                : libraryDropHover.mode === "replace"
+                  ? BRACELET_COPY.dropReplaceHint
+                  : BRACELET_COPY.dropInsertHint}
             </p>
           ) : reorderHintVisible && placedCount >= 2 ? (
             <div className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-full border border-border/50 bg-muted/20 px-3 py-1">

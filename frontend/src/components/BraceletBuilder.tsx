@@ -378,6 +378,13 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             offerKey: item.offerKey,
             catalogIssue: item.catalogIssue ?? null,
             unitPrice: item.unitPrice,
+            frame: item.frame
+              ? {
+                  beadLibraryId: item.frame.beadLibraryId,
+                  beadSizeMm: item.frame.beadSizeMm,
+                  offerKey: item.frame.offerKey,
+                }
+              : undefined,
           })),
         });
         setBraceletName(detail.title?.trim() ?? "");

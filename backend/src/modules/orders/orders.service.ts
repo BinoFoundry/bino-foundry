@@ -272,17 +272,32 @@ export class OrdersService {
         selection,
       });
 
-      const items: OrderSnapshotBeadItem[] = config.items.map((item) => ({
-        strandIndex: (Number(item.strandIndex) === 1 ? 1 : 0) as 0 | 1,
-        slotPosition: Number(item.slotPosition),
-        beadLibraryId: String(item.beadLibraryId ?? ""),
-        beadName: String(item.beadName ?? "Bead"),
-        beadTypeSlug: item.beadTypeSlug ? String(item.beadTypeSlug) : undefined,
-        beadSizeMm: Number(item.beadSizeMm),
-        sizeLabel: String(item.sizeLabel ?? `${item.beadSizeMm} mm`),
-        unitPrice: Number(item.unitPrice),
-        offerKey: item.offerKey ? String(item.offerKey) : undefined,
-      }));
+      const items: OrderSnapshotBeadItem[] = config.items.map((item) => {
+        const frame = item.frame;
+        return {
+          strandIndex: (Number(item.strandIndex) === 1 ? 1 : 0) as 0 | 1,
+          slotPosition: Number(item.slotPosition),
+          beadLibraryId: String(item.beadLibraryId ?? ""),
+          beadName: String(item.beadName ?? "Bead"),
+          beadTypeSlug: item.beadTypeSlug ? String(item.beadTypeSlug) : undefined,
+          beadSizeMm: Number(item.beadSizeMm),
+          sizeLabel: String(item.sizeLabel ?? `${item.beadSizeMm} mm`),
+          unitPrice: Number(item.unitPrice),
+          offerKey: item.offerKey ? String(item.offerKey) : undefined,
+          ...(frame
+            ? {
+                frame: {
+                  beadLibraryId: String(frame.beadLibraryId ?? ""),
+                  beadName: String(frame.beadName ?? "Frame"),
+                  beadSizeMm: Number(frame.beadSizeMm),
+                  sizeLabel: String(frame.sizeLabel ?? `${frame.beadSizeMm} mm`),
+                  unitPrice: Number(frame.unitPrice ?? 0),
+                  offerKey: frame.offerKey ? String(frame.offerKey) : undefined,
+                },
+              }
+            : {}),
+        };
+      });
 
       const prepOption = prepPricing.preparationLineItem
         ? options.find((o) => o.slug === prepPricing.preparationLineItem!.slug)

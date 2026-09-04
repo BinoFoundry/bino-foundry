@@ -62,6 +62,21 @@ export interface OrderSnapshotBeadRender {
   strandRenderProfile?: StrandRenderProfile;
 }
 
+/**
+ * A halo wrapping the bead it is attached to. Carries its own frozen render so
+ * admin replay draws the ring even after the catalogue changes; its price is
+ * separate from the bead's, and both are counted in the order total.
+ */
+export interface OrderSnapshotBeadFrame {
+  beadLibraryId: string;
+  beadName: string;
+  beadSizeMm: number;
+  sizeLabel: string;
+  unitPrice: number;
+  offerKey?: string;
+  render?: OrderSnapshotBeadRender;
+}
+
 export interface OrderSnapshotBeadItem {
   strandIndex: 0 | 1;
   slotPosition: number;
@@ -74,6 +89,8 @@ export interface OrderSnapshotBeadItem {
   offerKey?: string;
   /** Present on orders created after render freeze was added. */
   render?: OrderSnapshotBeadRender;
+  /** Present when the customer dropped a halo onto this bead. */
+  frame?: OrderSnapshotBeadFrame;
 }
 
 export interface OrderSnapshotPreparation {

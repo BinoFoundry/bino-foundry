@@ -15,6 +15,17 @@ export interface BraceletConfigurationItemRef {
   slotPosition: number;
   beadLibraryId: string;
   beadSizeMm: BraceletBeadSizeMm;
+  /**
+   * A decorative surround attached to this bead — a halo ring, for example.
+   *
+   * Recorded on the bead rather than as its own item, because it wraps that
+   * bead instead of taking a slot: it has no slotPosition and never affects
+   * capacity. Optional, so designs saved before frames existed still load.
+   */
+  frame?: {
+    beadLibraryId: string;
+    beadSizeMm: BraceletBeadSizeMm;
+  };
 }
 
 export interface BraceletPricingLineItem {

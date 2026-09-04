@@ -1,4 +1,4 @@
-import type { PlacedBead } from "@/lib/luxe-data";
+import type { PlacedBead, PlacedBeadFrame } from "@/lib/luxe-data";
 import type { BeadLibraryEntry } from "@/types/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 
@@ -10,6 +10,12 @@ import {
 } from "./unavailable-bead";
 import type { BeadAvailabilityStatus } from "@/types/bead-availability";
 
+export interface SavedBraceletFrame {
+  beadLibraryId: string;
+  beadSizeMm: number;
+  offerKey?: string;
+}
+
 export interface SavedBraceletItem {
   strandIndex: 0 | 1;
   slotPosition: number;
@@ -18,6 +24,8 @@ export interface SavedBraceletItem {
   offerKey?: string;
   catalogIssue?: UnavailableBeadIssue | null;
   unitPrice?: number;
+  /** Halo attached to this bead — no slot of its own. */
+  frame?: SavedBraceletFrame;
 }
 
 export interface SavedBraceletLoadInput {
@@ -42,6 +50,30 @@ function resolveSizeOffer(
   return beadLibrarySizes.find(
     (s) => s.beadLibraryId === bead.id && s.sizeMm === item.beadSizeMm,
   );
+}
+
+/**
+ * Rehydrate a halo from the live catalogue.
+ *
+ * Returns undefined when the frame bead or its size has gone: the bead it wraps
+ * is still perfectly valid, so the design opens with the bead intact and the
+ * halo quietly dropped rather than the whole slot flagged unavailable.
+ */
+function resolveFrame(
+  frame: SavedBraceletFrame | undefined,
+  beadLibraries: BeadLibraryEntry[],
+  beadLibrarySizes: BeadLibrarySizeOffer[],
+): PlacedBeadFrame | undefined {
+  if (!frame) return undefined;
+  const bead = findBead(beadLibraries, frame.beadLibraryId);
+  if (!bead) return undefined;
+  const size = frame.offerKey
+    ? findSizeOfferByKey(beadLibrarySizes, frame.offerKey, { includeUnavailable: true })
+    : beadLibrarySizes.find(
+        (s) => s.beadLibraryId === bead.id && s.sizeMm === frame.beadSizeMm,
+      );
+  if (!size) return undefined;
+  return { bead, size };
 }
 
 function statusMap(statuses: BeadAvailabilityStatus[]): Map<string, { showInBuilder: boolean }> {
@@ -97,6 +129,8 @@ function buildPlaced(
         });
       }
 
+      const frame = resolveFrame(item.frame, beadLibraries, beadLibrarySizes);
+
       // Soft-disabled / sold-out size: keep the bead visible but mark it for replacement.
       if (size.availableForNew === false) {
         return {
@@ -109,6 +143,7 @@ function buildPlaced(
             },
           },
           size,
+          ...(frame ? { frame } : {}),
         } satisfies PlacedBead;
       }
 
@@ -116,6 +151,7 @@ function buildPlaced(
         position: item.slotPosition,
         bead,
         size,
+        ...(frame ? { frame } : {}),
       } satisfies PlacedBead;
     });
 }

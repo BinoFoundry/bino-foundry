@@ -19,6 +19,12 @@ function strandItems(placed: PlacedBead[], strandIndex: 0 | 1): BraceletConfigur
       slotPosition: b.position,
       beadLibraryId: b.bead.id,
       beadSizeMm: placedBeadSizeMm(b),
+      // A halo rides along with the bead it wraps rather than taking a slot.
+      // Omitted entirely when absent, so a design without frames serialises
+      // byte-identically to before.
+      ...(b.frame
+        ? { frame: { beadLibraryId: b.frame.bead.id, beadSizeMm: b.frame.size.sizeMm } }
+        : {}),
     }));
 }
 
