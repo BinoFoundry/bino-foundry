@@ -6,7 +6,7 @@ export const beadTypeCreateSchema = z.object({
   displayOrder: z.coerce.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
   enableSubTypes: z.boolean().optional(),
-  placementMode: z.enum(["replace", "insert_between"]).optional(),
+  placementMode: z.enum(["replace", "insert_between", "frame"]).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 

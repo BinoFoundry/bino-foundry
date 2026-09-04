@@ -205,9 +205,13 @@ export function BeadTypeForm({ initial, onSave, onCancel }: BeadTypeFormProps) {
             >
               <option value="replace">Replace Bead</option>
               <option value="insert_between">Insert Between Beads</option>
+              <option value="frame">Frame Around Bead</option>
             </select>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Controls how items of this type land on the bracelet strand.
+              Controls how items of this type land on the bracelet strand. A
+              frame wraps whichever bead it is dropped on — a halo around a
+              crystal — and takes no space of its own, so it never changes
+              spacing or capacity.
             </p>
           </div>
           <AdminActiveInactiveStatusField

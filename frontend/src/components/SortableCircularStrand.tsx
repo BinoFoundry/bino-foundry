@@ -87,6 +87,13 @@ import type { BeadSlotSizingCatalogueContext } from "@/render/bead-crop";
 
 type EmptySlotGuideMode = "prominent" | "moderate" | "none";
 
+/**
+ * How much larger a halo surround draws than the bead it wraps. The reference
+ * pieces sit a little proud of the stone — enough to read as a setting without
+ * crowding the neighbouring beads.
+ */
+const FRAME_SIZE_RATIO = 1.34;
+
 const REORDER_HINT_STORAGE_KEY = "bino-foundry-reorder-hint-dismissed";
 const REORDER_HINT_AUTO_DISMISS_MS = 12_000;
 
@@ -252,6 +259,10 @@ function SortableBeadInner({
 
   // Soft-unavailable (e.g. disabled size): keep the bead asset visible so customers can identify it.
   const imgSrc = isPlaceholderUnavailable ? "" : getBeadImageUrl(bead, sizingCatalogue);
+  // A halo surround is a property of the bead, not a strand item, so its image
+  // is resolved here alongside the bead's own.
+  const frameSrc =
+    bead?.frame && !isPlaceholderUnavailable ? resolveStrandDeliveryUrl(bead.frame.bead) : null;
   const deliveryUrl =
     bead && !isPlaceholderUnavailable ? resolveStrandDeliveryUrl(bead.bead) : null;
   const needsProcessedMetrics =
@@ -370,6 +381,28 @@ function SortableBeadInner({
             className="pointer-events-none select-none"
             style={getStrandBeadImageStyle(bead.bead, renderSizing)}
           />
+          {/* A halo surround, drawn over the bead it wraps. Sized from the bead
+              rather than from its own mm value, so it always fits whatever it
+              is dropped on, and centred on the same origin so it stays put as
+              the bead rotates with the strand. Occupies no arc — the layout
+              never sees it (see PlacedBead.frame). */}
+          {frameSrc ? (
+            <img
+              src={frameSrc}
+              alt=""
+              draggable={false}
+              decoding="async"
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: "50%",
+                top: "50%",
+                width: renderDim.width * FRAME_SIZE_RATIO,
+                height: renderDim.height * FRAME_SIZE_RATIO,
+                transform: "translate(-50%, -50%)",
+                objectFit: "contain",
+              }}
+            />
+          ) : null}
         </div>
       ) : null}
       {unavailable && bead ? (
