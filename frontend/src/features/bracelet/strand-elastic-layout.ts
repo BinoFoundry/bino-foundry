@@ -401,11 +401,20 @@ export function resolveLibraryDropTarget(args: {
   dragged: BeadTypeRef;
   /** Placed beads in the same index order as layout sectors. */
   placedTypeRefs: Array<BeadTypeRef | null | undefined>;
-}): { mode: "insert" | "replace"; index: number } {
+}): { mode: "insert" | "replace" | "frame"; index: number } {
   const { pointerAngle, sectors, insertionAngles, placementMode, dragged, placedTypeRefs } = args;
   if (!sectors.length) return { mode: "insert", index: 0 };
 
   const hover = isPointerOverBeadSlot(pointerAngle, sectors, insertionAngles);
+
+  // A frame wraps the bead under the pointer instead of taking a place on the
+  // strand, so it needs a bead to attach to. Released away from one it does
+  // nothing — index -1. Deliberately no insert fallback: that would drop a
+  // loose ring onto the cord with nothing inside it.
+  if (placementMode === "frame") {
+    return { mode: "frame", index: hover.over ? hover.index : -1 };
+  }
+
   if (hover.over && isSameBeadType(dragged, placedTypeRefs[hover.index])) {
     return { mode: "replace", index: hover.index };
   }

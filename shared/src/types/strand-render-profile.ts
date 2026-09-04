@@ -17,16 +17,27 @@ export type StrandAttachmentStyle = "inline" | "betweenItems";
 /** Whether spacing uses full slot width (inline) or attachment point only (dangling). */
 export type StrandLayoutMode = "inline" | "dangling";
 
-/** How a library drag interacts with existing strand beads. */
-export type BeadPlacementMode = "replace" | "insert_between";
+/**
+ * How a library drag interacts with existing strand beads.
+ *
+ * `frame` is not a strand position at all: the item attaches to whichever bead
+ * it is dropped on and draws over it, like a halo around a crystal. It claims
+ * no arc, so occupancy, spacing and capacity are untouched — the attachment
+ * lives on `PlacedBead.frame` rather than in the bead sequence.
+ */
+export type BeadPlacementMode = "replace" | "insert_between" | "frame";
 
-export const BEAD_PLACEMENT_MODES = ["replace", "insert_between"] as const satisfies readonly BeadPlacementMode[];
+export const BEAD_PLACEMENT_MODES = [
+  "replace",
+  "insert_between",
+  "frame",
+] as const satisfies readonly BeadPlacementMode[];
 
 export const DEFAULT_BEAD_PLACEMENT_MODE: BeadPlacementMode = "replace";
 
 /** Parse/validate placement mode; invalid or missing → replace. */
 export function parseBeadPlacementMode(raw: unknown): BeadPlacementMode {
-  if (raw === "insert_between" || raw === "replace") return raw;
+  if (raw === "insert_between" || raw === "replace" || raw === "frame") return raw;
   return DEFAULT_BEAD_PLACEMENT_MODE;
 }
 

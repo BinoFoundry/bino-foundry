@@ -58,19 +58,34 @@ export type BeadSize = number;
 /** @deprecated Use beadTypeSlug on BeadLibraryEntry */
 export type ItemType = string;
 
+/**
+ * A decorative surround attached to a bead — a halo ring, for example.
+ *
+ * Held on the bead rather than in the strand sequence, because it wraps that
+ * bead instead of taking a place beside it. Reordering, dragging and deletion
+ * therefore carry it along with no extra handling, and the layout never sees it.
+ */
+export interface PlacedBeadFrame {
+  bead: BeadLibraryEntry;
+  size: BeadLibrarySizeOffer;
+}
+
 /** Unified placed bead on the strand (per-library enabled size + price). */
 export interface PlacedBead {
   position: number;
   bead: BeadLibraryEntry;
   size: BeadLibrarySizeOffer;
+  /** Optional surround drawn over this bead. Claims no arc of its own. */
+  frame?: PlacedBeadFrame;
 }
 
 export function placedBeadSizeMm(item: PlacedBead): BeadSize {
   return item.size.sizeMm;
 }
 
+/** Bead price including any attached frame — both are charged for. */
 export function getPlacedBeadPrice(item: PlacedBead): number {
-  return item.size.unitPrice;
+  return item.size.unitPrice + (item.frame?.size.unitPrice ?? 0);
 }
 
 export function calculateBeadCount(wristSizeCm: number, beadSizeMm: number): number {
