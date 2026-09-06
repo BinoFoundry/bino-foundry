@@ -50,6 +50,7 @@ export const STRAND_RENDER_PROFILE_KEYS = [
   "collisionPadding",
   "stringOcclusion",
   "forceRoundFootprint",
+  "mirrorTowardNeighbour",
   "preferStrandImageUrl",
   "placementMode",
 ] as const satisfies readonly StrandRenderProfileKey[];

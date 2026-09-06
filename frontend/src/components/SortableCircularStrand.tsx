@@ -64,6 +64,7 @@ import {
 } from "@/features/bracelet/strand-adjacency-spacing-debug";
 import type { LibraryDragPayload } from "@/components/BeadLibrary";
 import { BEAD_LIBRARY_DRAG_TYPE, isLibraryDragEvent } from "@/features/bracelet/interaction";
+import { shouldMirrorTowardNeighbour } from "@/features/bracelet/strand-mirroring";
 import {
   pointerAngleOnCanvas,
   STRAND_PATH_START_ANGLE,
@@ -211,6 +212,8 @@ interface SortableBeadProps {
   onSlotClick: (position: number) => void;
   onBeadRemove?: (position: number) => void;
   onFrameRemove?: (position: number) => void;
+  /** Flip the asset along the cord so it faces the bead beside it. */
+  mirrored?: boolean;
   isDragActive: boolean;
   emptyGuideMode: EmptySlotGuideMode;
   showRemoveAlways?: boolean;
@@ -239,6 +242,7 @@ function SortableBeadInner({
   onSlotClick,
   onBeadRemove,
   onFrameRemove,
+  mirrored = false,
   isDragActive,
   emptyGuideMode,
   showRemoveAlways = false,
@@ -383,7 +387,10 @@ function SortableBeadInner({
             decoding="async"
             {...getStrandBeadRasterSize(renderSizing?.imageDimensions ?? renderDim)}
             className="pointer-events-none select-none"
-            style={getStrandBeadImageStyle(bead.bead, renderSizing)}
+            style={{
+              ...getStrandBeadImageStyle(bead.bead, renderSizing),
+              ...(mirrored ? { transform: "scaleX(-1)" } : {}),
+            }}
           />
           {/* A halo surround, drawn over the bead it wraps. Sized from the bead
               rather than from its own mm value, so it always fits whatever it
@@ -534,6 +541,7 @@ const SortableBead = memo(SortableBeadInner, (prev, next) =>
   prev.showRemoveAlways === next.showRemoveAlways &&
   prev.isSelected === next.isSelected &&
   prev.isSwapTarget === next.isSwapTarget &&
+  prev.mirrored === next.mirrored &&
   prev.libraryDragActive === next.libraryDragActive &&
   prev.ringCenterX === next.ringCenterX &&
   prev.ringCenterY === next.ringCenterY &&
@@ -709,6 +717,16 @@ const SortableCircularStrand = ({
     }
     return catalogueRender.getForBead;
   }, [forcedResolved, catalogueRender.getForBead]);
+  /** Slots whose asset must face the bead beside it, by strand index. */
+  const mirroredSlots = useMemo(() => {
+    const flags = new Set<number>();
+    normalized.forEach((placed, index) => {
+      if (!getForBead(placed.bead).mirrorTowardNeighbour) return;
+      if (shouldMirrorTowardNeighbour(normalized, index)) flags.add(index);
+    });
+    return flags;
+  }, [normalized, getForBead]);
+
   const compositionMm = strandCircumferenceMm(normalized, guideSizeMm);
   const placedCount = normalized.length;
   const isStrandEmpty = placedCount === 0;
@@ -1394,6 +1412,7 @@ const SortableCircularStrand = ({
                 onSlotClick={onSlotClick}
                 onBeadRemove={onBeadRemove}
                 onFrameRemove={onFrameRemove}
+                mirrored={mirroredSlots.has(slot.index)}
                 isDragActive={activeId !== null}
                 emptyGuideMode="none"
                 showRemoveAlways={isMobile}

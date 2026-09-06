@@ -524,6 +524,23 @@ export function StrandRenderConfigPanel({
                   the wrist centre (typical for crystals and charms).{" "}
                   <span className="font-medium">Inward</span> = toward the centre.
                 </p>
+                <label className="mt-2 flex items-start gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    disabled={!isGroupEditable("orientationMode")}
+                    checked={draft.mirrorTowardNeighbour === true}
+                    onChange={(e) =>
+                      patchDraft({ mirrorTowardNeighbour: e.target.checked }, "orientationMode")
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">Face the neighbouring bead.</span> Flips the
+                    image so an asymmetric piece — a bead cap — opens toward the bead beside it,
+                    whichever side it lands on. One upload covers both. Left alone when there are
+                    beads on both sides or neither.
+                  </span>
+                </label>
               </FieldGroupCell>
 
               <FieldGroupCell

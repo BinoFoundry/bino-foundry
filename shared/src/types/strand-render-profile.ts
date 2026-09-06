@@ -122,6 +122,15 @@ export interface StrandRenderProfile {
   stringOcclusion: number;
   /** When true, layout footprint is forced square (round beads). */
   forceRoundFootprint: boolean;
+  /**
+   * Flip the asset horizontally so it opens toward the bead beside it.
+   *
+   * For pieces that are not symmetrical along the cord — a bead cap sits on
+   * either side of a bead and must face it — so one uploaded image serves both
+   * positions. Purely visual: the flip happens inside the slot's own rotated
+   * frame and changes no geometry, spacing or capacity.
+   */
+  mirrorTowardNeighbour: boolean;
   /** Prefer metadata.strandImageUrl over processed delivery URL. */
   preferStrandImageUrl: boolean;
   /**
@@ -237,6 +246,7 @@ export const DEFAULT_STRAND_RENDER_PROFILE: StrandRenderProfile = {
   collisionPadding: 0,
   stringOcclusion: 1,
   forceRoundFootprint: true,
+  mirrorTowardNeighbour: false,
   preferStrandImageUrl: false,
   placementMode: DEFAULT_BEAD_PLACEMENT_MODE,
 };
@@ -523,6 +533,7 @@ export function parseStrandRenderProfile(raw: unknown): Partial<StrandRenderProf
   if (typeof o.collisionPadding === "number") partial.collisionPadding = o.collisionPadding;
   if (typeof o.stringOcclusion === "number") partial.stringOcclusion = o.stringOcclusion;
   if (typeof o.forceRoundFootprint === "boolean") partial.forceRoundFootprint = o.forceRoundFootprint;
+  if (typeof o.mirrorTowardNeighbour === "boolean") partial.mirrorTowardNeighbour = o.mirrorTowardNeighbour;
   if (typeof o.preferStrandImageUrl === "boolean") partial.preferStrandImageUrl = o.preferStrandImageUrl;
   if (o.placementMode === "replace" || o.placementMode === "insert_between") {
     partial.placementMode = o.placementMode;

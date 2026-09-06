@@ -36,7 +36,7 @@ export const STRAND_FIELD_GROUP_PROFILE_KEYS: Record<
   visualScale: ["visualScale"],
   strandOccupancy: ["strandOccupancy", "contactWidth", "contactOffset", "spacingAdjustment"],
   verticalOffset: ["verticalOffset"],
-  orientationMode: ["orientationMode"],
+  orientationMode: ["orientationMode", "mirrorTowardNeighbour"],
   layoutMode: [
     "layoutMode",
     "anchorPreset",
