@@ -1,6 +1,7 @@
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { beadSizesApi } from "@/services/api/bead-sizes";
+import { beadsApi } from "@/services/api/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
@@ -170,6 +171,50 @@ function recordFromExportResult(
  * Build the full regeneration queue — every eligible junction is included.
  * Nothing is silently dropped when factors are stale or the bead is the group reference.
  */
+const CROP_FETCH_CONCURRENCY = 8;
+
+/**
+ * Fill in crop configs for the beads a run will touch.
+ *
+ * The catalogue list omits them on purpose — polygon payloads are large, so the
+ * API only returns a crop config when a bead is fetched by id. The queue
+ * builder needs one for every bead and silently drops those without, which
+ * meant the batch refresh completed instantly having processed nothing at all.
+ *
+ * Only beads with outstanding work are fetched, so a catalogue that is already
+ * exported costs no extra requests.
+ */
+export async function hydrateCropConfigs(
+  libraries: BeadLibraryEntry[],
+  offers: BeadLibrarySizeOffer[],
+  options?: { force?: boolean; signal?: AbortSignal },
+): Promise<BeadLibraryEntry[]> {
+  const inScope = options?.force
+    ? new Set(libraries.map((l) => l.id))
+    : new Set(
+        offers
+          .filter((o) => o.needsNormalizedReexport || !o.normalizedProcessedImageUrl?.trim())
+          .map((o) => o.beadLibraryId),
+      );
+
+  const needed = libraries.filter((l) => inScope.has(l.id) && !l.cropConfig);
+  if (!needed.length) return libraries;
+
+  const fetched = new Map<string, BeadLibraryEntry>();
+  for (let i = 0; i < needed.length; i += CROP_FETCH_CONCURRENCY) {
+    if (options?.signal?.aborted) break;
+    const batch = needed.slice(i, i + CROP_FETCH_CONCURRENCY);
+    const rows = await Promise.all(
+      // One bead failing to load must not sink the whole run; it simply stays
+      // unhydrated and is reported as ineligible like any other bad crop.
+      batch.map((l) => beadsApi.getLibrary(l.id).catch(() => null)),
+    );
+    for (const row of rows) if (row?.cropConfig) fetched.set(row.id, row);
+  }
+
+  return libraries.map((l) => fetched.get(l.id) ?? l);
+}
+
 export function buildNormalizedRegenQueue(
   libraries: BeadLibraryEntry[],
   offers: BeadLibrarySizeOffer[],
@@ -695,8 +740,12 @@ export async function runRecalculateMmGroupJob(
   ]);
   await ctx.refreshBeadLibrarySizes();
 
+  const libraries = await hydrateCropConfigs(ctx.beadLibraries, freshOffers, {
+    signal: options?.signal,
+  });
+
   const items = buildNormalizedRegenQueue(
-    ctx.beadLibraries,
+    libraries,
     freshOffers,
     freshSizes,
     ctx.beadTypes,
@@ -762,8 +811,12 @@ export async function runPendingNormalizedRegenJob(
     onProgress?: (progress: NormalizedRegenJobProgress) => void;
   },
 ): Promise<NormalizedRegenJobProgress> {
+  const libraries = await hydrateCropConfigs(ctx.beadLibraries, ctx.beadLibrarySizes, {
+    signal: options?.signal,
+  });
+
   const items = buildNormalizedRegenQueue(
-    ctx.beadLibraries,
+    libraries,
     ctx.beadLibrarySizes,
     ctx.beadSizes,
     ctx.beadTypes,
