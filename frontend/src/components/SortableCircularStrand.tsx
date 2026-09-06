@@ -836,9 +836,15 @@ const SortableCircularStrand = ({
         // still charges catalogue sizeMm independently.
         const layoutScale =
           renderProfiles[0]?.layoutScale ?? strandRenderDefaults?.layoutScale ?? 1;
-        // Builder always equalises leftover gaps. Only Live Preview may pass false via
-        // forceStrandRenderProfile (Reveal occupancy gaps / clustered demo).
-        const balanceSpacing = forceStrandRenderProfile?.balanceSpacing === false ? false : true;
+        // Equalising leftover gaps gives every item the same slice of the strand
+        // whatever its contact width, which silently discards contactWidth,
+        // contactOffset and occupancy — a narrow piece then sits in a bead-sized
+        // hole. Honour the configured value so those controls mean something;
+        // the system default is still true, so nothing changes until it is set.
+        const balanceSpacing =
+          forceStrandRenderProfile?.balanceSpacing ??
+          strandRenderDefaults?.balanceSpacing ??
+          true;
         const capacityUsedMm = occupancyMm.reduce((sum, mm) => sum + mm, 0);
 
         // Same pipeline as Admin Live Preview — occupancy → balanced path → shell transforms.
@@ -975,7 +981,7 @@ const SortableCircularStrand = ({
       insertionAngles: laidOut.insertionAngles,
       effectiveCanvasSize,
     };
-  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, processedMetricsEpoch, forceStrandRenderProfile]);
+  }, [normalized, canvasSize, guideSizeMm, isStrandEmpty, wristSize, wristSizeBounds, pathStartAngle, sizingCatalogue, getForBead, strandRenderDefaults?.layoutScale, strandRenderDefaults?.balanceSpacing, processedMetricsEpoch, forceStrandRenderProfile]);
   const renderCanvasSize = canvasSize;
   const ringStrokeWidth = computeStrandRingStrokePx(scaleFactor);
 
