@@ -10,8 +10,27 @@ import {
 type LibrarySizeRow = {
   id: string;
   bead_size_id: string;
+  normalized_visible_diameter_px: number | null;
   bead_libraries: { crop_config: BeadCropConfig | null } | { crop_config: BeadCropConfig | null }[] | null;
 };
+
+/**
+ * How many row updates to have in flight at once.
+ *
+ * PostgREST has no multi-row update with differing values, so each row needs
+ * its own request. Sending them one after another made a full recalculation
+ * take longer than the hosting gateway's 30s ceiling, which is a hard failure
+ * rather than a slow success. Overlapping them keeps the wall time proportional
+ * to the round trip rather than to the row count, and the cap keeps us well
+ * inside Supabase's connection limits.
+ */
+const UPDATE_CONCURRENCY = 12;
+
+async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<void>): Promise<void> {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(run));
+  }
+}
 
 /** Visible diameter from stored crop metadata (includes anchor estimate when mask data missing). */
 export function resolveAssetVisibleDiameterPx(cropConfig: unknown): number | null {
@@ -79,11 +98,11 @@ export class MmGroupNormalizationService {
 
     const { data: rows, error } = await supabase
       .from("bead_library_sizes")
-      .select("id, bead_size_id, bead_libraries(crop_config)")
+      .select("id, bead_size_id, normalized_visible_diameter_px, bead_libraries(crop_config)")
       .eq("bead_size_id", beadSizeId);
     assertNoDbError(error);
 
-    const entries: { junctionId: string; visibleDiameterPx: number }[] = [];
+    const entries: { junctionId: string; visibleDiameterPx: number; bakedDiameterPx: number }[] = [];
     let skipped = 0;
 
     for (const raw of rows ?? []) {
@@ -95,7 +114,11 @@ export class MmGroupNormalizationService {
         skipped += 1;
         continue;
       }
-      entries.push({ junctionId: row.id, visibleDiameterPx: visible });
+      entries.push({
+        junctionId: row.id,
+        visibleDiameterPx: visible,
+        bakedDiameterPx: Number(row.normalized_visible_diameter_px ?? 0),
+      });
     }
 
     if (!entries.length) {
@@ -116,8 +139,7 @@ export class MmGroupNormalizationService {
       .eq("id", beadSizeId);
     assertNoDbError(refErr);
 
-    let updated = 0;
-    for (const entry of entries) {
+    await inBatches(entries, UPDATE_CONCURRENCY, async (entry) => {
       const factor = computeMmGroupNormalizationFactor(groupReference, entry.visibleDiameterPx);
       const { error: upErr } = await supabase
         .from("bead_library_sizes")
@@ -127,30 +149,23 @@ export class MmGroupNormalizationService {
         })
         .eq("id", entry.junctionId);
       assertNoDbError(upErr);
-      updated += 1;
-    }
+    });
+    const updated = entries.length;
 
-    for (const entry of entries) {
-      const { data: junctionRow, error: junctionErr } = await supabase
-        .from("bead_library_sizes")
-        .select("normalized_visible_diameter_px")
-        .eq("id", entry.junctionId)
-        .maybeSingle();
-      assertNoDbError(junctionErr);
+    // Same condition as before, decided from the values already in hand, and
+    // applied to every affected row in a single request.
+    const needsReexportIds = entries
+      .filter(
+        (e) =>
+          referenceChanged || e.bakedDiameterPx <= 0 || Math.abs(e.bakedDiameterPx - groupReference) > 0.5,
+      )
+      .map((e) => e.junctionId);
 
-      const baked = Number(
-        (junctionRow as { normalized_visible_diameter_px?: number } | null)
-          ?.normalized_visible_diameter_px ?? 0,
-      );
-      const needsReexport =
-        referenceChanged || baked <= 0 || Math.abs(baked - groupReference) > 0.5;
-
-      if (!needsReexport) continue;
-
+    if (needsReexportIds.length) {
       const { error: flagErr } = await supabase
         .from("bead_library_sizes")
         .update({ needs_normalized_reexport: true })
-        .eq("id", entry.junctionId);
+        .in("id", needsReexportIds);
       assertNoDbError(flagErr);
     }
 
