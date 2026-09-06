@@ -1,6 +1,7 @@
 import {
   contactArcPxFromCapacityMm,
   type StrandRenderProfile,
+  effectiveStrandContactWidth,
 } from "@bino-foundry/shared/types";
 
 import { visualSizeCurveRelativeFactor } from "@/render/bead-crop/visual-bead-scale";
@@ -110,8 +111,15 @@ export function resolveStrandShellFootprint(params: {
     visualBaseLinear.height,
     profile.layoutScale,
   );
-  // Packing: occupancy/contact may widen gaps, but never shrink below the silhouette.
-  const packLinearWidth = Math.max(contactArcPx, visualWidthLinear);
+  // Packing: occupancy/contact may widen gaps, but never shrink below the
+  // silhouette — except that the silhouette here is the mm slot, not the
+  // artwork. A piece drawn narrow inside a full-size slot (a bead cap) would
+  // claim a whole bead of cord and sit in a visible hole. Narrowing contact
+  // width is an explicit instruction to let neighbours close in, so honour it.
+  const narrowsContact = effectiveStrandContactWidth(profile) < 1;
+  const packLinearWidth = narrowsContact
+    ? contactArcPx
+    : Math.max(contactArcPx, visualWidthLinear);
   const packLinearHeight =
     profile.layoutMode === "dangling"
       ? Math.max(packLinearWidth, visualHeightLinear)

@@ -41,10 +41,14 @@ describe("occupancy demo gap", () => {
     expect(loose.shellW).toBeCloseTo(tight.shellW, 3);
   });
 
-  it("floors packing near visual so 0.5 ≈ 1.0 for edge spacing", () => {
+  it("packs tighter below 1.0 instead of flooring at the drawn shell", () => {
     const half = chordFor(0.5);
     const one = chordFor(1);
-    // Lowering below 1 often cannot pack tighter than the drawn shell.
-    expect(Math.abs(half.chord - one.chord) / one.chord).toBeLessThan(0.15);
+    // This used to assert the opposite — that lowering occupancy below 1 could
+    // not pack tighter, because the claim was floored at the shell width. That
+    // shell comes from the mm slot, not the artwork, so a narrow piece reserved
+    // a full bead of cord and sat in a visible hole. Occupancy below 1 is now
+    // honoured, which is the only way a bead cap can sit against its bead.
+    expect(half.chord).toBeLessThan(one.chord);
   });
 });
