@@ -26,10 +26,19 @@ type LibrarySizeRow = {
  */
 const UPDATE_CONCURRENCY = 12;
 
-async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<void>): Promise<void> {
+/**
+ * Groups are recalculated concurrently too. Each bead size owns a disjoint set
+ * of junction rows, so they never contend; kept lower than the row concurrency
+ * because every group fans out into row updates of its own.
+ */
+const GROUP_CONCURRENCY = 4;
+
+async function inBatches<T, R>(items: T[], size: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
   for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(run));
+    results.push(...(await Promise.all(items.slice(i, i + size).map(run))));
   }
+  return results;
 }
 
 /** Visible diameter from stored crop metadata (includes anchor estimate when mask data missing). */
@@ -47,17 +56,17 @@ export class MmGroupNormalizationService {
     const { data: sizes, error } = await supabase.from("bead_sizes").select("id").eq("is_active", true);
     assertNoDbError(error);
 
-    let updated = 0;
-    let skipped = 0;
     const sizeIds = (sizes ?? []).map((r) => String((r as { id: string }).id));
 
-    for (const beadSizeId of sizeIds) {
-      const result = await this.recalculateGroup(beadSizeId);
-      updated += result.updated;
-      skipped += result.skipped;
-    }
+    const results = await inBatches(sizeIds, GROUP_CONCURRENCY, (beadSizeId) =>
+      this.recalculateGroup(beadSizeId),
+    );
 
-    return { groups: sizeIds.length, updated, skipped };
+    return {
+      groups: sizeIds.length,
+      updated: results.reduce((sum, r) => sum + r.updated, 0),
+      skipped: results.reduce((sum, r) => sum + r.skipped, 0),
+    };
   }
 
   /** Recompute groups for bead sizes linked to a library (after crop or size sync). */
