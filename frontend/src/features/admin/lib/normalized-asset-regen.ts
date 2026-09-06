@@ -181,23 +181,19 @@ const CROP_FETCH_CONCURRENCY = 8;
  * builder needs one for every bead and silently drops those without, which
  * meant the batch refresh completed instantly having processed nothing at all.
  *
- * Only beads with outstanding work are fetched, so a catalogue that is already
- * exported costs no extra requests.
+ * Every bead holding an offer is fetched, not only those with outstanding work:
+ * the run asserts that it visited every junction whose factor was refreshed, and
+ * a bead left unhydrated silently drops out of that count. Already-exported
+ * beads still cost a request, but they are recorded as unchanged rather than
+ * vanishing — which is the whole point of the coverage check.
  */
 export async function hydrateCropConfigs(
   libraries: BeadLibraryEntry[],
   offers: BeadLibrarySizeOffer[],
-  options?: { force?: boolean; signal?: AbortSignal },
+  options?: { signal?: AbortSignal },
 ): Promise<BeadLibraryEntry[]> {
-  const inScope = options?.force
-    ? new Set(libraries.map((l) => l.id))
-    : new Set(
-        offers
-          .filter((o) => o.needsNormalizedReexport || !o.normalizedProcessedImageUrl?.trim())
-          .map((o) => o.beadLibraryId),
-      );
-
-  const needed = libraries.filter((l) => inScope.has(l.id) && !l.cropConfig);
+  const withOffers = new Set(offers.map((o) => o.beadLibraryId));
+  const needed = libraries.filter((l) => withOffers.has(l.id) && !l.cropConfig);
   if (!needed.length) return libraries;
 
   const fetched = new Map<string, BeadLibraryEntry>();
@@ -682,8 +678,12 @@ export async function runNormalizedAssetRegenJob(
         pipelineStep: m.pipelineStep,
       })),
     );
+    const detail = missing.length
+      ? `Missing: ${missing.map((m) => m.libraryName).join(", ")}`
+      : `${factorsRefreshed - summary.beadsProcessed} never entered the queue — ` +
+        "usually beads whose crop data could not be loaded.";
     throw new Error(
-      `Regeneration processed ${summary.beadsProcessed} bead(s) but ${factorsRefreshed} factor(s) were refreshed. Missing: ${missing.map((m) => m.libraryName).join(", ")}`,
+      `Regeneration processed ${summary.beadsProcessed} bead(s) but ${factorsRefreshed} factor(s) were refreshed. ${detail}`,
     );
   }
 

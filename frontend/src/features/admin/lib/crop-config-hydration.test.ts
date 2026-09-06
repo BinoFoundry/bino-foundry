@@ -88,21 +88,20 @@ describe("crop config hydration", () => {
     expect(items[0].libraryId).toBe("alpha");
   });
 
-  it("skips beads that are already exported, costing no requests", async () => {
+  it("fetches already-exported beads too, so the coverage check can account for them", async () => {
+    // Skipping these made them vanish from the run, and the job then failed its
+    // own assertion that every refreshed factor was visited.
     await hydrateCropConfigs(
       [listedLibrary("alpha")],
       [offer("alpha", { normalizedProcessedImageUrl: "https://example.com/n.webp" })],
-    );
-    expect(getLibrary).not.toHaveBeenCalled();
-  });
-
-  it("still fetches an exported bead when the run is forced", async () => {
-    await hydrateCropConfigs(
-      [listedLibrary("alpha")],
-      [offer("alpha", { normalizedProcessedImageUrl: "https://example.com/n.webp" })],
-      { force: true },
     );
     expect(getLibrary).toHaveBeenCalledWith("alpha");
+  });
+
+  it("ignores beads that hold no offers", async () => {
+    await hydrateCropConfigs([listedLibrary("alpha"), listedLibrary("orphan")], [offer("alpha")]);
+    expect(getLibrary).toHaveBeenCalledWith("alpha");
+    expect(getLibrary).not.toHaveBeenCalledWith("orphan");
   });
 
   it("lets one unreadable bead through without sinking the run", async () => {
