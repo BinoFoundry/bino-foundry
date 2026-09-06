@@ -5,6 +5,7 @@ import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadAvailabilityStatus } from "@/types/bead-availability";
 import type { PlacedBead } from "@/lib/luxe-data";
 
+import { removeBeadFrame } from "./composition";
 import { buildPlacedFromSavedBracelet } from "./load-saved-bracelet";
 import { buildPlacedFromOrderBracelet } from "./load-order-bracelet";
 import { buildBraceletPricing } from "./pricing";
@@ -151,6 +152,25 @@ describe("frame persistence", () => {
     expect(pricing.subtotal).toBe(12 + 12 + 8);
     // Two beads on the strand; the halo shares a slot rather than taking one.
     expect(pricing.placedCount).toBe(2);
+  });
+
+  it("takes the halo off without disturbing the bead or its neighbours", () => {
+    const strand = [framedBead, plainBead];
+    const next = removeBeadFrame(strand, 0);
+
+    expect(next[0].frame).toBeUndefined();
+    expect(next[0].bead.id).toBe("rose");
+    expect(next[0].position).toBe(0);
+    expect(next).toHaveLength(2);
+    expect(next[1].bead.id).toBe("rose");
+    // The original array is untouched — the strand is replaced, not mutated.
+    expect(strand[0].frame?.bead.id).toBe("gold-halo");
+  });
+
+  it("leaves the strand alone when there is no halo to remove", () => {
+    const strand = [framedBead, plainBead];
+    expect(removeBeadFrame(strand, 1)).toBe(strand);
+    expect(removeBeadFrame(strand, 9)).toBe(strand);
   });
 
   it("replays a frozen order without the live catalogue", () => {

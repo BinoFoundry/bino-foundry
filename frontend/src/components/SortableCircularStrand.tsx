@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect, memo, type CSSProperties, type KeyboardEvent } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { X, AlertTriangle } from "lucide-react";
+import { X, AlertTriangle, CircleOff } from "lucide-react";
 import {
   DndContext,
   KeyboardSensor,
@@ -116,6 +116,8 @@ interface SortableCircularStrandProps {
   onBeadsReorder: (fromPosition: number, toPosition: number) => void;
   onSlotClick: (position: number) => void;
   onBeadDrop?: (target: StrandDropTarget, data: LibraryDropPayload) => void;
+  /** Take the halo off a bead without removing the bead. */
+  onFrameRemove?: (position: number) => void;
   onBeadRemove?: (position: number) => void;
   label?: string;
   wristSize: number;
@@ -208,6 +210,7 @@ interface SortableBeadProps {
   zIndex: number;
   onSlotClick: (position: number) => void;
   onBeadRemove?: (position: number) => void;
+  onFrameRemove?: (position: number) => void;
   isDragActive: boolean;
   emptyGuideMode: EmptySlotGuideMode;
   showRemoveAlways?: boolean;
@@ -235,6 +238,7 @@ function SortableBeadInner({
   zIndex,
   onSlotClick,
   onBeadRemove,
+  onFrameRemove,
   isDragActive,
   emptyGuideMode,
   showRemoveAlways = false,
@@ -471,6 +475,43 @@ function SortableBeadInner({
           />
         </button>
       ) : null}
+      {bead?.frame && onFrameRemove && !libraryDragActive ? (
+        <button
+          type="button"
+          title={BRACELET_COPY.removeFrame}
+          aria-label={BRACELET_COPY.removeFrame}
+          className={cn(
+            "pointer-events-auto absolute z-40 flex items-center justify-center rounded-full",
+            "border border-border bg-background text-muted-foreground shadow-sm",
+            "transition-opacity hover:bg-destructive hover:text-destructive-foreground",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isDragging
+              ? "opacity-0"
+              : showRemoveAlways
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100 focus:opacity-100",
+          )}
+          style={{
+            left: `calc(50% - ${outward.x}px)`,
+            top: `calc(50% - ${outward.y}px)`,
+            width: removeBtnSize,
+            height: removeBtnSize,
+            transform: "translate(-50%, -50%)",
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onFrameRemove(position);
+          }}
+        >
+          <CircleOff
+            className="shrink-0"
+            style={{ width: removeBtnSize * 0.42, height: removeBtnSize * 0.42 }}
+            strokeWidth={2.5}
+          />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -507,6 +548,7 @@ const SortableCircularStrand = ({
   onSlotClick,
   onBeadDrop,
   onBeadRemove,
+  onFrameRemove,
   label,
   wristSize,
   guideSizeMm,
@@ -1351,6 +1393,7 @@ const SortableCircularStrand = ({
                 zIndex={slot.zIndex}
                 onSlotClick={onSlotClick}
                 onBeadRemove={onBeadRemove}
+                onFrameRemove={onFrameRemove}
                 isDragActive={activeId !== null}
                 emptyGuideMode="none"
                 showRemoveAlways={isMobile}

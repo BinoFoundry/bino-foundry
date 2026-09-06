@@ -101,6 +101,19 @@ export function removeBeadAt(placed: PlacedBead[], index: number): PlacedBead[] 
   return normalizeSequence(sorted.filter((_, i) => i !== index));
 }
 
+/**
+ * Take the halo off the bead at `index`, leaving the bead itself on the strand.
+ * Returns the array unchanged when there is no bead there or it has no frame,
+ * so callers can pass the result straight back to setState.
+ */
+export function removeBeadFrame(placed: PlacedBead[], index: number): PlacedBead[] {
+  const sorted = normalizeFromSlots(placed);
+  const target = sorted[index];
+  if (!target?.frame) return placed;
+  const { frame: _removed, ...withoutFrame } = target;
+  return replaceBeadAt(sorted, index, withoutFrame);
+}
+
 /** Swap bead at index — preserves position and sequence order. */
 export function replaceBeadAt(placed: PlacedBead[], index: number, bead: PlacedBead): PlacedBead[] {
   const sorted = normalizeFromSlots(placed);

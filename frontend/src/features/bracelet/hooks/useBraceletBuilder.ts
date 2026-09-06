@@ -22,6 +22,7 @@ import {
 } from "../capacity";
 import {
   getBeadAtIndex,
+  removeBeadFrame,
   insertBeadAt,
   insertBeadWithAutoLayout,
   normalizeFromSlots,
@@ -401,17 +402,26 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       bead: BeadLibraryEntry,
       size: BeadLibrarySizeOffer,
     ) => {
-      const placed = bracelet === "A" ? placedBeadsA : placedBeadsB;
-      const target = getBeadAtIndex(placed, index);
-      if (!target) return false;
-
       const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
-      setPlaced(replaceBeadAt(placed, index, { ...target, frame: { bead, size } }));
+      setPlaced((prev) => {
+        const target = getBeadAtIndex(prev, index);
+        if (!target) return prev;
+        return replaceBeadAt(prev, index, { ...target, frame: { bead, size } });
+      });
       setCapacityNotice(null);
       bumpLayout();
-      return true;
     },
-    [placedBeadsA, placedBeadsB, bumpLayout],
+    [bumpLayout],
+  );
+
+  /** Take the halo off a bead, leaving the bead itself in place. */
+  const handleRemoveFrame = useCallback(
+    (bracelet: "A" | "B", position: number) => {
+      const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
+      setPlaced((prev) => removeBeadFrame(prev, position));
+      bumpLayout();
+    },
+    [bumpLayout],
   );
 
   const handleSlotClick = useCallback(
@@ -855,6 +865,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     handleBeadDrop,
     handleBeadsReorder,
     handleRemoveBead,
+    handleRemoveFrame,
     handleMatchBracelets,
     handleUnmatchBracelets,
     handleSelectBead,

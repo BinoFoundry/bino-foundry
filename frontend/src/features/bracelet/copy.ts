@@ -99,6 +99,7 @@ export const BRACELET_COPY = {
   dragToReorder: "Drag to reorder",
   dismissHint: "Dismiss",
   removeBead: "Remove",
+  removeFrame: "Remove frame",
   quantityLabel: (qty: number) => (qty === 1 ? "Qty 1" : `Qty ${qty}`),
   emptySlotHint: "Add a piece here",
   duplicateToPair: "Match first bracelet",
