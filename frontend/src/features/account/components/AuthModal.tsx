@@ -18,6 +18,8 @@ import { authApi } from "@/services/api/auth";
 import { isApiError } from "@/services/api/errors";
 import { useAuth } from "@/state/auth/AuthProvider";
 
+import { authCallbackUrl } from "../auth-callback-url";
+
 type AuthView = "sign-in" | "sign-up" | "forgot-password";
 
 function isUnverifiedLoginError(message: string): boolean {
@@ -63,7 +65,10 @@ export function AuthModal() {
       if (view === "forgot-password") {
         const response = await authApi.forgotPassword({
           email: email.trim(),
-          redirectTo: `${window.location.origin}/auth/callback`,
+          // Must include the app's base path. The builder is served under
+          // /design, so origin alone produced a link to /auth/callback on the
+          // storefront — a 404 — and locked people out of their own reset.
+          redirectTo: authCallbackUrl(),
         });
         setInfo(response.message);
         toast.message(response.message);
