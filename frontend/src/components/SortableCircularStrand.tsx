@@ -89,11 +89,17 @@ import type { BeadSlotSizingCatalogueContext } from "@/render/bead-crop";
 type EmptySlotGuideMode = "prominent" | "moderate" | "none";
 
 /**
- * How much larger a halo surround draws than the bead it wraps. The reference
- * pieces sit a little proud of the stone — enough to read as a setting without
- * crowding the neighbouring beads.
+ * How much larger a surround draws than the bead it wraps.
+ *
+ * Measured from the bead cap artwork rather than chosen by eye: the pair spans
+ * 1.66 bead diameters tip to tip, and the metal fills 98% of the asset, so the
+ * caps seat on the bead's shoulders at this value instead of sinking inside its
+ * outline. A halo ring reads correctly at the same scale.
+ *
+ * If surrounds with materially different proportions are added, this belongs on
+ * the bead type rather than here.
  */
-const FRAME_SIZE_RATIO = 1.34;
+const FRAME_SIZE_RATIO = 1.7;
 
 const REORDER_HINT_STORAGE_KEY = "bino-foundry-reorder-hint-dismissed";
 const REORDER_HINT_AUTO_DISMISS_MS = 12_000;
