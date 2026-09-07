@@ -284,6 +284,7 @@ export class OrdersService {
           sizeLabel: String(item.sizeLabel ?? `${item.beadSizeMm} mm`),
           unitPrice: Number(item.unitPrice),
           offerKey: item.offerKey ? String(item.offerKey) : undefined,
+          ...(item.flipped === true ? { flipped: true } : {}),
           ...(frame
             ? {
                 frame: {

@@ -378,6 +378,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
             offerKey: item.offerKey,
             catalogIssue: item.catalogIssue ?? null,
             unitPrice: item.unitPrice,
+            flipped: item.flipped,
             frame: item.frame
               ? {
                   beadLibraryId: item.frame.beadLibraryId,
@@ -780,6 +781,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
               onBeadDrop={(target, data) => builder.handleBeadDrop("A", target, data)}
               onBeadRemove={(pos) => builder.handleRemoveBead("A", pos)}
               onFrameRemove={(pos) => builder.handleRemoveFrame("A", pos)}
+              onFlip={(pos) => builder.handleToggleFlip("A", pos)}
               label={builder.twinning ? BRACELET_COPY.wristTwinA : undefined}
               wristSize={builder.wristSizeA}
               wristSizeBounds={builder.wristSizeBounds}
@@ -819,6 +821,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                 onBeadDrop={(target, data) => builder.handleBeadDrop("B", target, data)}
                 onBeadRemove={(pos) => builder.handleRemoveBead("B", pos)}
                 onFrameRemove={(pos) => builder.handleRemoveFrame("B", pos)}
+                onFlip={(pos) => builder.handleToggleFlip("B", pos)}
                 label={BRACELET_COPY.wristTwinB}
                 wristSize={builder.wristSizeB}
                 wristSizeBounds={builder.wristSizeBounds}

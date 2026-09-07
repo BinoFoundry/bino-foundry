@@ -26,6 +26,14 @@ export interface BraceletConfigurationItemRef {
     beadLibraryId: string;
     beadSizeMm: BraceletBeadSizeMm;
   };
+  /**
+   * Customer turned this piece around by hand.
+   *
+   * An asymmetric piece — a bead cap — has no correct facing the layout can
+   * infer when it sits between two beads: both arrangements are identical to
+   * look at, so only the person designing knows which bead it caps.
+   */
+  flipped?: boolean;
 }
 
 export interface BraceletPricingLineItem {

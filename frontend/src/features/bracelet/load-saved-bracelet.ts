@@ -26,6 +26,8 @@ export interface SavedBraceletItem {
   unitPrice?: number;
   /** Halo attached to this bead — no slot of its own. */
   frame?: SavedBraceletFrame;
+  /** Turned around by hand when the design was saved. */
+  flipped?: boolean;
 }
 
 export interface SavedBraceletLoadInput {
@@ -144,6 +146,7 @@ function buildPlaced(
           },
           size,
           ...(frame ? { frame } : {}),
+          ...(item.flipped ? { flipped: true } : {}),
         } satisfies PlacedBead;
       }
 
@@ -152,6 +155,7 @@ function buildPlaced(
         bead,
         size,
         ...(frame ? { frame } : {}),
+        ...(item.flipped ? { flipped: true } : {}),
       } satisfies PlacedBead;
     });
 }

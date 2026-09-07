@@ -20,6 +20,8 @@ export const braceletConfigItemDto = z
     beadLibraryId: z.string().min(1),
     beadSizeMm: beadSizeMm,
     frame: braceletConfigFrameDto.optional(),
+    /** Asymmetric pieces the customer turned around by hand. */
+    flipped: z.boolean().optional(),
     /** @deprecated Use beadLibraryId + beadSizeMm — accepted for older clients. */
     beadVariantId: z.string().min(1).optional(),
   })

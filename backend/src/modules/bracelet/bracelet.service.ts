@@ -139,6 +139,7 @@ export class BraceletService {
         frame_bead_size_mm: frame?.offer.sizeMm ?? null,
         frame_unit_price_snapshot: frame?.offer.unitPrice ?? null,
         frame_bead_library_public_id_snapshot: item.frame?.beadLibraryId ?? null,
+        is_flipped: item.flipped === true,
       };
     });
 
@@ -267,7 +268,7 @@ export class BraceletService {
     const { data: items, error: itemsErr } = await supabase
       .from("bracelet_configuration_items")
       .select(
-        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, frame_bead_size_mm, frame_unit_price_snapshot, frame_bead_library_public_id_snapshot, bead_library_sizes!bead_library_size_id(unit_price, available_for_new, bead_sizes(size_mm, label)), bead_libraries!bead_library_id(public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs, label)), frame_library:bead_libraries!frame_bead_library_id(public_id, name), frame_size:bead_library_sizes!frame_bead_library_size_id(bead_sizes(label))",
+        "strand_index, slot_position, bead_size_mm, unit_price_snapshot, bead_library_public_id_snapshot, bead_library_size_id, is_flipped, frame_bead_size_mm, frame_unit_price_snapshot, frame_bead_library_public_id_snapshot, bead_library_sizes!bead_library_size_id(unit_price, available_for_new, bead_sizes(size_mm, label)), bead_libraries!bead_library_id(public_id, name, is_active, availability_status_code, bead_types(slug), catalog_availability_statuses(show_in_builder, allow_new_designs, label)), frame_library:bead_libraries!frame_bead_library_id(public_id, name), frame_size:bead_library_sizes!frame_bead_library_size_id(bead_sizes(label))",
       )
       .eq("configuration_id", configId)
       .order("strand_index")
@@ -333,6 +334,7 @@ export class BraceletService {
         catalogIssue,
         availabilityStatusCode: lib ? String(lib.availability_status_code ?? "ACTIVE") : null,
         availabilityStatusLabel: status?.label ?? null,
+        ...(r.is_flipped === true ? { flipped: true } : {}),
         ...(frame ? { frame } : {}),
       };
     });

@@ -25,6 +25,8 @@ function strandItems(placed: PlacedBead[], strandIndex: 0 | 1): BraceletConfigur
       ...(b.frame
         ? { frame: { beadLibraryId: b.frame.bead.id, beadSizeMm: b.frame.size.sizeMm } }
         : {}),
+      // Only recorded when turned, so an untouched design serialises as before.
+      ...(b.flipped ? { flipped: true } : {}),
     }));
 }
 

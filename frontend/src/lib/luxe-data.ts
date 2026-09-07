@@ -77,6 +77,8 @@ export interface PlacedBead {
   size: BeadLibrarySizeOffer;
   /** Optional surround drawn over this bead. Claims no arc of its own. */
   frame?: PlacedBeadFrame;
+  /** Turned around by hand; overrides whichever way the strand would face it. */
+  flipped?: boolean;
 }
 
 export function placedBeadSizeMm(item: PlacedBead): BeadSize {

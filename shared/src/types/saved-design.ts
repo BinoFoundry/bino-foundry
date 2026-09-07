@@ -91,6 +91,8 @@ export interface OrderSnapshotBeadItem {
   render?: OrderSnapshotBeadRender;
   /** Present when the customer dropped a halo onto this bead. */
   frame?: OrderSnapshotBeadFrame;
+  /** Customer turned this piece around by hand — it is strung facing this way. */
+  flipped?: boolean;
 }
 
 export interface OrderSnapshotPreparation {

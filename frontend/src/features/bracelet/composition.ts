@@ -102,6 +102,19 @@ export function removeBeadAt(placed: PlacedBead[], index: number): PlacedBead[] 
 }
 
 /**
+ * Turn the piece at `index` around.
+ *
+ * Returns the array unchanged when there is no piece there, so callers can pass
+ * the result straight back to setState.
+ */
+export function toggleBeadFlip(placed: PlacedBead[], index: number): PlacedBead[] {
+  const sorted = normalizeFromSlots(placed);
+  const target = sorted[index];
+  if (!target) return placed;
+  return replaceBeadAt(sorted, index, { ...target, flipped: !target.flipped });
+}
+
+/**
  * Take the halo off the bead at `index`, leaving the bead itself on the strand.
  * Returns the array unchanged when there is no bead there or it has no frame,
  * so callers can pass the result straight back to setState.

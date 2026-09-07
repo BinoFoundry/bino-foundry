@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect, memo, type CSSProperties, type KeyboardEvent } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { X, AlertTriangle, CircleOff } from "lucide-react";
+import { X, AlertTriangle, CircleOff, FlipHorizontal } from "lucide-react";
 import {
   DndContext,
   KeyboardSensor,
@@ -119,6 +119,8 @@ interface SortableCircularStrandProps {
   onBeadDrop?: (target: StrandDropTarget, data: LibraryDropPayload) => void;
   /** Take the halo off a bead without removing the bead. */
   onFrameRemove?: (position: number) => void;
+  /** Turn an asymmetric piece around. */
+  onFlip?: (position: number) => void;
   onBeadRemove?: (position: number) => void;
   label?: string;
   wristSize: number;
@@ -212,6 +214,9 @@ interface SortableBeadProps {
   onSlotClick: (position: number) => void;
   onBeadRemove?: (position: number) => void;
   onFrameRemove?: (position: number) => void;
+  onFlip?: (position: number) => void;
+  /** Show the turn-around control — only asymmetric pieces have a wrong way round. */
+  canFlip?: boolean;
   /** Flip the asset along the cord so it faces the bead beside it. */
   mirrored?: boolean;
   isDragActive: boolean;
@@ -242,6 +247,8 @@ function SortableBeadInner({
   onSlotClick,
   onBeadRemove,
   onFrameRemove,
+  onFlip,
+  canFlip = false,
   mirrored = false,
   isDragActive,
   emptyGuideMode,
@@ -482,6 +489,44 @@ function SortableBeadInner({
           />
         </button>
       ) : null}
+      {bead && canFlip && onFlip && !libraryDragActive ? (
+        <button
+          type="button"
+          title={BRACELET_COPY.flipBead}
+          aria-label={BRACELET_COPY.flipBead}
+          aria-pressed={mirrored}
+          className={cn(
+            "pointer-events-auto absolute z-40 flex items-center justify-center rounded-full",
+            "border border-border bg-background text-muted-foreground shadow-sm",
+            "transition-opacity hover:bg-primary hover:text-primary-foreground",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isDragging
+              ? "opacity-0"
+              : showRemoveAlways
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100 focus:opacity-100",
+          )}
+          style={{
+            left: `calc(50% + ${outward.y}px)`,
+            top: `calc(50% - ${outward.x}px)`,
+            width: removeBtnSize,
+            height: removeBtnSize,
+            transform: "translate(-50%, -50%)",
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onFlip(position);
+          }}
+        >
+          <FlipHorizontal
+            className="shrink-0"
+            style={{ width: removeBtnSize * 0.46, height: removeBtnSize * 0.46 }}
+            strokeWidth={2.2}
+          />
+        </button>
+      ) : null}
       {bead?.frame && onFrameRemove && !libraryDragActive ? (
         <button
           type="button"
@@ -542,6 +587,7 @@ const SortableBead = memo(SortableBeadInner, (prev, next) =>
   prev.isSelected === next.isSelected &&
   prev.isSwapTarget === next.isSwapTarget &&
   prev.mirrored === next.mirrored &&
+  prev.canFlip === next.canFlip &&
   prev.libraryDragActive === next.libraryDragActive &&
   prev.ringCenterX === next.ringCenterX &&
   prev.ringCenterY === next.ringCenterY &&
@@ -557,6 +603,7 @@ const SortableCircularStrand = ({
   onBeadDrop,
   onBeadRemove,
   onFrameRemove,
+  onFlip,
   label,
   wristSize,
   guideSizeMm,
@@ -717,12 +764,29 @@ const SortableCircularStrand = ({
     }
     return catalogueRender.getForBead;
   }, [forcedResolved, catalogueRender.getForBead]);
-  /** Slots whose asset must face the bead beside it, by strand index. */
+  /**
+   * Slots drawn facing the other way, by strand index.
+   *
+   * The strand's own guess and the customer's choice combine: turning a piece
+   * around inverts whatever it would otherwise have done, so the control always
+   * changes what you see.
+   */
   const mirroredSlots = useMemo(() => {
     const flags = new Set<number>();
     normalized.forEach((placed, index) => {
-      if (!getForBead(placed.bead).mirrorTowardNeighbour) return;
-      if (shouldMirrorTowardNeighbour(normalized, index)) flags.add(index);
+      const auto =
+        getForBead(placed.bead).mirrorTowardNeighbour &&
+        shouldMirrorTowardNeighbour(normalized, index);
+      if (auto !== Boolean(placed.flipped)) flags.add(index);
+    });
+    return flags;
+  }, [normalized, getForBead]);
+
+  /** Pieces with a wrong way round, so only they offer the control. */
+  const flippableSlots = useMemo(() => {
+    const flags = new Set<number>();
+    normalized.forEach((placed, index) => {
+      if (getForBead(placed.bead).mirrorTowardNeighbour) flags.add(index);
     });
     return flags;
   }, [normalized, getForBead]);
@@ -1423,6 +1487,8 @@ const SortableCircularStrand = ({
                 onSlotClick={onSlotClick}
                 onBeadRemove={onBeadRemove}
                 onFrameRemove={onFrameRemove}
+                onFlip={onFlip}
+                canFlip={flippableSlots.has(slot.index)}
                 mirrored={mirroredSlots.has(slot.index)}
                 isDragActive={activeId !== null}
                 emptyGuideMode="none"

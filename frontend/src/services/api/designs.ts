@@ -22,6 +22,8 @@ export interface SavedDesignDetail extends SavedDesignSummary {
       beadName?: string;
       catalogIssue?: "deleted" | "unavailable" | null;
       unitPrice?: number;
+      /** Turned around by hand when saved. */
+      flipped?: boolean;
       /** Halo attached to this bead; wraps it rather than taking a slot. */
       frame?: {
         beadLibraryId: string;

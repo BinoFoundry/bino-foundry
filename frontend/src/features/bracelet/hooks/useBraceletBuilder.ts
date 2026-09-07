@@ -23,6 +23,7 @@ import {
 import {
   getBeadAtIndex,
   removeBeadFrame,
+  toggleBeadFlip,
   insertBeadAt,
   insertBeadWithAutoLayout,
   normalizeFromSlots,
@@ -409,6 +410,17 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
         return replaceBeadAt(prev, index, { ...target, frame: { bead, size } });
       });
       setCapacityNotice(null);
+      bumpLayout();
+    },
+    [bumpLayout],
+  );
+
+  /** Turn an asymmetric piece around — which bead a cap faces is the
+   * customer's call, not something the strand can work out. */
+  const handleToggleFlip = useCallback(
+    (bracelet: "A" | "B", position: number) => {
+      const setPlaced = bracelet === "A" ? setPlacedBeadsA : setPlacedBeadsB;
+      setPlaced((prev) => toggleBeadFlip(prev, position));
       bumpLayout();
     },
     [bumpLayout],
@@ -866,6 +878,7 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     handleBeadsReorder,
     handleRemoveBead,
     handleRemoveFrame,
+    handleToggleFlip,
     handleMatchBracelets,
     handleUnmatchBracelets,
     handleSelectBead,

@@ -214,6 +214,7 @@ export class DesignsService {
             slotPosition: Number(item.slotPosition),
             beadLibraryId: String(item.beadLibraryId),
             beadSizeMm: Number(item.beadSizeMm),
+            ...(item.flipped === true ? { flipped: true } : {}),
             ...(item.frame
               ? {
                   frame: {

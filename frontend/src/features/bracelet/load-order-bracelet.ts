@@ -80,7 +80,13 @@ function placedFromFrozenItem(item: OrderSnapshotBeadItem): PlacedBead {
   const frame = item.frame?.render
     ? frozenBeadAndSize(item.frame, item.frame.render)
     : undefined;
-  return { position: item.slotPosition, bead, size, ...(frame ? { frame } : {}) };
+  return {
+    position: item.slotPosition,
+    bead,
+    size,
+    ...(frame ? { frame } : {}),
+    ...(item.flipped ? { flipped: true } : {}),
+  };
 }
 
 function buildStrandFromFrozen(items: OrderSnapshotBeadItem[], strandIndex: 0 | 1): PlacedBead[] {
@@ -162,6 +168,7 @@ export function buildPlacedFromOrderBracelet(
       beadSizeMm: item.beadSizeMm,
       offerKey: item.offerKey,
       unitPrice: item.unitPrice,
+      ...(item.flipped ? { flipped: true } : {}),
       ...(item.frame
         ? {
             frame: {
