@@ -1041,6 +1041,10 @@ const SortableCircularStrand = ({
         insertionAngles,
         placementMode: options?.placementMode,
         dragged: options?.dragged ?? {},
+        // Hold the gap already being shown unless the pointer clearly leaves it,
+        // so the indicator does not rattle between neighbours while aiming.
+        previousInsertIndex:
+          hoverDropTarget?.mode === "insert" ? hoverDropTarget.index : undefined,
         placedTypeRefs: normalized.map((placed) => ({
           beadTypeId: placed.bead.beadTypeId,
           beadTypeSlug: placed.bead.beadTypeSlug,
@@ -1054,6 +1058,7 @@ const SortableCircularStrand = ({
       insertionAngles,
       pathStartAngle,
       normalized,
+      hoverDropTarget,
     ],
   );
 

@@ -292,24 +292,49 @@ export function beadIndexFromLayoutSectors(
   return bestIdx;
 }
 
+/**
+ * How far past the midpoint the pointer must travel before the chosen gap
+ * changes, as a fraction of the spacing between adjacent gaps.
+ *
+ * Without it the target flips the instant the pointer crosses a boundary, so
+ * a hand that is merely holding still can rattle between two gaps — and the
+ * angle swings fastest near the middle of the bracelet, where the pointer is
+ * furthest from the cord it is aiming at.
+ */
+const GAP_STICKINESS_FRACTION = 0.35;
+
 export function insertionIndexFromLayoutGaps(
   pointerAngle: number,
   insertionAngles: number[],
+  /** Gap currently shown to the customer, kept unless clearly beaten. */
+  previousIndex?: number,
 ): number {
   if (insertionAngles.length <= 1) return 0;
   const target = normalizeAngleRad(pointerAngle);
+  const distanceTo = (i: number) => {
+    let dist = Math.abs(target - normalizeAngleRad(insertionAngles[i]!));
+    if (dist > Math.PI) dist = 2 * Math.PI - dist;
+    return dist;
+  };
+
   let bestIdx = 0;
   let bestDist = Infinity;
-  insertionAngles.forEach((angle, i) => {
-    const gap = normalizeAngleRad(angle);
-    let dist = Math.abs(target - gap);
-    if (dist > Math.PI) dist = 2 * Math.PI - dist;
+  insertionAngles.forEach((_, i) => {
+    const dist = distanceTo(i);
     if (dist < bestDist) {
       bestDist = dist;
       bestIdx = i;
     }
   });
-  return bestIdx;
+
+  const held =
+    previousIndex != null && previousIndex >= 0 && previousIndex < insertionAngles.length
+      ? previousIndex
+      : null;
+  if (held == null || held === bestIdx) return bestIdx;
+
+  const margin = ((2 * Math.PI) / insertionAngles.length) * GAP_STICKINESS_FRACTION;
+  return distanceTo(held) - bestDist > margin ? bestIdx : held;
 }
 
 export function angularDistanceRad(a: number, b: number): number {
@@ -363,10 +388,11 @@ export function isPointerOverBeadSlot(
 export function resolveLibraryInsertTarget(
   pointerAngle: number,
   insertionAngles: number[],
+  previousIndex?: number,
 ): StrandInsertTarget {
   return {
     mode: "insert",
-    index: insertionIndexFromLayoutGaps(pointerAngle, insertionAngles),
+    index: insertionIndexFromLayoutGaps(pointerAngle, insertionAngles, previousIndex),
   };
 }
 
@@ -401,8 +427,10 @@ export function resolveLibraryDropTarget(args: {
   dragged: BeadTypeRef;
   /** Placed beads in the same index order as layout sectors. */
   placedTypeRefs: Array<BeadTypeRef | null | undefined>;
+  /** Gap currently under the pointer, so it is not surrendered too readily. */
+  previousInsertIndex?: number;
 }): { mode: "insert" | "replace" | "frame"; index: number } {
-  const { pointerAngle, sectors, insertionAngles, placementMode, dragged, placedTypeRefs } = args;
+  const { pointerAngle, sectors, insertionAngles, placementMode, dragged, placedTypeRefs, previousInsertIndex } = args;
   if (!sectors.length) return { mode: "insert", index: 0 };
 
   const hover = isPointerOverBeadSlot(pointerAngle, sectors, insertionAngles);
@@ -420,12 +448,12 @@ export function resolveLibraryDropTarget(args: {
   }
 
   if (placementMode === "insert_between") {
-    return resolveLibraryInsertTarget(pointerAngle, insertionAngles);
+    return resolveLibraryInsertTarget(pointerAngle, insertionAngles, previousInsertIndex);
   }
 
   const target = resolveDropTargetFromLayout(pointerAngle, sectors, insertionAngles);
   if (target.mode === "replace" && !isSameBeadType(dragged, placedTypeRefs[target.index])) {
-    return resolveLibraryInsertTarget(pointerAngle, insertionAngles);
+    return resolveLibraryInsertTarget(pointerAngle, insertionAngles, previousInsertIndex);
   }
   return target;
 }
