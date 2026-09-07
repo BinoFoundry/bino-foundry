@@ -1013,9 +1013,19 @@ const SortableCircularStrand = ({
             slotDim,
             renderDim: shell.renderDim,
             contactArcPx: shellLayout.contactArcPx[i] ?? 0,
-            // DOM/stacking order follows the sequence exactly; type-level zPriority must
-            // never make an earlier charm paint above a later crystal.
-            zIndex: 20 + i,
+            // Stacking follows the sequence exactly; a type-level priority must
+            // never make an earlier charm paint above a later crystal — that is
+            // why the general mechanism was removed.
+            //
+            // The one exception is a piece that deliberately tucks into its
+            // neighbours: drawn underneath, a bead cap is swallowed by the bead
+            // it is meant to sit over. Raising only these keeps every other
+            // piece in strict sequence.
+            zIndex:
+              (renderProfiles[i]?.leadingOverlap ?? 0) > 0 ||
+              (renderProfiles[i]?.trailingOverlap ?? 0) > 0
+                ? 60 + i
+                : 20 + i,
             layoutDim: slotDim,
             emptyDim: slotDim,
             isInsertionSlot: false,

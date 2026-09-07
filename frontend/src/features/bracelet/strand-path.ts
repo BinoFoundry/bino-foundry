@@ -426,18 +426,20 @@ function balanceEmptyNeighbourGapsPx(params: {
   const freePx = Math.max(0, circumferencePx - occupiedPx - count * gapPx);
 
   /**
-   * Space shared out evenly, then each junction gives back whatever the two
-   * pieces tuck into each other. Sharing first and subtracting after keeps the
-   * total unchanged: a hugging pair closes up and the space it releases widens
-   * the other gaps, instead of every gap being identical regardless of what
-   * sits at it. Without this a bead cap can never hug — the balancing pass
-   * handed it exactly the same empty arc as everything else.
+   * A junction asked to hug is pinned shut and takes no share of the free arc;
+   * everything else splits what remains.
+   *
+   * Sharing evenly and then subtracting the overlap does not hug: the leftover
+   * share still separates the pair, and it grows as the strand empties, so a
+   * bead cap drifts off its bead on a sparse strand and touches on a full one.
+   * Pinning makes the hug the same whatever else is on the cord.
    */
-  const overlapAt = (leftIndex: number) => junctionOverlapPx?.[leftIndex] ?? 0;
-  const totalOverlapPx = junctionOverlapPx
-    ? positionsPx.reduce((sum, _, i) => sum + Math.max(0, overlapAt(i)), 0)
-    : 0;
-  const targetEmptyPx = (freePx + totalOverlapPx) / count;
+  const overlapAt = (leftIndex: number) => Math.max(0, junctionOverlapPx?.[leftIndex] ?? 0);
+  const hugging = positionsPx.map((_, i) => overlapAt(i) > 0);
+  const hugCount = hugging.filter(Boolean).length;
+  const shared = count - hugCount;
+  const reclaimedPx = positionsPx.reduce((sum, _, i) => sum + (hugging[i] ? overlapAt(i) : 0), 0);
+  const targetEmptyPx = shared > 0 ? (freePx + reclaimedPx) / shared : 0;
 
   const balanced = new Array<number>(count);
   const anchorIndex = 0;
@@ -454,7 +456,9 @@ function balanceEmptyNeighbourGapsPx(params: {
     const rightIndex = rotatedOrder[slot + 1]!;
     const halfSpan = (widthsPx[leftIndex]! + widthsPx[rightIndex]!) / 2;
     // Never let a pair close past the point of passing through each other.
-    const emptyPx = Math.max(-halfSpan, targetEmptyPx - Math.max(0, overlapAt(leftIndex)));
+    const emptyPx = hugging[leftIndex]
+      ? Math.max(-halfSpan, -overlapAt(leftIndex))
+      : Math.max(-halfSpan, targetEmptyPx);
     cursorPx = normalizeArcDistancePx(
       cursorPx + halfSpan + gapPx + emptyPx,
       circumferencePx,

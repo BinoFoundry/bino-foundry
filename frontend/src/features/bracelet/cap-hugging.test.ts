@@ -82,6 +82,14 @@ describe("a cap hugging the bead beside it", () => {
     expect(total).toBeCloseTo(plainTotal, 3);
   });
 
+  it("hugs by the same amount however full the strand is", () => {
+    // A share of the free arc used to leak into the hug, so a cap drifted off
+    // its bead on a sparse strand and only touched on a full one.
+    const sparse = arcs([cap, bead, bead]);
+    const full = arcs([cap, bead, bead, bead, bead, bead, bead, bead, bead, bead]);
+    expect(Math.min(...sparse.gaps)).toBeCloseTo(Math.min(...full.gaps), 6);
+  });
+
   it("leaves a strand with no overlaps evenly spaced", () => {
     const { gaps } = arcs(Array.from({ length: 8 }, () => bead));
     for (const g of gaps) expect(g).toBeCloseTo(gaps[0]!, 6);
