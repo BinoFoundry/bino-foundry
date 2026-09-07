@@ -10,6 +10,10 @@ import type { CreateBraceletConfigDTO } from "../bracelet/bracelet.validation.js
 import { sunglassesConfigService } from "./sunglasses-config.service.js";
 import type { SaveDesignDTO } from "./designs.validation.js";
 import { persistDesignThumbnail } from "./design-thumbnail.service.js";
+import { mapWithConcurrency } from "../../lib/concurrency.js";
+
+/** Deletions in flight at once; each design costs several round trips. */
+const DELETE_CONCURRENCY = 8;
 import { uploadService } from "../upload/upload.service.js";
 
 const DESIGN_SUMMARY_SELECT =
@@ -294,19 +298,13 @@ export class DesignsService {
       }),
     );
 
-    for (const publicId of uniqueIds) {
+    // Each design costs several round trips, so deleting a full library one at
+    // a time ran past the gateway ceiling and died mid-way — some deleted, some
+    // not, and an error that said only "unable to reach the server". Overlap a
+    // few, and tally afterwards so the counts stay in the caller's order.
+    const outcomes = await mapWithConcurrency(uniqueIds, DELETE_CONCURRENCY, async (publicId) => {
       const row = byPublicId.get(publicId);
-      if (!row) {
-        result.skipped += 1;
-        result.skippedIds.push(publicId);
-        continue;
-      }
-
-      if (String(row.status) === "archived") {
-        result.skipped += 1;
-        result.skippedIds.push(publicId);
-        continue;
-      }
+      if (!row || String(row.status) === "archived") return "skipped" as const;
 
       try {
         const used = await this.isDesignInUse(String(row.id), row);
@@ -315,13 +313,25 @@ export class DesignsService {
         } else {
           await this.hardDeleteDesignRow(userId, row);
         }
+        return "deleted" as const;
+      } catch {
+        return "failed" as const;
+      }
+    });
+
+    uniqueIds.forEach((publicId, i) => {
+      const outcome = outcomes[i]!;
+      if (outcome === "deleted") {
         result.deleted += 1;
         result.deletedIds.push(publicId);
-      } catch {
+      } else if (outcome === "skipped") {
+        result.skipped += 1;
+        result.skippedIds.push(publicId);
+      } else {
         result.failed += 1;
         result.failedIds.push(publicId);
       }
-    }
+    });
 
     return result;
   }

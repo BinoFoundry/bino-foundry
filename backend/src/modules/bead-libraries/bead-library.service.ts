@@ -12,6 +12,10 @@ import {
 import { beadAvailabilityStatusService } from "../bead-availability-statuses/bead-availability-status.service.js";
 import { beadLibrarySizeService } from "../bead-library-sizes/bead-library-size.service.js";
 import { tagService } from "../tags/tag.service.js";
+import { mapWithConcurrency } from "../../lib/concurrency.js";
+
+/** Bead metadata writes in flight at once. */
+const BOUNDS_CONCURRENCY = 12;
 import { mmGroupNormalizationService } from "../bead-sizes/mm-group-normalization.service.js";
 import {
   collectBeadLibraryAssetUrls,
@@ -496,30 +500,28 @@ export class BeadLibraryService {
       .select("id, crop_config");
     assertNoDbError(libErr);
 
-    let updated = 0;
-    let skipped = 0;
+    // One write per bead, and the group recalculation afterwards already uses
+    // most of the request budget; sequentially this left no headroom at all.
+    const outcomes = await mapWithConcurrency(
+      (libraries ?? []) as { id: string; crop_config: BeadCropConfig | null }[],
+      BOUNDS_CONCURRENCY,
+      async (row) => {
+        const cropConfig = row.crop_config;
+        if (!cropConfig || !isBeadCropConfigValid(cropConfig)) return "skipped" as const;
 
-    for (const lib of libraries ?? []) {
-      const row = lib as { id: string; crop_config: BeadCropConfig | null };
-      const cropConfig = row.crop_config;
-      if (!cropConfig || !isBeadCropConfigValid(cropConfig)) {
-        skipped += 1;
-        continue;
-      }
+        const nextConfig = refreshBeadCropStoredMetrics(cropConfig);
+        if (!nextConfig) return "skipped" as const;
 
-      const nextConfig = refreshBeadCropStoredMetrics(cropConfig);
-      if (!nextConfig) {
-        skipped += 1;
-        continue;
-      }
-
-      const { error: upErr } = await supabase
-        .from("bead_libraries")
-        .update({ crop_config: nextConfig })
-        .eq("id", row.id);
-      assertNoDbError(upErr);
-      updated += 1;
-    }
+        const { error: upErr } = await supabase
+          .from("bead_libraries")
+          .update({ crop_config: nextConfig })
+          .eq("id", row.id);
+        assertNoDbError(upErr);
+        return "updated" as const;
+      },
+    );
+    const updated = outcomes.filter((o) => o === "updated").length;
+    const skipped = outcomes.length - updated;
 
     await mmGroupNormalizationService.recalculateAll();
 

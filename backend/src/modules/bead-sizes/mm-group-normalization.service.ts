@@ -1,4 +1,5 @@
 import { getSupabaseServiceRole } from "../../infra/supabase/adminClient.js";
+import { mapWithConcurrency } from "../../lib/concurrency.js";
 import { assertNoDbError } from "../../lib/supabase-db.js";
 import {
   computeMmGroupNormalizationFactor,
@@ -14,16 +15,7 @@ type LibrarySizeRow = {
   bead_libraries: { crop_config: BeadCropConfig | null } | { crop_config: BeadCropConfig | null }[] | null;
 };
 
-/**
- * How many row updates to have in flight at once.
- *
- * PostgREST has no multi-row update with differing values, so each row needs
- * its own request. Sending them one after another made a full recalculation
- * take longer than the hosting gateway's 30s ceiling, which is a hard failure
- * rather than a slow success. Overlapping them keeps the wall time proportional
- * to the round trip rather than to the row count, and the cap keeps us well
- * inside Supabase's connection limits.
- */
+/** Row updates in flight at once — see mapWithConcurrency for why. */
 const UPDATE_CONCURRENCY = 12;
 
 /**
@@ -33,13 +25,7 @@ const UPDATE_CONCURRENCY = 12;
  */
 const GROUP_CONCURRENCY = 4;
 
-async function inBatches<T, R>(items: T[], size: number, run: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = [];
-  for (let i = 0; i < items.length; i += size) {
-    results.push(...(await Promise.all(items.slice(i, i + size).map(run))));
-  }
-  return results;
-}
+
 
 /** Visible diameter from stored crop metadata (includes anchor estimate when mask data missing). */
 export function resolveAssetVisibleDiameterPx(cropConfig: unknown): number | null {
@@ -58,7 +44,7 @@ export class MmGroupNormalizationService {
 
     const sizeIds = (sizes ?? []).map((r) => String((r as { id: string }).id));
 
-    const results = await inBatches(sizeIds, GROUP_CONCURRENCY, (beadSizeId) =>
+    const results = await mapWithConcurrency(sizeIds, GROUP_CONCURRENCY, (beadSizeId) =>
       this.recalculateGroup(beadSizeId),
     );
 
@@ -148,7 +134,7 @@ export class MmGroupNormalizationService {
       .eq("id", beadSizeId);
     assertNoDbError(refErr);
 
-    await inBatches(entries, UPDATE_CONCURRENCY, async (entry) => {
+    await mapWithConcurrency(entries, UPDATE_CONCURRENCY, async (entry) => {
       const factor = computeMmGroupNormalizationFactor(groupReference, entry.visibleDiameterPx);
       const { error: upErr } = await supabase
         .from("bead_library_sizes")
