@@ -255,6 +255,8 @@ export function layoutStrandBeadShells(
         occupancyPx: footprint.packDiameterPx,
         visualRadiusPx: Math.max(occupancyRadiusPx, visualRadiusPx),
         contactAdjustmentPx: 0,
+        leadingOverlapPx: arc.leadingOverlapPx,
+        trailingOverlapPx: arc.trailingOverlapPx,
       };
     }),
     centerX,

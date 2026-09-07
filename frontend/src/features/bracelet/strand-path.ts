@@ -53,6 +53,10 @@ export interface SequentialStrandBeadInput {
   visualRadiusPx: number;
   /** Optional per-bead contact adjustment (px); paired with the adjacent bead. */
   contactAdjustmentPx?: number;
+  /** Arc this piece tucks into the neighbour before it (px). */
+  leadingOverlapPx?: number;
+  /** Arc this piece tucks into the neighbour after it (px). */
+  trailingOverlapPx?: number;
 }
 
 export interface SequentialStrandPathLayout {
@@ -408,8 +412,10 @@ function balanceEmptyNeighbourGapsPx(params: {
   widthsPx: number[];
   circumferencePx: number;
   gapPx: number;
+  /** Per-pair arc the two neighbours tuck into each other (px), by left index. */
+  junctionOverlapPx?: number[];
 }): number[] {
-  const { positionsPx, widthsPx, circumferencePx, gapPx } = params;
+  const { positionsPx, widthsPx, circumferencePx, gapPx, junctionOverlapPx } = params;
   const count = positionsPx.length;
   if (count < 2) return [...positionsPx];
 
@@ -418,7 +424,20 @@ function balanceEmptyNeighbourGapsPx(params: {
   );
   const occupiedPx = widthsPx.reduce((sum, width) => sum + width, 0);
   const freePx = Math.max(0, circumferencePx - occupiedPx - count * gapPx);
-  const targetEmptyPx = freePx / count;
+
+  /**
+   * Space shared out evenly, then each junction gives back whatever the two
+   * pieces tuck into each other. Sharing first and subtracting after keeps the
+   * total unchanged: a hugging pair closes up and the space it releases widens
+   * the other gaps, instead of every gap being identical regardless of what
+   * sits at it. Without this a bead cap can never hug — the balancing pass
+   * handed it exactly the same empty arc as everything else.
+   */
+  const overlapAt = (leftIndex: number) => junctionOverlapPx?.[leftIndex] ?? 0;
+  const totalOverlapPx = junctionOverlapPx
+    ? positionsPx.reduce((sum, _, i) => sum + Math.max(0, overlapAt(i)), 0)
+    : 0;
+  const targetEmptyPx = (freePx + totalOverlapPx) / count;
 
   const balanced = new Array<number>(count);
   const anchorIndex = 0;
@@ -433,12 +452,11 @@ function balanceEmptyNeighbourGapsPx(params: {
   for (let slot = 0; slot < rotatedOrder.length - 1; slot++) {
     const leftIndex = rotatedOrder[slot]!;
     const rightIndex = rotatedOrder[slot + 1]!;
+    const halfSpan = (widthsPx[leftIndex]! + widthsPx[rightIndex]!) / 2;
+    // Never let a pair close past the point of passing through each other.
+    const emptyPx = Math.max(-halfSpan, targetEmptyPx - Math.max(0, overlapAt(leftIndex)));
     cursorPx = normalizeArcDistancePx(
-      cursorPx +
-        widthsPx[leftIndex]! / 2 +
-        gapPx +
-        targetEmptyPx +
-        widthsPx[rightIndex]! / 2,
+      cursorPx + halfSpan + gapPx + emptyPx,
       circumferencePx,
     );
     balanced[rightIndex] = cursorPx;
@@ -619,11 +637,24 @@ export function computeBalancedRadialStrandPathLayout(params: {
   }
 
   if (balanceSpacing) {
+    // Overlap belongs to the junction, so pair each piece's trailing tuck with
+    // the following piece's leading tuck, in ring order.
+    const ringOrder = beads
+      .map((_, i) => i)
+      .sort((a, b) => positionsPx[a]! - positionsPx[b]!);
+    const junctionOverlapPx = new Array<number>(beads.length).fill(0);
+    ringOrder.forEach((leftIndex, slot) => {
+      const rightIndex = ringOrder[(slot + 1) % ringOrder.length]!;
+      junctionOverlapPx[leftIndex] =
+        (beads[leftIndex]!.trailingOverlapPx ?? 0) + (beads[rightIndex]!.leadingOverlapPx ?? 0);
+    });
+
     positionsPx = balanceEmptyNeighbourGapsPx({
       positionsPx,
       widthsPx,
       circumferencePx,
       gapPx,
+      junctionOverlapPx,
     });
   }
 
