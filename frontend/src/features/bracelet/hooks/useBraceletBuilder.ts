@@ -41,6 +41,7 @@ import {
 import { buildBraceletPricing } from "../pricing";
 import { swapPlacedBeads, logBraceletReorderSwap } from "../sequence-reorder";
 import { STRAND_PATH_START_ANGLE } from "../strand-path";
+import { isFramePiece } from "../frame-placement-intent";
 import { serializeBraceletConfiguration } from "../serialize";
 import { buildBraceletBuilderSummary } from "../summary";
 import { buildPlacedFromSavedBracelet, type SavedBraceletLoadInput } from "../load-saved-bracelet";
@@ -446,6 +447,13 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       const isInsertionSlot = !existing && (isEmptyStrand || position === sorted.length);
       const insertIndex = isEmptyStrand ? 0 : position;
 
+      if (existing && selectedBead && activeSizeOffer && isFramePiece(selectedBead, beadTypes)) {
+        frameAt(bracelet, position, selectedBead, activeSizeOffer);
+        setSelectedBead(null);
+        setSelectedSizeOfferKey(null);
+        return { openLibrary: false as const };
+      }
+
       if (existing && !selectedBead) {
         if (
           selectedStrandBead?.bracelet === bracelet &&
@@ -477,6 +485,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       activeSizeOffer,
       placeAt,
       bumpLayout,
+      beadTypes,
+      frameAt,
     ],
   );
 
@@ -644,6 +654,23 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       const s = size ?? defaultSizeForLibrary(beadLibrarySizes, bead.id);
       if (!s) return;
 
+      // A frame wraps a bead instead of taking a place on the cord. Threading
+      // it onto the strand like an ordinary item leaves a stray ornament in a
+      // gap, so it either attaches to the bead in hand or waits for one.
+      if (isFramePiece(bead, beadTypes)) {
+        if (selectedStrandBead) {
+          frameAt(selectedStrandBead.bracelet, selectedStrandBead.position, bead, s);
+          setSelectedBead(null);
+          setSelectedStrandBead(null);
+          setSelectedSizeOfferKey(null);
+          return;
+        }
+        setSelectedBead(bead);
+        setSelectedSizeOfferKey(s.offerKey);
+        publishCapacityNotice(BRACELET_COPY.frameNeedsBead);
+        return;
+      }
+
       if (selectedStrandBead) {
         const placed =
           selectedStrandBead.bracelet === "A" ? placedBeadsA : placedBeadsB;
@@ -674,6 +701,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
       placedBeadsA,
       placedBeadsB,
       applySizeOffer,
+      beadTypes,
+      frameAt,
+      publishCapacityNotice,
     ],
   );
 
