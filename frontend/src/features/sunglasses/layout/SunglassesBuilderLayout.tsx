@@ -28,8 +28,11 @@ export function SunglassesBuilderLayout({
         <div className="shrink-0 border-b border-border px-4 py-3 lg:hidden">{mobileSteps}</div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:grid-rows-1">
-        <section className="surface-canvas relative flex max-h-[min(42vh,26rem)] shrink-0 flex-col overflow-hidden lg:max-h-none lg:min-h-0">
+      {/* The preview row needs a definite height below lg: its contents size
+          themselves with h-full, which resolves to zero against an auto row and
+          collapsed the preview to nothing on phones. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[min(42vh,26rem)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:grid-rows-1">
+        <section className="surface-canvas relative flex min-h-0 shrink-0 flex-col overflow-hidden lg:max-h-none">
           {preview}
         </section>
 
