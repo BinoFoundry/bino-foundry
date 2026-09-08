@@ -15,6 +15,11 @@
  * clear lens and one photographed with a near-black lens both land at the same
  * density — four of these ten frames were shot light, six dark. Hue comes from
  * the tint at partial saturation, matching the hand-made references (0.62-0.64).
+ *
+ * Rank is a real percentile, not a normalised value. The difference matters:
+ * the studio highlight gives these histograms a long bright tail, so a linear
+ * stretch puts the median pixel around rank 0.2 and renders every lens far
+ * darker than the reference.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -29,7 +34,7 @@ const flag = (name, fallback = null) => {
 const outDir = flag("out", "tinted-plates");
 const onlyTint = flag("tint");
 const onlyFrame = flag("frame");
-const SAT_KEEP = Number(flag("sat", "0.63"));
+const SAT_KEEP = Number(flag("sat", "0.65"));
 /**
  * Pixels of feathered inset applied to the lens polygon. The polygons were drawn
  * for the live renderer, which paints the frame back over the lens edge, so
@@ -122,30 +127,51 @@ async function recolour(plateBuf, mask, tint, w, h) {
   // Rank every lens pixel within this lens's own luminance distribution.
   const idx = [];
   const lums = [];
+  const core = [];
   for (let p = 0; p < info.width * info.height; p++) {
     if (mask[p] === 0) continue;
     const i = p * ch;
     if (data[i + 3] < 32) continue;
+    const l = lum(data[i], data[i + 1], data[i + 2]);
     idx.push(p);
-    lums.push(lum(data[i], data[i + 1], data[i + 2]));
+    lums.push(l);
+    // Statistics come from full-weight pixels only. The feathered edge overlaps
+    // the frame, and letting those dark pixels into the distribution drags the
+    // percentiles down and darkens the whole lens with them.
+    if (mask[p] >= 250) core.push(l);
   }
   if (!idx.length) return null;
 
-  const sorted = [...lums].sort((a, b) => a - b);
-  const at = (q) => sorted[Math.floor(q * (sorted.length - 1))];
-  const lo = at(CLIP_LO);
-  const hi = at(CLIP_HI);
-  const span = Math.max(1, hi - lo);
+  // True percentile rank, via a 256-bin CDF of the core pixels. Stretching the
+  // value range linearly instead looks equivalent but is not: these lens
+  // histograms are right-skewed by the studio highlight, which pushed the median
+  // pixel to rank 0.21 and darkened every lens by about a quarter.
+  const sample = core.length > 64 ? core : lums;
+  const hist = new Float64Array(256);
+  for (const l of sample) hist[Math.max(0, Math.min(255, Math.round(l)))]++;
+  const cdf = new Float64Array(256);
+  let acc = 0;
+  for (let v = 0; v < 256; v++) {
+    acc += hist[v];
+    cdf[v] = acc / sample.length;
+  }
+  const rankOf = (l) => cdf[Math.max(0, Math.min(255, Math.round(l)))];
+  // Re-spread so the clipped tails map to the ends rather than compressing.
+  const rLo = CLIP_LO;
+  const rHi = CLIP_HI;
 
   const tintLum = lum(...tint);
-  const targetMid = Math.max(24, Math.min(150, 0.55 * tintLum + 32));
+  // Fitted against the hand-retouched references: #5A0000 (tint luma 19) lands
+  // at a lens median of 43, #2B2B2B (tint luma 43) at 61. With the median pixel
+  // now sitting at rank 0.5, that solves to this line.
+  const targetMid = Math.max(20, Math.min(150, 0.65 * tintLum + 25));
   const outLo = targetMid * RANGE_LO;
   const outHi = targetMid * RANGE_HI;
 
   for (let k = 0; k < idx.length; k++) {
     const p = idx[k];
     const i = p * ch;
-    const rank = Math.max(0, Math.min(1, (lums[k] - lo) / span));
+    const rank = Math.max(0, Math.min(1, (rankOf(lums[k]) - rLo) / (rHi - rLo)));
     let target = outLo + (outHi - outLo) * rank;
     // Keep the brightest few percent reading as a highlight on the glass.
     if (rank > SPECULAR_FROM) {

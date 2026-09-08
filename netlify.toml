@@ -6,6 +6,12 @@
   command = "npm run build -w @bino-foundry/shared && npm run build -w @bino-foundry/frontend"
   publish = "frontend/dist"
   functions = "netlify/functions"
+  # Skip the build when a push touched nothing the SPA or functions compile from.
+  # Exit 0 tells Netlify to cancel. Maintenance scripts and docs do not ship in
+  # the bundle, so rebuilding for them just spends build minutes. An empty
+  # $CACHED_COMMIT_REF (first build after a cache clear) makes git exit non-zero,
+  # which builds — failing towards deploying is the safe direction here.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':(exclude)scripts/**' ':(exclude)**/*.md'"
 
 [build.environment]
   # 22, not 20: @supabase/supabase-js needs a native WebSocket, which Node only
