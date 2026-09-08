@@ -683,8 +683,13 @@ export function resolveLensClipRenderSettings(
       DEFAULT_LENS_CLIP_RENDER.edgeDarkness,
     ),
     edgeWidth: clampRange(merged.edgeWidth, DEFAULT_LENS_CLIP_RENDER.edgeWidth, 0, 0.05),
-    // Background visibility / environment transmission retired — always off.
-    backgroundVisibility: 0,
+    // How much of what sits behind the lens survives the glass substrate.
+    // 0 keeps the fully opaque plate; 1 is clear glass. Environment transmission
+    // stays retired — it belonged to the withdrawn Glass Sheet path.
+    backgroundVisibility: clamp01(
+      merged.backgroundVisibility,
+      DEFAULT_LENS_CLIP_RENDER.backgroundVisibility,
+    ),
     environmentTransparency: 0,
     centerDensity: clamp01(
       automaticMaterial?.centerDensity ?? merged.centerDensity,

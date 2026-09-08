@@ -28,8 +28,13 @@ export function ProceduralGlassBaseElement({
   const richness = clamp01(render.baseGlassRichness / 100);
   const transmission = clamp01(render.lensTransmission);
 
+  // The substrate is what makes the lens opaque. Thinning it by the configured
+  // background visibility is what lets a tint read as glass you can see through
+  // rather than as paint: at 0 this is the solid plate it has always drawn.
+  const substrate = 1 - clamp01(render.backgroundVisibility);
+
   // Clear → lightly smoked body (never reads original plate colour).
-  const bodyAlpha = 0.08 + darkness * 0.42 + (1 - transmission) * 0.28;
+  const bodyAlpha = (0.08 + darkness * 0.42 + (1 - transmission) * 0.28) * substrate;
   const bodyLum = Math.round(235 - darkness * 150 - richness * 25);
   const bodyColor = `rgb(${bodyLum},${bodyLum + 1},${Math.min(255, bodyLum + 4)})`;
 
@@ -115,7 +120,7 @@ export function ProceduralGlassBaseElement({
         width={width + 16}
         height={height + 16}
         fill="#f4f5f3"
-        opacity={0.92}
+        opacity={0.92 * substrate}
       />
       <path d={lens.pathD} fill={`url(#${prefix}-body)`} />
 
