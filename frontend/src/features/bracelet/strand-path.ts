@@ -440,6 +440,16 @@ function balanceEmptyNeighbourGapsPx(params: {
   const shared = count - hugCount;
   const reclaimedPx = positionsPx.reduce((sum, _, i) => sum + (hugging[i] ? overlapAt(i) : 0), 0);
   const targetEmptyPx = shared > 0 ? (freePx + reclaimedPx) / shared : 0;
+  /**
+   * When every junction hugs there is nothing left to absorb the free arc, and
+   * pinning them all sends the whole of it to the seam — a strand of charms
+   * bunched together with a third of the ring bare, while the capacity panel
+   * correctly reports it nearly full. A hug cannot be honoured at every junction
+   * and still close the ring, so share the slack across them on the same terms
+   * the unpinned path uses. Relative hugs still hold — a junction asked to tuck
+   * further stays tighter than its neighbours — but no single gap gapes.
+   */
+  const hugSpreadPx = shared > 0 ? 0 : (freePx + reclaimedPx) / count;
 
   const balanced = new Array<number>(count);
   const anchorIndex = 0;
@@ -457,7 +467,7 @@ function balanceEmptyNeighbourGapsPx(params: {
     const halfSpan = (widthsPx[leftIndex]! + widthsPx[rightIndex]!) / 2;
     // Never let a pair close past the point of passing through each other.
     const emptyPx = hugging[leftIndex]
-      ? Math.max(-halfSpan, -overlapAt(leftIndex))
+      ? Math.max(-halfSpan, -overlapAt(leftIndex) + hugSpreadPx)
       : Math.max(-halfSpan, targetEmptyPx);
     cursorPx = normalizeArcDistancePx(
       cursorPx + halfSpan + gapPx + emptyPx,
