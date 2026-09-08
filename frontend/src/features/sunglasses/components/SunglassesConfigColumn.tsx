@@ -61,7 +61,7 @@ export function SunglassesConfigColumn({
       )}
     >
       <div className="hidden shrink-0 border-b border-border/60 px-4 py-3 sm:px-5 lg:block">
-        <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
+        <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} steps={flow.steps} />
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">

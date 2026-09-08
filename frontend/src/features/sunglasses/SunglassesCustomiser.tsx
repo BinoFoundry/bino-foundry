@@ -25,6 +25,7 @@ import { SunglassesConfigColumn } from "./components/SunglassesConfigColumn";
 import { SunglassesHorizontalSteps } from "./components/SunglassesHorizontalSteps";
 import { SunglassesPreviewPanel } from "./components/SunglassesPreviewPanel";
 import { useCustomiserFlow } from "./hooks/useCustomiserFlow";
+import { extrasBuilderOptions } from "./utils/builder-option-groups";
 import { useSunglassesCustomiserState } from "./hooks/useSunglassesCustomiserState";
 import { SunglassesBuilderLayout } from "./layout/SunglassesBuilderLayout";
 import { CapacityAlertBanner } from "@/features/bracelet/components/CapacityAlertBanner";
@@ -40,10 +41,17 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
   const designIdFromUrl = searchParams.get("design");
   const { user, saveDesign, openAuth } = useAuth();
   const state = useSunglassesCustomiserState(onPriceChange);
-  const flow = useCustomiserFlow();
   const { data: siteSettings } = useSiteGeneralSettings();
   const currencyCode = siteSettings.currencyCode;
   const { sunglassesCatalog } = state;
+  // Every builder option belongs to the Lens or RX step until a true add-on is
+  // configured, which would leave the Add-Ons step blank apart from Continue.
+  const hiddenSteps = useMemo<CustomiserStep[]>(
+    () =>
+      extrasBuilderOptions(sunglassesCatalog.builderOptions).length === 0 ? ["extras"] : [],
+    [sunglassesCatalog.builderOptions],
+  );
+  const flow = useCustomiserFlow("frame", hiddenSteps);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [savedDesignId, setSavedDesignId] = useState<string | null>(designIdFromUrl);
   const [hydrationDone, setHydrationDone] = useState(!designIdFromUrl);
@@ -410,7 +418,7 @@ export function SunglassesCustomiser({ onPriceChange }: SunglassesCustomiserProp
       <SunglassesBuilderLayout
         mobileSteps={
           <div className="flex items-center justify-between gap-3">
-            <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} />
+            <SunglassesHorizontalSteps current={flow.step} onSelect={flow.goTo} steps={flow.steps} />
           </div>
         }
         preview={

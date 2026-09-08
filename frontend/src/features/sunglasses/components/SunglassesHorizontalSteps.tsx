@@ -9,19 +9,26 @@ interface SunglassesHorizontalStepsProps {
   current: CustomiserStep;
   onSelect: (step: CustomiserStep) => void;
   className?: string;
+  /**
+   * Steps to show — defaults to the whole flow. Pass the flow's own list so a
+   * step hidden for having nothing to show also leaves the stepper.
+   */
+  steps?: readonly { id: CustomiserStep; label: string }[];
 }
 
 export function SunglassesHorizontalSteps({
   current,
   onSelect,
   className,
+  steps,
 }: SunglassesHorizontalStepsProps) {
-  const currentNavIndex = SUNGLASSES_NAV_STEPS.findIndex((s) => s.flowStep === current);
+  const navSteps = steps?.length ? steps : SUNGLASSES_NAV_STEPS;
+  const currentNavIndex = navSteps.findIndex((s) => s.id === current);
 
   return (
     <nav aria-label="Configuration steps" className={cn("w-full", className)}>
       <ol className="flex w-full items-start">
-        {SUNGLASSES_NAV_STEPS.map((step, index) => {
+        {navSteps.map((step, index) => {
           const completed = index < currentNavIndex;
           const active = index === currentNavIndex;
 
@@ -30,7 +37,7 @@ export function SunglassesHorizontalSteps({
               <li className="flex min-w-0 flex-1 flex-col items-center">
                 <button
                   type="button"
-                  onClick={() => onSelect(step.flowStep)}
+                  onClick={() => onSelect(step.id)}
                   aria-current={active ? "step" : undefined}
                   className="group relative z-10 flex w-full min-w-0 flex-col items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
@@ -58,7 +65,7 @@ export function SunglassesHorizontalSteps({
                 </button>
               </li>
 
-              {index < SUNGLASSES_NAV_STEPS.length - 1 ? (
+              {index < navSteps.length - 1 ? (
                 <li
                   aria-hidden
                   className="pointer-events-none flex min-w-[0.75rem] flex-[0.75] items-start pt-3.5"
