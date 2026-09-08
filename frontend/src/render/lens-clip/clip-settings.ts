@@ -89,6 +89,7 @@ export type ResolvedLensClipRender = Required<
     | "edgeDarkness"
     | "edgeWidth"
     | "backgroundVisibility"
+    | "lensDetailStrength"
     | "environmentTransparency"
     | "centerDensity"
     | "edgeDensity"
@@ -222,6 +223,7 @@ export const DEFAULT_LENS_CLIP_RENDER: ResolvedLensClipRender = {
   edgeDarkness: 0.24,
   edgeWidth: 0.006,
   backgroundVisibility: 0,
+  lensDetailStrength: 0,
   environmentTransparency: 0,
   centerDensity: 0,
   edgeDensity: 0.18,
@@ -691,6 +693,10 @@ export function resolveLensClipRenderSettings(
       DEFAULT_LENS_CLIP_RENDER.backgroundVisibility,
     ),
     environmentTransparency: 0,
+    lensDetailStrength: clamp01(
+      merged.lensDetailStrength,
+      DEFAULT_LENS_CLIP_RENDER.lensDetailStrength,
+    ),
     centerDensity: clamp01(
       automaticMaterial?.centerDensity ?? merged.centerDensity,
       DEFAULT_LENS_CLIP_RENDER.centerDensity,

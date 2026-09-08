@@ -64,6 +64,7 @@ export const LENS_RENDER_PRESET_KEYS = [
   "reflectionOpacity",
   "edgeDarkness",
   "backgroundVisibility",
+  "lensDetailStrength",
   "environmentTransparency",
   "centerDensity",
   "edgeDensity",
@@ -184,6 +185,7 @@ export type ResolvedLensRenderMaterial = Required<
     | "edgeDarkness"
     | "edgeOpacity"
     | "backgroundVisibility"
+    | "lensDetailStrength"
     | "environmentTransparency"
     | "centerDensity"
     | "edgeDensity"
@@ -260,6 +262,7 @@ export const LENS_RENDER_SYSTEM_DEFAULTS: Required<
   reflectionOpacity: 0.2,
   edgeDarkness: 0.24,
   backgroundVisibility: 0,
+  lensDetailStrength: 0,
   environmentTransparency: 0,
   centerDensity: 0,
   edgeDensity: 0.18,
@@ -366,6 +369,7 @@ export const LENS_RENDER_ZERO_SETTINGS: Required<
     | "edgeDarkness"
     | "edgeOpacity"
     | "backgroundVisibility"
+    | "lensDetailStrength"
     | "environmentTransparency"
     | "centerDensity"
     | "edgeDensity"
@@ -430,6 +434,7 @@ export const LENS_RENDER_ZERO_SETTINGS: Required<
   edgeDarkness: 0,
   edgeOpacity: 0,
   backgroundVisibility: 0,
+  lensDetailStrength: 0,
   environmentTransparency: 0,
   centerDensity: 0,
   edgeDensity: 0,
@@ -593,6 +598,8 @@ export function resolveLensRenderConfig(
     edgeOpacity: settings.edgeOpacity ?? LENS_RENDER_SYSTEM_DEFAULTS.edgeOpacity,
     backgroundVisibility:
       settings.backgroundVisibility ?? LENS_RENDER_SYSTEM_DEFAULTS.backgroundVisibility,
+    lensDetailStrength:
+      settings.lensDetailStrength ?? LENS_RENDER_SYSTEM_DEFAULTS.lensDetailStrength,
     environmentTransparency:
       settings.environmentTransparency ?? LENS_RENDER_SYSTEM_DEFAULTS.environmentTransparency,
     centerDensity: settings.centerDensity ?? LENS_RENDER_SYSTEM_DEFAULTS.centerDensity,

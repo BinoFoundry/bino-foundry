@@ -25,6 +25,7 @@ import {
   shouldReplaceOriginalLens,
   type GlassCompositionOrder,
 } from "@/render/lens-clip/glass-composition";
+import { LensPhotoDetailElement } from "@/render/lens-clip/LensPhotoDetailElement";
 import { AutomaticInnerFrameElement } from "@/render/lens-clip/AutomaticInnerFrameElement";
 import { SvgTintGradientDef } from "@/render/tint/SvgTintGradientDef";
 import {
@@ -235,6 +236,17 @@ const InsertedGlassLayers = memo(function InsertedGlassLayers({
             lens={lens}
             tintId={tintId}
             appearance={appearance}
+          />
+        ))}
+        {lenses.map((lens) => (
+          <LensPhotoDetailElement
+            key={`${uid}-lens-detail-${lens.id}`}
+            uid={uid}
+            lens={lens}
+            plateUrl={plateUrl}
+            w={w}
+            h={h}
+            render={render}
           />
         ))}
       </>

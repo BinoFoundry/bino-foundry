@@ -503,6 +503,8 @@ export interface LensClipRenderSettings {
    * Kept only for reading older presets.
    */
   backgroundVisibility?: number;
+  /** 0-1: how much surface detail is lifted from the product photo into the lens. */
+  lensDetailStrength?: number;
   /**
    * @deprecated Retired with Glass Sheet architecture — always forced to 0 at resolve time.
    * Kept only for reading older presets.
