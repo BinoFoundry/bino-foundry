@@ -8,12 +8,35 @@ describe("vite-env-merge", () => {
     expect(pickEnvValue(undefined, "x")).toBe("x");
   });
 
-  it("mirrors ADMIN_API_KEY when VITE_ADMIN_API_KEY is missing", () => {
+  it("mirrors ADMIN_API_KEY into local development builds", () => {
     const env = mergeFrontendViteEnv({
       frontendEnv: {},
       rootEnv: { ADMIN_API_KEY: "server-secret" },
+      mode: "development",
     });
     expect(env.VITE_ADMIN_API_KEY).toBe("server-secret");
+  });
+
+  it("never mirrors ADMIN_API_KEY into a deployed build", () => {
+    // Anything VITE_* is inlined into the JavaScript the browser downloads, so
+    // mirroring here published the key that authorises catalogue writes.
+    for (const mode of ["production", "staging"]) {
+      const env = mergeFrontendViteEnv({
+        frontendEnv: {},
+        rootEnv: { ADMIN_API_KEY: "server-secret" },
+        mode,
+      });
+      expect(env.VITE_ADMIN_API_KEY).toBe("");
+    }
+  });
+
+  it("still allows a deliberately exported key", () => {
+    const env = mergeFrontendViteEnv({
+      frontendEnv: { VITE_ADMIN_API_KEY: "deliberate" },
+      rootEnv: { ADMIN_API_KEY: "server-secret" },
+      mode: "production",
+    });
+    expect(env.VITE_ADMIN_API_KEY).toBe("deliberate");
   });
 
   it("prefers frontend VITE_ADMIN_API_KEY over root values", () => {
