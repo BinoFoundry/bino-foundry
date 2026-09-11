@@ -1,6 +1,7 @@
 import { sizesForLibrary } from "@/features/bracelet/library-sizes";
 import { beadLibrarySizesApi } from "@/services/api/bead-library-sizes";
 import { beadSizesApi } from "@/services/api/bead-sizes";
+import { beadsApi } from "@/services/api/beads";
 import type { BeadLibrarySizeOffer } from "@/types/bead-library-sizes";
 import type { BeadSizeEntry } from "@/types/bead-sizes";
 import type { BeadLibraryEntry, BeadTypeEntry } from "@/types/beads";
@@ -106,6 +107,47 @@ export interface NormalizedRegenJobProgress {
 export const NORMALIZED_REGEN_BATCH_SIZE = 1;
 const ETA_SAMPLE_SIZE = 12;
 const INTER_ITEM_DELAY_MS = 16;
+const CROP_HYDRATE_CONCURRENCY = 4;
+
+/**
+ * List endpoints omit `cropConfig` (large polygons). Regen needs full GET-by-id payloads.
+ */
+export async function hydrateBeadLibrariesForNormalizedRegen(
+  libraries: BeadLibraryEntry[],
+  options?: {
+    signal?: AbortSignal;
+    onProgress?: (done: number, total: number) => void;
+  },
+): Promise<BeadLibraryEntry[]> {
+  const total = libraries.length;
+  if (total === 0) return [];
+
+  const out = libraries.slice();
+  let done = 0;
+  let cursor = 0;
+
+  const workers = Array.from({ length: Math.min(CROP_HYDRATE_CONCURRENCY, total) }, async () => {
+    while (cursor < total) {
+      if (options?.signal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+      const index = cursor++;
+      const lib = out[index]!;
+      if (!lib.cropConfig || !isBeadCropConfigValid(lib.cropConfig)) {
+        try {
+          out[index] = await beadsApi.getLibrary(lib.id);
+        } catch {
+          // Keep list row; queue builder will skip / mark ineligible.
+        }
+      }
+      done += 1;
+      options?.onProgress?.(done, total);
+    }
+  });
+
+  await Promise.all(workers);
+  return out;
+}
 
 function libraryPassesScope(
   library: BeadLibraryEntry,
@@ -623,11 +665,19 @@ export async function runNormalizedAssetRegenJob(
     factorsRefreshed: factorsRefreshed || records.length,
   });
 
+  // Recalculate can touch every size offer (e.g. 102) while the export queue only includes
+  // libraries with a valid crop (e.g. 86). That is expected — do not fail a successful run.
   if (factorsRefreshed > 0 && summary.beadsProcessed !== factorsRefreshed) {
+    console.warn(
+      `[Normalized regen] Queue processed ${summary.beadsProcessed} junction(s); size-group recalculate refreshed ${factorsRefreshed} factor(s).`,
+    );
+  }
+
+  if (records.length !== items.length) {
     const recordKeys = new Set(records.map((r) => `${r.libraryId}:${r.sizeMm}`));
     const missing = items.filter((item) => !recordKeys.has(`${item.libraryId}:${item.sizeMm}`));
     console.error(
-      "[Normalized regen] Processed count ≠ factors refreshed:",
+      "[Normalized regen] Queue items without a final record:",
       missing.map((m) => ({
         assetId: m.offerId,
         slug: m.libraryId,
@@ -638,7 +688,7 @@ export async function runNormalizedAssetRegenJob(
       })),
     );
     throw new Error(
-      `Regeneration processed ${summary.beadsProcessed} bead(s) but ${factorsRefreshed} factor(s) were refreshed. Missing: ${missing.map((m) => m.libraryName).join(", ")}`,
+      `Regeneration missing ${missing.length} queue result(s): ${missing.map((m) => m.libraryName).join(", ")}`,
     );
   }
 
@@ -673,6 +723,8 @@ export async function runRecalculateMmGroupJob(
   options?: {
     signal?: AbortSignal;
     onProgress?: (progress: NormalizedRegenJobProgress) => void;
+    /** When true, re-export every eligible junction (not only stale). */
+    force?: boolean;
   },
 ): Promise<{
   recalc: { groups: number; updated: number; skipped: number };
@@ -681,6 +733,25 @@ export async function runRecalculateMmGroupJob(
   const report = (partial: Partial<NormalizedRegenJobProgress> & { status: NormalizedRegenJobStatus }) => {
     options?.onProgress?.(makeProgress(partial, partial.total ?? 0));
   };
+
+  report({
+    status: "preparing",
+    phase: "preparing",
+    currentLabel: "Loading crop data…",
+  });
+
+  const hydratedLibraries = await hydrateBeadLibrariesForNormalizedRegen(ctx.beadLibraries, {
+    signal: options?.signal,
+    onProgress: (done, total) => {
+      report({
+        status: "preparing",
+        phase: "preparing",
+        done,
+        total,
+        currentLabel: `Loading crop data… (${done}/${total})`,
+      });
+    },
+  });
 
   report({
     status: "preparing",
@@ -696,11 +767,11 @@ export async function runRecalculateMmGroupJob(
   await ctx.refreshBeadLibrarySizes();
 
   const items = buildNormalizedRegenQueue(
-    ctx.beadLibraries,
+    hydratedLibraries,
     freshOffers,
     freshSizes,
     ctx.beadTypes,
-    { scope: "all", force: false },
+    { scope: "all", force: options?.force === true, includeIneligible: true },
   );
 
   report({
@@ -746,6 +817,7 @@ export async function runRefreshBeadAssetsJob(
   options?: {
     signal?: AbortSignal;
     onProgress?: (progress: NormalizedRegenJobProgress) => void;
+    force?: boolean;
   },
 ): Promise<{
   recalc: { groups: number; updated: number; skipped: number };
@@ -762,8 +834,12 @@ export async function runPendingNormalizedRegenJob(
     onProgress?: (progress: NormalizedRegenJobProgress) => void;
   },
 ): Promise<NormalizedRegenJobProgress> {
+  const hydratedLibraries = await hydrateBeadLibrariesForNormalizedRegen(ctx.beadLibraries, {
+    signal: options?.signal,
+  });
+
   const items = buildNormalizedRegenQueue(
-    ctx.beadLibraries,
+    hydratedLibraries,
     ctx.beadLibrarySizes,
     ctx.beadSizes,
     ctx.beadTypes,

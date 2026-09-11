@@ -12,6 +12,8 @@ export type ApiRequestOptions = Omit<RequestInit, "body"> & {
   body?: BodyInit | Record<string, unknown> | null;
   /** Skip JSON serialization for `body` (e.g. FormData). */
   rawBody?: boolean;
+  /** Override default request timeout (ms). */
+  timeoutMs?: number;
   /** Internal: request already retried after a token refresh. */
   _authRetried?: boolean;
 };
@@ -122,13 +124,17 @@ const DEFAULT_API_TIMEOUT_MS = 25_000;
 /** Low-level catalogue HTTP call; path is relative to `/api` prefix. */
 export async function apiRequest<T>(path: string, init?: ApiRequestOptions): Promise<T> {
   const url = resolveApiUrl(path);
-  const { body: _body, rawBody: _raw, _authRetried, signal: userSignal, ...rest } = init ?? {};
+  const { body: _body, rawBody: _raw, _authRetried, signal: userSignal, timeoutMs, ...rest } =
+    init ?? {};
   const bootstrap = isAuthBootstrapPath(path);
 
   const accessToken = bootstrap ? getAccessToken() : await ensureFreshAccessToken();
 
   const timeoutController = new AbortController();
-  const timeoutId = window.setTimeout(() => timeoutController.abort(), DEFAULT_API_TIMEOUT_MS);
+  const timeoutId = window.setTimeout(
+    () => timeoutController.abort(),
+    timeoutMs ?? DEFAULT_API_TIMEOUT_MS,
+  );
   const onUserAbort = () => timeoutController.abort();
   if (userSignal) {
     if (userSignal.aborted) timeoutController.abort();

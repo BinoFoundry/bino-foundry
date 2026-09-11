@@ -6,6 +6,7 @@ import { AppProviders } from "@/providers";
 import Index from "./pages/Index.tsx";
 import AuthCallbackPage from "./pages/AuthCallbackPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import DevRefreshBeadAssetsPage from "./pages/DevRefreshBeadAssetsPage.tsx";
 
 const CustomerPortalApp = lazy(() => import("@/features/customer-portal/CustomerPortalApp"));
 
@@ -28,6 +29,9 @@ export const appRouter = createBrowserRouter(
       <Route path="/bracelet" element={<Index />} />
       <Route path="/sunglasses" element={<Index />} />
       <Route path="/admin/*" element={<Index />} />
+      {import.meta.env.DEV && (
+        <Route path="/dev/refresh-bead-assets" element={<DevRefreshBeadAssetsPage />} />
+      )}
       {/* Unknown paths (e.g. /handover) → 404; do not fall back to the bracelet home */}
       <Route path="*" element={<NotFound />} />
     </Route>,

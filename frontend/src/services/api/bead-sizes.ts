@@ -26,7 +26,7 @@ export const beadSizesApi = {
   recalculateMmGroupReferences(): Promise<{ groups: number; updated: number; skipped: number }> {
     return apiRequest<{ groups: number; updated: number; skipped: number }>(
       "/bead-sizes/recalculate-mm-group-references",
-      { method: "POST" },
+      { method: "POST", timeoutMs: 180_000 },
     );
   },
 
