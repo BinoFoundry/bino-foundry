@@ -107,6 +107,7 @@ export interface NormalizedRegenJobProgress {
 export const NORMALIZED_REGEN_BATCH_SIZE = 1;
 const ETA_SAMPLE_SIZE = 12;
 const INTER_ITEM_DELAY_MS = 16;
+const CROP_FETCH_CONCURRENCY = 8;
 
 function libraryPassesScope(
   library: BeadLibraryEntry,
@@ -166,12 +167,6 @@ function recordFromExportResult(
     isGroupReference: item.isGroupReference,
   });
 }
-
-/**
- * Build the full regeneration queue — every eligible junction is included.
- * Nothing is silently dropped when factors are stale or the bead is the group reference.
- */
-const CROP_FETCH_CONCURRENCY = 8;
 
 /**
  * Fill in crop configs for the beads a run will touch.
@@ -664,11 +659,19 @@ export async function runNormalizedAssetRegenJob(
     factorsRefreshed: factorsRefreshed || records.length,
   });
 
+  // Recalculate can touch every size offer (e.g. 102) while the export queue only includes
+  // libraries with a valid crop (e.g. 86). That is expected — do not fail a successful run.
   if (factorsRefreshed > 0 && summary.beadsProcessed !== factorsRefreshed) {
+    console.warn(
+      `[Normalized regen] Queue processed ${summary.beadsProcessed} junction(s); size-group recalculate refreshed ${factorsRefreshed} factor(s).`,
+    );
+  }
+
+  if (records.length !== items.length) {
     const recordKeys = new Set(records.map((r) => `${r.libraryId}:${r.sizeMm}`));
     const missing = items.filter((item) => !recordKeys.has(`${item.libraryId}:${item.sizeMm}`));
     console.error(
-      "[Normalized regen] Processed count ≠ factors refreshed:",
+      "[Normalized regen] Queue items without a final record:",
       missing.map((m) => ({
         assetId: m.offerId,
         slug: m.libraryId,
@@ -683,7 +686,7 @@ export async function runNormalizedAssetRegenJob(
       : `${factorsRefreshed - summary.beadsProcessed} never entered the queue — ` +
         "usually beads whose crop data could not be loaded.";
     throw new Error(
-      `Regeneration processed ${summary.beadsProcessed} bead(s) but ${factorsRefreshed} factor(s) were refreshed. ${detail}`,
+      `Regeneration missing ${missing.length} queue result(s): ${missing.map((m) => m.libraryName).join(", ") || detail}`,
     );
   }
 
@@ -718,6 +721,8 @@ export async function runRecalculateMmGroupJob(
   options?: {
     signal?: AbortSignal;
     onProgress?: (progress: NormalizedRegenJobProgress) => void;
+    /** When true, re-export every eligible junction (not only stale). */
+    force?: boolean;
   },
 ): Promise<{
   recalc: { groups: number; updated: number; skipped: number };
@@ -726,6 +731,12 @@ export async function runRecalculateMmGroupJob(
   const report = (partial: Partial<NormalizedRegenJobProgress> & { status: NormalizedRegenJobStatus }) => {
     options?.onProgress?.(makeProgress(partial, partial.total ?? 0));
   };
+
+  report({
+    status: "preparing",
+    phase: "preparing",
+    currentLabel: "Loading crop data…",
+  });
 
   report({
     status: "preparing",
@@ -740,6 +751,11 @@ export async function runRecalculateMmGroupJob(
   ]);
   await ctx.refreshBeadLibrarySizes();
 
+  report({
+    status: "preparing",
+    phase: "preparing",
+    currentLabel: "Loading crop data…",
+  });
   const libraries = await hydrateCropConfigs(ctx.beadLibraries, freshOffers, {
     signal: options?.signal,
   });
@@ -749,7 +765,7 @@ export async function runRecalculateMmGroupJob(
     freshOffers,
     freshSizes,
     ctx.beadTypes,
-    { scope: "all", force: false },
+    { scope: "all", force: options?.force === true, includeIneligible: true },
   );
 
   report({
@@ -795,6 +811,7 @@ export async function runRefreshBeadAssetsJob(
   options?: {
     signal?: AbortSignal;
     onProgress?: (progress: NormalizedRegenJobProgress) => void;
+    force?: boolean;
   },
 ): Promise<{
   recalc: { groups: number; updated: number; skipped: number };

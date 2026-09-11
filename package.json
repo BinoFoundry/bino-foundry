@@ -27,6 +27,7 @@
     "start:api:prod": "bash scripts/start-api-production.sh",
     "start:prod": "npm run start:api:prod",
     "env:check": "node scripts/check-env.mjs",
+    "refresh:bead-assets": "node scripts/refresh-bead-assets.mjs",
     "deploy:build": "bash scripts/build-production.sh",
     "deploy:web": "bash scripts/sync-web-root.sh",
     "docker:api": "docker compose build api",

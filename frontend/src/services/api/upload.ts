@@ -20,6 +20,7 @@ export const uploadApi = {
       method: "POST",
       body: form,
       rawBody: true,
+      timeoutMs: 120_000,
     });
   },
 
