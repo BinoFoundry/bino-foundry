@@ -6,6 +6,7 @@ import { LayerStack } from "../layers/LayerStack";
 import type { CompositorView, SunglassesCompositorConfig } from "../types";
 import { SvgClipCompositorView } from "./SvgClipCompositorView";
 import { CompositorViewport, type CompositorAspectRatio } from "./CompositorViewport";
+import { resolveTintedPlate } from "./tinted-plate-proto";
 
 export interface SunglassesCompositorProps {
   config: SunglassesCompositorConfig;
@@ -52,12 +53,16 @@ export function SunglassesCompositor({
 
   const clipConfig = plateView ? resolveLensClipConfig(plateView) : null;
 
+  // PROTOTYPE: a photograph of this frame already wearing this tint replaces the
+  // whole plate, and no lens compositing runs at all.
+  const tinted = plateOnly ? null : resolveTintedPlate(config.frameLabel, config.tint?.top, view);
+
   if (plateView?.plateUrl) {
     // Step 1 uses the cropped plate as-is. Do not fall back to originalPlateUrl —
     // that would undo the frame crop. Lens clip/render stay inactive via plateOnly.
-    const plateUrl = plateView.plateUrl;
-    const width = plateView.width;
-    const height = plateView.height;
+    const plateUrl = tinted?.file ?? plateView.plateUrl;
+    const width = tinted?.w ?? plateView.width;
+    const height = tinted?.h ?? plateView.height;
 
     return (
       <SvgClipCompositorView
@@ -67,7 +72,7 @@ export function SunglassesCompositor({
           plateUrl,
           width,
           height,
-          clipConfig: clipConfig ?? {
+          clipConfig: (tinted ? null : clipConfig) ?? {
             version: 1,
             imageWidth: width,
             imageHeight: height,

@@ -31,3 +31,7 @@ dist-ssr
 deploy/env/.env.*
 !deploy/env/*.example
 .vercel
+
+# Generated tint plates for the sunglasses prototype (~185MB, reproducible:
+# scripts/generate-tinted-plates.mjs then scripts/stage-tint-proto.mjs)
+frontend/public/tint-proto/

@@ -117,8 +117,22 @@ function bbox(ink, w, x0, x1, y0, y1) {
   return c < 0 ? null : [a, b, c, d];
 }
 
-/** Crop a cell and turn white into transparency, ramped so the shadow survives. */
-async function cutOut(file, [x0, y0, x1, y1], w, h) {
+/** True when the export already carries its own alpha, so nothing needs keying. */
+async function alreadyCutOut(file) {
+  const { data, w, h, ch } = await raw(file);
+  const at = (x, y) => data[(y * w + x) * ch + 3];
+  return [at(3, 3), at(w - 4, 3), at(3, h - 4), at(w - 4, h - 4)].every((a) => a < 24);
+}
+
+/**
+ * Crop a cell, keying white to transparency only when the source needs it.
+ *
+ * Keying by luminance is fine for the white-background contact sheets but wrong
+ * for exports that already have an alpha channel: a pale frame sits in the same
+ * luminance band as the background, so the cream acetate models were being
+ * dissolved along with it.
+ */
+async function cutOut(file, [x0, y0, x1, y1], w, h, keyWhite = true) {
   const left = Math.max(0, x0 - PAD);
   const top = Math.max(0, y0 - PAD);
   const width = Math.min(w - left, x1 - x0 + 1 + PAD * 2);
@@ -129,14 +143,16 @@ async function cutOut(file, [x0, y0, x1, y1], w, h) {
     .raw()
     .toBuffer({ resolveWithObject: true });
   const ch = info.channels;
-  for (let p = 0; p < info.width * info.height; p++) {
-    const i = p * ch;
-    const l = luma(data[i], data[i + 1], data[i + 2]);
-    const alpha =
-      l >= BG_CLEAR ? 0
-      : l <= BG_SOLID ? 255
-      : Math.round(((BG_CLEAR - l) / (BG_CLEAR - BG_SOLID)) * 255);
-    data[i + 3] = Math.min(data[i + 3], alpha);
+  if (keyWhite) {
+    for (let p = 0; p < info.width * info.height; p++) {
+      const i = p * ch;
+      const l = luma(data[i], data[i + 1], data[i + 2]);
+      const alpha =
+        l >= BG_CLEAR ? 0
+        : l <= BG_SOLID ? 255
+        : Math.round(((BG_CLEAR - l) / (BG_CLEAR - BG_SOLID)) * 255);
+      data[i + 3] = Math.min(data[i + 3], alpha);
+    }
   }
   return sharp(data, { raw: { width: info.width, height: info.height, channels: ch } }).png().toBuffer();
 }
@@ -283,6 +299,7 @@ for (const file of files) {
   if (!slugs.length) { console.log(`SKIP ${file} — no frame codes in the filename`); continue; }
 
   const sheet = await raw(full);
+  const keyWhite = !(await alreadyCutOut(full));
   const ink = inkMap(sheet);
   const proj = new Array(sheet.h).fill(0);
   for (let y = 0; y < sheet.h; y++) {
@@ -306,11 +323,11 @@ for (const file of files) {
     for (const [cx0, cx1] of cols) {
       const box = bbox(ink, sheet.w, cx0, cx1, y0, y1);
       if (!box) continue;
-      const buf = await cutOut(full, box, sheet.w, sheet.h);
+      const buf = await cutOut(full, box, sheet.w, sheet.h, keyWhite);
       let label = null;
       if (labelBand) {
         const lb = bbox(ink, sheet.w, cx0, cx1, labelBand[0], labelBand[1]);
-        if (lb) label = await silhouette(await cutOut(full, lb, sheet.w, sheet.h));
+        if (lb) label = await silhouette(await cutOut(full, lb, sheet.w, sheet.h, keyWhite));
       }
       cells.push({ buf, sil: await silhouette(buf), label });
     }
@@ -319,9 +336,16 @@ for (const file of files) {
       const slug = slugs[order[ci]];
       const confidence = labelOnly[ci]?.[order[ci]] ?? 0;
       const name = `${slug}-${axis}-${hex}.png`;
-      const flag = confidence < 0.80 ? "   << low confidence, check this one" : "";
-      if (confidence < 0.80) lowConfidence++;
-      console.log(`    col ${ci + 1} ${axis.padEnd(5)} -> ${name.padEnd(26)} label ${(confidence * 100).toFixed(1)}%${flag}`);
+      // One frame named on the sheet leaves nothing to choose between, and the
+      // single-frame exports carry no printed label to score against either.
+      const forced = slugs.length === 1;
+      const weak = !forced && confidence < 0.80;
+      if (weak) lowConfidence++;
+      const score = forced ? "only frame on the sheet" : `label ${(confidence * 100).toFixed(1)}%`;
+      console.log(
+        `    col ${ci + 1} ${axis.padEnd(5)} -> ${name.padEnd(26)} ${score}` +
+        (weak ? "   << low confidence, check this one" : ""),
+      );
       if (!dryRun) {
         fs.writeFileSync(path.join(outDir, name), cell.buf);
         written.push(name);
