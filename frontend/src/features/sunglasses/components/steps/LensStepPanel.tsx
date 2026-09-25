@@ -168,20 +168,33 @@ function PolarisedUpgradeCard({
   polarizedSurcharge,
   currencyCode,
   onPolarizedChange,
+  disabled,
 }: {
   polarizedOption: BuilderOptionEntry;
   polarized: boolean;
   polarizedSurcharge: number;
   currencyCode: string;
   onPolarizedChange: (value: boolean) => void;
+  disabled: boolean;
 }) {
   return (
-    <div className={cn(LENS_OPTION_CARD, "flex items-center justify-between gap-2 sm:gap-3")}>
+    <div
+      className={cn(
+        LENS_OPTION_CARD,
+        "flex items-center justify-between gap-2 sm:gap-3",
+        disabled && "opacity-60",
+      )}
+    >
       <div className="min-w-0 flex-1">
         <Label htmlFor="polarized-toggle" className="text-sm font-medium leading-snug text-foreground">
           Upgrade to {polarizedOption.label}
         </Label>
-        {(polarizedSurcharge > 0 || polarizedOption.description) ? (
+        {/* When the selected tint can't be polarised, describe the rule instead of the price/blurb. */}
+        {disabled ? (
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground sm:text-xs">
+            Available on grey lenses only — pick the grey tint to enable
+          </p>
+        ) : (polarizedSurcharge > 0 || polarizedOption.description) ? (
           <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground sm:text-xs">
             {polarizedSurcharge > 0 ? (
               <span className={SUNGLASSES_PRICE.surcharge}>
@@ -200,6 +213,8 @@ function PolarisedUpgradeCard({
         className="shrink-0"
         checked={polarized}
         onCheckedChange={onPolarizedChange}
+        disabled={disabled}
+        aria-label="Upgrade to polarised lenses (grey lenses only)"
       />
     </div>
   );
@@ -225,24 +240,19 @@ export function LensStepPanel({
     [classicTints, gradientTints],
   );
 
-  // When polarised is on, only polarised-eligible tints (admin flag, else grey) are offered.
-  const shownClassic = useMemo(
-    () => (polarized ? classicTints.filter(isPolarizedEligible) : classicTints),
-    [polarized, classicTints, isPolarizedEligible],
+  // Polarised applies only to eligible (grey) tints. It never restricts the colour list or
+  // changes the chosen colour: the toggle is simply only usable while an eligible tint is
+  // selected. Selecting grey does NOT auto-enable polarised — it just makes the toggle available.
+  const activeTint = useMemo(
+    () => [...classicTints, ...gradientTints].find((t) => t.id === activeTintId) ?? null,
+    [classicTints, gradientTints, activeTintId],
   );
-  const shownGradient = useMemo(
-    () => (polarized ? gradientTints.filter(isPolarizedEligible) : gradientTints),
-    [polarized, gradientTints, isPolarizedEligible],
-  );
+  const polarizedAllowed = activeTint ? isPolarizedEligible(activeTint) : false;
 
-  // Turning polarised on while a non-eligible tint is selected snaps the choice to an eligible one.
+  // If the selection moves to a non-eligible tint, polarised can't apply — drop it.
   useEffect(() => {
-    if (!polarized) return;
-    const eligible = [...classicTints, ...gradientTints].filter(isPolarizedEligible);
-    if (eligible.length && !eligible.some((t) => t.id === activeTintId)) {
-      onSelectTint(eligible[0].id);
-    }
-  }, [polarized, activeTintId, classicTints, gradientTints, onSelectTint, isPolarizedEligible]);
+    if (polarized && !polarizedAllowed) onPolarizedChange(false);
+  }, [polarized, polarizedAllowed, onPolarizedChange]);
 
   const [activeTab, setActiveTab] = useState<TintTab>(() =>
     resolveInitialTab(activeTintId, classicTints, gradientTints),
@@ -255,17 +265,12 @@ export function LensStepPanel({
   const hasMoreBelow = useScrollOverflowHint(scrollRef, [activeTab, classicTints.length, gradientTints.length]);
   useContainedScrollWheel(scrollRef, panelRef, true);
 
-  // Grey lives in the Classic group, so keep the Classic tab active while polarised is on.
-  useEffect(() => {
-    if (polarized) setActiveTab("classic");
-  }, [polarized]);
-
   const tabCounts = useMemo(
-    () => ({ classic: shownClassic.length, gradient: shownGradient.length }),
-    [shownClassic.length, shownGradient.length],
+    () => ({ classic: classicTints.length, gradient: gradientTints.length }),
+    [classicTints.length, gradientTints.length],
   );
 
-  const activeTints = activeTab === "classic" ? shownClassic : shownGradient;
+  const activeTints = activeTab === "classic" ? classicTints : gradientTints;
   const activeGroupLabel =
     activeTab === "classic" ? "Classic lens tints" : "Gradient lens tints";
 
@@ -311,6 +316,7 @@ export function LensStepPanel({
               polarizedSurcharge={polarizedSurcharge}
               currencyCode={currencyCode}
               onPolarizedChange={onPolarizedChange}
+              disabled={!polarizedAllowed}
             />
           </div>
         ) : (
@@ -321,9 +327,6 @@ export function LensStepPanel({
       <div className="flex min-h-0 flex-1 flex-col gap-1">
         <div className="flex shrink-0 flex-wrap items-baseline gap-x-2">
           <p className="type-label text-sm text-foreground">Choose lens tint</p>
-          {polarized ? (
-            <p className="text-[11px] text-muted-foreground">Polarised is available in grey only</p>
-          ) : null}
         </div>
 
         <div
