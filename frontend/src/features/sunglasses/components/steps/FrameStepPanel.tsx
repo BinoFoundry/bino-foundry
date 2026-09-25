@@ -1,5 +1,9 @@
+import { Info } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/common";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { resolveTintedPlate } from "@/render/components/tinted-plate-proto";
 import type { FrameOption } from "@/lib/luxe-data";
 
 import { formatCurrency } from "@bino-foundry/shared/currency";
@@ -17,7 +21,9 @@ interface FrameStepPanelProps {
 }
 
 function FrameCardThumbnail({ frame }: { frame: FrameOption }) {
-  const src = getFrontPlateUrl(frame);
+  // Prefer the sharp transparent front plate (black/2b2b2b tint) as the card image; fall back
+  // to the frame's backend render view when there's no photographed plate for it.
+  const src = resolveTintedPlate(frame.name, "2b2b2b", "front")?.file ?? getFrontPlateUrl(frame);
 
   if (src) {
     return (
@@ -84,34 +90,54 @@ export function FrameStepPanel({
       >
         {frames.map((frame) => {
           const active = frame.id === selectedFrameId;
+          const description = frame.description?.trim() ?? "";
           return (
-            <button
-              key={frame.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              aria-label={`${frame.name}, ${formatCurrency(frame.price, currencyCode)}`}
-              onClick={() => onSelectFrame(frame.id)}
-              className={cn(
-                "flex h-full min-w-0 flex-col rounded-xl border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-3",
-                active
-                  ? "state-selected-subtle"
-                  : "border-border bg-card state-hoverable",
-              )}
-            >
-              <FrameCardThumbnail frame={frame} />
-              <div className="mt-2 flex min-h-0 flex-1 flex-col justify-end space-y-0.5">
-                <p className="type-small truncate font-medium text-foreground sm:text-body">{frame.name}</p>
-                {frame.description ? (
-                  <p className="hidden line-clamp-2 text-[10px] text-muted-foreground sm:block">
-                    {frame.description}
+            <div key={frame.id} className="relative h-full">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={`${frame.name}, ${formatCurrency(frame.price, currencyCode)}`}
+                onClick={() => onSelectFrame(frame.id)}
+                className={cn(
+                  "flex h-full w-full min-w-0 flex-col rounded-xl border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-3",
+                  active
+                    ? "state-selected-subtle"
+                    : "border-border bg-card state-hoverable",
+                )}
+              >
+                <FrameCardThumbnail frame={frame} />
+                <div className="mt-2 flex min-h-0 flex-1 flex-col justify-end space-y-0.5">
+                  <p className="type-small truncate font-medium text-foreground sm:text-body">{frame.name}</p>
+                  <p className={SUNGLASSES_PRICE.item}>
+                    {formatCurrency(frame.price, currencyCode)}
                   </p>
-                ) : null}
-                <p className={SUNGLASSES_PRICE.item}>
-                  {formatCurrency(frame.price, currencyCode)}
-                </p>
-              </div>
-            </button>
+                </div>
+              </button>
+
+              {/* Info popover with the frame's specifications (edit the frame's Description in
+                  admin). Kept off the card face so the grid stays uncluttered. */}
+              {description ? (
+                <HoverCard openDelay={80} closeDelay={80}>
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`${frame.name} specifications`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-background/85 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent align="end" className="w-56">
+                    <p className="text-sm font-medium text-foreground">{frame.name}</p>
+                    <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+                      {description}
+                    </p>
+                  </HoverCardContent>
+                </HoverCard>
+              ) : null}
+            </div>
           );
         })}
       </div>

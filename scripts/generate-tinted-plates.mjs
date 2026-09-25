@@ -460,6 +460,26 @@ function profileDetrend(lums, axis, mask, idx) {
  * edge than either the hand-drawn outline or the warped catalogue.
  */
 const CLEAR_DIR = "scripts/clear-lens";
+/**
+ * Hand-tinted exports, one per frame, as an alternative to a catalogue page.
+ *
+ * Named <slug>-<hex>.png for the colour they were painted in. The colour is
+ * divided back out to recover what is behind the glass, and the tinted region
+ * itself gives the lens shape. Preferred over the catalogue page where one
+ * exists: these are exported at the plate's own resolution, where the
+ * catalogue is less than half of it.
+ */
+const HAND_DIR = "scripts/hand-lens";
+/**
+ * Hand-tinted exports per tint, as scripts/hand-tints/<slug>/<hex>.png.
+ *
+ * Where one exists the generator does no colouring at all: the export's lens
+ * pixels are fitted onto the plate's frame and used as they are. The frame,
+ * rivets and edge come from the plate; the tint, arms and gradient come from
+ * the export exactly as painted. This is the most faithful path there is, and
+ * the most work to supply — one image per frame per tint.
+ */
+const HAND_TINT_DIR = "scripts/hand-tints";
 /** Transmittance a pale tint's open background renders at, matching PALE_TOP. */
 const CLEAR_LEVEL = 0.82;
 /**
@@ -538,19 +558,64 @@ function frameBox(data, info, y0, y1) {
   return x1 < 0 ? null : { x0, y0: by0, w: x1 - x0, h: by1 - by0 };
 }
 
-async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
-  const file = path.join(CLEAR_DIR, `${slug}.png`);
-  if (!fs.existsSync(file)) return null;
-  const P = await sharp(plateBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const pb = frameBox(P.data, P.info, 0, P.info.height);
+/**
+ * Turn a hand-tinted export into the same kind of image a clear-lens
+ * catalogue page is: lens shown as neutral grey (what is behind the glass),
+ * everything else black, background transparent.
+ */
+async function handLensAsClear(file, hex) {
+  const tint = hexToRgb(hex);
+  const tl = lum(...tint);
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const out = Buffer.alloc(info.width * info.height * 4);
+  const hueOf = (r, g, b) => {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (d === 0) return 0;
+    let h = mx === r ? (g - b) / d : mx === g ? 2 + (b - r) / d : 4 + (r - g) / d;
+    return ((h * 60) + 360) % 360;
+  };
+  const th = hueOf(...tint);
+  for (let p = 0; p < info.width * info.height; p++) {
+    const i = p * 4;
+    const a = data[i + 3];
+    out[i + 3] = a;
+    if (a < 128) continue;
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const sat = Math.max(r, g, b) - Math.min(r, g, b);
+    const dh = Math.abs(((hueOf(r, g, b) - th + 540) % 360) - 180);
+    if (sat > 25 && dh < 28) {
+      // painted lens: divide the colour out
+      const v = Math.max(0, Math.min(255, Math.round((lum(r, g, b) / tl) * 255)));
+      out[i] = out[i + 1] = out[i + 2] = v;
+    } else {
+      out[i] = out[i + 1] = out[i + 2] = 0;
+    }
+  }
+  return sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+}
+
+/**
+ * Fit one source image's lens shapes onto the plate.
+ *
+ * Returns the fitted shape (mask0) and, aligned the same way, what the source
+ * shows behind the glass (behindAligned) — or null if the source has no
+ * usable lens.
+ */
+async function fitSourceToPlate(file, band, ctx) {
+  const { P, pb, W, H, one, alphaSoft, score, prior, slug, axis, colourFile, noFit } = ctx;
   const T = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const band = (await pageBands(file))[axis];
-  if (!band) return null;
-  const tb = frameBox(T.data, T.info, band[0], band[1] + 1);
-  if (!pb || !tb) return null;
+  const tb = band ? frameBox(T.data, T.info, band[0], band[1] + 1) : frameBox(T.data, T.info, 0, T.info.height);
+  if (!tb) return null;
 
   const cat = await sharp(file).extract({ left: tb.x0, top: tb.y0, width: tb.w + 1, height: tb.h + 1 })
     .resize(pb.w + 1, pb.h + 1, { fit: "fill" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  // The same crop of the untouched colour image, when the caller wants the
+  // source's own pixels rather than a luminance read of them.
+  const catColour = colourFile
+    ? await sharp(colourFile).extract({ left: tb.x0, top: tb.y0, width: tb.w + 1, height: tb.h + 1 })
+        .resize(pb.w + 1, pb.h + 1, { fit: "fill" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+    : null;
+  const catIndex = new Int32Array(W * H).fill(-1);
 
   const catLens = new Uint8Array(W * H);
   const behind = new Uint8Array(W * H).fill(255);
@@ -562,14 +627,13 @@ async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
     const l = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
     const p = py * W + px;
     behind[p] = Math.round(l);
+    catIndex[p] = ci;
     // Lens interior is the white page or grey arms — bright and neutral. A
     // black frame fails on brightness; a cream or tortoiseshell one fails on
     // colour, which is what keeps PK008's pale frame from reading as lens.
     const csat = Math.max(cr, cg, cb) - Math.min(cr, cg, cb);
     catLens[p] = l > 95 && csat <= 20 ? 255 : 0;
   }
-  const one = { raw: { width: W, height: H, channels: 1 } };
-  const alphaSoft = await sharp(plateBuf).ensureAlpha().extractChannel(3).blur(5).raw().toBuffer();
   // Only inside the plate's frame silhouette. Where the catalogue shows a thin
   // or missing rim — PK005's near lens in side view, PK8018's lower edge — the
   // bright lens runs straight into the white page and a flood fill takes the
@@ -597,16 +661,6 @@ async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
    * and size are uncertain, so those are searched for, scoring each candidate
    * by how much of it lands on lens-like plate and how much on black frame.
    */
-  const plateLum = await sharp(plateBuf).flatten({ background: "#000" }).greyscale().blur(2).extractChannel(0).raw().toBuffer();
-  const score = new Int8Array(W * H);
-  for (let p = 0; p < W * H; p++) {
-    if (alphaSoft[p] < 252) { score[p] = -3; continue; }
-    const i = p * P.info.channels;
-    const r = P.data[i], g = P.data[i + 1], b = P.data[i + 2];
-    const sat = Math.max(r, g, b) - Math.min(r, g, b);
-    const l = plateLum[p];
-    score[p] = sat > 28 ? -3 : l < 26 ? -2 : l <= 160 ? 1 : 0;
-  }
 
   // Connected components of the catalogue lens shape.
   const label = new Int32Array(W * H);
@@ -643,6 +697,7 @@ async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
 
   const mask0 = new Uint8Array(W * H);
   const behindAligned = new Uint8Array(W * H).fill(255);
+  const colourAligned = catColour ? new Uint8Array(W * H * 3) : null;
   const isLens = (p) => score[p] === 1 ? 1 : -1;
   const isFrame = (p) => score[p] < 0 ? 1 : score[p] === 1 ? -1 : 0;
   for (const c of comps) {
@@ -679,13 +734,17 @@ async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
       }
       return sum;
     };
-    // coarse, then refine around the winner
+    // coarse, then refine around the winner — unless the caller trusts the
+    // source's own boundary and wants only the frame-box alignment
+    if (noFit) { best = { s: 0, dx: 0, dy: 0, sx: 1, sy: 1 }; }
+    else
     for (let sx = 0.92; sx <= 1.181; sx += 0.03) for (let sy = 0.92; sy <= 1.181; sy += 0.03)
       for (let dy = -48; dy <= 48; dy += 4) for (let dx = -60; dx <= 60; dx += 4) {
         const v = evaluate(sx, sy, dx, dy);
         if (v > best.s) best = { s: v, dx, dy, sx, sy };
       }
     const c0 = { ...best };
+    if (!noFit)
     for (let sx = c0.sx - 0.03; sx <= c0.sx + 0.031; sx += 0.01) for (let sy = c0.sy - 0.03; sy <= c0.sy + 0.031; sy += 0.01)
       for (let dy = c0.dy - 4; dy <= c0.dy + 4; dy += 1) for (let dx = c0.dx - 4; dx <= c0.dx + 4; dx += 1) {
         const v = evaluate(sx, sy, dx, dy);
@@ -708,9 +767,193 @@ async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
         if (label[q] !== id) continue;
         mask0[ny * W + nx] = 255;
         behindAligned[ny * W + nx] = behind[q];
+        if (colourAligned && catIndex[q] >= 0) {
+          const ci = catIndex[q], o = (ny * W + nx) * 3;
+          colourAligned[o] = catColour.data[ci]; colourAligned[o + 1] = catColour.data[ci + 1]; colourAligned[o + 2] = catColour.data[ci + 2];
+        }
       }
     }
     if (statsMode) console.log(`    ${slug} ${axis} lens fit: dx ${best.dx} dy ${best.dy} scale ${best.sx.toFixed(2)}x${best.sy.toFixed(2)}`);
+  }
+
+  return { mask0, behindAligned, colourAligned };
+}
+
+/**
+ * Turn a hand-tinted export into a shape image for fitting: lens as flat
+ * grey, frame black, background transparent. Works for any colour, gradients
+ * and neutral greys included, because it uses opacity and darkness rather
+ * than hue: on these exports the frame is black and everything else opaque
+ * is lens.
+ */
+async function handTintAsShape(file) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const W = info.width, H = info.height, N = W * H;
+  // Frame is black. Everything else is background or lens, and the difference
+  // is topology: background reaches the image border, lens is sealed inside
+  // the frame. So flood from the border through anything that is not frame;
+  // whatever is left unreached and not frame is lens. This survives a
+  // transparency checkerboard baked into the pixels at any brightness.
+  const frame = new Uint8Array(N);
+  for (let q = 0; q < N; q++) {
+    const i = q * 4;
+    if (data[i + 3] >= 128 && lum(data[i], data[i + 1], data[i + 2]) <= 34) frame[q] = 1;
+  }
+  const bg = new Uint8Array(N);
+  const stack = new Int32Array(N);
+  let sp = 0;
+  const push = (q) => { if (!frame[q] && !bg[q]) { bg[q] = 1; stack[sp++] = q; } };
+  for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (sp) {
+    const q = stack[--sp];
+    const x = q % W;
+    if (x > 0) push(q - 1);
+    if (x < W - 1) push(q + 1);
+    if (q >= W) push(q - W);
+    if (q < N - W) push(q + W);
+  }
+  const out = Buffer.alloc(N * 4);
+  for (let q = 0; q < N; q++) {
+    const i = q * 4;
+    if (bg[q]) continue;                 // transparent
+    out[i + 3] = 255;
+    out[i] = out[i + 1] = out[i + 2] = frame[q] ? 0 : 200;
+  }
+  return sharp(out, { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();
+}
+
+/**
+ * Fit a per-tint hand export onto the plate and hand back its pixels, aligned,
+ * to be composited under the mask that clearLensSource already settled.
+ */
+/** Connected components of a mask, with bounding boxes. */
+function components(mask, W, H, minPx = 4000) {
+  const label = new Int32Array(W * H);
+  const out = [];
+  const stack = new Int32Array(W * H);
+  for (let seed = 0; seed < W * H; seed++) {
+    if (!mask[seed] || label[seed]) continue;
+    const id = out.length + 1;
+    let sp = 0, n = 0, x0 = W, y0 = H, x1 = 0, y1 = 0;
+    stack[sp++] = seed; label[seed] = id;
+    while (sp) {
+      const q = stack[--sp]; n++;
+      const qx = q % W, qy = (q - qx) / W;
+      if (qx < x0) x0 = qx; if (qx > x1) x1 = qx; if (qy < y0) y0 = qy; if (qy > y1) y1 = qy;
+      for (const r of [q - 1, q + 1, q - W, q + W]) if (r >= 0 && r < W * H && mask[r] && !label[r]) { label[r] = id; stack[sp++] = r; }
+    }
+    if (n >= minPx) out.push({ id, x0, y0, x1, y1, cx: (x0 + x1) / 2 });
+  }
+  return { label, comps: out.sort((a, b) => a.cx - b.cx) };
+}
+
+async function handTintOverlay(clear, tintFile) {
+  /**
+   * The export is placed by its frame box alone. No boundary fit against the plate: its glossy rim is as bright as the
+   * lens beside it, so a fit that looks for "frame" at the edge pulls the
+   * shape inward. The export was painted to the real edge; its boundary is
+   * the mask.
+   */
+  const fit = await fitSourceToPlate(await handTintAsShape(tintFile), null, { ...clear.ctx, colourFile: tintFile, noFit: true });
+  if (!fit?.colourAligned) return null;
+  const { W, H, one, alphaSoft, P } = clear.ctx;
+
+  const mask0 = fit.mask0;
+  const colour = fit.colourAligned;
+  // tuck in a couple of pixels, feather, never over bare metal or outside the silhouette
+  /**
+   * The export's own painted boundary is the mask — it was drawn to the real
+   * lens edge at the plate's resolution. Grown a few pixels to close any thin
+   * sliver of untinted glass between its edge and the frame (the grey line the
+   * fallback would otherwise show), then vetoed by the plate: never over bare
+   * metal (the rivets) and never outside the frame silhouette. The plate cannot
+   * veto the frame body itself here — at this corner frame and lens read the
+   * same dark grey — so a loosely painted export can still run slightly onto
+   * the frame; the remedy for that is a cleaner export, not a guess.
+   */
+  /**
+   * The export's own painted boundary is the mask — it was drawn to the real
+   * lens edge at the plate's resolution. Grown a few pixels to close any thin
+   * sliver of untinted glass at its edge, then vetoed by the plate: never over
+   * bare metal (the rivets), never outside the frame silhouette. At the darkest
+   * frame corner the plate cannot tell frame from lens, so a loosely painted
+   * export can still run a little onto the frame there; a tighter export is the
+   * remedy, not a guess against ambiguous pixels.
+   */
+  let m = await sharp(Buffer.from(mask0), one).blur(4).extractChannel(0).raw().toBuffer();
+  for (let i = 0; i < m.length; i++) m[i] = m[i] > 90 ? 255 : 0;
+  const mask = await sharp(m, one).blur(1.5).extractChannel(0).raw().toBuffer();
+  for (let i = 0; i < W * H; i++) {
+    const j = i * P.info.channels;
+    if (alphaSoft[i] < 252 || lum(P.data[j], P.data[j + 1], P.data[j + 2]) > 175) mask[i] = 0;
+  }
+  return { colour, mask: Buffer.from(mask) };
+}
+
+async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
+  const P = await sharp(plateBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const pb = frameBox(P.data, P.info, 0, P.info.height);
+  if (!pb) return null;
+  const one = { raw: { width: W, height: H, channels: 1 } };
+  const alphaSoft = await sharp(plateBuf).ensureAlpha().extractChannel(3).blur(5).raw().toBuffer();
+  const plateLum = await sharp(plateBuf).flatten({ background: "#000" }).greyscale().blur(2).extractChannel(0).raw().toBuffer();
+  /**
+   * Saturation judged over a neighbourhood, not a pixel. Tortoiseshell has
+   * near-black patches between the orange, and pixel by pixel those read as
+   * neutral — as lens — so the fit expanded into the frame wherever the
+   * pattern was dark. Blurred, the whole band carries the orange's colour.
+   */
+  const softRgb = await sharp(plateBuf).flatten({ background: "#000" }).blur(5).raw().toBuffer({ resolveWithObject: true });
+  // ...and relative to brightness. Dark tortoiseshell such as (20,12,8) is
+  // only twelve levels apart in absolute terms but strongly coloured for how
+  // dark it is; a dark neutral lens is not. Scaled to 0-255.
+  const satSoft = new Uint8Array(W * H);
+  for (let p = 0; p < W * H; p++) {
+    const i = p * softRgb.info.channels;
+    const mx = Math.max(softRgb.data[i], softRgb.data[i + 1], softRgb.data[i + 2]);
+    const mn = Math.min(softRgb.data[i], softRgb.data[i + 1], softRgb.data[i + 2]);
+    satSoft[p] = Math.round(((mx - mn) * 255) / Math.max(12, mx));
+  }
+  const score = new Int8Array(W * H);
+  for (let p = 0; p < W * H; p++) {
+    if (alphaSoft[p] < 252) { score[p] = -3; continue; }
+    const l = plateLum[p];
+    score[p] = satSoft[p] > 34 ? -3 : l < 26 ? -2 : l <= 160 ? 1 : 0;
+  }
+  const ctx = { P, pb, W, H, one, alphaSoft, score, satSoft, prior, slug, axis };
+
+  /**
+   * Two sources, each used for what it is good at.
+   *
+   * The supplier's catalogue page shows the real lens edge against a white
+   * page, so its shape is trustworthy — but it is less than half the plate's
+   * resolution, so what it shows behind the glass is soft. A hand-tinted
+   * export is at the plate's resolution, so its arms are sharp — but its rim
+   * is drawn thinner than the real one, so its lens runs onto the frame. So
+   * the shape comes from the catalogue and the content from the export, and
+   * either stands in for the other when only one exists.
+   */
+  let shapeFit = null, contentFit = null;
+  const page = path.join(CLEAR_DIR, `${slug}.png`);
+  if (fs.existsSync(page)) {
+    const band = (await pageBands(page))[axis];
+    if (band) shapeFit = await fitSourceToPlate(page, band, ctx);
+  }
+  const hand = fs.existsSync(HAND_DIR)
+    ? fs.readdirSync(HAND_DIR).find((f) => f.startsWith(`${slug}-`) && f.endsWith(".png"))
+    : null;
+  if (hand && axis === "front") {
+    const hex = hand.slice(slug.length + 1, -4);
+    contentFit = await fitSourceToPlate(await handLensAsClear(path.join(HAND_DIR, hand), hex), null, ctx);
+  }
+  if (!shapeFit && !contentFit) return null;
+  const shapeSrc = shapeFit ?? contentFit;
+  const contentSrc = contentFit ?? shapeFit;
+  const mask0 = shapeSrc.mask0;
+  const behindAligned = new Uint8Array(W * H);
+  for (let p = 0; p < W * H; p++) {
+    behindAligned[p] = contentSrc.mask0[p] ? contentSrc.behindAligned[p] : shapeSrc.behindAligned[p];
   }
   /**
    * The fitted shape is only ever approximate: the catalogue and the plate are
@@ -722,19 +965,52 @@ async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
    * highlights being taken for lens the way they were before the fit existed.
    */
   const prior2 = await sharp(Buffer.from(mask0), one).blur(12).extractChannel(0).raw().toBuffer();
+  /**
+   * On a coloured or patterned frame the plate's pixel test cannot draw a
+   * clean edge — tortoiseshell leaves it ragged wherever a dark patch meets
+   * the lens — and the fitted shape is the better boundary. Decide by what
+   * surrounds the shape: if the ring just outside it is mostly coloured, the
+   * frame is, and the shape is kept as fitted.
+   */
+  let ringN = 0, ringColoured = 0;
+  for (let p = 0; p < W * H; p++) {
+    if (prior2[p] > 40 && !mask0[p] && alphaSoft[p] >= 252) { ringN++; if (satSoft[p] > 34) ringColoured++; }
+  }
+  const colouredFrame = ringN > 0 && ringColoured / ringN > 0.15;   // black frames measure 0-2%, tortoiseshell 27%
+  if (statsMode) console.log(`    ${slug} ${axis} frame ring coloured: ${((ringColoured / Math.max(1, ringN)) * 100).toFixed(0)}% -> ${colouredFrame ? "keep fitted shape" : "refine edge from plate"}`);
   const cand = new Uint8Array(W * H);
-  for (let p = 0; p < W * H; p++) if (prior2[p] > 40 && score[p] === 1) cand[p] = 255;
+  for (let p = 0; p < W * H; p++) {
+    // A bright neutral pixel inside the fitted shape is a highlight on the glass,
+    // not frame; excluding it bit a notch out of the lens at a glossy corner.
+    const lensLike = score[p] === 1 || (score[p] === 0 && mask0[p]);
+    if (colouredFrame ? mask0[p] : (prior2[p] > 40 && lensLike)) cand[p] = 255;
+  }
   // open: drop anything thinner than ~18px (highlights on the rim), keep the lens
   let pm = await sharp(Buffer.from(cand), one).blur(9).extractChannel(0).raw().toBuffer();
   for (let i = 0; i < pm.length; i++) pm[i] = pm[i] > 205 ? 255 : 0;
   pm = await sharp(pm, one).blur(9).extractChannel(0).raw().toBuffer();
   for (let i = 0; i < pm.length; i++) pm[i] = pm[i] > 50 && cand[i] ? 255 : 0;
-  // the fitted shape's core is always lens, even where the plate is too dark to say
+  // The fitted shape's core is lens even where the plate is too dark to say —
+  // but never where the plate is clearly frame. A hand-tinted export tends to
+  // draw the rim thinner than it is, so its lens runs onto the frame's inner
+  // band; tortoiseshell and cream are coloured, bare metal is bright, and the
+  // plate can veto both. A black frame's shadow is neither and passes.
   const core = await sharp(Buffer.from(mask0), one).blur(4).extractChannel(0).raw().toBuffer();
-  for (let i = 0; i < pm.length; i++) if (core[i] > 240) pm[i] = 255;
-  // close pinholes, feather
-  pm = await sharp(pm, one).blur(3).extractChannel(0).raw().toBuffer();
-  for (let i = 0; i < pm.length; i++) pm[i] = pm[i] > 120 ? 255 : 0;
+  for (let i = 0; i < pm.length; i++) {
+    if (core[i] <= 240) continue;
+    const j = i * P.info.channels;
+    if (satSoft[i] <= 34 && lum(P.data[j], P.data[j + 1], P.data[j + 2]) < 175) pm[i] = 255;
+  }
+  // and rivets are never lens, whatever any shape says
+  for (let i = 0; i < pm.length; i++) {
+    const j = i * P.info.channels;
+    if (lum(P.data[j], P.data[j + 1], P.data[j + 2]) > 175) pm[i] = 0;
+  }
+  // Smooth the contour. On a patterned frame the pixel test leaves the edge
+  // ragged wherever a dark patch of pattern sits against the lens; a lens edge
+  // is a smooth curve, so a wider blur-and-threshold restores one.
+  pm = await sharp(pm, one).blur(5).extractChannel(0).raw().toBuffer();
+  for (let i = 0; i < pm.length; i++) pm[i] = pm[i] > 128 ? 255 : 0;
   const mask = await sharp(pm, one).blur(2).extractChannel(0).raw().toBuffer();
   for (let p = 0; p < W * H; p++) if (alphaSoft[p] < 252) mask[p] = 0;
 
@@ -765,7 +1041,7 @@ async function clearLensSource(slug, axis, plateBuf, W, H, prior) {
   }
   // How far inside the lens each pixel is, for the rim shading.
   const inside = await sharp(pm, one).blur(7).extractChannel(0).raw().toBuffer();
-  return { mask: Buffer.from(mask), t, inside };
+  return { mask: Buffer.from(mask), t, inside, satSoft, ctx };
 }
 
 async function recolour(plateBuf, lensMap, tint, w, h, label = "", clear = null) {
@@ -1130,8 +1406,19 @@ for (const frame of frames) {
       // photographic path takes over, so the tint continues into shadow instead
       // of stopping at a hard band of untinted plate.
       clear.lensMask = clear.mask;
+      // ...but only where the plate could plausibly be lens: dark and neutral.
+      // The outline over-covers, and on a tortoiseshell or cream frame that
+      // let it paint the frame's inner band and the rivets. A black-frame
+      // shadow passes this test; tortoiseshell, cream and bare metal do not.
+      const { data: pd, info: pi } = await sharp(plate).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       const union = Buffer.alloc(lensMap.mask.length);
-      for (let i = 0; i < union.length; i++) union[i] = Math.max(lensMap.mask[i], clear.mask[i]);
+      for (let i = 0; i < union.length; i++) {
+        const j = i * pi.channels;
+        // colour judged over a neighbourhood: tortoiseshell's dark patches are
+        // not neutral, the band around them is orange
+        const plausible = clear.satSoft[i] <= 34 && lum(pd[j], pd[j + 1], pd[j + 2]) < 160;
+        union[i] = Math.max(clear.mask[i], plausible ? lensMap.mask[i] : 0);
+      }
       lensMap.mask = union;
     }
 
@@ -1139,6 +1426,32 @@ for (const frame of frames) {
       const hex = tint.gradient_top.replace("#", "").toLowerCase();
       const name = `${frame.slug}-${axis}-${hex}.png`;
       try {
+        const tintFile = path.join(HAND_TINT_DIR, frame.slug, `${hex}.png`);
+        if (clear && axis === "front" && fs.existsSync(tintFile)) {
+          const overlay = await handTintOverlay(clear, tintFile);
+          if (overlay) {
+            const { colour, mask: handMask } = overlay;
+            // Laid over the generator's own plate for this tint, not the raw
+            // photograph: wherever the export falls a little short of the real
+            // lens — under the rivets on PK002 — the generated tint shows
+            // through instead of untinted glass.
+            const base = await recolour(plate, lensMap, tint, view.image_width, view.image_height, `${frame.slug} ${axis}`, clear);
+            const { data, info } = await sharp(base ?? plate).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+            for (let p = 0; p < info.width * info.height; p++) {
+              const w = handMask[p] / 255;
+              if (w === 0) continue;
+              const i = p * info.channels, o = p * 3;
+              data[i] = Math.round(data[i] * (1 - w) + colour[o] * w);
+              data[i + 1] = Math.round(data[i + 1] * (1 - w) + colour[o + 1] * w);
+              data[i + 2] = Math.round(data[i + 2] * (1 - w) + colour[o + 2] * w);
+            }
+            const out = await sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } }).png().toBuffer();
+            if (!dryRun) fs.writeFileSync(path.join(outDir, name), out);
+            made++;
+            if (made % 20 === 0 || tints.length === 1) console.log(`  ${name}  (${tint.code}, hand-tinted)`);
+            continue;
+          }
+        }
         const out = await recolour(plate, lensMap, tint, view.image_width, view.image_height, `${frame.slug} ${axis}`, clear);
         if (!out) { skipped.push(`${frame.slug} ${axis} ${hex}: empty lens mask`); continue; }
         if (!dryRun) fs.writeFileSync(path.join(outDir, name), out);

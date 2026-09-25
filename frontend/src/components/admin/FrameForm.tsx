@@ -235,12 +235,15 @@ export const FrameForm = ({ initial, onSave, onCancel }: FrameFormProps) => {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
-          <input
-            className="w-full rounded border border-border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            Description / specifications
+          </label>
+          <textarea
+            rows={3}
+            className="w-full resize-y rounded border border-border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-primary"
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
-            placeholder="Optional"
+            placeholder={"Shown in the frame's ⓘ popover. e.g.\nLens 53 · Bridge 23 · Temple 150\nAcetate · Square"}
           />
         </div>
         <div>

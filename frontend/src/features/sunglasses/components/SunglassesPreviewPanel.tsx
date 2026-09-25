@@ -50,7 +50,9 @@ export function SunglassesPreviewPanel({
   unavailableFrame = false,
   plateOnly = false,
 }: SunglassesPreviewPanelProps) {
-  const displayViews = getCustomiserDisplayViews(config);
+  // Show front + side on both the frame step and the tint step: the side tints are now
+  // real photographed plates (not procedural), so they hold up during tint selection too.
+  const displayViews = getCustomiserDisplayViews(config, { includeSide: true });
   const primary = displayViews[0];
   const secondary = displayViews.slice(1);
 

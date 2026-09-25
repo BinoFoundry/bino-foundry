@@ -3,15 +3,14 @@ import type { SunglassesCompositorConfig } from "@/render/types";
 import { FRAME_VIEW_LABELS, type FrameViewAxis } from "@/types/frame-rendering";
 
 /**
- * Only the front view is shown to customers.
+ * Callers pass `includeSide` to opt into the two-view (front + side) list.
  *
- * The side view is where the product photography is weakest — the near lens
- * sits in deep shadow and the far one is half hidden — and every attempt to
- * render lens tints convincingly on it has fallen short of the front. Rather
- * than show one good view next to one poor one, the side is withheld until the
- * source photographs improve. Admin keeps its own view list.
+ * The customiser now shows front + side on both the frame step and the tint step,
+ * because the side plates are real photographed tint images that hold up under
+ * colour. Thumbnails and admin still call without `includeSide` for front-only.
  */
 export const CUSTOMISER_VIEW_ORDER: FrameViewAxis[] = ["front"];
+const CUSTOMISER_VIEW_ORDER_WITH_SIDE: FrameViewAxis[] = ["front", "side"];
 
 export interface CustomiserDisplayView {
   axis: FrameViewAxis;
@@ -21,16 +20,19 @@ export interface CustomiserDisplayView {
 
 export function getCustomiserDisplayViews(
   config: SunglassesCompositorConfig,
+  options?: { includeSide?: boolean },
 ): CustomiserDisplayView[] {
+  const order = options?.includeSide ? CUSTOMISER_VIEW_ORDER_WITH_SIDE : CUSTOMISER_VIEW_ORDER;
   const clipViews = config.clipViews ?? config.maskedViews;
   if (!clipViews) {
-    return [
+    const base: CustomiserDisplayView[] = [
       { axis: "front", label: FRAME_VIEW_LABELS.front, aspectRatio: "16/10" },
       { axis: "side", label: FRAME_VIEW_LABELS.side, aspectRatio: "video" },
     ];
+    return base.filter((v) => order.includes(v.axis));
   }
 
-  return CUSTOMISER_VIEW_ORDER.filter((axis) => {
+  return order.filter((axis) => {
     const view = clipViews[axis];
     return view && isFrameViewClipReady(view);
   }).map((axis) => ({

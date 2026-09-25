@@ -56,6 +56,11 @@ export function SunglassesCompositor({
   // PROTOTYPE: a photograph of this frame already wearing this tint replaces the
   // whole plate, and no lens compositing runs at all.
   const tinted = plateOnly ? null : resolveTintedPlate(config.frameLabel, config.tint?.top, view);
+  // When a tint is chosen but this frame has no real photo for it, show the clear
+  // frame rather than procedurally tinting it (which looks wrong on these frames).
+  // `?noproto` opts back into procedural tinting for everything.
+  const noproto = typeof window !== "undefined" && window.location.search.includes("noproto");
+  const missingTintPhoto = !plateOnly && !noproto && !tinted && Boolean(config.tint?.top);
 
   if (plateView?.plateUrl) {
     // Step 1 uses the cropped plate as-is. Do not fall back to originalPlateUrl —
@@ -72,7 +77,7 @@ export function SunglassesCompositor({
           plateUrl,
           width,
           height,
-          clipConfig: (tinted ? null : clipConfig) ?? {
+          clipConfig: (tinted || missingTintPhoto ? null : clipConfig) ?? {
             version: 1,
             imageWidth: width,
             imageHeight: height,

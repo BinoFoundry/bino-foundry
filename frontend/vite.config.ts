@@ -45,6 +45,9 @@ export default defineConfig(({ mode }) => {
       hmr: {
         overlay: false,
       },
+      proxy: {
+        "/api": { target: "https://thenewchapterstudio.com", changeOrigin: true, secure: true },
+      },
     },
     plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {

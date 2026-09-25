@@ -36,4 +36,35 @@ describe("getCustomiserDisplayViews", () => {
     expect(views).toHaveLength(1);
     expect(views[0]?.axis).toBe("front");
   });
+
+  it("includes the side view only when includeSide is set and its clip is ready", () => {
+    const readySide = {
+      view: "side" as const,
+      plateUrl: "https://example.com/s.jpg",
+      width: 800,
+      height: 600,
+      clipStatus: "ready" as const,
+      clipConfig: {
+        version: 1,
+        imageWidth: 800,
+        imageHeight: 600,
+        lenses: [{ id: "l1", label: "Left", pathD: "M0 0 L800 0 L800 600 Z" }],
+      },
+    };
+    const config: SunglassesCompositorConfig = {
+      renderMode: "svg-clip",
+      basePrice: 100,
+      tint: { name: "Test", top: "#000", bottom: "#111" },
+      options: {},
+      clipViews: {
+        front: { ...readySide, view: "front", plateUrl: "https://example.com/f.jpg" },
+        side: readySide,
+      },
+    };
+    expect(getCustomiserDisplayViews(config).map((v) => v.axis)).toEqual(["front"]);
+    expect(getCustomiserDisplayViews(config, { includeSide: true }).map((v) => v.axis)).toEqual([
+      "front",
+      "side",
+    ]);
+  });
 });

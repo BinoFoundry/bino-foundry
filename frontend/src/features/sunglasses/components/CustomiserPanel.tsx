@@ -19,6 +19,7 @@ import { PreviewStepPanel } from "./steps/PreviewStepPanel";
 import { RxStepPanel } from "./steps/RxStepPanel";
 import { buildAddOnsLabel } from "./SunglassesConfigurationSummary";
 import { extrasBuilderOptions, rxBuilderOptions } from "../utils/builder-option-groups";
+import { availableTintTops } from "@/render/components/tinted-plate-proto";
 
 type CustomiserState = ReturnType<typeof useSunglassesCustomiserState>;
 
@@ -58,6 +59,14 @@ export function CustomiserPanel({
     requiresManualFollowUp,
     totalPrice,
   } = state;
+
+  // Only offer tint colours this frame has a real photo for; the rest would
+  // fall back to procedural tinting, which looks wrong on these frames.
+  const availableTops = availableTintTops(frameSku.name);
+  const hasImage = (tint: { gradientTop: string }) =>
+    !availableTops || availableTops.has(tint.gradientTop.replace("#", "").toLowerCase());
+  const classicTints = sunglassesCatalog.classicTints.filter(hasImage);
+  const gradientTints = sunglassesCatalog.gradientTints.filter(hasImage);
 
   const polarizedOption = sunglassesCatalog.getOptionByCode(POLARIZED_CODE);
   const rxOptions = rxBuilderOptions(sunglassesCatalog.builderOptions);
@@ -109,8 +118,8 @@ export function CustomiserPanel({
     ),
     lens: (
       <LensStepPanel
-        classicTints={sunglassesCatalog.classicTints}
-        gradientTints={sunglassesCatalog.gradientTints}
+        classicTints={classicTints}
+        gradientTints={gradientTints}
         polarizedOption={polarizedOption}
         polarized={isOptionEnabled(POLARIZED_CODE)}
         activeTintId={activeTintId}

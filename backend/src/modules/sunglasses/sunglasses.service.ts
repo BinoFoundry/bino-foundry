@@ -57,7 +57,7 @@ async function readLensDisclaimer(): Promise<string> {
 
   assertNoDbError(error);
   if (!data?.value) {
-    return "Lens appearance may vary slightly from the final product.";
+    return "Lens tints shown are a close preview — the exact colour may vary slightly from the final product.";
   }
   if (typeof data.value === "string") return data.value;
   return String(data.value);

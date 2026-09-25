@@ -1,4 +1,5 @@
 {
+  "version": "mugf024m",
   "yours": {
     "pk002|front|2a120c": {
       "file": "pk002-front-2a120c.png",
@@ -649,1203 +650,1203 @@
   "generated": {
     "pk002|front|1a2459": {
       "file": "gen-pk002-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|2a120c": {
       "file": "gen-pk002-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|2a2f73": {
       "file": "gen-pk002-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|2b2b2b": {
       "file": "gen-pk002-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|4a4a4a": {
       "file": "gen-pk002-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|5a0000": {
       "file": "gen-pk002-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|5b001e": {
       "file": "gen-pk002-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|8ec3e3": {
       "file": "gen-pk002-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|8f1830": {
       "file": "gen-pk002-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|9fc85b": {
       "file": "gen-pk002-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|d7d51d": {
       "file": "gen-pk002-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|front|e3bc86": {
       "file": "gen-pk002-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 388
     },
     "pk002|side|1a2459": {
       "file": "gen-pk002-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|2a120c": {
       "file": "gen-pk002-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|2a2f73": {
       "file": "gen-pk002-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|2b2b2b": {
       "file": "gen-pk002-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|4a4a4a": {
       "file": "gen-pk002-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|5a0000": {
       "file": "gen-pk002-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|5b001e": {
       "file": "gen-pk002-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|8ec3e3": {
       "file": "gen-pk002-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|8f1830": {
       "file": "gen-pk002-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|9fc85b": {
       "file": "gen-pk002-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|d7d51d": {
       "file": "gen-pk002-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk002|side|e3bc86": {
       "file": "gen-pk002-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 967,
+      "h": 323
     },
     "pk003|front|1a2459": {
       "file": "gen-pk003-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|2a120c": {
       "file": "gen-pk003-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|2a2f73": {
       "file": "gen-pk003-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|2b2b2b": {
       "file": "gen-pk003-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|4a4a4a": {
       "file": "gen-pk003-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|5a0000": {
       "file": "gen-pk003-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|5b001e": {
       "file": "gen-pk003-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|8ec3e3": {
       "file": "gen-pk003-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|8f1830": {
       "file": "gen-pk003-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|9fc85b": {
       "file": "gen-pk003-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|d7d51d": {
       "file": "gen-pk003-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|front|e3bc86": {
       "file": "gen-pk003-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 951,
+      "h": 371
     },
     "pk003|side|1a2459": {
       "file": "gen-pk003-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|2a120c": {
       "file": "gen-pk003-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|2a2f73": {
       "file": "gen-pk003-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|2b2b2b": {
       "file": "gen-pk003-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|4a4a4a": {
       "file": "gen-pk003-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|5a0000": {
       "file": "gen-pk003-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|5b001e": {
       "file": "gen-pk003-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|8ec3e3": {
       "file": "gen-pk003-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|8f1830": {
       "file": "gen-pk003-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|9fc85b": {
       "file": "gen-pk003-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|d7d51d": {
       "file": "gen-pk003-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk003|side|e3bc86": {
       "file": "gen-pk003-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 952,
+      "h": 352
     },
     "pk005|front|1a2459": {
       "file": "gen-pk005-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|2a120c": {
       "file": "gen-pk005-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|2a2f73": {
       "file": "gen-pk005-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|2b2b2b": {
       "file": "gen-pk005-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|4a4a4a": {
       "file": "gen-pk005-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|5a0000": {
       "file": "gen-pk005-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|5b001e": {
       "file": "gen-pk005-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|8ec3e3": {
       "file": "gen-pk005-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|8f1830": {
       "file": "gen-pk005-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|9fc85b": {
       "file": "gen-pk005-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|d7d51d": {
       "file": "gen-pk005-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|front|e3bc86": {
       "file": "gen-pk005-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 970,
+      "h": 357
     },
     "pk005|side|1a2459": {
       "file": "gen-pk005-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|2a120c": {
       "file": "gen-pk005-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|2a2f73": {
       "file": "gen-pk005-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|2b2b2b": {
       "file": "gen-pk005-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|4a4a4a": {
       "file": "gen-pk005-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|5a0000": {
       "file": "gen-pk005-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|5b001e": {
       "file": "gen-pk005-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|8ec3e3": {
       "file": "gen-pk005-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|8f1830": {
       "file": "gen-pk005-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|9fc85b": {
       "file": "gen-pk005-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|d7d51d": {
       "file": "gen-pk005-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk005|side|e3bc86": {
       "file": "gen-pk005-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 317
     },
     "pk006|front|1a2459": {
       "file": "gen-pk006-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|2a120c": {
       "file": "gen-pk006-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|2a2f73": {
       "file": "gen-pk006-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|2b2b2b": {
       "file": "gen-pk006-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|4a4a4a": {
       "file": "gen-pk006-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|5a0000": {
       "file": "gen-pk006-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|5b001e": {
       "file": "gen-pk006-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|8ec3e3": {
       "file": "gen-pk006-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|8f1830": {
       "file": "gen-pk006-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|9fc85b": {
       "file": "gen-pk006-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|d7d51d": {
       "file": "gen-pk006-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|front|e3bc86": {
       "file": "gen-pk006-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 898,
+      "h": 389
     },
     "pk006|side|1a2459": {
       "file": "gen-pk006-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|2a120c": {
       "file": "gen-pk006-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|2a2f73": {
       "file": "gen-pk006-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|2b2b2b": {
       "file": "gen-pk006-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|4a4a4a": {
       "file": "gen-pk006-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|5a0000": {
       "file": "gen-pk006-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|5b001e": {
       "file": "gen-pk006-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|8ec3e3": {
       "file": "gen-pk006-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|8f1830": {
       "file": "gen-pk006-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|9fc85b": {
       "file": "gen-pk006-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|d7d51d": {
       "file": "gen-pk006-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk006|side|e3bc86": {
       "file": "gen-pk006-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 334
     },
     "pk007|front|1a2459": {
       "file": "gen-pk007-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|2a120c": {
       "file": "gen-pk007-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|2a2f73": {
       "file": "gen-pk007-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|2b2b2b": {
       "file": "gen-pk007-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|4a4a4a": {
       "file": "gen-pk007-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|5a0000": {
       "file": "gen-pk007-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|5b001e": {
       "file": "gen-pk007-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|8ec3e3": {
       "file": "gen-pk007-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|8f1830": {
       "file": "gen-pk007-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|9fc85b": {
       "file": "gen-pk007-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|d7d51d": {
       "file": "gen-pk007-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|front|e3bc86": {
       "file": "gen-pk007-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 976,
+      "h": 352
     },
     "pk007|side|1a2459": {
       "file": "gen-pk007-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|2a120c": {
       "file": "gen-pk007-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|2a2f73": {
       "file": "gen-pk007-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|2b2b2b": {
       "file": "gen-pk007-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|4a4a4a": {
       "file": "gen-pk007-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|5a0000": {
       "file": "gen-pk007-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|5b001e": {
       "file": "gen-pk007-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|8ec3e3": {
       "file": "gen-pk007-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|8f1830": {
       "file": "gen-pk007-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|9fc85b": {
       "file": "gen-pk007-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|d7d51d": {
       "file": "gen-pk007-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk007|side|e3bc86": {
       "file": "gen-pk007-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 969,
+      "h": 297
     },
     "pk008|front|1a2459": {
       "file": "gen-pk008-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|2a120c": {
       "file": "gen-pk008-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|2a2f73": {
       "file": "gen-pk008-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|2b2b2b": {
       "file": "gen-pk008-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|4a4a4a": {
       "file": "gen-pk008-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|5a0000": {
       "file": "gen-pk008-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|5b001e": {
       "file": "gen-pk008-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|8ec3e3": {
       "file": "gen-pk008-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|8f1830": {
       "file": "gen-pk008-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|9fc85b": {
       "file": "gen-pk008-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|d7d51d": {
       "file": "gen-pk008-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|front|e3bc86": {
       "file": "gen-pk008-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 896,
+      "h": 374
     },
     "pk008|side|1a2459": {
       "file": "gen-pk008-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|2a120c": {
       "file": "gen-pk008-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|2a2f73": {
       "file": "gen-pk008-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|2b2b2b": {
       "file": "gen-pk008-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|4a4a4a": {
       "file": "gen-pk008-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|5a0000": {
       "file": "gen-pk008-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|5b001e": {
       "file": "gen-pk008-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|8ec3e3": {
       "file": "gen-pk008-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|8f1830": {
       "file": "gen-pk008-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|9fc85b": {
       "file": "gen-pk008-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|d7d51d": {
       "file": "gen-pk008-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk008|side|e3bc86": {
       "file": "gen-pk008-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 897,
+      "h": 337
     },
     "pk009|front|1a2459": {
       "file": "gen-pk009-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|2a120c": {
       "file": "gen-pk009-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|2a2f73": {
       "file": "gen-pk009-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|2b2b2b": {
       "file": "gen-pk009-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|4a4a4a": {
       "file": "gen-pk009-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|5a0000": {
       "file": "gen-pk009-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|5b001e": {
       "file": "gen-pk009-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|8ec3e3": {
       "file": "gen-pk009-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|8f1830": {
       "file": "gen-pk009-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|9fc85b": {
       "file": "gen-pk009-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|d7d51d": {
       "file": "gen-pk009-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|front|e3bc86": {
       "file": "gen-pk009-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 933,
+      "h": 372
     },
     "pk009|side|1a2459": {
       "file": "gen-pk009-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|2a120c": {
       "file": "gen-pk009-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|2a2f73": {
       "file": "gen-pk009-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|2b2b2b": {
       "file": "gen-pk009-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|4a4a4a": {
       "file": "gen-pk009-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|5a0000": {
       "file": "gen-pk009-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|5b001e": {
       "file": "gen-pk009-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|8ec3e3": {
       "file": "gen-pk009-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|8f1830": {
       "file": "gen-pk009-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|9fc85b": {
       "file": "gen-pk009-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|d7d51d": {
       "file": "gen-pk009-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk009|side|e3bc86": {
       "file": "gen-pk009-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 894,
+      "h": 297
     },
     "pk010|front|1a2459": {
       "file": "gen-pk010-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|2a120c": {
       "file": "gen-pk010-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|2a2f73": {
       "file": "gen-pk010-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|2b2b2b": {
       "file": "gen-pk010-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|4a4a4a": {
       "file": "gen-pk010-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|5a0000": {
       "file": "gen-pk010-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|5b001e": {
       "file": "gen-pk010-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|8ec3e3": {
       "file": "gen-pk010-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|8f1830": {
       "file": "gen-pk010-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|9fc85b": {
       "file": "gen-pk010-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|d7d51d": {
       "file": "gen-pk010-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|front|e3bc86": {
       "file": "gen-pk010-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 857,
+      "h": 355
     },
     "pk010|side|1a2459": {
       "file": "gen-pk010-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|2a120c": {
       "file": "gen-pk010-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|2a2f73": {
       "file": "gen-pk010-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|2b2b2b": {
       "file": "gen-pk010-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|4a4a4a": {
       "file": "gen-pk010-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|5a0000": {
       "file": "gen-pk010-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|5b001e": {
       "file": "gen-pk010-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|8ec3e3": {
       "file": "gen-pk010-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|8f1830": {
       "file": "gen-pk010-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|9fc85b": {
       "file": "gen-pk010-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|d7d51d": {
       "file": "gen-pk010-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk010|side|e3bc86": {
       "file": "gen-pk010-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 861,
+      "h": 309
     },
     "pk011|front|1a2459": {
       "file": "gen-pk011-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|2a120c": {
       "file": "gen-pk011-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|2a2f73": {
       "file": "gen-pk011-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|2b2b2b": {
       "file": "gen-pk011-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|4a4a4a": {
       "file": "gen-pk011-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|5a0000": {
       "file": "gen-pk011-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|5b001e": {
       "file": "gen-pk011-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|8ec3e3": {
       "file": "gen-pk011-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|8f1830": {
       "file": "gen-pk011-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|9fc85b": {
       "file": "gen-pk011-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|d7d51d": {
       "file": "gen-pk011-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|front|e3bc86": {
       "file": "gen-pk011-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 856,
+      "h": 343
     },
     "pk011|side|1a2459": {
       "file": "gen-pk011-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|2a120c": {
       "file": "gen-pk011-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|2a2f73": {
       "file": "gen-pk011-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|2b2b2b": {
       "file": "gen-pk011-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|4a4a4a": {
       "file": "gen-pk011-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|5a0000": {
       "file": "gen-pk011-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|5b001e": {
       "file": "gen-pk011-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|8ec3e3": {
       "file": "gen-pk011-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|8f1830": {
       "file": "gen-pk011-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|9fc85b": {
       "file": "gen-pk011-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|d7d51d": {
       "file": "gen-pk011-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk011|side|e3bc86": {
       "file": "gen-pk011-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 847,
+      "h": 303
     },
     "pk8018-s|front|1a2459": {
       "file": "gen-pk8018-s-front-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|2a120c": {
       "file": "gen-pk8018-s-front-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|2a2f73": {
       "file": "gen-pk8018-s-front-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|2b2b2b": {
       "file": "gen-pk8018-s-front-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|4a4a4a": {
       "file": "gen-pk8018-s-front-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|5a0000": {
       "file": "gen-pk8018-s-front-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|5b001e": {
       "file": "gen-pk8018-s-front-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|8ec3e3": {
       "file": "gen-pk8018-s-front-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|8f1830": {
       "file": "gen-pk8018-s-front-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|9fc85b": {
       "file": "gen-pk8018-s-front-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|d7d51d": {
       "file": "gen-pk8018-s-front-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|front|e3bc86": {
       "file": "gen-pk8018-s-front-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 937,
+      "h": 333
     },
     "pk8018-s|side|1a2459": {
       "file": "gen-pk8018-s-side-1a2459.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|2a120c": {
       "file": "gen-pk8018-s-side-2a120c.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|2a2f73": {
       "file": "gen-pk8018-s-side-2a2f73.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|2b2b2b": {
       "file": "gen-pk8018-s-side-2b2b2b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|4a4a4a": {
       "file": "gen-pk8018-s-side-4a4a4a.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|5a0000": {
       "file": "gen-pk8018-s-side-5a0000.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|5b001e": {
       "file": "gen-pk8018-s-side-5b001e.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|8ec3e3": {
       "file": "gen-pk8018-s-side-8ec3e3.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|8f1830": {
       "file": "gen-pk8018-s-side-8f1830.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|9fc85b": {
       "file": "gen-pk8018-s-side-9fc85b.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|d7d51d": {
       "file": "gen-pk8018-s-side-d7d51d.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     },
     "pk8018-s|side|e3bc86": {
       "file": "gen-pk8018-s-side-e3bc86.png",
-      "w": 1920,
-      "h": 1080
+      "w": 932,
+      "h": 305
     }
   }
 }

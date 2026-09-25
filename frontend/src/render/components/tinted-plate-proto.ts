@@ -30,9 +30,21 @@ interface TintedPlate {
 }
 
 const SETS = manifest as {
+  version?: string;
   yours: Record<string, TintedPlate>;
   generated: Record<string, TintedPlate>;
 };
+
+// Plate files keep stable names across re-stagings, so browsers cache stale copies. A
+// manifest version (bumped whenever plates are re-staged) busts that cache on the URL.
+const CACHE_BUST = SETS.version ? `?v=${SETS.version}` : "";
+
+function activeSet(): Record<string, TintedPlate> {
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  // Default to the generated set (full 12 tints per frame, consistent size); ?yours shows
+  // the hand-retouched originals instead.
+  return search.includes("yours") ? SETS.yours : SETS.generated;
+}
 
 export function resolveTintedPlate(
   frameName: string | undefined,
@@ -45,8 +57,28 @@ export function resolveTintedPlate(
   if (view !== "front" && view !== "side") return null;
   const slug = frameName.trim().toLowerCase();
   const hex = tintHex.replace("#", "").toLowerCase();
-  const set = search.includes("yours") ? SETS.yours : SETS.generated;
-  const found = set[`${slug}|${view}|${hex}`];
+  const found = activeSet()[`${slug}|${view}|${hex}`];
   if (!found) return null;
-  return { ...found, file: `${import.meta.env.BASE_URL}tint-proto/${found.file}` };
+  return { ...found, file: `${import.meta.env.BASE_URL}tint-proto/${found.file}${CACHE_BUST}` };
+}
+
+/**
+ * The tint top-colours that have a real front-view photo for this frame.
+ *
+ * The builder hides colours a frame has no hand-made image for, rather than
+ * fall back to procedural tinting (which looks wrong on these photographed
+ * frames). Returns null when filtering should be skipped — `?noproto` renders
+ * everything procedurally, so nothing is hidden.
+ */
+export function availableTintTops(frameName: string | undefined): Set<string> | null {
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  if (search.includes("noproto")) return null;
+  if (!frameName) return new Set();
+  const slug = frameName.trim().toLowerCase();
+  const out = new Set<string>();
+  for (const key of Object.keys(activeSet())) {
+    const [s, v, hex] = key.split("|");
+    if (s === slug && v === "front") out.add(hex);
+  }
+  return out;
 }
