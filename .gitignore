@@ -37,6 +37,7 @@ deploy/env/.env.*
 # hand-retouched "yours" source set, scratch exports) stays out of the bundle.
 frontend/public/tint-proto/*
 !frontend/public/tint-proto/gen-*.png
+!frontend/public/tint-proto/thumb-*.png
 
 # Full-resolution frame plates pulled from the database for the tint pipeline (reproducible)
 scripts/hires-plates/

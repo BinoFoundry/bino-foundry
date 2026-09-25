@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,13 @@ import { formatCurrencySurcharge } from "@bino-foundry/shared/currency";
 import { formatBuilderOptionDescription, SUNGLASSES_COPY, SUNGLASSES_PRICE } from "../../copy";
 
 type TintTab = "classic" | "gradient";
+
+// Polarised lenses are only offered in grey (charcoal / 2B2B2B); grey can also be
+// non-polarised. Interim hardcode — the admin per-tint "polarised available" flag will
+// replace this list once that column exists.
+const POLARIZED_ELIGIBLE_HEXES = new Set(["2b2b2b"]);
+const isPolarizedEligible = (t: LensTintEntry) =>
+  POLARIZED_ELIGIBLE_HEXES.has((t.gradientTop || "").replace("#", "").toLowerCase());
 
 const LENS_OPTION_CARD =
   "rounded-lg border border-border/60 bg-muted/15 px-2.5 py-2 sm:px-3 sm:py-2.5";
@@ -208,6 +215,26 @@ export function LensStepPanel({
   saveStatus,
 }: LensStepPanelProps) {
   const polarizedSurcharge = polarizedOption?.priceSurcharge ?? 0;
+
+  // When polarised is on, only grey-eligible tints are offered.
+  const shownClassic = useMemo(
+    () => (polarized ? classicTints.filter(isPolarizedEligible) : classicTints),
+    [polarized, classicTints],
+  );
+  const shownGradient = useMemo(
+    () => (polarized ? gradientTints.filter(isPolarizedEligible) : gradientTints),
+    [polarized, gradientTints],
+  );
+
+  // Turning polarised on while a non-grey tint is selected snaps the choice to grey.
+  useEffect(() => {
+    if (!polarized) return;
+    const eligible = [...classicTints, ...gradientTints].filter(isPolarizedEligible);
+    if (eligible.length && !eligible.some((t) => t.id === activeTintId)) {
+      onSelectTint(eligible[0].id);
+    }
+  }, [polarized, activeTintId, classicTints, gradientTints, onSelectTint]);
+
   const [activeTab, setActiveTab] = useState<TintTab>(() =>
     resolveInitialTab(activeTintId, classicTints, gradientTints),
   );
@@ -219,12 +246,17 @@ export function LensStepPanel({
   const hasMoreBelow = useScrollOverflowHint(scrollRef, [activeTab, classicTints.length, gradientTints.length]);
   useContainedScrollWheel(scrollRef, panelRef, true);
 
+  // Grey lives in the Classic group, so keep the Classic tab active while polarised is on.
+  useEffect(() => {
+    if (polarized) setActiveTab("classic");
+  }, [polarized]);
+
   const tabCounts = useMemo(
-    () => ({ classic: classicTints.length, gradient: gradientTints.length }),
-    [classicTints.length, gradientTints.length],
+    () => ({ classic: shownClassic.length, gradient: shownGradient.length }),
+    [shownClassic.length, shownGradient.length],
   );
 
-  const activeTints = activeTab === "classic" ? classicTints : gradientTints;
+  const activeTints = activeTab === "classic" ? shownClassic : shownGradient;
   const activeGroupLabel =
     activeTab === "classic" ? "Classic lens tints" : "Gradient lens tints";
 
@@ -278,7 +310,12 @@ export function LensStepPanel({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-1">
-        <p className="type-label shrink-0 text-sm text-foreground">Choose lens tint</p>
+        <div className="flex shrink-0 flex-wrap items-baseline gap-x-2">
+          <p className="type-label text-sm text-foreground">Choose lens tint</p>
+          {polarized ? (
+            <p className="text-[11px] text-muted-foreground">Polarised is available in grey only</p>
+          ) : null}
+        </div>
 
         <div
           ref={panelRef}

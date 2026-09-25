@@ -3,7 +3,7 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/common";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { resolveTintedPlate } from "@/render/components/tinted-plate-proto";
+import { resolveFrameThumb, resolveTintedPlate } from "@/render/components/tinted-plate-proto";
 import type { FrameOption } from "@/lib/luxe-data";
 
 import { formatCurrency } from "@bino-foundry/shared/currency";
@@ -21,9 +21,12 @@ interface FrameStepPanelProps {
 }
 
 function FrameCardThumbnail({ frame }: { frame: FrameOption }) {
-  // Prefer the sharp transparent front plate (black/2b2b2b tint) as the card image; fall back
-  // to the frame's backend render view when there's no photographed plate for it.
-  const src = resolveTintedPlate(frame.name, "2b2b2b", "front")?.file ?? getFrontPlateUrl(frame);
+  // Use the small pre-sized thumbnail (crisp at card size); fall back to the full front plate,
+  // then to the frame's backend render view.
+  const src =
+    resolveFrameThumb(frame.name) ??
+    resolveTintedPlate(frame.name, "2b2b2b", "front")?.file ??
+    getFrontPlateUrl(frame);
 
   if (src) {
     return (

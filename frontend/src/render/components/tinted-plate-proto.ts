@@ -63,6 +63,19 @@ export function resolveTintedPlate(
 }
 
 /**
+ * Small, pre-sized frame-card thumbnail (thumb-<slug>.png), so the card doesn't downscale a
+ * full ~970px plate (which looked rough). Returns null when the frame has no generated plate.
+ */
+export function resolveFrameThumb(frameName: string | undefined): string | null {
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  if (search.includes("noproto")) return null;
+  if (!frameName) return null;
+  const slug = frameName.trim().toLowerCase();
+  if (!activeSet()[`${slug}|front|2b2b2b`]) return null;
+  return `${import.meta.env.BASE_URL}tint-proto/thumb-${slug}.png${CACHE_BUST}`;
+}
+
+/**
  * The tint top-colours that have a real front-view photo for this frame.
  *
  * The builder hides colours a frame has no hand-made image for, rather than
