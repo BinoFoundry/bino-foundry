@@ -7,6 +7,7 @@ import { NormalizedRegenProgressPanel } from "@/features/admin/components/Normal
 import {
   buildNormalizedRegenQueue,
   countNormalizedRegenWorkItems,
+  hydrateCropConfigs,
   runNormalizedAssetRegenJob,
   type NormalizedRegenFilter,
   type NormalizedRegenJobProgress,
@@ -112,6 +113,11 @@ export function AssetMaintenancePage() {
     setProgress({ ...IDLE_PROGRESS, status: "preparing", total: previewCount });
 
     try {
+      setProgress((p) => ({ ...p, status: "preparing", currentLabel: "Loading crop data…" }));
+      const hydratedLibraries = await hydrateCropConfigs(cat.beadLibraries, cat.beadLibrarySizes, {
+        signal: controller.signal,
+      });
+
       if (recalcFirst) {
         setProgress((p) => ({ ...p, status: "preparing", currentLabel: "Refreshing group references…" }));
         await cat.recalculateMmGroupReferences();
@@ -119,7 +125,7 @@ export function AssetMaintenancePage() {
       }
 
       const items = buildNormalizedRegenQueue(
-        cat.beadLibraries,
+        hydratedLibraries,
         cat.beadLibrarySizes,
         cat.beadSizes,
         cat.beadTypes,
