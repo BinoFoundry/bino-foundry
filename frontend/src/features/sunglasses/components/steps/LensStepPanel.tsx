@@ -19,12 +19,16 @@ import { formatBuilderOptionDescription, SUNGLASSES_COPY, SUNGLASSES_PRICE } fro
 
 type TintTab = "classic" | "gradient";
 
-// Polarised lenses are only offered in grey (charcoal / 2B2B2B); grey can also be
-// non-polarised. Interim hardcode — the admin per-tint "polarised available" flag will
-// replace this list once that column exists.
-const POLARIZED_ELIGIBLE_HEXES = new Set(["2b2b2b"]);
-const isPolarizedEligible = (t: LensTintEntry) =>
-  POLARIZED_ELIGIBLE_HEXES.has((t.gradientTop || "").replace("#", "").toLowerCase());
+// Polarised lenses are only offered in tints the admin marks "polarised available" (typically
+// grey). Until any tint carries that flag (before the DB column/migration), fall back to the
+// grey charcoal/2B2B2B hardcode so the rule still holds. Grey can also be non-polarised.
+const GREY_FALLBACK_HEXES = new Set(["2b2b2b"]);
+const isGreyHex = (t: LensTintEntry) =>
+  GREY_FALLBACK_HEXES.has((t.gradientTop || "").replace("#", "").toLowerCase());
+function makeIsPolarizedEligible(allTints: LensTintEntry[]) {
+  const anyFlagged = allTints.some((t) => t.polarizedAvailable);
+  return (t: LensTintEntry) => (anyFlagged ? t.polarizedAvailable : isGreyHex(t));
+}
 
 const LENS_OPTION_CARD =
   "rounded-lg border border-border/60 bg-muted/15 px-2.5 py-2 sm:px-3 sm:py-2.5";
@@ -216,24 +220,29 @@ export function LensStepPanel({
 }: LensStepPanelProps) {
   const polarizedSurcharge = polarizedOption?.priceSurcharge ?? 0;
 
-  // When polarised is on, only grey-eligible tints are offered.
+  const isPolarizedEligible = useMemo(
+    () => makeIsPolarizedEligible([...classicTints, ...gradientTints]),
+    [classicTints, gradientTints],
+  );
+
+  // When polarised is on, only polarised-eligible tints (admin flag, else grey) are offered.
   const shownClassic = useMemo(
     () => (polarized ? classicTints.filter(isPolarizedEligible) : classicTints),
-    [polarized, classicTints],
+    [polarized, classicTints, isPolarizedEligible],
   );
   const shownGradient = useMemo(
     () => (polarized ? gradientTints.filter(isPolarizedEligible) : gradientTints),
-    [polarized, gradientTints],
+    [polarized, gradientTints, isPolarizedEligible],
   );
 
-  // Turning polarised on while a non-grey tint is selected snaps the choice to grey.
+  // Turning polarised on while a non-eligible tint is selected snaps the choice to an eligible one.
   useEffect(() => {
     if (!polarized) return;
     const eligible = [...classicTints, ...gradientTints].filter(isPolarizedEligible);
     if (eligible.length && !eligible.some((t) => t.id === activeTintId)) {
       onSelectTint(eligible[0].id);
     }
-  }, [polarized, activeTintId, classicTints, gradientTints, onSelectTint]);
+  }, [polarized, activeTintId, classicTints, gradientTints, onSelectTint, isPolarizedEligible]);
 
   const [activeTab, setActiveTab] = useState<TintTab>(() =>
     resolveInitialTab(activeTintId, classicTints, gradientTints),

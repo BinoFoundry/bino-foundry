@@ -18,6 +18,7 @@ export function normalizeLensTintEntry(raw: LensTintEntry): LensTintEntry {
   return {
     ...raw,
     category,
+    polarizedAvailable: raw.polarizedAvailable === true,
     gradientTop: raw.gradientTop || defaults.gradientTop,
     gradientBottom:
       category === "classic" ? raw.gradientTop || defaults.gradientTop : raw.gradientBottom || defaults.gradientBottom,

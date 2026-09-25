@@ -21,6 +21,7 @@ const lensTintFields = {
   priceSurcharge: z.number().nonnegative(),
   displayOrder: z.number().int().nonnegative(),
   isActive: z.boolean(),
+  polarizedAvailable: z.boolean(),
 };
 
 export const lensTintCreateDto = z.object({
@@ -33,6 +34,7 @@ export const lensTintCreateDto = z.object({
   priceSurcharge: lensTintFields.priceSurcharge.default(0),
   displayOrder: lensTintFields.displayOrder.default(0),
   isActive: lensTintFields.isActive.default(true),
+  polarizedAvailable: lensTintFields.polarizedAvailable.default(false),
 });
 
 export const lensTintUpdateDto = z.object(lensTintFields).partial();

@@ -23,6 +23,8 @@ export interface LensTintEntry {
   priceSurcharge: number;
   displayOrder: number;
   isActive: boolean;
+  /** Whether this tint may be chosen with polarised lenses (admin-controlled; e.g. grey). */
+  polarizedAvailable: boolean;
 }
 
 export interface BuilderOptionEntry {

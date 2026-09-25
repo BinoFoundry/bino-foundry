@@ -26,6 +26,8 @@ function mapLensTint(row: Record<string, unknown>) {
     priceSurcharge: Number(row.price_surcharge),
     displayOrder: row.display_order,
     isActive: row.is_active,
+    // Tolerant of the column being absent (before the migration runs): undefined -> false.
+    polarizedAvailable: row.polarized_available === true,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -153,6 +155,7 @@ export class SunglassesCatalogService {
         price_surcharge: payload.priceSurcharge ?? 0,
         display_order: payload.displayOrder ?? 0,
         is_active: payload.isActive ?? true,
+        polarized_available: payload.polarizedAvailable ?? false,
       })
       .select("*")
       .single();
@@ -180,6 +183,7 @@ export class SunglassesCatalogService {
     if (payload.priceSurcharge !== undefined) patch.price_surcharge = payload.priceSurcharge;
     if (payload.displayOrder !== undefined) patch.display_order = payload.displayOrder;
     if (payload.isActive !== undefined) patch.is_active = payload.isActive;
+    if (payload.polarizedAvailable !== undefined) patch.polarized_available = payload.polarizedAvailable;
 
     const { data, error } = await supabase
       .from("sunglasses_lens_tints")

@@ -52,6 +52,7 @@ function blankLensTint(): LensTintEntry {
     priceSurcharge: 0,
     displayOrder: 0,
     isActive: true,
+    polarizedAvailable: false,
   };
 }
 
@@ -198,6 +199,7 @@ export function SunglassesCatalogAdmin() {
                     priceSurcharge: entry.priceSurcharge,
                     displayOrder: entry.displayOrder,
                     isActive: entry.isActive,
+                    polarizedAvailable: entry.polarizedAvailable,
                   });
                   closeEditor();
                 }}
@@ -552,6 +554,22 @@ function TintEditor({
               value={form.priceSurcharge}
               onChange={(e) => setForm({ ...form, priceSurcharge: Number(e.target.value) })}
             />
+          </AdminFormField>
+          <AdminFormField
+            id="tint-polarized"
+            label="Polarised available"
+            hint="When ticked, customers can pick this tint with polarised lenses. Untick to keep it non-polarised only. Usually only grey qualifies."
+          >
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                id="tint-polarized"
+                type="checkbox"
+                className="h-4 w-4 rounded border-border accent-primary"
+                checked={form.polarizedAvailable}
+                onChange={(e) => setForm({ ...form, polarizedAvailable: e.target.checked })}
+              />
+              Offer this tint with polarised lenses
+            </label>
           </AdminFormField>
             </div>
           </EditorSection>
