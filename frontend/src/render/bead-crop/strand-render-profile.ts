@@ -100,12 +100,38 @@ export function resolveStrandRenderConfigForBead(
   const typeEntry = beadTypeFor(hydrated, catalogue);
   const subTypeEntry = subBeadTypeFor(hydrated, catalogue);
 
-  return resolveStrandRenderConfig({
+  const resolved = resolveStrandRenderConfig({
     systemDefaults: catalogue?.strandRenderDefaults ?? null,
     beadTypeDefaults: typeDefaultsFromEntry(typeEntry),
     subBeadTypePartialOverride: partialStrandOverrideFromMetadata(subTypeEntry?.metadata ?? null),
     beadPartialOverride: partialStrandOverrideFromMetadata(hydrated?.metadata ?? null),
   });
+
+  // "Drop (lower hang)" charms (e.g. the mahjong tiles) were configured as layoutMode
+  // "inline", which sizes tall artwork by its longest edge and shrinks the tile to a sliver.
+  // Render them the same as "Dangling (on cord)": the figure's width maps to the mm slot and
+  // the hanging piece dangles below, so a drop tile sits on the cord at its true size.
+  if (subTypeEntry?.slug === "drop") {
+    return {
+      ...resolved,
+      layoutMode: "dangling",
+      anchorPreset: "loop",
+      rotationMode: "radial-upright",
+      forceRoundFootprint: false,
+      strandOccupancy: 1,
+      verticalOffset: 0,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    };
+  }
+
+  // Dangling charms now fill the top mm-square of their artwork with the main figure, so
+  // anchor at the figure centre (0.5) rather than near the top (the old 0.14 was tuned for
+  // the previous smaller artwork). This seats the head on the cord with the drop hanging past.
+  if (resolved.layoutMode === "dangling") {
+    return { ...resolved, anchorY: 0.5 };
+  }
+  return resolved;
 }
 
 /** @deprecated Use resolveStrandRenderConfigForBead */

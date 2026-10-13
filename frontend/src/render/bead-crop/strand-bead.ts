@@ -112,17 +112,18 @@ export function getStrandBeadImageStyle(
     | "strandImageFit"
   > | null,
 ): CSSProperties {
-  // Dangling baseline: fill the mm square with contain/top — same box for every charm.
+  // Dangling baseline: the artwork's WIDTH maps to the mm slot; height follows the
+  // artwork's own aspect so the main figure (head) matches other charms and any
+  // dangling piece (bell / egg / tassel) hangs below the strand instead of being
+  // squashed into the slot (which shrank the figure to ~half on drop charms).
   if (sizing?.strandImageFit === "contain-top") {
     return {
       position: "absolute",
       left: 0,
       top: 0,
       width: "100%",
-      height: "100%",
+      height: "auto",
       display: "block",
-      objectFit: "contain",
-      objectPosition: "top center",
       background: "transparent",
     };
   }
