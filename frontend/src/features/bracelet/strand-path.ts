@@ -659,8 +659,13 @@ export function computeBalancedRadialStrandPathLayout(params: {
     const junctionOverlapPx = new Array<number>(beads.length).fill(0);
     ringOrder.forEach((leftIndex, slot) => {
       const rightIndex = ringOrder[(slot + 1) % ringOrder.length]!;
-      junctionOverlapPx[leftIndex] =
-        (beads[leftIndex]!.trailingOverlapPx ?? 0) + (beads[rightIndex]!.leadingOverlapPx ?? 0);
+      // Tuck by the more-eager neighbour, not the sum — otherwise two hugging pieces
+      // (e.g. charm↔charm) double up and visibly overlap. A piece next to a bead with
+      // no tuck (overlap 0, e.g. a crystal) is unaffected, since max(x, 0) === x.
+      junctionOverlapPx[leftIndex] = Math.max(
+        beads[leftIndex]!.trailingOverlapPx ?? 0,
+        beads[rightIndex]!.leadingOverlapPx ?? 0,
+      );
     });
 
     positionsPx = balanceEmptyNeighbourGapsPx({

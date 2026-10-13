@@ -77,6 +77,14 @@ function typeDefaultsFromEntry(type: BeadTypeEntry | null): Partial<StrandRender
   return { ...(fromMeta ?? {}), placementMode };
 }
 
+/**
+ * How much a charm tucks into each neighbour (fraction of its arc). A charm's figure fills
+ * only ~90% of its mm slot, so without a hug it leaves spacer-width gaps against adjacent
+ * beads on a near-full strand. Pins the charm's junctions so it nestles flush; the remaining
+ * slack is shared across the other (bead↔bead) junctions.
+ */
+const CHARM_NEIGHBOUR_HUG = 0.02;
+
 /** Resolve hierarchical config for one bead library entry. */
 export function resolveStrandRenderConfigForBead(
   bead: BeadLibraryEntry | null | undefined,
@@ -122,6 +130,10 @@ export function resolveStrandRenderConfigForBead(
       verticalOffset: 0,
       anchorX: 0.5,
       anchorY: 0.5,
+      // Tuck into neighbours so the figure sits flush on the cord (a charm's figure fills
+      // ~90% of its mm slot, which otherwise leaves spacer-width gaps when mixed with beads).
+      leadingOverlap: CHARM_NEIGHBOUR_HUG,
+      trailingOverlap: CHARM_NEIGHBOUR_HUG,
     };
   }
 
@@ -129,7 +141,12 @@ export function resolveStrandRenderConfigForBead(
   // anchor at the figure centre (0.5) rather than near the top (the old 0.14 was tuned for
   // the previous smaller artwork). This seats the head on the cord with the drop hanging past.
   if (resolved.layoutMode === "dangling") {
-    return { ...resolved, anchorY: 0.5 };
+    return {
+      ...resolved,
+      anchorY: 0.5,
+      leadingOverlap: CHARM_NEIGHBOUR_HUG,
+      trailingOverlap: CHARM_NEIGHBOUR_HUG,
+    };
   }
   return resolved;
 }
