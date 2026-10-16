@@ -25,6 +25,7 @@ import { BraceletDragOnboardingHint } from "@/features/bracelet/components/Brace
 import { BraceletNameField } from "@/features/bracelet/components/BraceletNameField";
 import { BraceletMobileOptionsDrawer } from "@/features/bracelet/components/BraceletMobileOptionsDrawer";
 import { BraceletMobileStatusCard } from "@/features/bracelet/components/BraceletMobileStatusCard";
+import { BraceletMobileSummaryDrawer } from "@/features/bracelet/components/BraceletMobileSummaryDrawer";
 import {
   BraceletMobileStrandSwitcher,
   type BraceletMobileViewMode,
@@ -115,6 +116,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [mobileViewMode, setMobileViewMode] = useState<BraceletMobileViewMode>("A");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [savingDesign, setSavingDesign] = useState(false);
   const [savedDesignId, setSavedDesignId] = useState<string | null>(designIdFromUrl);
   const [hydrationDone, setHydrationDone] = useState(!designIdFromUrl);
@@ -563,6 +565,9 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     preparationSelection: builder.preparationSelection,
     onSelectPreparation: builder.selectPreparation,
     onPreparationQuantityChange: builder.setPreparationQuantity,
+    glamOptions: builder.glamOptions,
+    glamSelection: builder.glamSelection,
+    onSelectGlam: builder.selectGlam,
     onAddToCart: () => void handleAddToCart(),
     onSaveDesign: () => void handleSaveDesign(),
     savingDesign,
@@ -570,6 +575,16 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
     autoSaveStatus,
     autoSaveVisible: builder.wristSizeConfirmed,
     signedIn: Boolean(user),
+  };
+
+  // Mobile review sheet reuses the same panel, but its Add-to-cart closes the
+  // sheet first so checkout opens cleanly on top of the canvas.
+  const mobileSummaryProps = {
+    ...summaryPanelProps,
+    onAddToCart: () => {
+      setSummaryOpen(false);
+      void handleAddToCart();
+    },
   };
 
   if (!wristConfirmed) {
@@ -891,7 +906,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
                 currencyCode={builder.pricing.currencyCode}
                 twinning={builder.twinning}
                 strandIndex={mobileViewMode === "B" ? 2 : 1}
-                onAddToCart={() => void handleAddToCart()}
+                onAddToCart={() => setSummaryOpen(true)}
                 addDisabled={saveDisabled}
               />
             ) : null}
@@ -948,6 +963,13 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           toast.message(`Loading design ${code}…`);
         }}
         builderActions={builderActions}
+      />
+    ) : null}
+    {isMobile ? (
+      <BraceletMobileSummaryDrawer
+        open={summaryOpen}
+        onOpenChange={setSummaryOpen}
+        summaryProps={mobileSummaryProps}
       />
     ) : null}
     <CheckoutDialog

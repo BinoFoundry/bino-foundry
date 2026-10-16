@@ -42,6 +42,7 @@ import { buildBraceletPricing } from "../pricing";
 import { swapPlacedBeads, logBraceletReorderSwap } from "../sequence-reorder";
 import { STRAND_PATH_START_ANGLE } from "../strand-path";
 import { isFramePiece } from "../frame-placement-intent";
+import { GLAM_OPTIONS, glamOptionById } from "../glam-options";
 import { serializeBraceletConfiguration } from "../serialize";
 import { buildBraceletBuilderSummary } from "../summary";
 import { buildPlacedFromSavedBracelet, type SavedBraceletLoadInput } from "../load-saved-bracelet";
@@ -132,6 +133,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [hoverSlot, setHoverSlot] = useState<{ bracelet: "A" | "B"; position: number } | null>(null);
   const [preparationSelection, setPreparationSelection] = useState<BraceletPreparationSelection | null>(null);
+  /** "Glam it up" add-on — selected tier id, or null for none. */
+  const [glamSelection, setGlamSelection] = useState<string | null>(null);
 
   const bumpLayout = useCallback(() => setLayoutRevision((n) => n + 1), []);
 
@@ -212,14 +215,17 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     [basePricing.subtotal, twinning, activeHowWePrepareOptions, preparationSelection],
   );
 
+  // "Glam it up" — a flat add-on layered on top of the (bead + preparation) total.
+  const glamAmount = useMemo(() => glamOptionById(glamSelection)?.price ?? 0, [glamSelection]);
+
   const pricing = useMemo(
     () => ({
       ...basePricing,
       preparationLineItem: preparationPricing.preparationLineItem,
       preparationSubtotal: preparationPricing.preparationSubtotal,
-      total: preparationPricing.total,
+      total: preparationPricing.total + glamAmount,
     }),
-    [basePricing, preparationPricing],
+    [basePricing, preparationPricing, glamAmount],
   );
 
   const selectPreparation = useCallback(
@@ -233,6 +239,8 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     },
     [activeHowWePrepareOptions],
   );
+
+  const selectGlam = useCallback((id: string | null) => setGlamSelection(id), []);
 
   const setPreparationQuantity = useCallback(
     (quantity: number) => {
@@ -903,6 +911,9 @@ export function useBraceletBuilder(options: UseBraceletBuilderOptions = {}) {
     preparationSelection,
     selectPreparation,
     setPreparationQuantity,
+    glamOptions: GLAM_OPTIONS,
+    glamSelection,
+    selectGlam,
     handleSlotClick,
     handleBeadDrop,
     handleBeadsReorder,

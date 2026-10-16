@@ -16,7 +16,9 @@ import { BUILDER_COPY } from "@/layouts/builder-copy";
 import { cn } from "@/lib/utils";
 
 import { BRACELET_COPY } from "../copy";
+import { glamOptionById, type GlamOption } from "../glam-options";
 import { formatPricingLineItemLabel } from "../pricing";
+import { GlamSection } from "./GlamSection";
 import { HowWePrepareSection } from "./HowWePrepareSection";
 import { StrandCapacityCard } from "./StrandCapacityCard";
 import { SummaryInfoCard } from "./SummaryInfoCard";
@@ -27,6 +29,9 @@ interface BraceletSummaryPanelProps {
   preparationSelection: BraceletPreparationSelection | null;
   onSelectPreparation: (slug: string) => void;
   onPreparationQuantityChange: (quantity: number) => void;
+  glamOptions: GlamOption[];
+  glamSelection: string | null;
+  onSelectGlam: (id: string | null) => void;
   className?: string;
   collapsible?: boolean;
   defaultOpen?: boolean;
@@ -65,6 +70,9 @@ export function BraceletSummaryPanel({
   preparationSelection,
   onSelectPreparation,
   onPreparationQuantityChange,
+  glamOptions,
+  glamSelection,
+  onSelectGlam,
   className,
   collapsible = false,
   defaultOpen = true,
@@ -79,6 +87,7 @@ export function BraceletSummaryPanel({
 }: BraceletSummaryPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
   const { pricing } = summary;
+  const selectedGlam = glamOptionById(glamSelection);
   const strandA = summary.strands[0];
   const strandB = summary.twinning ? summary.strands[1] : undefined;
 
@@ -112,6 +121,13 @@ export function BraceletSummaryPanel({
                 currencyCode={pricing.currencyCode}
               />
             </div>
+            {selectedGlam ? (
+              <CostLine
+                label={`Glam it up: ${selectedGlam.name}`}
+                amount={selectedGlam.price}
+                currencyCode={pricing.currencyCode}
+              />
+            ) : null}
           </div>
         )}
       </SummaryInfoCard>
@@ -124,6 +140,13 @@ export function BraceletSummaryPanel({
           </div>
         </SummaryInfoCard>
       ) : null}
+
+      <GlamSection
+        options={glamOptions}
+        selection={glamSelection}
+        onSelect={onSelectGlam}
+        currencyCode={pricing.currencyCode}
+      />
 
       <HowWePrepareSection
         options={howWePrepareOptions}

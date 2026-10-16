@@ -146,6 +146,7 @@ export const BRACELET_COPY = {
   mobileOptionsTitle: "Options",
   mobileOptionsSubtitle: "Set these once — they stay out of your way.",
   mobileOptionsDone: "Done",
+  mobileReviewSubtitle: "Add a finishing touch and choose how we prepare it before you order.",
   mobileMeasureWrist: "Not sure? Measure your wrist",
   mobileLoadDesignCode: "Load a design code",
   mobileLoadDesignPlaceholder: "Paste code…",
