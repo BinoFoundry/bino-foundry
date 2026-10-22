@@ -74,7 +74,6 @@ export function WristSizeStep({
   // whichever size lands under the top marker is selected. It's larger on
   // desktop so it fills the space.
   const isMobile = useIsMobile();
-  const dialMult = isMobile ? 0.66 : 0.9;
   const n = options.length;
   const step = n ? 360 / n : 0;
   const selectedIndex = options.findIndex((o) => o.id === selectedId);
@@ -148,7 +147,13 @@ export function WristSizeStep({
     onSelect(entry);
   };
 
-  const renderWell = (entry: WristSizeEntry, mult = 1, uniform = false, onClickOverride?: () => void) => {
+  const renderWell = (
+    entry: WristSizeEntry,
+    mult = 1,
+    uniform = false,
+    onClickOverride?: () => void,
+    fill = false,
+  ) => {
     const selected = selectedId === entry.id;
     const sizeText = formatWristSizeCm(entry.sizeCm);
     const descriptor = wristSizeDescriptor(entry.label, entry.sizeCm);
@@ -163,10 +168,11 @@ export function WristSizeStep({
         aria-checked={selected}
         aria-label={descriptor ? `${sizeText} centimetres, ${descriptor}` : `${sizeText} centimetres`}
         onClick={onClickOverride ?? (() => onSelect(entry))}
-        style={{ width: `${dimRem}rem`, height: `${dimRem}rem` }}
+        style={fill ? undefined : { width: `${dimRem}rem`, height: `${dimRem}rem` }}
         className={cn(
           "group relative flex shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8a8a5e] focus-visible:ring-offset-4 focus-visible:ring-offset-transparent",
+          fill && "h-full w-full",
           selected ? "scale-[1.06]" : "hover:scale-[1.04]",
         )}
       >
@@ -174,11 +180,14 @@ export function WristSizeStep({
         <span className="relative flex flex-col items-center justify-center leading-none">
           <span
             className="font-serif font-medium leading-none"
-            style={{ color: selected ? "#404225" : "#646345", fontSize: `${numberRem}rem` }}
+            style={{ color: selected ? "#404225" : "#646345", fontSize: fill ? "26cqw" : `${numberRem}rem` }}
           >
             {sizeText}
           </span>
-          <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em]" style={{ color: "#8f8a6a" }}>
+          <span
+            className="mt-1 font-medium uppercase tracking-[0.22em]"
+            style={{ color: "#8f8a6a", fontSize: fill ? "8cqw" : "9px" }}
+          >
             cm
           </span>
         </span>
@@ -213,7 +222,8 @@ export function WristSizeStep({
           ref={dialRef}
           className={cn(
             "relative mx-auto aspect-square w-full cursor-grab touch-none select-none active:cursor-grabbing",
-            isMobile ? "max-w-[21rem]" : "max-w-[30rem]",
+            // cap by viewport height on desktop so the whole step fits on one screen
+            isMobile ? "max-w-[21rem]" : "max-w-[min(24rem,34vh)]",
           )}
           style={{ touchAction: "none" }}
           onPointerDown={onDialPointerDown}
@@ -231,7 +241,8 @@ export function WristSizeStep({
             <div className="absolute inset-0" style={{ transform: `rotate(${rotation}deg)`, transition: dragging ? "none" : spin }}>
               {options.map((entry, i) => {
                 const angle = (-90 + i * step) * (Math.PI / 180);
-                const radiusPct = 31; // distance of each well from the dial centre
+                const radiusPct = 32; // distance of each well from the dial centre
+                const wellPct = 24; // well diameter as a share of the dial, so it scales with it
                 const left = 50 + radiusPct * Math.cos(angle);
                 const top = 50 + radiusPct * Math.sin(angle);
                 return (
@@ -239,11 +250,18 @@ export function WristSizeStep({
                     key={entry.id}
                     data-well={i}
                     className="absolute"
-                    style={{ left: `${left}%`, top: `${top}%`, transform: "translate(-50%, -50%)" }}
+                    style={{
+                      left: `${left}%`,
+                      top: `${top}%`,
+                      width: `${wellPct}%`,
+                      height: `${wellPct}%`,
+                      transform: "translate(-50%, -50%)",
+                      containerType: "inline-size",
+                    }}
                   >
                     {/* counter-rotate so the number stays upright as the ring turns */}
-                    <div style={{ transform: `rotate(${-rotation}deg)`, transition: dragging ? "none" : spin }}>
-                      {renderWell(entry, dialMult, true, () => selectAt(entry, i))}
+                    <div className="h-full w-full" style={{ transform: `rotate(${-rotation}deg)`, transition: dragging ? "none" : spin }}>
+                      {renderWell(entry, 1, true, () => selectAt(entry, i), true)}
                     </div>
                   </div>
                 );

@@ -594,7 +594,7 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
           className="relative flex h-full w-full flex-1 flex-col animate-fade-in"
           style={{ background: "#fbf8f1" }}
         >
-          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-6 py-10 sm:p-16">
+          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-6 py-6 sm:px-16 sm:py-6">
             <WristSizeStep
               className="my-auto"
               sizes={builder.wristSizes}
