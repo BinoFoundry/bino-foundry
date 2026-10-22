@@ -590,9 +590,13 @@ const BraceletBuilder = ({ onPriceChange }: BraceletBuilderProps) => {
   if (!wristConfirmed) {
     return (
       <>
-        <div className="relative flex h-full w-full flex-1 flex-col animate-fade-in bg-gradient-to-b from-background via-background to-muted/20">
-          <div className="flex min-h-0 flex-1 items-center justify-center p-6 sm:p-12">
+        <div
+          className="relative flex h-full w-full flex-1 flex-col animate-fade-in"
+          style={{ background: "#fbf8f1" }}
+        >
+          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-6 py-10 sm:p-16">
             <WristSizeStep
+              className="my-auto"
               sizes={builder.wristSizes}
               selectedId={builder.draftWristIdA}
               onSelect={builder.selectDraftWristA}

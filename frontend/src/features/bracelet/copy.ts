@@ -11,7 +11,7 @@ export const BRACELET_COPY = {
   dropCharmInsertHint: "Release to insert between beads",
   dropReorderHint: "Release to swap positions",
   wristStepSubtitle:
-    "Select your wrist measurement. Your bracelet is crafted to fit — the studio adapts to your size.",
+    "Select your wrist measurement. Your bracelet is crafted to fit, sized just for you.",
   wristStepSelectPrompt: "Please select your bracelet size to begin.",
   wristStepContinue: "Start Designing",
   wristSizesUnavailable: "Sizing options are being prepared. Please check back shortly.",
